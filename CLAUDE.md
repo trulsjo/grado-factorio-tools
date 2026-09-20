@@ -84,28 +84,59 @@ move; the harness might.
 ## Commit messages
 
 [Conventional Commits](https://www.conventionalcommits.org/) with a [gitmoji](https://gitmoji.dev/)
-prefix, the same convention as both sibling repos:
+prefix. The rules below are `realistic-fusion-refreshed`'s, adopted here so that one check can
+serve both repos — only the scope vocabulary and the extraction rule are this repo's own. One
+format, no exceptions:
 
 ```
 <emoji> <type>(<scope>): <subject>
+
+<body>
+
+<footer>
 ```
 
+**Subject line**
+
 - Imperative mood, lowercase after the colon, no trailing period, whole line ≤ 72 characters.
-- `<scope>` is the tool (`coexistence`, `tree-viewer`, `pack`, `upload`, `commit-check`) or the area
-  (`docs`, `repo`).
-- Types: `feat` ✨, `fix` 🐛, `docs` 📝, `refactor` ♻️, `test` ✅, `chore` 🔧, `revert` ⏪️.
-  🎉 to begin, 🚚 to move a file in, 🔥 to remove.
-- Use **🚚 `refactor`** for an extraction, and name the origin repo and commit in the body.
-- Body explains **why**, not what the diff shows. Wrap at 72.
+- `<scope>` is optional but preferred. Use the tool (`coexistence`, `tree-viewer`, `pack`, `upload`,
+  `commit-check`) or the area (`docs`, `repo`).
+- The emoji is the *rendered* character, not the `:shortcode:`.
+
+**Types, and the emoji that goes with each**
+
+| Type | Emoji | Use for |
+|---|---|---|
+| `feat` | ✨ | a new capability |
+| `fix` | 🐛 | a bug fix |
+| `docs` | 📝 | documentation only |
+| `refactor` | ♻️ | restructuring with no behaviour change |
+| `perf` | ⚡️ | performance |
+| `test` | ✅ | tests |
+| `build` | 📦 | packaging, dependencies |
+| `chore` | 🔧 | tooling and config |
+| `style` | 🎨 | formatting and code structure only |
+| `revert` | ⏪️ | reverting a previous commit |
+
+A few situational ones worth knowing: 🎉 to begin a project, 🚚 to move or rename files, 🔥 to remove
+code or files, 🌐 for localisation, 💄 for icons and other visual assets, 🚧 for work in progress.
+
+**Extraction** — use **🚚 `refactor`**, and name the origin repo and commit in the body.
+
+**Body** — explain *why*, not what the diff already shows. Wrap at 72. Reference the Factorio API
+version when a change depends on one.
+
+**Breaking changes** — for anything that breaks a consuming repo's interface, put `!` before the
+colon *and* a `BREAKING CHANGE:` footer explaining the migration.
 
 Example:
 
 ```
 🚚 refactor(commit-check): adopt commit-check.ps1 from the mod repo
 
-Moved from realistic-fusion-refreshed at 4fc73cf. It had no references to
-that project, so it transfers unchanged. Removed there in the same change;
-no copy is left behind.
+Moved from realistic-fusion-refreshed at 4fc73cf. It had no references
+to that project, so it transfers unchanged. Removed there in the same
+change; no copy is left behind.
 ```
 
 ## Agent skills
