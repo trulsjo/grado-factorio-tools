@@ -1,0 +1,11 @@
+# Build and run output
+/dist/
+/out/
+*.zip
+
+# Python
+__pycache__/
+*.pyc
+
+# Personal, never committed
+CLAUDE.local.md
