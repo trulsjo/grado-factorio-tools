@@ -8,4 +8,4 @@ __pycache__/
 *.pyc
 
 # Personal, never committed
-CLAUDE.local.md
+*.local.md
