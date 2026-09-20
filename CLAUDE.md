@@ -107,3 +107,18 @@ Moved from realistic-fusion-refreshed at 4fc73cf. It had no references to
 that project, so it transfers unchanged. Removed there in the same change;
 no copy is left behind.
 ```
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as GitHub issues on `trulsjo/grado-factorio-tools`, driven via the `gh` CLI.
+See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical roles, each label string equal to its name. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
