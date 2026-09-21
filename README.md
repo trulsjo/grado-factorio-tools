@@ -3,7 +3,7 @@
 Shared tooling for the Factorio mod projects — the scripts that are not about any one mod and should
 not be maintained twice.
 
-Siblings that will consume it:
+Siblings that consume it, each carrying this repo as a submodule at `vendor/grado-factorio-tools`:
 
 - [realistic-fusion-refreshed](https://github.com/trulsjo/realistic-fusion-refreshed) — where most of
   this tooling was written and still lives
@@ -11,12 +11,12 @@ Siblings that will consume it:
 
 ## Status
 
-**One tool extracted, and not yet finished.** `scripts/commit-check.ps1` is here, and this repo's
-own `commit-msg` hook runs it. The siblings still hold byte-identical copies until each is
-repointed here as a submodule, so for now this is a copy rather than an extraction. Everything else
-named below still lives in `realistic-fusion-refreshed` and is still that repo's, working and
-gated. See [docs/extraction-plan.md](docs/extraction-plan.md) for what is earmarked, how entangled
-each piece is, what has moved, and what has to be written from nothing.
+**One tool extracted, and that extraction is finished.** `scripts/commit-check.ps1` is here, this
+repo's own `commit-msg` hook runs it, and both siblings resolve it from the submodule rather than
+holding a copy. No copy of it remains anywhere. Everything else named below still lives in
+`realistic-fusion-refreshed` and is still that repo's, working and gated. See
+[docs/extraction-plan.md](docs/extraction-plan.md) for what is earmarked, how entangled each piece
+is, what has moved, and what has to be written from nothing.
 
 The commit-message convention this repo and its siblings share is declared in
 [docs/commit-convention.md](docs/commit-convention.md).

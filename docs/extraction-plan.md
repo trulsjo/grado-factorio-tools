@@ -2,10 +2,10 @@
 
 What is earmarked to move here from `realistic-fusion-refreshed`, and how hard each one will be.
 
-**One script has been extracted, and only partly.** `scripts/commit-check.ps1` is here; the
-siblings are not yet repointed at it. Everything else below still lives in that repo, works there,
-and is covered by its gates. This file is an inventory, and — for whatever has moved — the record
-of where it came from.
+**One script has been extracted, and that extraction is finished.** `scripts/commit-check.ps1` is
+here and nowhere else; both siblings resolve it from this repo as a submodule. Everything else
+below still lives in `realistic-fusion-refreshed`, works there, and is covered by its gates. This
+file is an inventory, and — for whatever has moved — the record of where it came from.
 
 ## Method
 
@@ -46,8 +46,26 @@ Two things measured during the move, both of which correct what this plan and
   does not call it, so the "a move that breaks `ship-check`" risk below does not apply to this
   script.
 
-**Not finished.** The copies in both siblings stand until each is wired to this repo as a submodule
-at `vendor/grado-factorio-tools`.
+**Both siblings wired, both copies gone.** Each carries this repo as a submodule at
+`vendor/grado-factorio-tools`, pinned to a commit it bumps deliberately:
+
+| Consumer | Wired in | Pinned at | Bumped in |
+|---|---|---|---|
+| `grado-factorio-modpack` | issue #9 | `0e421eb` | `cc11238` |
+| `realistic-fusion-refreshed` | issue #4 | `0e421eb` | `5f54299` |
+
+The modpack was wired first on purpose — it is the cheaper consumer to be wrong in, so a failure
+there would have been the mechanism rather than the other repository.
+
+**The pin has been exercised, not just installed.** `0e421eb` changed the check's rejection message
+here (issue #10) and changed nothing in either sibling until each bumped. Measured at each bump: a
+sweep of 504 commits in `realistic-fusion-refreshed` and 26 in `grado-factorio-modpack` produced
+output byte-identical to before — 144 and 3 rejected, the same commits for the same named reasons.
+
+**The abandon tripwire never fired.** It was to stop the work if wiring a sibling needed a third
+setup step or a change to `commit-check.ps1` itself. Both siblings are two steps per clone, and
+both were wired with the check byte-identical to the origin copy. The edit in `0e421eb` came after
+the wiring, as its own ticket, which is what keeps the two distinguishable.
 
 ## What has to be written, not moved
 

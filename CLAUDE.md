@@ -8,15 +8,26 @@ assumed. `CLAUDE.local.md` has the path and is git-ignored. Read it at session s
 
 ## State
 
-**The first extraction is in progress, and is not finished.** `scripts/commit-check.ps1` is here,
-moved from `realistic-fusion-refreshed` at `8a4fb90`, and this repository's own gate runs it. The
-siblings are not yet wired: byte-identical copies still stand in `realistic-fusion-refreshed` and
-`grado-factorio-modpack` until each is repointed at this repo as a submodule. **Until that happens
-this is a copy, not an extraction** — see
+**The first extraction is finished.** `scripts/commit-check.ps1` is here, moved from
+`realistic-fusion-refreshed` at `8a4fb90`, and no copy of it remains anywhere. Both
+`realistic-fusion-refreshed` and `grado-factorio-modpack` resolve it from this repo as a submodule
+at `vendor/grado-factorio-tools`, each pinned to a commit it bumps deliberately. One check, three
+repositories, no copies — see
 [issue #1](https://github.com/trulsjo/grado-factorio-tools/issues/1).
 
+The mechanism has been exercised, not just installed: `0e421eb` changed the check here and changed
+nothing in either sibling until each bumped its pin. That is the one property
+[ADR 0001](docs/adr/0001-siblings-consume-this-repo-as-a-submodule.md) was chosen for.
+
+**The abandon tripwire never fired.** It was to stop the work if wiring a sibling needed a third
+setup step or a change to `commit-check.ps1` itself. Both siblings are two steps per clone
+(`git submodule update --init`, then `git config core.hooksPath .githooks`) and both were wired
+with the check byte-identical to the origin copy. The later edit to the check was its own decision
+with its own ticket, which is why it is a separate commit after the wiring rather than inside it.
+
 Everything else named in `docs/extraction-plan.md` still lives in `realistic-fusion-refreshed`,
-still works there, and is still covered by that repo's gates.
+still works there, and is still covered by that repo's gates. Nothing is earmarked for the next
+move yet.
 
 ## The rule that matters most here
 
@@ -107,10 +118,10 @@ prefix. One format, no exceptions:
 
 **The rules live in [`docs/commit-convention.md`](docs/commit-convention.md)** — the type table,
 the situational emoji, the subject and body limits, and what the check is blind to. That page is
-the single declaration for this repository and for every repository that will consume it. The
-siblings do **not** point at it yet — both still carry the full table — and they are repointed in
+the single declaration for this repository and for both that consume it: since
 [#9](https://github.com/trulsjo/grado-factorio-tools/issues/9) and
-[#4](https://github.com/trulsjo/grado-factorio-tools/issues/4). Reasoning in
+[#4](https://github.com/trulsjo/grado-factorio-tools/issues/4) each sibling points here for the
+table and keeps only its own scope vocabulary. A rejected message names the page too. Reasoning in
 [ADR 0002](docs/adr/0002-the-commit-convention-is-declared-in-one-document.md).
 
 Three things are this repository's own:
