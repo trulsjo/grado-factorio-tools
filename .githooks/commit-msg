@@ -21,4 +21,14 @@ if ! command -v pwsh >/dev/null 2>&1; then
     exit 0
 fi
 
-exec pwsh -NoProfile -File "$(git rev-parse --show-toplevel)/scripts/commit-check.ps1" "$1"
+# The check itself may be missing: a renamed script here, or -- in a sibling -- a submodule that
+# was never initialised. pwsh answers that with exit 64 and a usage dump, which blocks the commit
+# and tells the author nothing. ADR 0001 requires the other posture for exactly this case, so guard
+# the path rather than letting pwsh fail on it.
+CHECK="$(git rev-parse --show-toplevel)/scripts/commit-check.ps1"
+if [ ! -f "$CHECK" ]; then
+    echo "commit-msg: $CHECK not found, so the message format was NOT checked." >&2
+    exit 0
+fi
+
+exec pwsh -NoProfile -File "$CHECK" "$1"
