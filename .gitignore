@@ -9,3 +9,9 @@ __pycache__/
 
 # Personal, never committed
 *.local.md
+
+# Agent runtime state. Ignore the contents rather than the directory, so that
+# .omc/skills/ stays committable: project-scoped skills are meant to be shared,
+# everything else under .omc/ is this machine's scratch.
+/.omc/*
+!/.omc/skills/
