@@ -1,7 +1,7 @@
 # Commit convention
 
 **This is the canonical declaration of the commit-message convention** for this repository and for
-every repository that will consume it. [Conventional Commits](https://www.conventionalcommits.org/)
+both repositories that consume it. [Conventional Commits](https://www.conventionalcommits.org/)
 with a [gitmoji](https://gitmoji.dev/) prefix. One format, no exceptions:
 
 ```

@@ -108,16 +108,14 @@ $OutputEncoding = [Text.Encoding]::UTF8
 $LIMIT = 72
 
 # The convention's table, type by type. The emoji is the rendered character, which is the rule as
-# much
-# as the pairing is -- a :shortcode: fails the emoji test below rather than passing quietly.
+# much as the pairing is -- a :shortcode: fails the emoji test below rather than passing quietly.
 $TYPES = [ordered]@{
     feat = '✨'; fix = '🐛'; docs = '📝'; refactor = '♻️'; perf = '⚡️'
     test = '✅'; build = '📦'; chore = '🔧'; style = '🎨'; revert = '⏪️'
 }
 
 # "A few situational ones worth knowing", which the convention lists without binding to a type --
-# so
-# they are accepted with any type. 🔀 is the one addition; see ON 🔀 above.
+# so they are accepted with any type. 🔀 is the one addition; see ON 🔀 above.
 $SITUATIONAL = @('🎉', '🚚', '🔥', '🌐', '💄', '🚧', '🔀')
 
 # ♻️, ⚡️ and ⏪️ carry a variation selector (U+FE0F) and are also legible without one. Comparing
@@ -384,11 +382,16 @@ if (-not (Test-Path -LiteralPath $Path)) { throw "no such message file: $Path" }
 
 $problems = Test-CommitMessage @(Get-Content -LiteralPath $Path -Encoding utf8)
 if ($problems.Count) {
-    # WHERE THE RULES ARE WRITTEN, resolved from this script rather than printed as a path relative
-    # to the repository being committed to. In a consumer the document sits inside the submodule,
-    # at vendor/grado-factorio-tools/docs/, so a bare "docs/commit-convention.md" names nothing
-    # there. Resolved rather than linked to GitHub because this is the copy at the commit that
-    # consumer pinned, and main may have moved on from it.
+    # WHERE THE RULES ARE WRITTEN, derived from this script's own location rather than printed as
+    # a path relative to the repository being committed to. In a consumer the document sits inside
+    # the submodule, at vendor/grado-factorio-tools/docs/, so a bare "docs/commit-convention.md"
+    # names nothing there. A local path rather than a GitHub link because this is the copy at the
+    # commit that consumer pinned, and main may have moved on from it.
+    #
+    # DERIVED, NOT VERIFIED. Both calls are string arithmetic with no Test-Path, so a layout that
+    # moved this script out of scripts/ would print a path to nothing rather than say so. That is
+    # the trade: the property that made this the cheapest thing to extract is that it reads only
+    # the message it is handed, and a filesystem probe to check its own paperwork would spend it.
     $convention = Join-Path (Split-Path $PSScriptRoot -Parent) 'docs/commit-convention.md'
 
     Write-Host ''

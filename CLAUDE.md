@@ -26,8 +26,7 @@ with the check byte-identical to the origin copy. The later edit to the check wa
 with its own ticket, which is why it is a separate commit after the wiring rather than inside it.
 
 Everything else named in `docs/extraction-plan.md` still lives in `realistic-fusion-refreshed`,
-still works there, and is still covered by that repo's gates. Nothing is earmarked for the next
-move yet.
+still works there, and is still covered by that repo's gates. No next move has been chosen yet.
 
 ## The rule that matters most here
 

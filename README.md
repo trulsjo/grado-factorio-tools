@@ -51,8 +51,9 @@ scripts/     PowerShell entry points, one job each
 .githooks/   this repo's own commit-msg hook, opted into once per clone
 docs/        the commit convention, the ADRs, the notes agents read, and the
              extraction record — what moved, from where, and why
+CONTEXT.md   the glossary this repo's own prose is held to
 LICENSE      MIT; see CLAUDE.md for why this repo's licence is not a sibling's
 ```
 
-There is no Python here, and nothing is written in anticipation of any. A directory appears above
-once it exists.
+There is no Python here, and nothing is written in anticipation of any. An entry appears above once
+it exists.

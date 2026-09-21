@@ -51,7 +51,7 @@ Two things measured during the move, both of which correct what this plan and
 
 | Consumer | Wired in | Pinned at | Bumped in |
 |---|---|---|---|
-| `grado-factorio-modpack` | issue #9 | `0e421eb` | `cc11238` |
+| `grado-factorio-modpack` | issue #9 | `0e421eb` | `93dd5f3` |
 | `realistic-fusion-refreshed` | issue #4 | `0e421eb` | `5f54299` |
 
 The modpack was wired first on purpose — it is the cheaper consumer to be wrong in, so a failure
@@ -60,12 +60,23 @@ there would have been the mechanism rather than the other repository.
 **The pin has been exercised, not just installed.** `0e421eb` changed the check's rejection message
 here (issue #10) and changed nothing in either sibling until each bumped.
 
-Measured at each bump, 2026-09-22: a sweep of 504 commits in `realistic-fusion-refreshed` and all
-26 in `grado-factorio-modpack` produced output byte-identical to the same sweep before the bump —
-144 and 3 rejected, the same commits for the same named reasons. The 144 is **not** a change from
-the 145 that issue #4 records: that baseline was the 504 commits ending at `8a4fb90`, and this one
-is the 504 ending at today's `main`, so the two spans are different sets. What is compared here is
-before against after on one span, which is the only comparison that means anything.
+Measured at each bump, 2026-09-22, and **named by commit rather than by `main`**, because `main`
+moves and a span written as `-504 main` stops meaning what it meant:
+
+| Consumer | Span | Commits | Rejected |
+|---|---|---|---|
+| `realistic-fusion-refreshed` | `-504 e7376b8` | 504 | 144 |
+| `grado-factorio-modpack` | all of `main` at `45a3042` | 26 | 3 |
+
+Each produced output byte-identical to the same span swept before the bump — the same commits, for
+the same named reasons. Neither figure is a change from the 145 that issue #4 records: that
+baseline was the 504 ending at `8a4fb90`, a different set. What is compared here is before against
+after on one span, which is the only comparison that means anything.
+
+An earlier draft of this paragraph called the first span "the 504 ending at today's `main`". That
+was wrong by one commit — `main` had gained the bump itself by then, and `-504 main` now answers
+143. The figure was right and the sentence describing it was not, which is this repository's
+signature defect and is why the spans above are pinned.
 
 The check each sibling was wired at is byte-identical to the origin copy: `8a4fb90`'s 393 lines and
 19,407 bytes, unchanged through `5d3c561`. `0e421eb` is the first commit for which that stops being
