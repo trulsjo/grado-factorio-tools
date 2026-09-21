@@ -152,6 +152,12 @@ See `docs/agents/issue-tracker.md`.
 
 The five canonical roles, each label string equal to its name. See `docs/agents/triage-labels.md`.
 
+### Code review
+
+Two conventions on top of the `/code-review` plugin: a filtered finding is still reported, and the
+prose is reviewed as carefully as the code, because here there is nothing but prose. **Load
+`docs/agents/code-review.md` before running a review.**
+
 ### Domain docs
 
 Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
