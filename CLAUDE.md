@@ -8,9 +8,15 @@ assumed. `CLAUDE.local.md` has the path and is git-ignored. Read it at session s
 
 ## State
 
-**Empty skeleton**, created 2026-09-20. A README, this file, and `docs/extraction-plan.md`. **No
-tooling has been extracted.** Every script named in the plan still lives in
-`realistic-fusion-refreshed`, still works there, and is still covered by that repo's gates.
+**The first extraction is in progress, and is not finished.** `scripts/commit-check.ps1` is here,
+moved from `realistic-fusion-refreshed` at `8a4fb90`, and this repository's own gate runs it. The
+siblings are not yet wired: byte-identical copies still stand in `realistic-fusion-refreshed` and
+`grado-factorio-modpack` until each is repointed at this repo as a submodule. **Until that happens
+this is a copy, not an extraction** — see
+[issue #1](https://github.com/trulsjo/grado-factorio-tools/issues/1).
+
+Everything else named in `docs/extraction-plan.md` still lives in `realistic-fusion-refreshed`,
+still works there, and is still covered by that repo's gates.
 
 ## The rule that matters most here
 
@@ -33,8 +39,11 @@ Whatever moves leaves nothing behind.
   [ADR 0001](docs/adr/0001-siblings-consume-this-repo-as-a-submodule.md), which records why
   vendoring and a published module were rejected, and the audience assumption the choice rests on.
 - **Where the mod portal API key lives** and what gates a release.
-- **The licence.** No `LICENSE` file yet. The sibling `realistic-fusion-refreshed` is LGPLv3 because
-  it carries Krastorio 2 code; that reasoning does not transfer to tooling written from scratch.
+- ~~**The licence.**~~ **Decided 2026-09-21: MIT**, in `LICENSE`. The sibling
+  `realistic-fusion-refreshed` is LGPLv3 because it carries Krastorio 2 code; that reasoning does
+  not transfer to tooling written from scratch. Forced now rather than later because a submodule
+  makes this repo a build dependency of two others, so "all rights reserved by default" stopped
+  being harmless.
 
 Do not settle any of them as a side effect of doing something else. Recording options with trade-offs
 is welcome; choosing between them is not.
@@ -86,9 +95,7 @@ move; the harness might.
 ## Commit messages
 
 [Conventional Commits](https://www.conventionalcommits.org/) with a [gitmoji](https://gitmoji.dev/)
-prefix. The rules below are `realistic-fusion-refreshed`'s, adopted here so that one check can
-serve both repos — only the scope vocabulary and the extraction rule are this repo's own. One
-format, no exceptions:
+prefix. One format, no exceptions:
 
 ```
 <emoji> <type>(<scope>): <subject>
@@ -98,48 +105,22 @@ format, no exceptions:
 <footer>
 ```
 
-**Subject line**
+**The rules live in [`docs/commit-convention.md`](docs/commit-convention.md)** — the type table,
+the situational emoji, the subject and body limits, and what the check is blind to. That page is
+the single declaration for this repository and for every repository that consumes it; the siblings
+point at it rather than restating it. Reasoning in
+[ADR 0002](docs/adr/0002-the-commit-convention-is-declared-in-one-document.md).
 
-- Imperative mood, lowercase after the colon, no trailing period, whole line ≤ 72 characters.
-- `<scope>` is optional but preferred. Use the tool (`coexistence`, `tree-viewer`, `pack`, `upload`,
+Two things are this repository's own:
+
+- **Scope vocabulary.** Use the tool (`coexistence`, `tree-viewer`, `pack`, `upload`,
   `commit-check`) or the area (`docs`, `repo`).
-- The emoji is the *rendered* character, not the `:shortcode:`.
+- **Extraction** — use **🚚 `refactor`**, and name the origin repo and commit in the body.
 
-**Types, and the emoji that goes with each**
+`.githooks/commit-msg` runs `scripts/commit-check.ps1` on the message before the commit is written.
+Git does not track `.git/hooks`, so each clone opts in once:
 
-| Type | Emoji | Use for |
-|---|---|---|
-| `feat` | ✨ | a new capability |
-| `fix` | 🐛 | a bug fix |
-| `docs` | 📝 | documentation only |
-| `refactor` | ♻️ | restructuring with no behaviour change |
-| `perf` | ⚡️ | performance |
-| `test` | ✅ | tests |
-| `build` | 📦 | packaging, dependencies |
-| `chore` | 🔧 | tooling and config |
-| `style` | 🎨 | formatting and code structure only |
-| `revert` | ⏪️ | reverting a previous commit |
-
-A few situational ones worth knowing: 🎉 to begin a project, 🚚 to move or rename files, 🔥 to remove
-code or files, 🌐 for localisation, 💄 for icons and other visual assets, 🚧 for work in progress.
-
-**Extraction** — use **🚚 `refactor`**, and name the origin repo and commit in the body.
-
-**Body** — explain *why*, not what the diff already shows. Wrap at 72. Reference the Factorio API
-version when a change depends on one.
-
-**Breaking changes** — for anything that breaks a consuming repo's interface, put `!` before the
-colon *and* a `BREAKING CHANGE:` footer explaining the migration.
-
-Example:
-
-```
-🚚 refactor(commit-check): adopt commit-check.ps1 from the mod repo
-
-Moved from realistic-fusion-refreshed at 4fc73cf. It had no references
-to that project, so it transfers unchanged. Removed there in the same
-change; no copy is left behind.
-```
+    git config core.hooksPath .githooks
 
 ## Agent skills
 
