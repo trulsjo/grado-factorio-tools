@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
-    Checks a commit message against the format CLAUDE.md lays down: gitmoji, Conventional Commits,
-    a subject of 72 characters or fewer, and a body wrapped at 72.
+    Checks a commit message against the format docs/commit-convention.md lays down: gitmoji,
+    Conventional Commits, a subject of 72 characters or fewer, and a body wrapped at 72.
 
 .DESCRIPTION
     A GATE, and the only one here that reads a commit message. It starts no game and touches no
@@ -9,8 +9,9 @@
     that build a map -- and like ship-check it exists because the thing it reads is prose that
     every other gate is blind to.
 
-    WHY IT EXISTS. CLAUDE.md has said "Wrap at 72" since the repository started, and nothing was
-    reading it. Measured by this script against the last fifty commits on main, 2026-09-06:
+    WHY IT EXISTS. `realistic-fusion-refreshed`, where this was written, had said "Wrap at 72" in
+    its CLAUDE.md since that repository started, and nothing was reading it. Measured by this
+    script against the last fifty commits on its main, 2026-09-06:
     21 of the 50 are rejected, on 183 body lines over 72 and 5 subject lines over 72 -- the
     longest subject being 82 characters. The argument reached for at review time was that a rule
     main breaks this widely must not really apply. That is backwards: a rule nothing enforces is a
@@ -23,7 +24,8 @@
     commits in 50. Stated because a gate whose own justification is unmeasured is the thing it
     exists to prevent.
 
-    WHAT IT CHECKS, and every rule here is quoted from CLAUDE.md's "Commit messages" section:
+    WHAT IT CHECKS, and every rule here is quoted from docs/commit-convention.md, which is where
+    this repository and both consumers declare the convention -- see ADR 0002:
 
       subject   <emoji> <type>(<scope>): <subject>, with the RENDERED emoji rather than a
                 :shortcode:. Imperative mood is not checkable and is not checked.
@@ -49,11 +51,11 @@
         person. The repository's OWN merges are written by hand as `🔀 chore(repo): merge ...` and
         are checked like anything else.
 
-    ON 🔀. CLAUDE.md's table does not list it and this script accepts it, because the repository has
-    used it for merge commits eight times and a gate that failed those would be asserting a rule
-    nobody agreed to. It is accepted the way the other situational emoji are -- with any type --
-    rather than given a row of its own. If that is wrong, the fix is one line in $SITUATIONAL and a
-    row in CLAUDE.md, and it should be CLAUDE.md first.
+    ON 🔀. The convention's table does not list it and this script accepts it, because the origin
+    repository had used it for merge commits eight times and a gate that failed those would be
+    asserting a rule nobody agreed to. It is accepted the way the other situational emoji are --
+    with any type -- rather than given a row of its own. If that is wrong, the fix is one line in
+    $SITUATIONAL and a row in docs/commit-convention.md, and it should be the document first.
 
 .PARAMETER Path
     The file holding the message to check. This is what git passes a `commit-msg` hook. Comment
@@ -66,7 +68,7 @@
     Reports every commit that fails and exits non-zero if any did.
 
 .PARAMETER SelfTest
-    Prove the checker can FAIL. A gate that only ever passes is a gate that has stopped reading, so
+    Prove this check can FAIL. A gate that only ever passes is a gate that has stopped reading, so
     this runs a table of messages that must each be rejected for a named reason, and a table that
     must be accepted. It starts nothing and takes about a second.
 
@@ -101,17 +103,20 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $OutputEncoding = [Text.Encoding]::UTF8
 
-# The width every rule here is about. One number, named once, because CLAUDE.md states it once.
+# The width every rule here is about. One number, named once, because the convention states it
+# once.
 $LIMIT = 72
 
-# CLAUDE.md's table, type by type. The emoji is the rendered character, which is the rule as much
+# The convention's table, type by type. The emoji is the rendered character, which is the rule as
+# much
 # as the pairing is -- a :shortcode: fails the emoji test below rather than passing quietly.
 $TYPES = [ordered]@{
     feat = '✨'; fix = '🐛'; docs = '📝'; refactor = '♻️'; perf = '⚡️'
     test = '✅'; build = '📦'; chore = '🔧'; style = '🎨'; revert = '⏪️'
 }
 
-# "A few situational ones worth knowing", which CLAUDE.md lists without binding to a type -- so
+# "A few situational ones worth knowing", which the convention lists without binding to a type --
+# so
 # they are accepted with any type. 🔀 is the one addition; see ON 🔀 above.
 $SITUATIONAL = @('🎉', '🚚', '🔥', '🌐', '💄', '🚧', '🔀')
 
@@ -218,7 +223,7 @@ function Test-CommitMessage([string[]] $raw) {
         $text = $Matches.subject
 
         if (-not $TYPES.Contains($type)) {
-            $bad.Add("'$type' is not one of the types CLAUDE.md lists: $($TYPES.Keys -join ', ')")
+            $bad.Add("'$type' is not one of the types the convention lists: $($TYPES.Keys -join ', ')")
         } elseif ($isKnown -and (Normalise $emoji) -notin ($SITUATIONAL | ForEach-Object { Normalise $_ }) -and
                   (Normalise $emoji) -ne (Normalise $TYPES[$type])) {
             $bad.Add("$type takes $($TYPES[$type]), not $emoji")
@@ -379,14 +384,22 @@ if (-not (Test-Path -LiteralPath $Path)) { throw "no such message file: $Path" }
 
 $problems = Test-CommitMessage @(Get-Content -LiteralPath $Path -Encoding utf8)
 if ($problems.Count) {
+    # WHERE THE RULES ARE WRITTEN, resolved from this script rather than printed as a path relative
+    # to the repository being committed to. In a consumer the document sits inside the submodule,
+    # at vendor/grado-factorio-tools/docs/, so a bare "docs/commit-convention.md" names nothing
+    # there. Resolved rather than linked to GitHub because this is the copy at the commit that
+    # consumer pinned, and main may have moved on from it.
+    $convention = Join-Path (Split-Path $PSScriptRoot -Parent) 'docs/commit-convention.md'
+
     Write-Host ''
-    Write-Host 'This commit message does not match the format in CLAUDE.md:'
+    Write-Host 'This commit message does not match the convention:'
     foreach ($p in $problems) { Write-Host "  - $p" }
     Write-Host ''
     Write-Host '  <emoji> <type>(<scope>): <subject>      subject and body both wrap at 72'
     Write-Host '  feat ✨  fix 🐛  docs 📝  refactor ♻️  perf ⚡️  test ✅'
     Write-Host '  build 📦  chore 🔧  style 🎨  revert ⏪️'
     Write-Host ''
+    Write-Host "The rules are written in $convention"
     Write-Host 'The message is kept, so `git commit -e -F .git/COMMIT_EDITMSG` reopens it.'
     exit 1
 }
