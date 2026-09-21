@@ -1,0 +1,24 @@
+#!/bin/sh
+# Checks the message against docs/commit-convention.md, which is where the rules and the reasons
+# live. This file is only the wiring, so git has something without an extension to run.
+#
+# INSTALL, once per clone, because git does not track .git/hooks:
+#
+#     git config core.hooksPath .githooks
+#
+# The message file survives a rejection, so `git commit -e -F .git/COMMIT_EDITMSG` reopens what you
+# typed rather than making you write it again.
+#
+# THIS REPOSITORY RESOLVES THE CHECK DIRECTLY, because it cannot be a submodule of itself. A
+# sibling resolves it from vendor/grado-factorio-tools instead, so this hook does NOT exercise the
+# submodule mechanism and a green run here proves nothing about a sibling.
+#
+# pwsh is what every other script here needs, so a clone that can run the gates can run this. If it
+# is genuinely missing, say so and let the commit through rather than blocking work on a machine
+# that was never going to run the gates either.
+if ! command -v pwsh >/dev/null 2>&1; then
+    echo "commit-msg: pwsh not found, so the message format was NOT checked." >&2
+    exit 0
+fi
+
+exec pwsh -NoProfile -File "$(git rev-parse --show-toplevel)/scripts/commit-check.ps1" "$1"
