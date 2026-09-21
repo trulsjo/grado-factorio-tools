@@ -58,9 +58,18 @@ The modpack was wired first on purpose — it is the cheaper consumer to be wron
 there would have been the mechanism rather than the other repository.
 
 **The pin has been exercised, not just installed.** `0e421eb` changed the check's rejection message
-here (issue #10) and changed nothing in either sibling until each bumped. Measured at each bump: a
-sweep of 504 commits in `realistic-fusion-refreshed` and 26 in `grado-factorio-modpack` produced
-output byte-identical to before — 144 and 3 rejected, the same commits for the same named reasons.
+here (issue #10) and changed nothing in either sibling until each bumped.
+
+Measured at each bump, 2026-09-22: a sweep of 504 commits in `realistic-fusion-refreshed` and all
+26 in `grado-factorio-modpack` produced output byte-identical to the same sweep before the bump —
+144 and 3 rejected, the same commits for the same named reasons. The 144 is **not** a change from
+the 145 that issue #4 records: that baseline was the 504 commits ending at `8a4fb90`, and this one
+is the 504 ending at today's `main`, so the two spans are different sets. What is compared here is
+before against after on one span, which is the only comparison that means anything.
+
+The check each sibling was wired at is byte-identical to the origin copy: `8a4fb90`'s 393 lines and
+19,407 bytes, unchanged through `5d3c561`. `0e421eb` is the first commit for which that stops being
+true, and it is after both wirings.
 
 **The abandon tripwire never fired.** It was to stop the work if wiring a sibling needed a third
 setup step or a change to `commit-check.ps1` itself. Both siblings are two steps per clone, and
