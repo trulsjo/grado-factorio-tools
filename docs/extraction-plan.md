@@ -42,8 +42,11 @@ is gated — neither decided.
 - **`realistic-fusion-refreshed` is actively developed and its gates depend on these scripts.**
   Extraction is a refactor of a working repo, not a copy. A move that breaks `ship-check` or
   `load-check` costs more than the duplication it removes.
-- **There is no dependency mechanism between the repos yet.** A git submodule, a vendored copy, or a
-  published module are all different answers with different costs, and none is chosen.
+- ~~**There is no dependency mechanism between the repos yet.**~~ **Settled 2026-09-21: a git
+  submodule**, per [ADR 0001](adr/0001-siblings-consume-this-repo-as-a-submodule.md). A vendored
+  copy was rejected on two grounds: its drift gate would need a network fetch on every commit to
+  know it had drifted, and — the heavier one — a copy left behind in a sibling is the thing this
+  repo exists to prevent. Cost was what ruled out the published module, not vendoring.
 - **Copying is not extracting.** Two copies that drift are worse than one file in the wrong repo.
   Whatever moves should leave nothing behind.
 - **The reference counts above are a proxy.** A low count does not prove a script is generic; it

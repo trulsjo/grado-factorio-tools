@@ -28,8 +28,10 @@ Whatever moves leaves nothing behind.
 ## The decisions that are Truls's
 
 - **Which scripts move, and in what order.**
-- **How the sibling repos consume this one** — git submodule, vendored copy, published PowerShell
-  module. None is chosen, and the answer shapes every extraction after it.
+- ~~**How the sibling repos consume this one.**~~ **Decided 2026-09-21: a git submodule**, pinned to
+  a commit each sibling bumps deliberately. See
+  [ADR 0001](docs/adr/0001-siblings-consume-this-repo-as-a-submodule.md), which records why
+  vendoring and a published module were rejected, and the audience assumption the choice rests on.
 - **Where the mod portal API key lives** and what gates a release.
 - **The licence.** No `LICENSE` file yet. The sibling `realistic-fusion-refreshed` is LGPLv3 because
   it carries Krastorio 2 code; that reasoning does not transfer to tooling written from scratch.
