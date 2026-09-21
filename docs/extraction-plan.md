@@ -39,7 +39,8 @@ Two things measured during the move, both of which correct what this plan and
 
 - **`grado-factorio-modpack` already held a byte-identical copy**, with its own
   `.githooks/commit-msg`, added in `172848a`. So the duplication this extraction removes is real
-  rather than hypothetical, and that repo was never ungated.
+  rather than hypothetical. That repo has been gated since `172848a`, its fourth commit — the three
+  before it are ungated and all three fail the check.
 - **Nothing but the hook depended on it in `realistic-fusion-refreshed`.** `commit-check` is named
   only by `.githooks/commit-msg` and twice in prose in that repo's `CLAUDE.md`. `ship-check.ps1`
   does not call it, so the "a move that breaks `ship-check`" risk below does not apply to this

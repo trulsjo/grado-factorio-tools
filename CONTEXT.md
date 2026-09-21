@@ -60,4 +60,5 @@ A repository that resolves a tool from here rather than holding a copy of it. Th
 *origin*: origin is where a tool was written, consumer is where it is used after the move — and a
 repository is usually both. A repository holding its own copy is not a consumer, however identical
 that copy is today.
-_Avoid_: client, dependent, downstream — "upstream" is already spoken for, so its mirror is too
+_Avoid_: client, dependent, downstream — "upstream" here means predecessor mod code in the sibling
+repository, so "downstream" cannot be pressed into service as its mirror.
