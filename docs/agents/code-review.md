@@ -53,22 +53,23 @@ branch:
 |---|---|---|
 | the rejection rationale | 75 | `docs/extraction-plan.md` said the vendored copy "was rejected partly on cost". ADR 0001, added in the same PR, rejects it on the no-network constraint and on principle — cost is what ruled out the *published module*. Two documents in one changeset disagreed about their own decision |
 | the banned word | 75 | `CLAUDE.md` wrote "one checker" in the same commit that added `CONTEXT.md` listing `checker` under `_Avoid_`, for the concept `CONTEXT.md` uses as its worked example |
-| the situational count | 75 | the commit message and PR body claimed the sibling has "seven" situational emoji. It lists six. The seventh, 🔀, exists only in `commit-check.ps1`, which the sibling's own `CLAUDE.md` deliberately omits |
+| the situational count | 75 | the commit message and PR body claimed the sibling has "seven" situational emoji. It lists six. The seventh, 🔀, existed only in `commit-check.ps1` — **declared 2026-09-21** in `docs/commit-convention.md`, and recharacterised by ADR 0002 as undetected drift rather than a deliberate omission |
 
-A fourth, `CLAUDE.md`'s State section still enumerating the repository as three files, scored 60 and
-is partly pre-existing. The siblings measured the same shape: ten findings and zero posted across
-realistic-fusion-refreshed's PRs #124, #126 and #127, nine of them real; nine findings and zero
-posted on the modpack's first PR, the two highest both real.
+A fourth, `CLAUDE.md`'s State section still enumerating the repository as three files, scored 60,
+was partly pre-existing, and was fixed 2026-09-21. The siblings measured the same shape: ten
+findings and zero posted across realistic-fusion-refreshed's PRs #124, #126 and #127, nine of them
+real; nine findings and zero posted on the modpack's first PR, the two highest both real.
 
 **Note the pattern in all three of this repository's 75s: the shipped artefact was correct and the
 prose describing it was wrong.** The emoji table was right and the sentence counting it was wrong.
 
 ## Review the prose, not only the code
 
-**This repository is prose and nothing else.** Nothing has been extracted, so there is no script
-here to run, no gate to fail, and nothing that can be loaded in Factorio to contradict a claim. The
-first gate it will get is the commit check, which reads the *shape* of a commit message and says so
-in its own header. A wrong sentence in this repository has no natural enemy.
+**This repository is almost entirely prose.** ~~Nothing has been extracted, so there is no script
+here to run, no gate to fail.~~ **Changed 2026-09-21:** `scripts/commit-check.ps1` is here and
+gates every commit. Nothing can still be loaded in Factorio to contradict a claim, and the one gate
+there is reads the *shape* of a commit message and says so in its own header — so the point is
+undiminished. A wrong sentence in this repository has no natural enemy.
 
 ### The rule
 
@@ -77,9 +78,10 @@ look plausible" — count it out. A line count, a reference count, a number of t
 tally of repositories: each is a claim with an arithmetic answer, and the answer is usually in the
 same diff.
 
-**Treat a quantifier as an instruction to enumerate.** "Nothing has been extracted", "every
-earmarked script still lives there", "none of the three repos has CI" — a claim about *all* or
-*none* of a set is checked by walking the set, never by agreeing with its tone.
+**Treat a quantifier as an instruction to enumerate.** "The check exists exactly once", "nothing
+has been extracted", "that repo was never ungated" — a claim about *all* or *none* of a set is
+checked by walking the set, never by agreeing with its tone. Every one of those three was written
+in this repository and every one was false.
 
 **When a change supersedes a figure, grep the repository for the old one**, and read every hit in a
 file that records a measurement. Here that is `docs/extraction-plan.md`, `docs/adr/`, `CLAUDE.md`,
@@ -103,13 +105,15 @@ the obligation lives in the review.
 
 ### Measured, not assumed
 
-Every defect this repository has produced has been prose, and none was catchable by machinery
-because there is no machinery:
+Every defect this repository has produced has been prose, and none was catchable by the machinery
+it has. There is a gate now — `scripts/commit-check.ps1`, since 2026-09-21 — and it reads the shape
+of a commit message, not the truth of a sentence. It would have caught none of these:
 
 | what escaped | where it was |
 |---|---|
-| **the extraction spec argued from a false premise** — that moving the commit check removes duplication. It removes none: the check exists exactly once, and the two repositories without it had shipped 135 pull requests between them without missing it. Caught by a grilling pass, not a review | issue #1, rewritten |
-| **"0 project references" was read as "portable"** and it is not. `commit-check.ps1` names the project zero times and is still coupled to one repository's convention through its emoji table. The plan's own method section warns the count undercounts; the verdict column ignored its own warning | `docs/extraction-plan.md` |
+| **the extraction spec argued from a false premise** — that moving the commit check removes duplication. Caught by a grilling pass, not a review. ~~It removes none: the check exists exactly once, and the two repositories without it had shipped 135 pull requests between them.~~ **The correction was itself wrong, 2026-09-21**, and in the opposite direction: `grado-factorio-modpack` held a byte-identical copy, so the check existed twice; only one repository was ungated, and only for its first three commits; and 135 is `realistic-fusion-refreshed`'s own PR count, never a total for the two. The duplication is real | issue #1, rewritten twice |
+| **"0 project references" was read as "portable"** and the inference was the thing to watch. The plan's own method section warns the count undercounts; the verdict column ignored its own warning | `docs/extraction-plan.md` |
+| ~~the emoji table is what couples `commit-check.ps1` to one repository~~ — the worked example of the row above, and **it did not survive measurement (2026-09-21)**: all three type tables are identical, so the table coupled the check to nothing. The coupling is real but elsewhere — the script's header names `CLAUDE.md` as the authority and carries the sibling's own measurements into a repository where they are false | `docs/extraction-plan.md`, ADR 0002, issue #10 |
 | **a blocking edge that was simply wrong** — ticket #3 was marked blocked by the consumption decision. A repository that *holds* a check consumes it through no mechanism at all; it has the file | the tracker, corrected |
 | **the worked example broke the rule it demonstrates** — the commit-message example in `CLAUDE.md` exceeded 72 characters by one and by two. Found only by running the sibling's check against it | `CLAUDE.md`, fixed |
 

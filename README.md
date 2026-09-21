@@ -35,9 +35,9 @@ Three things, in the order Truls named them:
    so in its own header: *"It uploads nothing and it changes no version."* This repo is where that
    machinery gets written.
 
-Likely to follow, because they are about *a* Factorio mod rather than *this* Factorio mod: the commit
-message checker, the locale and prototype-name checks, and the parts of the PowerShell helper library
-that are not RFR-specific.
+Likely to follow, because they are about *a* Factorio mod rather than *this* Factorio mod: the
+locale and prototype-name checks, and the parts of the shared PowerShell library that are not
+RFR-specific. The commit-message check has already moved — see Status above.
 
 ## What does not belong here
 

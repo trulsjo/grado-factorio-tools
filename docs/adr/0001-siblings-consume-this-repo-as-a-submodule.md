@@ -17,8 +17,11 @@ than settled in passing.
 
 The decision was taken against five constraints, established before the options were scored:
 
-- **One developer.** One commit author across the history, 135 pull requests all by the owner, no
-  forks, no CI. Designing for contributors who have not arrived would mean paying ceremony forever.
+- **One developer.** One commit author across the history, all by the owner, no forks, no CI. The
+  figure of 135 pull requests, quoted here and elsewhere without its subject, is
+  `realistic-fusion-refreshed` alone; across the three repositories it is 144 (135, 6 and 3,
+  recounted 2026-09-21). The constraint is unaffected — one author either way — but the number was
+  being read as a total. Designing for contributors who have not arrived would mean paying ceremony forever.
 - **No action at a distance.** Editing a tool here must not change a sibling's behaviour until that
   sibling opts in. Deliberate version skew is not wanted; a half-finished edit silently becoming
   another repository's gate is.
@@ -36,6 +39,12 @@ primary mechanism.
 
 Sibling repositories consume this one as a **git submodule**, pinned to a commit each sibling bumps
 deliberately.
+
+**Mounted at `vendor/grado-factorio-tools`** — decided 2026-09-21 alongside the first extraction,
+and recorded here because the mount path is the other half of this decision: it is where every
+`.gitmodules` entry and every relative pointer in a sibling resolves. `vendor/` says *not ours,
+your edit is lost on the next bump* to a human and to an agent without needing a README, where
+`tools/` would sit beside `scripts/` and read as a second place to put your own.
 
 ## Considered options
 
