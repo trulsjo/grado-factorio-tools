@@ -48,6 +48,11 @@ prototype name is that mod's business. If a script needs to know `rf-`, it stays
 
 ```
 scripts/     PowerShell entry points, one job each
-tools/       Python helpers
-docs/        what was extracted, from where, and why
+.githooks/   this repo's own commit-msg hook, opted into once per clone
+docs/        the commit convention, the ADRs, the notes agents read, and the
+             extraction record — what moved, from where, and why
+LICENSE      MIT; see CLAUDE.md for why this repo's licence is not a sibling's
 ```
+
+There is no Python here, and nothing is written in anticipation of any. A directory appears above
+once it exists.
