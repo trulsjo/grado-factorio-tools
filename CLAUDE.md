@@ -107,14 +107,20 @@ prefix. One format, no exceptions:
 
 **The rules live in [`docs/commit-convention.md`](docs/commit-convention.md)** — the type table,
 the situational emoji, the subject and body limits, and what the check is blind to. That page is
-the single declaration for this repository and for every repository that consumes it; the siblings
-point at it rather than restating it. Reasoning in
+the single declaration for this repository and for every repository that will consume it. The
+siblings do **not** point at it yet — both still carry the full table — and they are repointed in
+[#9](https://github.com/trulsjo/grado-factorio-tools/issues/9) and
+[#4](https://github.com/trulsjo/grado-factorio-tools/issues/4). Reasoning in
 [ADR 0002](docs/adr/0002-the-commit-convention-is-declared-in-one-document.md).
 
-Two things are this repository's own:
+Three things are this repository's own:
 
 - **Scope vocabulary.** Use the tool (`coexistence`, `tree-viewer`, `pack`, `upload`,
   `commit-check`) or the area (`docs`, `repo`).
+- **What counts as a breaking change.** Here: anything that breaks a consuming repository's
+  interface. The `!` and the `BREAKING CHANGE:` footer are shared mechanics; what triggers them is
+  domain knowledge, and a sibling's answer is its own — save compatibility in the mod repo, a
+  dependency change an existing save cannot survive in the modpack.
 - **Extraction** — use **🚚 `refactor`**, and name the origin repo and commit in the body.
 
 `.githooks/commit-msg` runs `scripts/commit-check.ps1` on the message before the commit is written.
