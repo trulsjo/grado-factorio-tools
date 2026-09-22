@@ -49,16 +49,21 @@ Two things measured during the move, both of which correct what this plan and
 **Both siblings wired, both copies gone.** Each carries this repo as a submodule at
 `vendor/grado-factorio-tools`, pinned to a commit it bumps deliberately:
 
-| Consumer | Wired in | Pinned at | Bumped in |
-|---|---|---|---|
-| `grado-factorio-modpack` | issue #9 | `0e421eb` | `93dd5f3` |
-| `realistic-fusion-refreshed` | issue #4 | `0e421eb` | `5f54299` |
+| Consumer | Wired in | Pinned at | Bump commit | On |
+|---|---|---|---|---|
+| `grado-factorio-modpack` | issue #9 | `5d3c561` → `0e421eb` | `93dd5f3` | `bump-shared-check-convention` |
+| `realistic-fusion-refreshed` | issue #4 | `5d3c561` → `0e421eb` | `5f54299` | `bump-shared-check-convention` |
+
+**The bumps are on branches, not on either `main`.** Both siblings landed their wiring through a
+pull request and this follows that; until each is merged, a clone of either `main` still resolves
+the check at `5d3c561` and still prints the old rejection text. The `Pinned at` column is what the
+bump commit sets, not what `main` reads today.
 
 The modpack was wired first on purpose — it is the cheaper consumer to be wrong in, so a failure
 there would have been the mechanism rather than the other repository.
 
 **The pin has been exercised, not just installed.** `0e421eb` changed the check's rejection message
-here (issue #10) and changed nothing in either sibling until each bumped.
+here (issue #10) and changes nothing in either sibling until each bumps.
 
 Measured at each bump, 2026-09-22, and **named by commit rather than by `main`**, because `main`
 moves and a span written as `-504 main` stops meaning what it meant:

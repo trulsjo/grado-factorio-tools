@@ -15,9 +15,11 @@ at `vendor/grado-factorio-tools`, each pinned to a commit it bumps deliberately.
 repositories, no copies — see
 [issue #1](https://github.com/trulsjo/grado-factorio-tools/issues/1).
 
-The mechanism has been exercised, not just installed: `0e421eb` changed the check here and changed
-nothing in either sibling until each bumped its pin. That is the one property
-[ADR 0001](docs/adr/0001-siblings-consume-this-repo-as-a-submodule.md) was chosen for.
+The mechanism has been exercised, not just installed: `0e421eb` changed the check here and changes
+nothing in either sibling until each bumps its pin. That is the one property
+[ADR 0001](docs/adr/0001-siblings-consume-this-repo-as-a-submodule.md) was chosen for. Both bumps
+are written and sitting on a `bump-shared-check-convention` branch in their own repository; see
+`docs/extraction-plan.md` for which commit each is.
 
 **The abandon tripwire never fired.** It was to stop the work if wiring a sibling needed a third
 setup step or a change to `commit-check.ps1` itself. Both siblings are two steps per clone
