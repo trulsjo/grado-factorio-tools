@@ -15,17 +15,7 @@ at `vendor/grado-factorio-tools`, each pinned to a commit it bumps deliberately.
 repositories, no copies — see
 [issue #1](https://github.com/trulsjo/grado-factorio-tools/issues/1).
 
-The mechanism has been exercised, not just installed: `0e421eb` changed the check here and changes
-nothing in either sibling until each bumps its pin. That is the one property
-[ADR 0001](docs/adr/0001-siblings-consume-this-repo-as-a-submodule.md) was chosen for. Both bumps
-are written and sitting on a `bump-shared-check-convention` branch in their own repository; see
-`docs/extraction-plan.md` for which commit each is.
-
-**The abandon tripwire never fired.** It was to stop the work if wiring a sibling needed a third
-setup step or a change to `commit-check.ps1` itself. Both siblings are two steps per clone
-(`git submodule update --init`, then `git config core.hooksPath .githooks`) and both were wired
-with the check byte-identical to the origin copy. The later edit to the check was its own decision
-with its own ticket, which is why it is a separate commit after the wiring rather than inside it.
+The pins, the bump commits and the tripwire's answer are in `docs/extraction-plan.md`.
 
 Everything else named in `docs/extraction-plan.md` still lives in `realistic-fusion-refreshed`,
 still works there, and is still covered by that repo's gates. No next move has been chosen yet.
