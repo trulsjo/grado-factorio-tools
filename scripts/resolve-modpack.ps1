@@ -13,7 +13,7 @@
     THE METHOD is grado-factorio-modpack's docs/porting-notes.md, "Resolves on stable 2.0.77":
 
       pick     For each mod, its newest release whose factorio_version equals -Line and whose
-               `base` constraint -Build satisfies. Newest by version number, which is what the
+               mandatory `base` constraint -Build meets. Newest by version number, which is what the
                mod manager installs.
       walk     The mandatory closure from those picks: every dependency with no prefix or a `~`
                prefix. `?`, `(?)` and `!` are not followed. The game's own mods -- base,
@@ -142,7 +142,7 @@ function Select-Release {
         $ok = $true
         foreach ($d in @($r.info_json.PSObject.Properties['dependencies']?.Value | Where-Object { $_ })) {
             $dep = ConvertFrom-Dependency $d
-            if ($dep.Name -eq 'base' -and $dep.Kind -ne 'incompatible' -and -not (Test-Constraint $Build $dep.Op $dep.Version)) { $ok = $false }
+            if ($dep.Name -eq 'base' -and $dep.Kind -in 'required', 'unordered' -and -not (Test-Constraint $Build $dep.Op $dep.Version)) { $ok = $false }
         }
         if ($ok) { $r }
     }
@@ -214,7 +214,7 @@ function Resolve-Packs {
             foreach ($d in $member.Dependencies) {
                 $dep = ConvertFrom-Dependency $d
                 if ($dep.Name -eq 'base') {
-                    if (-not $member.Local -and $dep.Op -in '>=', '>' -and (-not $floor -or (ConvertTo-Version $dep.Version) -gt (ConvertTo-Version $floor))) {
+                    if (-not $member.Local -and $dep.Kind -in 'required', 'unordered' -and $dep.Op -in '>=', '>' -and (-not $floor -or (ConvertTo-Version $dep.Version) -gt (ConvertTo-Version $floor))) {
                         $floor = $dep.Version; $floorBy = "$name $($member.Version)"
                     }
                     continue
@@ -232,7 +232,7 @@ function Resolve-Packs {
         }
 
         $declared = @($Packs[$packName].dependencies | ForEach-Object { ConvertFrom-Dependency $_ } |
-            Where-Object { $_.Name -eq 'base' -and $_.Op }) | Select-Object -First 1
+            Where-Object { $_.Name -eq 'base' -and $_.Kind -in 'required', 'unordered' -and $_.Op }) | Select-Object -First 1
         $picks = [ordered]@{}
         foreach ($name in $closure.Keys) { if (-not $closure[$name].Local) { $picks[$name] = $closure[$name].Version } }
 
@@ -308,6 +308,7 @@ function Invoke-SelfTest {
         'only-2.1' = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.1'; dependencies = @() } })
         'enemy-of-content' = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0'; dependencies = @() } })
         'no-deps'  = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0' } })
+        'soft-base' = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0'; dependencies = @('? base >= 2.0.99', 'base >= 2.0.10') } })
         'empty'    = @()
     }
     # Through JSON, so each release has the shape Invoke-RestMethod hands back rather than a hashtable's.
@@ -350,6 +351,9 @@ function Invoke-SelfTest {
         @{ Name = 'a mod with no releases is not reported as unknown; a release with no dependencies resolves'; Test = {
             $r = & $resolve (& $pack 'P' @('empty', 'no-deps'))
             $r[0].Unresolved.Count -eq 1 -and $r[0].Unresolved[0] -match '^empty: no release declares' -and $r[0].Picks['no-deps'] -eq '1.0.0' } }
+        @{ Name = 'an optional base line neither disqualifies a release nor sets the floor'; Test = {
+            $r = & $resolve (& $pack 'P' @('soft-base'))
+            $r[0].Picks['soft-base'] -eq '1.0.0' -and $r[0].Floor -eq '2.0.10' -and -not $r[0].Unresolved } }
         @{ Name = 'a pack named by another pack is walked locally, and each pack gets its own closure'; Test = {
             $r = & $resolve (& $pack 'Low' @('lib')), (& $pack 'High' @('Low', 'hater'))
             $r[0].Picks.Keys -join ',' -eq 'lib' -and -not $r[0].Violations -and
