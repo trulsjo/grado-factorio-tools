@@ -43,7 +43,7 @@
     scrubbed before it is rethrown; and the ErrorRecord PowerShell files in $Error is DROPPED, because
     a scrubbed message is not the only copy -- the record's TargetObject holds the request URI, token
     and all, even when the message does not. `-SelfTest` proves all of it with a sentinel rather than
-    asserting it, and checks 2/5 and 5/5 are two different checks for that reason: a child process
+    asserting it, and checks 3/6 and 6/6 are two different checks for that reason: a child process
     takes its $Error to the grave, so only an in-process call can see that leak.
 
     WHAT IT CANNOT SEE. It fetches what the manifest names and nothing else: a dependency the
@@ -323,7 +323,7 @@ function Get-PortalRelease {
         [Parameter(Mandatory)] [string] $BaseUrl
     )
 
-    $url = "$BaseUrl/api/mods/$Name/full"
+    $url = "$BaseUrl/api/mods/$([uri]::EscapeDataString($Name))/full"
     try { $full = Invoke-RestMethod -Uri $url -Method Get -Verbose:$false }
     catch { throw "$Name`: could not reach the mod portal API at $url -- $($_.Exception.Message)" }
 
@@ -566,10 +566,12 @@ function Start-FakePortal {
 }
 
 function Invoke-SelfTest {
-    <#  Prove the five things a passing fetch does not show.
+    <#  Prove the six things a passing fetch does not show.
 
-        Every portal check runs the real script in a child process against the loopback portal above,
-        so what is exercised is the shipped code path rather than a re-implementation of it.  #>
+        Every portal check but the last runs the real script in a child process against the loopback
+        portal above, so what is exercised is the shipped code path rather than a re-implementation
+        of it. The last, 6/6, calls Save-PortalMod in this process, because a child takes its $Error
+        with it and that is the leak 6/6 looks for.  #>
     param([Parameter(Mandatory)] [string] $ScriptPath, [string] $UserPinFile)
 
     $temp = Join-Path ([IO.Path]::GetTempPath()) ('fetchmods-selftest-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
