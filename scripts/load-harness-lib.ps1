@@ -17,13 +17,19 @@
     19e2d92 (grado-factorio-tools#16). The harness moved and the invariants did not: everything
     here is what that script did around its checks -- build an isolated mod directory, junction or
     copy the mods in, write the mod list, create a throwaway map, report which way it went. The
-    functions taken from factorio-lib.ps1 keep their names and bodies; New-ModJunctions takes
+    functions taken from factorio-lib.ps1 keep their names and code, with some doc comments
+    trimmed to what is true outside that repository; New-ModJunctions takes
     source paths rather than a repository root, and the harness functions are new.
 
     IT NEVER TOUCHES THE PLAYER'S GAME. Mods go into a mod directory under a temp directory, and
     every run gets a write-data directory of its own there (Invoke-Factorio), so the player's mods,
-    mod-list.json, saves and player-data.json are neither read nor written. Mods are junctioned
-    rather than copied, so Remove-LoadHarness deletes the junctions before the directory.
+    mod-list.json, saves and player-data.json are neither read nor written. Mod directories are
+    junctioned in rather than copied, and zips are copied, so Remove-LoadHarness deletes the
+    junctions before the directory.
+
+    WHAT IT CANNOT SEE, as a harness. A load validates prototypes and runs on_init; it loads no
+    sprites or sounds and runs no ticks. Invoke-HarnessLoad reports Loaded and the game's error
+    text; what a pass should also require is the caller's to check.
 
     PowerShell 7 is required: 5.1's Remove-Item -Recurse follows junctions instead of skipping
     them, which would delete a mod's source through the link. Junctions make this Windows-only.
@@ -32,7 +38,8 @@
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 function Resolve-FactorioExe {
-    <#  Preferred path, then $env:FACTORIO_EXE, then the Steam install on this machine. #>
+    <#  Preferred path, then $env:FACTORIO_EXE, then the Steam path on the machine this was written
+        on -- which on any other machine means: pass one of the first two.  #>
     param([string] $Path)
 
     if (-not $Path) { $Path = $env:FACTORIO_EXE }
@@ -147,7 +154,7 @@ function Remove-TempDirectory {
 
         Factorio can hold a save open for a moment after exiting, so a single Remove-Item loses
         the race often enough to leak the directory silently. Always call Remove-ModJunctions
-        first: this follows junctions rather than skipping them.  #>
+        first: under PowerShell 5.1 this would follow junctions rather than skip them.  #>
     param(
         [Parameter(Mandatory)] [string] $Path,
         [string] $Label = 'cleanup'
