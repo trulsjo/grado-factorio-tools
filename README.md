@@ -18,6 +18,8 @@ holding a copy. No copy of it remains anywhere. Everything else named below stil
 [docs/extraction-plan.md](docs/extraction-plan.md) for what is earmarked, how entangled each piece
 is, what has moved, and what has to be written from nothing.
 
+**One tool written here from nothing:** `scripts/resolve-modpack.ps1`, below.
+
 The commit-message convention this repo and its siblings share is declared in
 [docs/commit-convention.md](docs/commit-convention.md).
 
@@ -38,6 +40,22 @@ Three things, in the order Truls named them:
 Likely to follow, because they are about *a* Factorio mod rather than *this* Factorio mod: the
 locale and prototype-name checks, and the parts of the shared PowerShell library that are not
 RFR-specific. The commit-message check has already moved — see Status above.
+
+## Resolving a modpack
+
+`scripts/resolve-modpack.ps1` answers, for a modpack and a game build, which release of each mod in
+the pack's mandatory closure that build would install, and whether those releases satisfy each
+other. A Grado pack runs it before every release, to check that its declared `base >=` minimum is
+still true. It reads only the public portal API, which needs no login.
+
+    pwsh -File scripts/resolve-modpack.ps1 -Line 2.0 -Build 2.0.77 -PinFile pins.psd1 `
+        Grado_NonChanging/info.json Grado_ChangingBase/info.json Grado_ABC/info.json `
+        Grado_ABCX/info.json Grado_ABCS/info.json
+
+Pass the pack and every pack it depends on; a pack named by another is read from those files
+rather than the portal. It prints, per pack, the effective floor and every violation or
+unresolvable member, and exits non-zero on either. `-PinFile` writes the picks as one set per pack.
+`-SelfTest` proves it can fail, with no network. What it cannot see is in its header.
 
 ## What does not belong here
 
