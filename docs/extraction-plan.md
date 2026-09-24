@@ -120,11 +120,11 @@ self-test fixture's name, twice, and its temp prefix, all renamed. They are:
 | `-Set` defaulting to `krastorio2` | the pin file's `Default` |
 | The cache under the script's parent directory, which in a submodule is `vendor/` | `.mod-cache/<set>` under the current directory |
 
-**The pins were the entanglement the proxy missed**: seventeen sets and lanes of one mod's version
+**The pins were the entanglement the proxy missed**: eleven sets and five lanes of one mod's version
 decisions, naming the project nowhere. The format did not have to be invented — each entry keeps
 the shape it had, and a `.psd1` takes the two hashtable literals verbatim, comments included.
-Measured: both literals lifted from `19e2d92` by AST into a `.psd1` resolve all seventeen sets and
-lanes identically through `-PinFile`, and `-SelfTest -PinFile` certifies that file's five lanes the
+Measured: both literals lifted from `19e2d92` by AST into a `.psd1` resolve all seventeen —
+those sixteen and the old self-test fixture — identically through `-PinFile`, and `-SelfTest -PinFile` certifies that file's five lanes the
 way the old self-test certified its own. So #456 is a file move plus call sites. The self-test
 now brings a fixture manifest of its own, which is the one change to its first half; the credential
 path, `Protect-Token`, the `$Error` scrub and the sha1 checks are unchanged, halves 2 to 6 assert
@@ -137,7 +137,7 @@ at the same `19e2d92`: `load-check.ps1` (blob `ddf0672`, last changed `c3758f7`)
 `factorio-lib.ps1` (blob `e7da675`, last changed `463aa6e`), on 2026-09-24,
 [#16](https://github.com/trulsjo/grado-factorio-tools/issues/16).
 
-Taken from `factorio-lib.ps1` with names and bodies kept: `Resolve-FactorioExe`,
+Taken from `factorio-lib.ps1` with names and code kept, and some doc comments trimmed to what is true outside that repository: `Resolve-FactorioExe`,
 `Get-FactorioDataDirectory`, `ConvertTo-NativeArgument`, `Invoke-Factorio`, `Write-FactorioTail`,
 `Remove-TempDirectory`, `Get-BundledMods`, `Resolve-BundledSelection`, `Write-ModList`,
 `Remove-ModJunctions`. `New-ModJunctions` takes a map of link name to source rather than a repo

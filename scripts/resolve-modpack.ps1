@@ -5,7 +5,7 @@
     constraint between the picks is violated.
 
 .DESCRIPTION
-    A CHECK, run before every pack release. A pack names its members without versions, so each
+    A CHECK, to be run before every pack release. A pack names its members without versions, so each
     member is served its newest release for the declared line -- and when a member publishes a
     release with a higher `base` floor, the pack's declared minimum silently stops being true.
     Ruled on grado-factorio-modpack#16, 2026-09-24.
@@ -54,10 +54,8 @@
 
 .PARAMETER PinFile
     Where to write the pinned list: a .psd1 of one set per pack, named after the pack --
-    `@{ Sets = @{ <pack> = @( @{ Name = ...; Version = ... } ) } }`. Each entry has the shape of an
-    entry in fetch-mods.ps1's $MOD_SETS in realistic-fusion-refreshed, which holds its pins inside
-    the script rather than reading a file; this is the file it is to read once it moves here
-    (grado-factorio-tools#15). Optional; without it only the report is printed.
+    `@{ Sets = @{ <pack> = @( @{ Name = ...; Version = ... } ) } }`, which is what fetch-mods.ps1
+    here reads as -PinFile. Optional; without it only the report is printed.
 
 .PARAMETER PortalBaseUrl
     The mod portal's base URL. Only /api/mods/<name>/full is read, which needs no login.
@@ -142,7 +140,7 @@ function Select-Release {
     $qualifying = foreach ($r in $Releases) {
         if ($r.info_json.factorio_version -ne $Line) { continue }
         $ok = $true
-        foreach ($d in @($r.info_json.dependencies)) {
+        foreach ($d in @($r.info_json.PSObject.Properties['dependencies']?.Value | Where-Object { $_ })) {
             $dep = ConvertFrom-Dependency $d
             if ($dep.Name -eq 'base' -and $dep.Kind -ne 'incompatible' -and -not (Test-Constraint $Build $dep.Op $dep.Version)) { $ok = $false }
         }
@@ -201,7 +199,7 @@ function Resolve-Packs {
                     if (-not $unresolved.Contains($p.Problem)) { $unresolved.Add($p.Problem) }
                     continue
                 }
-                $closure[$name] = @{ Version = $p.Release.version; Dependencies = @($p.Release.info_json.dependencies); Local = $false }
+                $closure[$name] = @{ Version = $p.Release.version; Dependencies = @($p.Release.info_json.PSObject.Properties['dependencies']?.Value | Where-Object { $_ }); Local = $false }
             }
             foreach ($d in $closure[$name].Dependencies) {
                 $dep = ConvertFrom-Dependency $d
@@ -240,7 +238,8 @@ function Resolve-Packs {
 
         [pscustomobject]@{
             Name       = $packName
-            Declared   = if ($declared) { $declared.Version } else { $null }
+            Declared   = if ($declared) { "$($declared.Op) $($declared.Version)" } else { $null }
+            DeclaredAt = if ($declared -and $declared.Op -in '>=', '>', '=') { $declared.Version } else { $null }
             Floor      = $floor
             FloorBy    = $floorBy
             Picks      = $picks
@@ -259,7 +258,7 @@ function ConvertTo-PinFile {
     [void] $out.AppendLine('@{')
     [void] $out.AppendLine('    Sets = @{')
     foreach ($r in $Results) {
-        [void] $out.AppendLine("        '$($r.Name)' = @(")
+        [void] $out.AppendLine("        '$($r.Name -replace "'", "''")' = @(")
         foreach ($name in ($r.Picks.Keys | Sort-Object)) {
             [void] $out.AppendLine("            @{ Name = '$($name -replace "'", "''")'; Version = '$($r.Picks[$name])' }")
         }
@@ -279,8 +278,11 @@ function Write-Report {
         $floor = if ($r.Floor) { "base >= $($r.Floor) (from $($r.FloorBy))" } else { 'none declared by any pick' }
         Write-Host ''
         Write-Host "$($r.Name): $($r.Picks.Count) mods, effective floor $floor"
-        if ($r.Floor -and (-not $r.Declared -or (ConvertTo-Version $r.Declared) -lt (ConvertTo-Version $r.Floor))) {
-            Write-Host "  declares base >= $($r.Declared), below that floor -- the pack's minimum is not true"
+        if ($r.Floor -and -not $r.DeclaredAt) {
+            Write-Host "  declares $(if ($r.Declared) { "base $($r.Declared)" } else { 'no base minimum' }), so it states no floor to hold"
+        }
+        elseif ($r.Floor -and (ConvertTo-Version $r.DeclaredAt) -lt (ConvertTo-Version $r.Floor)) {
+            Write-Host "  declares base $($r.Declared), below that floor -- the pack's minimum is not true"
         }
         foreach ($u in $r.Unresolved) { Write-Host "  UNRESOLVED  $u"; $pass = $false }
         foreach ($v in $r.Violations) { Write-Host "  VIOLATION   $v"; $pass = $false }
@@ -305,8 +307,12 @@ function Invoke-SelfTest {
         'picky'    = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0'; dependencies = @('? lib < 2.0.0', '? absent < 1.0.0') } })
         'only-2.1' = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.1'; dependencies = @() } })
         'enemy-of-content' = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0'; dependencies = @() } })
+        'no-deps'  = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0' } })
+        'empty'    = @()
     }
-    $get = { param($n) if ($portal.ContainsKey($n)) { $portal[$n] } else { $null } }
+    # Through JSON, so each release has the shape Invoke-RestMethod hands back rather than a hashtable's.
+    foreach ($k in @($portal.Keys)) { $portal[$k] = @(ConvertTo-Json -InputObject @($portal[$k]) -Depth 6 | ConvertFrom-Json) }
+    $get = { param($n) if ($portal.ContainsKey($n)) { return , $portal[$n] } else { $null } }
     $pack = { param($name, [string[]] $deps) @{ name = $name; version = '0.1.0'; dependencies = $deps } }
     $resolve = {
         param([hashtable[]] $infos)
@@ -324,7 +330,7 @@ function Invoke-SelfTest {
             (($r[0].Picks.Keys | Sort-Object) -join ',') -eq 'content,lib,mod with spaces' -and -not $r[0].Unresolved } }
         @{ Name = 'the floor is the highest base >= among the picks'; Test = {
             $r = & $resolve (& $pack 'P' @('base >= 2.0.0', 'content'))
-            $r[0].Floor -eq '2.0.60' -and $r[0].FloorBy -eq 'lib 2.4.0' -and $r[0].Declared -eq '2.0.0' } }
+            $r[0].Floor -eq '2.0.60' -and $r[0].FloorBy -eq 'lib 2.4.0' -and $r[0].Declared -eq '>= 2.0.0' } }
         @{ Name = 'a mandatory version constraint the closure misses is a violation'; Test = {
             $r = & $resolve (& $pack 'P' @('too-new'))
             $r[0].Violations.Count -eq 1 -and $r[0].Violations[0] -match "too-new 1\.0\.0 declares 'lib >= 2\.5\.0'.*lib 2\.4\.0" } }
@@ -341,6 +347,9 @@ function Invoke-SelfTest {
             $r = & $resolve (& $pack 'P' @('ghost', 'only-2.1'))
             $r[0].Unresolved.Count -eq 2 -and ($r[0].Unresolved -join ' ') -match 'ghost: the portal does not know' -and
                 ($r[0].Unresolved -join ' ') -match 'only-2\.1: no release declares factorio_version 2\.0' } }
+        @{ Name = 'a mod with no releases is not reported as unknown; a release with no dependencies resolves'; Test = {
+            $r = & $resolve (& $pack 'P' @('empty', 'no-deps'))
+            $r[0].Unresolved.Count -eq 1 -and $r[0].Unresolved[0] -match '^empty: no release declares' -and $r[0].Picks['no-deps'] -eq '1.0.0' } }
         @{ Name = 'a pack named by another pack is walked locally, and each pack gets its own closure'; Test = {
             $r = & $resolve (& $pack 'Low' @('lib')), (& $pack 'High' @('Low', 'hater'))
             $r[0].Picks.Keys -join ',' -eq 'lib' -and -not $r[0].Violations -and
@@ -382,7 +391,9 @@ foreach ($path in $InfoJson) {
 
 $getReleases = {
     param($name)
-    try { @((Invoke-RestMethod -Uri "$PortalBaseUrl/api/mods/$([uri]::EscapeDataString($name))/full" -Verbose:$false).releases) }
+    # The comma keeps a mod with no releases an empty array: unrolled, it would read as $null,
+    # which means a name the portal does not know.
+    try { return , @((Invoke-RestMethod -Uri "$PortalBaseUrl/api/mods/$([uri]::EscapeDataString($name))/full" -Verbose:$false).releases) }
     catch {
         $response = $_.Exception.PSObject.Properties['Response']?.Value
         if ($response -and [int] $response.StatusCode -eq 404) { return $null }

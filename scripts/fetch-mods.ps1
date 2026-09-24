@@ -46,6 +46,11 @@
     asserting it, and checks 2/5 and 5/5 are two different checks for that reason: a child process
     takes its $Error to the grave, so only an in-process call can see that leak.
 
+    WHAT IT CANNOT SEE. It fetches what the manifest names and nothing else: a dependency the
+    manifest omits is not fetched, and nothing here reports it -- that is the load's job, and
+    resolve-modpack.ps1's before it. Exit 0 says the mods are on disk at their pins, never that they
+    load together.
+
 .PARAMETER PinFile
     The manifest: a .psd1 holding the pinned sets, which is the caller's and not this script's.
 
@@ -56,8 +61,9 @@
                     @{ Name = 'flib'; Version = '0.16.2'; Git = 'https://github.com/factoriolib/flib.git' }
                     @{ Name = 'Krastorio2Assets'; Version = '2.0.5' }
                 )
+                riteg = @( @{ Name = 'RITEG'; Version = '1.3.11' } )
             }
-            Lanes = @{ 'k2-spaceex' = @('krastorio2', 'spaceex') }   # optional: unions of sets
+            Lanes = @{ 'k2-riteg' = @('krastorio2', 'riteg') }        # optional: unions of sets
         }
 
     Each entry is Name and Version, plus an optional Git URL -- a mod with one is cloned rather than
@@ -663,7 +669,10 @@ function Invoke-SelfTest {
             $script:MOD_SETS = $manifests[$label].Sets
             $script:COMBINED_SETS = $manifests[$label].Lanes
             foreach ($lane in $COMBINED_SETS.Keys) {
-                $lanes = @(Join-ModSets $COMBINED_SETS[$lane])
+                # A lane that refuses to compose is a finding, not a crash: the self-test is the run
+                # that exists to explain what went wrong, so it goes on to its other halves.
+                try { $lanes = @(Join-ModSets $COMBINED_SETS[$lane]) }
+                catch { $wrongSize += "$lane ($label) does not compose -- $($_.Exception.Message)"; continue }
                 $composed["$lane ($label)"] = $lanes.Count
                 $distinct = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
                 foreach ($family in $COMBINED_SETS[$lane]) {

@@ -33,7 +33,7 @@
     load-harness-lib.ps1 for what is picked up from a directory.
 
 .PARAMETER FactorioExe
-    Path to Factorio.exe. Defaults to $env:FACTORIO_EXE, then the Steam install on this machine.
+    Path to Factorio.exe. Defaults to $env:FACTORIO_EXE, then the Steam path Resolve-FactorioExe names.
 
 .PARAMETER With
     Bundled mods to enable, comma-separated, e.g. -With space-age. Dependencies are pulled in, so
@@ -134,9 +134,6 @@ exit 0
             if (-not (Test-Path -LiteralPath $root)) { continue }
             Get-ChildItem -LiteralPath $root -Recurse -File -Force -ErrorAction SilentlyContinue |
                 ForEach-Object { "$($_.FullName)|$($_.Length)|$($_.LastWriteTimeUtc.Ticks)" }
-            if ((Get-Item -LiteralPath $root) -is [IO.FileInfo]) {
-                $f = Get-Item -LiteralPath $root; "$($f.FullName)|$($f.Length)|$($f.LastWriteTimeUtc.Ticks)"
-            }
         }
     }
     $userBefore = @(& $fingerprint)
