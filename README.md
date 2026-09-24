@@ -13,8 +13,11 @@ Siblings that consume it, each carrying this repo as a submodule at `vendor/grad
 
 **One tool extracted, and that extraction is finished.** `scripts/commit-check.ps1` is here, this
 repo's own `commit-msg` hook runs it, and both siblings resolve it from the submodule rather than
-holding a copy. No copy of it remains anywhere. Everything else named below still lives in
-`realistic-fusion-refreshed` and is still that repo's, working and gated. See
+holding a copy. No copy of it remains anywhere.
+
+**Two more are here, and not yet gone from their origin.** `scripts/fetch-mods.ps1` and the load
+harness moved on 2026-09-24; `realistic-fusion-refreshed` keeps its own copies until its rewire
+tickets delete them. Everything else named below still lives there, working and gated. See
 [docs/extraction-plan.md](docs/extraction-plan.md) for what is earmarked, how entangled each piece
 is, what has moved, and what has to be written from nothing.
 
@@ -30,8 +33,9 @@ Nothing is moved out of a working repo until it is agreed — see `CLAUDE.md`.
 Three things, in the order Truls named them:
 
 1. **Coexistence checking** — loading a mod alongside other mod sets and proving they still load.
-   In `realistic-fusion-refreshed` this is `load-check.ps1 -AlsoModDirectory` plus `fetch-mods.ps1`,
-   which fills a cache with third-party mods at pinned versions, git first and the portal as fallback.
+   Here: `fetch-mods.ps1` fills a cache with third-party mods at pinned versions, git first and the
+   portal as fallback, and `load-harness.ps1` loads a set of mods in isolation and says whether it
+   loaded. A mod's own invariants stay in its own repository and run on top — see below.
 2. **Technology tree viewer** — renders a mod set's tech tree as a self-contained zoomable HTML page.
 3. **Mod portal upload** — **does not exist yet, anywhere.** `pack-mods.ps1` builds the zips and says
    so in its own header: *"It uploads nothing and it changes no version."* This repo is where that
@@ -56,6 +60,24 @@ Pass the pack and every pack it depends on; a pack named by another is read from
 rather than the portal. It prints, per pack, the effective floor and every violation or
 unresolvable member, and exits non-zero on either. `-PinFile` writes the picks as one set per pack.
 `-SelfTest` proves it can fail, with no network. What it cannot see is in its header.
+
+## Checking that mods coexist
+
+Three steps, no glue between them: resolve a pack (above) to a pin file, fetch that set into a
+cache, and load the cache.
+
+    pwsh -File scripts/fetch-mods.ps1 -PinFile pins.psd1 -Set Grado_NonChanging
+    pwsh -File scripts/load-harness.ps1 .mod-cache/Grado_NonChanging path/to/Grado_NonChanging
+
+`fetch-mods.ps1` reads no pins of its own: `-PinFile` is the consumer's manifest, and its header
+shows the format. A mod with a Git entry is cloned at its tag; any other is downloaded from the
+portal with the credentials Factorio keeps in `player-data.json`, so sign in to the game once.
+
+`load-harness.ps1` takes mod directories, zips, or directories of them, and never touches the
+player's mods, saves or `player-data.json`. `-With space-age` enables bundled mods. A consumer with
+checks of its own passes `-Check <script>`, or dot-sources `load-harness-lib.ps1` to dump the data
+stage and load again under other mod lists. Both scripts take `-SelfTest`; the harness's needs the
+game installed.
 
 ## What does not belong here
 
