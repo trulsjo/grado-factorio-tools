@@ -64,8 +64,9 @@ pull request and this follows that; until each is merged, a clone of either `mai
 the check at `5d3c561` and still prints the old rejection text.~~ **Both merged 2026-09-22**, as
 `realistic-fusion-refreshed` `7567254` and `grado-factorio-modpack` `828ce4b`. The `Pinned at`
 column is what those bumps set, not what either `main` reads today: **both now pin `99d4b57`**,
-moved by `realistic-fusion-refreshed` `84db1b6` (see *The contract half*) and
-`grado-factorio-modpack` `ad9ead7`, both 2026-09-24.
+moved by `grado-factorio-modpack` `ad9ead7` on 2026-09-24 and by `realistic-fusion-refreshed`
+`84db1b6`, on that repository's `main` since PR #465 was merged on 2026-09-25 (see *The contract
+half*).
 
 The modpack was wired first on purpose — it is the cheaper consumer to be wrong in, so a failure
 there would have been the mechanism rather than the other repository.
