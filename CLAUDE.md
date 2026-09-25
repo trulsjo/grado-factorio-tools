@@ -20,6 +20,10 @@ The pins, the bump commits and the tripwire's answer are in `docs/extraction-pla
 **Two more are extracted and finished.** `fetch-mods.ps1` and the load-check harness are here and
 nowhere else (#15 and #16 here, contracted by `realistic-fusion-refreshed`'s #456 to #462) — see *Expanded and
 contracted* in `docs/extraction-plan.md`.
+**One is expanded, not contracted.** `pack-mods.ps1` is here, parameterised (#19), while
+`realistic-fusion-refreshed`'s copy and the modpack's `Publish-PackZip` still work unchanged. Two
+copies of it, and a third zipper, stand until each sibling's rewire ticket lands — see *Expanded,
+not yet contracted* in `docs/extraction-plan.md`.
 `resolve-modpack.ps1` was written here, not moved (#14). Everything else named in the plan still
 lives in `realistic-fusion-refreshed`, still works there, and is still covered by that repo's
 gates.
