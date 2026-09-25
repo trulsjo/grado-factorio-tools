@@ -30,7 +30,7 @@ through an assumed directory layout or an invariant without ever naming it.
 |---|---|---|---|
 | ~~`scripts/commit-check.ps1`~~ | 393 | **0** | **Moved 2026-09-21.** See *Extracted* below. |
 | ~~`scripts/fetch-mods.ps1`~~ | 1,049 | 3 | **Expanded 2026-09-24, contracted 2026-09-25.** See *Expanded and contracted* below. Fills a cache directory with third-party mods at pinned versions — git first, portal as fallback. This is half of the coexistence check and the more reusable half. |
-| `scripts/pack-mods.ps1` | 322 | 7 | **Expanded 2026-09-25**, not yet contracted; see *Expanded, not yet contracted* below. **Moved and parameterised.** Builds one distributable zip per mod, named as the portal requires, and enforces the version bounds the portal enforces at upload. The natural home for the upload step that does not exist yet. |
+| `scripts/pack-mods.ps1` | 322 | 7 | **Expanded 2026-09-25**, not yet contracted; see *Expanded, not yet contracted* below. **Copied here and parameterised; the origin copy stays until the rewires.** Builds one distributable zip per mod, named as the portal requires, and enforces the version bounds the portal enforces at upload. The natural home for the upload step that does not exist yet. |
 | `scripts/tree-viewer.ps1` + `tree-viewer.template.html` + `tree-layout-probe.js` | 533 + 2 files | 7 | **Move the set.** Renders a mod set's technology tree as a self-contained zoomable HTML viewer. Already takes a mod set rather than assuming one. |
 | `scripts/locale-check.ps1` | 391 | — | **Probably move.** Fails if a prototype would show a player something other than its proper name. The rule is general; only the prototype list is local. |
 | `scripts/name-check.ps1` | 1,749 | — | **Probably move.** Fails if a repo defines a prototype name that is not its own, or one another mod already claims. General rule, large implementation. |
@@ -219,7 +219,7 @@ that repository's HEAD as `2e7b034` when it was filed. That commit is on branch 
 is the pre-rebase form of `bf001d9`, which is on `main`. The file is blob `efb098a` at all three.
 
 **Why now:** `grado-factorio-modpack` grew a second, weaker zipper — `stage-pack.ps1`'s
-`Publish-PackZip` (grado-factorio-modpack#24, PR #63), which packs every file under the pack
+`Publish-PackZip` (grado-factorio-modpack#24, PR #56), which packs every file under the pack
 directory and checks only `x.y.z`. So three zippers stand — the origin, `Publish-PackZip` and this
 one — until both rewires land.
 
