@@ -21,6 +21,9 @@ Everything else named below still lives there, working and gated. See
 [docs/extraction-plan.md](docs/extraction-plan.md) for what is earmarked, how entangled each piece
 is, what has moved, and what has to be written from nothing.
 
+**One more is here but not yet extracted:** `scripts/pack-mods.ps1`, below. Its copy in
+`realistic-fusion-refreshed` still works, until that repository and the modpack each adopt this one.
+
 **One tool written here from nothing:** `scripts/resolve-modpack.ps1`, below.
 
 The commit-message convention this repo and its siblings share is declared in
@@ -78,6 +81,20 @@ player's mods, saves or `player-data.json`. `-With space-age` enables bundled mo
 checks of its own passes `-Check <script>`, or dot-sources `load-harness-lib.ps1` to dump the data
 stage and load again under other mod lists. Both scripts take `-SelfTest`; the harness's needs the
 game installed.
+
+## Packing mods
+
+`scripts/pack-mods.ps1` builds one zip per mod directory, named `<name>_<version>.zip` from the
+mod's own `info.json`, with `info.json` in a single top-level folder — the shape the portal and the
+game take.
+
+    pwsh -File scripts/pack-mods.ps1 -OutputDirectory dist my-mod my-mod-graphics
+
+What goes in is what git tracks under each directory, read from the working tree; untracked files
+are reported and left out. A version the portal would reject — not `x.y.z`, a component above
+65535, or `0.0.0` — is refused, and nothing is written. Any other version's zip of the same mod in
+the output directory is deleted, so one copy is left. It uploads nothing. `-SelfTest` proves it
+can fail, in a scratch repository of its own.
 
 ## What does not belong here
 

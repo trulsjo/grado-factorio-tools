@@ -8,7 +8,11 @@ here and nowhere else; both siblings resolve it from this repo as a submodule.
 **Two more are extracted, and finished too.** `fetch-mods.ps1` and the load-check harness are here
 and nowhere else: `realistic-fusion-refreshed` deleted its copies, reads its pins from a file of
 its own, and takes every harness function from this repository's `load-harness-lib.ps1`. See
-*Expanded and contracted* below. Everything else still lives in `realistic-fusion-refreshed`.
+*Expanded and contracted* below.
+
+**One is expanded and not yet contracted:** `pack-mods.ps1` is here, parameterised, and its
+origin copy still works unchanged, so **two copies exist until the rewire tickets** — see
+*Expanded, not yet contracted* below. Everything else still lives in `realistic-fusion-refreshed`.
 
 This file is an inventory, and — for whatever has moved — the record of where it came from.
 
@@ -26,7 +30,7 @@ through an assumed directory layout or an invariant without ever naming it.
 |---|---|---|---|
 | ~~`scripts/commit-check.ps1`~~ | 393 | **0** | **Moved 2026-09-21.** See *Extracted* below. |
 | ~~`scripts/fetch-mods.ps1`~~ | 1,049 | 3 | **Expanded 2026-09-24, contracted 2026-09-25.** See *Expanded and contracted* below. Fills a cache directory with third-party mods at pinned versions — git first, portal as fallback. This is half of the coexistence check and the more reusable half. |
-| `scripts/pack-mods.ps1` | 322 | 7 | **Move, parameterise.** Builds one distributable zip per mod, named as the portal requires, and enforces the version bounds the portal enforces at upload. The natural home for the upload step that does not exist yet. |
+| `scripts/pack-mods.ps1` | 322 | 7 | **Expanded 2026-09-25**, not yet contracted; see *Expanded, not yet contracted* below. **Moved and parameterised.** Builds one distributable zip per mod, named as the portal requires, and enforces the version bounds the portal enforces at upload. The natural home for the upload step that does not exist yet. |
 | `scripts/tree-viewer.ps1` + `tree-viewer.template.html` + `tree-layout-probe.js` | 533 + 2 files | 7 | **Move the set.** Renders a mod set's technology tree as a self-contained zoomable HTML viewer. Already takes a mod set rather than assuming one. |
 | `scripts/locale-check.ps1` | 391 | — | **Probably move.** Fails if a prototype would show a player something other than its proper name. The rule is general; only the prototype list is local. |
 | `scripts/name-check.ps1` | 1,749 | — | **Probably move.** Fails if a repo defines a prototype name that is not its own, or one another mod already claims. General rule, large implementation. |
@@ -205,6 +209,54 @@ now dot-sources `load-harness-lib.ps1` from the submodule, and `scripts/fetch-mo
 defines is defined under `scripts/` or `tools/` there. One consequence is recorded in PR #465:
 every script there that loads `factorio-lib.ps1` — `ship-check.ps1` and `pack-mods.ps1` included,
 which start no game — now needs the submodule initialised.
+
+## Expanded, not yet contracted
+
+**`scripts/pack-mods.ps1`** — from `realistic-fusion-refreshed` at
+`5671460c05c6c38d5895b6d4d04edc9cc75e1709` (the file last changed in `0b40a22`; blob `efb098a`),
+on 2026-09-25, [#19](https://github.com/trulsjo/grado-factorio-tools/issues/19). Issue #19 names
+that repository's HEAD as `2e7b034` when it was filed. That commit is on branch `pr-465` only; it
+is the pre-rebase form of `bf001d9`, which is on `main`. The file is blob `efb098a` at all three.
+
+**Why now:** `grado-factorio-modpack` grew a second, weaker zipper — `stage-pack.ps1`'s
+`Publish-PackZip` (grado-factorio-modpack#24, PR #63), which packs every file under the pack
+directory and checks only `x.y.z`. So three zippers stand — the origin, `Publish-PackZip` and this
+one — until both rewires land.
+
+Of the seven references the grep counts, all seven are the self-test — its temp prefix, one comment,
+and five uses of `realistic-fusion-refreshed-core` as the fixture. The entanglement it missed is
+the layout, as the method section warns:
+
+| Was | Is now |
+|---|---|
+| The mods, from `factorio-lib.ps1`'s `Get-RepoMods` | the mod directories, as trailing arguments |
+| Paths relative to the script's parent directory | each directory's own git work tree, so the mods need not share one |
+| `-OutputDirectory` defaulting to `dist/` in that repository | required |
+| The self-test packing that repository's three mods, with the plant in `realistic-fusion-refreshed-core/prototypes/.omc` | a scratch git repository of fixture mods; the planted-file half kept, the plant still under an ignored `.omc/` |
+| A closing hint to run `load-check.ps1 -FromZips` | dropped |
+
+**One behaviour changed, as #19 asked: one copy per mod.** The origin replaces only a zip of the
+same name and version, so a version bump left the old zip beside the new. Here, once a mod's new zip
+is in place, every other `<name>_<x.y.z>.zip` of it in the output directory is deleted; a mod whose
+name only contains this one stays, and so does anything that is not a zip. That is narrower than
+`Publish-PackZip`, which also removes `<name>_<x.y.z>` and `<name>` directories — the modpack's
+rewire has to decide whether it still needs that. The rewire changes one more thing: the folder
+inside the zip is `<name>/`, as the origin's is, where `Publish-PackZip` writes `<name>_<version>/`.
+The portal and the game take either. Two refusals are new too: the same mod given
+twice, and a directory outside any git work tree. And every manifest is now read before any zip is
+written, so a refused mod stops the run with nothing packed, where the origin had already packed
+every mod before it.
+
+**Measured, 2026-09-25**, against `realistic-fusion-refreshed` at `5671460`: the three mods packed
+by the origin and by this script give the same entries, the same sizes and the same CRC-32s — 41,
+20 and 178, 239 in all. `-SelfTest` passes 14 cases, and each of eight mutations to the script
+turns at least one red: packing the untracked and ignored set, dropping either version bound,
+dropping the one-copy removal, unanchoring its pattern, dropping the duplicate guard, dropping the
+up-front missing-file guard, and leaving a relative output directory unresolved.
+
+**Contract half, not started.** `realistic-fusion-refreshed` (`pack-mods.ps1`, and
+`load-check.ps1 -FromZips`, which calls it) and `grado-factorio-modpack` (`Publish-PackZip`) each
+adopt it in a ticket of their own. Until both land, this is a copy, not an extraction.
 
 ## What has to be written, not moved
 
