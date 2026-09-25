@@ -25,13 +25,13 @@ through an assumed directory layout or an invariant without ever naming it.
 | Script | Lines | Project refs | Verdict |
 |---|---|---|---|
 | ~~`scripts/commit-check.ps1`~~ | 393 | **0** | **Moved 2026-09-21.** See *Extracted* below. |
-| `scripts/fetch-mods.ps1` | 1,049 | 3 | **Moved 2026-09-24, finished 2026-09-25.** See *Expanded and contracted* below. Fills a cache directory with third-party mods at pinned versions — git first, portal as fallback. This is half of the coexistence check and the more reusable half. |
+| ~~`scripts/fetch-mods.ps1`~~ | 1,049 | 3 | **Expanded 2026-09-24, contracted 2026-09-25.** See *Expanded and contracted* below. Fills a cache directory with third-party mods at pinned versions — git first, portal as fallback. This is half of the coexistence check and the more reusable half. |
 | `scripts/pack-mods.ps1` | 322 | 7 | **Move, parameterise.** Builds one distributable zip per mod, named as the portal requires, and enforces the version bounds the portal enforces at upload. The natural home for the upload step that does not exist yet. |
 | `scripts/tree-viewer.ps1` + `tree-viewer.template.html` + `tree-layout-probe.js` | 533 + 2 files | 7 | **Move the set.** Renders a mod set's technology tree as a self-contained zoomable HTML viewer. Already takes a mod set rather than assuming one. |
 | `scripts/locale-check.ps1` | 391 | — | **Probably move.** Fails if a prototype would show a player something other than its proper name. The rule is general; only the prototype list is local. |
 | `scripts/name-check.ps1` | 1,749 | — | **Probably move.** Fails if a repo defines a prototype name that is not its own, or one another mod already claims. General rule, large implementation. |
 | `scripts/factorio-lib.ps1` | 1,357 | **22** | **Split, do not move whole.** The shared PowerShell library, and the most entangled file in the list. Needs a real read to separate what is generic from what is RFR's. |
-| `scripts/load-check.ps1` | 2,294 | many | **Harness moved 2026-09-24, finished 2026-09-25**, as `load-harness.ps1` and `load-harness-lib.ps1`; see below. **Move the harness, not the file.** Most of it is thirteen RFR-specific invariants that belong to that mod. What is generic is the surrounding machinery: build an isolated mod directory, junction or zip the mods in, create a throwaway map, report which way it loaded. That harness is the other half of the coexistence check. |
+| `scripts/load-check.ps1` | 2,294 | many | **Harness expanded 2026-09-24, contracted 2026-09-25**, as `load-harness.ps1` and `load-harness-lib.ps1`; see below. **Move the harness, not the file.** Most of it is thirteen RFR-specific invariants that belong to that mod. What is generic is the surrounding machinery: build an isolated mod directory, junction or zip the mods in, create a throwaway map, report which way it loaded. That harness is the other half of the coexistence check. |
 
 ## Extracted
 
@@ -59,10 +59,13 @@ Two things measured during the move, both of which correct what this plan and
 | `grado-factorio-modpack` | issue #9 | `5d3c561` → `0e421eb` | `93dd5f3` | `bump-shared-check-convention` |
 | `realistic-fusion-refreshed` | issue #4 | `5d3c561` → `0e421eb` | `5f54299` | `bump-shared-check-convention` |
 
-**The bumps are on branches, not on either `main`.** Both siblings landed their wiring through a
+~~**The bumps are on branches, not on either `main`.** Both siblings landed their wiring through a
 pull request and this follows that; until each is merged, a clone of either `main` still resolves
-the check at `5d3c561` and still prints the old rejection text. The `Pinned at` column is what the
-bump commit sets, not what `main` reads today.
+the check at `5d3c561` and still prints the old rejection text.~~ **Both merged 2026-09-22**, as
+`realistic-fusion-refreshed` `7567254` and `grado-factorio-modpack` `828ce4b`. The `Pinned at`
+column is what those bumps set, not what either `main` reads today: **both now pin `99d4b57`**,
+moved by `realistic-fusion-refreshed` `84db1b6` (see *The contract half*) and
+`grado-factorio-modpack` `ad9ead7`, both 2026-09-24.
 
 The modpack was wired first on purpose — it is the cheaper consumer to be wrong in, so a failure
 there would have been the mechanism rather than the other repository.
@@ -153,7 +156,7 @@ mods junctioned or zipped in, a throwaway map, "exit 0 but no save" as a failure
 consumer dot-sources to run its own checks; `load-harness.ps1` is the same as a command, with
 `-Check` for a caller with one script to run. **Nothing of Realistic Fusion's own came across**:
 not the invariants (`check_prototypes()` runs them inside the game, on the map the harness creates), not the
-asset, containment, render or mockup gates, and not `Find-MissingAssets`, which is generic but a
+asset, containment, render, socket or mockup gates, and not `Find-MissingAssets`, which is generic but a
 check rather than harness and is a candidate of its own.
 
 ### The contract half
@@ -162,8 +165,9 @@ All of it landed in `realistic-fusion-refreshed` through
 [PR #465](https://github.com/trulsjo/realistic-fusion-refreshed/pull/465), rebase-merged on
 2026-09-25, which put that repository's `main` at `5671460`. It superseded
 [PR #464](https://github.com/trulsjo/realistic-fusion-refreshed/pull/464), which held only the first
-two commits, under other hashes, and was closed unmerged. The measurements are the commits' own, and
-the PR's; none was re-run here.
+two commits, under their pre-rebase hashes, and was closed unmerged. The measurements are the
+commits' own, and the PR's, and none was re-run here; the one check made here is the last
+paragraph's, that no copy is left.
 
 | Consumer commit | Ticket | What it did |
 |---|---|---|
@@ -174,9 +178,9 @@ the PR's; none was re-run here.
 | `8aece32` | [#462](https://github.com/trulsjo/realistic-fusion-refreshed/issues/462) | deleted `factorio-lib.ps1`'s own `New-ModJunctions` |
 
 Four fixes followed on the same PR: `e037275` (#463, a bad `-With` refused before any zip is
-built, as before #457), and `181f9c5`, `bf001d9` and `5671460` from its reviews — one of them a
-regression #458 introduced, where `ship-check -SelfTest`'s runner canary copied `factorio-lib.ps1`
-to `%TEMP%` and could no longer find the submodule from there.
+built, as before #457); `181f9c5` and `5671460` from its reviews; and `bf001d9`, which a full sweep
+of the gates caught — a regression #458 introduced, where `ship-check -SelfTest`'s runner canary
+copied `factorio-lib.ps1` to `%TEMP%` and could no longer find the submodule from there.
 
 **The fetcher.** Measured at `84db1b6`: all 16 sets and lanes resolve to the same names, versions,
 git URLs and tags from the old literals and from `mod-sets.psd1`; fresh fills of `fluid`, `riteg`
@@ -200,6 +204,7 @@ now dot-sources `load-harness-lib.ps1` from the submodule, and `scripts/fetch-mo
 defines is defined under `scripts/` or `tools/` there. One consequence is recorded in PR #465:
 every script there that loads `factorio-lib.ps1` — `ship-check.ps1` and `pack-mods.ps1` included,
 which start no game — now needs the submodule initialised.
+
 ## What has to be written, not moved
 
 **Mod portal upload.** It does not exist in any repo. `pack-mods.ps1` is explicit in its own header:
