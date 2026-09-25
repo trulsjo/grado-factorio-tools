@@ -15,9 +15,9 @@ Siblings that consume it, each carrying this repo as a submodule at `vendor/grad
 repo's own `commit-msg` hook runs it, and both siblings resolve it from the submodule rather than
 holding a copy. No copy of it remains anywhere.
 
-**Two more are here, and not yet gone from their origin.** `scripts/fetch-mods.ps1` and the load
-harness moved on 2026-09-24; `realistic-fusion-refreshed` keeps its own copies until its rewire
-tickets delete them. Everything else named below still lives there, working and gated. See
+**Two more are extracted and finished.** `scripts/fetch-mods.ps1` and the load harness are here and
+nowhere else: `realistic-fusion-refreshed` deleted its copies and takes both from the submodule.
+Everything else named below still lives there, working and gated. See
 [docs/extraction-plan.md](docs/extraction-plan.md) for what is earmarked, how entangled each piece
 is, what has moved, and what has to be written from nothing.
 

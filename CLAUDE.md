@@ -17,9 +17,9 @@ repositories, no copies — see
 
 The pins, the bump commits and the tripwire's answer are in `docs/extraction-plan.md`.
 
-**Two more are half-way.** `fetch-mods.ps1` and the load-check harness have moved here (the
-expand half, #15 and #16), and `realistic-fusion-refreshed` still holds its copies until its
-rewire tickets delete them — see *Expanded, not yet contracted* in `docs/extraction-plan.md`.
+**Two more are extracted and finished.** `fetch-mods.ps1` and the load-check harness are here and
+nowhere else (#15 and #16 here, contracted by that repository's #456 to #462) — see *Expanded and
+contracted* in `docs/extraction-plan.md`.
 `resolve-modpack.ps1` was written here, not moved (#14). Everything else named in the plan still
 lives in `realistic-fusion-refreshed`, still works there, and is still covered by that repo's
 gates.
