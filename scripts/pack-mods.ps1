@@ -31,8 +31,21 @@
     `better-armor_0.3.6` -- while "the folder inside the zip file does not have any naming
     restrictions". info.json must sit in that top-level folder. The name is computed from
     info.json rather than passed in, and the mod directory's own name must equal info.json's
-    `name`: the folder inside the zip is the directory's name, and a zip named after one mod and
-    filled from another is one the portal would accept, since it only reads the name.
+    `name`: the zip and its folder are named from info.json while the files come from the
+    directory, and a zip named after one mod and filled from another is one the portal would
+    accept, since it only reads the name.
+
+    NAMES ARE CASE-SENSITIVE. That documentation says nothing about case, so it was measured on
+    2026-09-26 against Factorio 2.0.77 (build 84539): a zip `Alpha_1.0.0.zip` or a directory
+    `Alpha` holding a mod named `alpha` is refused with "doesn't match the expected
+    alpha_1.0.0.zip (case sensitive!)", and a dependency on `Alpha` with only `alpha` present
+    fails as "Missing required dependency Alpha". The mod portal agrees: /api/mods/Krastorio2
+    answers and /api/mods/krastorio2 is "Mod not found". So `Alpha` and `alpha` are two mods. The
+    name check refuses a case-only mismatch, and the one-copy rule leaves the other case's zips
+    alone -- whatever the check accepts, the rule cleans up after. Two places cannot follow that,
+    because at one version the two mods' zips are one file on a case-insensitive file system:
+    packing `alpha` 1.0.0 replaces an `Alpha_1.0.0.zip` already there, and giving both in one run
+    is refused as the same mod twice.
 
     THE VERSION BOUNDS are the portal's: major.minor.sub, each 0-65535, and 0.0.0 invalid. A regex
     of three digit-runs accepts 0.0.0 and 1.0.99999, which the portal rejects at upload, so the
@@ -59,10 +72,10 @@
 
 .PARAMETER SelfTest
     Prove this script can fail. Builds a scratch git repository of fixture mods and checks the
-    naming, the layout, the version bounds, the one-copy rule and -- the half that matters -- the
-    exclusion, by planting a git-ignored file inside a mod directory and proving it does not reach
-    the zip while its tracked neighbour does. Without that half, "no junk in the zip" is a claim
-    about a directory that happened to be clean. Needs git; touches no repository but its own.
+    naming, the layout, the version bounds, the one-copy rule, that it and the name check agree on
+    case, and -- the half that matters -- the exclusion, by planting a git-ignored file inside a
+    mod directory and proving it does not reach the zip while its tracked neighbour does. Without
+    that half, "no junk in the zip" is a claim about a directory that happened to be clean. Needs git; touches no repository but its own.
 
 .EXAMPLE
     pwsh -File scripts/pack-mods.ps1 -OutputDirectory dist my-mod my-mod-graphics
@@ -88,14 +101,18 @@ function Get-ModManifest {
 
     if (-not (Test-Path -LiteralPath $Directory -PathType Container)) { throw "mod directory not found: $Directory" }
     $dir = (Resolve-Path -LiteralPath $Directory).ProviderPath.TrimEnd('\', '/')
-    $leaf = Split-Path $dir -Leaf
+    # From Get-Item, not from the path: on a case-insensitive file system Resolve-Path keeps the
+    # case it was typed in, so `alpha` would pass the name check for a directory named `Alpha`.
+    $leaf = (Get-Item -LiteralPath $dir).Name
 
     $infoPath = Join-Path $dir 'info.json'
     if (-not (Test-Path -LiteralPath $infoPath)) { throw "$leaf has no info.json" }
     $info = Get-Content -LiteralPath $infoPath -Raw | ConvertFrom-Json
 
-    if ($info.name -ne $leaf) {
-        throw "$leaf/info.json declares name '$($info.name)'. The zip is named from info.json and its folder from the directory, so these must agree."
+    # -cne, as the one-copy rule's -cmatch: Factorio compares mod names case-sensitively (see the
+    # header), so the two must agree or a name this accepts is one that rule does not clean up after.
+    if ($info.name -cne $leaf) {
+        throw "$leaf/info.json declares name '$($info.name)'. The zip is named from info.json and the files come from the directory, so these must agree."
     }
     if ($info.version -notmatch '^\d{1,5}\.\d{1,5}\.\d{1,5}$') {
         throw "$leaf/info.json version '$($info.version)' is not major.minor.sub."
@@ -184,6 +201,8 @@ function Invoke-Pack {
     )
 
     $manifests = @($Directory | ForEach-Object { Get-ModManifest -Directory $_ })
+    # Case-insensitive on purpose: `alpha` and `Alpha` are two mods, but at one version their zips
+    # are one file on a case-insensitive file system (see the header).
     $twice = @($manifests | Group-Object Name | Where-Object Count -gt 1 | ForEach-Object Name)
     if ($twice) { throw "given more than once: $($twice -join ', '). One copy per mod means the second would delete the first." }
 
@@ -257,6 +276,7 @@ function Invoke-SelfTest {
     & $put 'beta/data.lua' '-- beta'
     & $put 'gamma/info.json' (& $info 'gamma' '1.0.0')
     & $put 'misnamed/info.json' (& $info 'somebody-else' '1.0.0')
+    & $put 'Delta/info.json' (& $info 'delta' '1.0.0')
     git -C $repo add -A
     # After the add, so neither is tracked. The plant is IGNORED, not merely untracked, or it
     # demonstrates the wrong thing: ls-files --cached leaves out untracked files too, so an
@@ -317,6 +337,16 @@ function Invoke-SelfTest {
             ($left -join ',') -eq 'alpha_1.2.3.zip,alpha_extra_1.0.0.zip,alpha-2_1.0.0.zip,my-alpha_1.0.0.zip' } }
         @{ Name = 'a directory whose name is not info.json''s name is refused'; Test = {
             & $refused { Invoke-Pack -Directory (Join-Path $repo 'misnamed') -Destination $out -Quiet } "declares name 'somebody-else'" } }
+        @{ Name = 'names are compared case-sensitively by both halves: a case-only mismatch is refused, and another case''s zip stays'; Test = {
+            # Both halves in one case, so either one going case-insensitive on its own turns it red.
+            # On a case-insensitive file system the path is also passed in the wrong case, which
+            # proves the directory's name is read from disk and not from how it was typed.
+            $delta = @(Join-Path $repo 'Delta') + @(Join-Path $repo 'delta' | Where-Object { Test-Path -LiteralPath $_ })
+            $nameCheck = foreach ($d in $delta) { & $refused { Invoke-Pack -Directory $d -Destination $out -Quiet } "Delta/info.json declares name 'delta'" }
+            Set-Content -LiteralPath (Join-Path $out 'Alpha_0.9.0.zip') -Value 'another mod, to Factorio'
+            Invoke-Pack -Directory $alpha -Destination $out -Quiet -WarningAction SilentlyContinue | Out-Null
+            -not ($nameCheck -contains $false) -and
+                (Get-ChildItem -LiteralPath $out -File | Where-Object Name -ceq 'Alpha_0.9.0.zip') } }
         @{ Name = 'a mod directory outside any git work tree is refused'; Test = {
             $loose = Join-Path $temp 'loose'
             New-Item -ItemType Directory -Path $loose -Force | Out-Null
