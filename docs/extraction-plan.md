@@ -247,12 +247,24 @@ twice, and a directory outside any git work tree. And every manifest is now read
 written, so a refused mod stops the run with nothing packed, where the origin had already packed
 every mod before it.
 
+**The name check is case-sensitive since
+[#23](https://github.com/trulsjo/grado-factorio-tools/issues/23), 2026-09-26.** The origin refuses
+a mod directory whose name is not its `info.json` `name`, and compares without regard to case; the
+first extraction kept that, while its new one-copy rule matched case-sensitively. So `Alpha`
+holding `alpha` was packed and left `alpha_*.zip` beside an earlier `Alpha_*.zip`. Factorio 2.0.77
+and the mod portal both treat mod names as case-sensitive — measured, and recorded in the script's
+header — so both halves now do too: that directory is refused, and `Alpha_*.zip` is another mod's
+zip, left alone at any other version. `-SelfTest` now passes 15 cases; the new one turns red under
+each of three mutations — the name check made case-insensitive, the one-copy rule made
+case-insensitive, and the directory's name read from the path as typed rather than from disk.
+
 **Measured, 2026-09-25**, against `realistic-fusion-refreshed` at `5671460`: the three mods packed
 by the origin and by this script give the same entries, the same sizes and the same CRC-32s — 41,
-20 and 178, 239 in all. `-SelfTest` passes 14 cases, and each of eight mutations to the script
-turns at least one red: packing the untracked and ignored set, dropping either version bound,
-dropping the one-copy removal, unanchoring its pattern, dropping the duplicate guard, dropping the
-up-front missing-file guard, and leaving a relative output directory unresolved.
+20 and 178, 239 in all. `-SelfTest` passed 14 cases (15 since #23, above), and each of eight
+mutations to the script turns at least one red: packing the untracked and ignored set, dropping
+either version bound, dropping the one-copy removal, unanchoring its pattern, dropping the
+duplicate guard, dropping the up-front missing-file guard, and leaving a relative output directory
+unresolved.
 
 **Contract half, not started.** `realistic-fusion-refreshed` (`pack-mods.ps1`, and
 `load-check.ps1 -FromZips`, which calls it) and `grado-factorio-modpack` (`Publish-PackZip`) each
