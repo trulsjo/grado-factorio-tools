@@ -256,7 +256,9 @@ and the mod portal both treat mod names as case-sensitive — measured, and reco
 header — so both halves now do too: that directory is refused, and `Alpha_*.zip` is another mod's
 zip, left alone at any other version. `-SelfTest` now passes 15 cases; the new one turns red under
 each of three mutations — the name check made case-insensitive, the one-copy rule made
-case-insensitive, and the directory's name read from the path as typed rather than from disk.
+case-insensitive, and the directory's name read from the path as typed rather than from disk. That
+last one is measured on Windows and is only reachable on a case-insensitive file system, since the
+case passes the wrong-case path only where it resolves; elsewhere the case cannot see it.
 
 **Measured, 2026-09-25**, against `realistic-fusion-refreshed` at `5671460`: the three mods packed
 by the origin and by this script give the same entries, the same sizes and the same CRC-32s — 41,
