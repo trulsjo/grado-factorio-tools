@@ -264,9 +264,12 @@ case passes the wrong-case path only where it resolves; elsewhere the case canno
 by the origin and by this script give the same entries, the same sizes and the same CRC-32s — 41,
 20 and 178, 239 in all. `-SelfTest` passed 14 cases (15 since #23, above), and each of eight
 mutations to the script turns at least one red: packing the untracked and ignored set, dropping
-either version bound, dropping the one-copy removal, unanchoring its pattern, dropping the
-duplicate guard, dropping the up-front missing-file guard, and leaving a relative output directory
-unresolved.
+the 65535 bound, dropping the 0.0.0 bound, dropping the one-copy removal, unanchoring its pattern,
+dropping the duplicate guard, dropping the up-front missing-file guard, and leaving a relative
+output directory unresolved. PR #22's record gives the count and names none of them, so the
+source is a re-run: on 2026-09-28 each of the eight was applied to the script as PR #22 merged it
+(`bb8991c`), and each turned at least one of its 14 cases red
+([#25](https://github.com/trulsjo/grado-factorio-tools/issues/25)).
 
 **Contract half, not started.** `realistic-fusion-refreshed` (`pack-mods.ps1`, and
 `load-check.ps1 -FromZips`, which calls it) and `grado-factorio-modpack` (`Publish-PackZip`) each
