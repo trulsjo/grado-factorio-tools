@@ -10,9 +10,10 @@ and nowhere else: `realistic-fusion-refreshed` deleted its copies, reads its pin
 its own, and takes every harness function from this repository's `load-harness-lib.ps1`. See
 *Expanded and contracted* below.
 
-**One is expanded and not yet contracted:** `pack-mods.ps1` is here, parameterised, and its
-origin copy still works unchanged, so **two copies exist until the rewire tickets** — see
-*Expanded, not yet contracted* below. Everything else still lives in `realistic-fusion-refreshed`.
+**So is a fourth.** `pack-mods.ps1` is here and nowhere else: `realistic-fusion-refreshed`
+deleted its copy and `grado-factorio-modpack` deleted `Publish-PackZip`, its own zipper, and both
+pack through this repository's. See *The packer, expanded and contracted* below. Everything else
+still lives in `realistic-fusion-refreshed`.
 
 This file is an inventory, and — for whatever has moved — the record of where it came from.
 
@@ -30,7 +31,7 @@ through an assumed directory layout or an invariant without ever naming it.
 |---|---|---|---|
 | ~~`scripts/commit-check.ps1`~~ | 393 | **0** | **Moved 2026-09-21.** See *Extracted* below. |
 | ~~`scripts/fetch-mods.ps1`~~ | 1,049 | 3 | **Expanded 2026-09-24, contracted 2026-09-25.** See *Expanded and contracted* below. Fills a cache directory with third-party mods at pinned versions — git first, portal as fallback. This is half of the coexistence check and the more reusable half. |
-| `scripts/pack-mods.ps1` | 322 | 7 | **Expanded 2026-09-25**, not yet contracted; see *Expanded, not yet contracted* below. **Copied here and parameterised; the origin copy stays until the rewires.** Builds one distributable zip per mod, named as the portal requires, and enforces the version bounds the portal enforces at upload. The natural home for the upload step that does not exist yet. |
+| ~~`scripts/pack-mods.ps1`~~ | 322 | 7 | **Moved 2026-09-28: expanded 2026-09-25, contracted 2026-09-28.** See *The packer, expanded and contracted* below. Builds one distributable zip per mod, named as the portal requires, and enforces the version bounds the portal enforces at upload. The natural home for the upload step that does not exist yet. |
 | `scripts/tree-viewer.ps1` + `tree-viewer.template.html` + `tree-layout-probe.js` | 533 + 2 files | 7 | **Move the set.** Renders a mod set's technology tree as a self-contained zoomable HTML viewer. Already takes a mod set rather than assuming one. |
 | `scripts/locale-check.ps1` | 391 | — | **Probably move.** Fails if a prototype would show a player something other than its proper name. The rule is general; only the prototype list is local. |
 | `scripts/name-check.ps1` | 1,749 | — | **Probably move.** Fails if a repo defines a prototype name that is not its own, or one another mod already claims. General rule, large implementation. |
@@ -38,6 +39,11 @@ through an assumed directory layout or an invariant without ever naming it.
 | `scripts/load-check.ps1` | 2,294 | many | **Harness expanded 2026-09-24, contracted 2026-09-25**, as `load-harness.ps1` and `load-harness-lib.ps1`; see below. **Move the harness, not the file.** Most of it is thirteen RFR-specific invariants that belong to that mod. What is generic is the surrounding machinery: build an isolated mod directory, junction or zip the mods in, create a throwaway map, report which way it loaded. That harness is the other half of the coexistence check. |
 
 ## Extracted
+
+This section is the commit check's. The three extracted since each have one of their own, with
+origin and pins: `fetch-mods.ps1` and the harness under *Expanded and contracted*, and
+`pack-mods.ps1` — from `realistic-fusion-refreshed` `5671460`, pinned at `fc322ff` there and
+`d09fba3` in the modpack — under *The packer, expanded and contracted*.
 
 **`scripts/commit-check.ps1`** — from `realistic-fusion-refreshed` at
 `8a4fb90e370540fa963c127c9bcece8f4fc7be8d`, on 2026-09-21. Transferred byte-identical. No edit was
@@ -67,10 +73,12 @@ Two things measured during the move, both of which correct what this plan and
 pull request and this follows that; until each is merged, a clone of either `main` still resolves
 the check at `5d3c561` and still prints the old rejection text.~~ **Both merged 2026-09-22**, as
 `realistic-fusion-refreshed` `7567254` and `grado-factorio-modpack` `828ce4b`. The `Pinned at`
-column is what those bumps set, not what either `main` reads today: **both now pin `99d4b57`**,
+column is what those bumps set, not what either `main` reads today. ~~**Both now pin `99d4b57`**,
 moved by `grado-factorio-modpack` `ad9ead7` on 2026-09-24 and by `realistic-fusion-refreshed`
 `84db1b6`, on that repository's `main` since PR #465 was merged on 2026-09-25 (see *The contract
-half*).
+half* of *Expanded and contracted*).~~ **The pins differ since 2026-09-28:** each consumer moved off `99d4b57` to take the
+packer, `realistic-fusion-refreshed` to `fc322ff` and `grado-factorio-modpack` to `d09fba3` — see
+*The packer, expanded and contracted*.
 
 The modpack was wired first on purpose — it is the cheaper consumer to be wrong in, so a failure
 there would have been the mechanism rather than the other repository.
@@ -210,7 +218,15 @@ defines is defined under `scripts/` or `tools/` there. One consequence is record
 every script there that loads `factorio-lib.ps1` — `ship-check.ps1` and `pack-mods.ps1` included,
 which start no game — now needs the submodule initialised.
 
-## Expanded, not yet contracted
+## The packer, expanded and contracted
+
+**`scripts/pack-mods.ps1`**, from `realistic-fusion-refreshed` at `5671460`; now pinned by that
+repository at `fc322ff` and by `grado-factorio-modpack` at `d09fba3`.
+
+Called *Expanded, not yet contracted* until 2026-09-28 (UTC), when the second
+consumer's rewire merged. **No copy is left**: see *The contract half* at the end of this section.
+
+### The expand half
 
 **`scripts/pack-mods.ps1`** — from `realistic-fusion-refreshed` at
 `5671460c05c6c38d5895b6d4d04edc9cc75e1709` (the file last changed in `0b40a22`; blob `efb098a`),
@@ -219,9 +235,10 @@ that repository's HEAD as `2e7b034` when it was filed. That commit is on branch 
 is the pre-rebase form of `bf001d9`, which is on `main`. The file is blob `efb098a` at all three.
 
 **Why now:** `grado-factorio-modpack` grew a second, weaker zipper — `stage-pack.ps1`'s
-`Publish-PackZip` (grado-factorio-modpack#24, PR #56), which packs every file under the pack
-directory and checks only `x.y.z`. So three zippers stand — the origin, `Publish-PackZip` and this
-one — until both rewires land.
+`Publish-PackZip` (grado-factorio-modpack#24, PR #56), which packed every file under the pack
+directory and checked only `x.y.z`. ~~So three zippers stand — the origin, `Publish-PackZip` and this
+one — until both rewires land.~~ **One stands since 2026-09-28**: both rewires landed and deleted
+the other two.
 
 Of the seven references the grep counts, all seven are the self-test — its temp prefix, one comment,
 and five uses of `realistic-fusion-refreshed-core` as the fixture. The entanglement it missed is
@@ -239,9 +256,11 @@ the layout, as the method section warns:
 same name and version, so a version bump left the old zip beside the new. Here, once a mod's new zip
 is in place, every other `<name>_<x.y.z>.zip` of it in the output directory is deleted; a mod whose
 name only contains this one stays, and so does anything that is not a zip. That is narrower than
-`Publish-PackZip`, which also removes `<name>_<x.y.z>` and `<name>` directories — the modpack's
-rewire has to decide whether it still needs that. The rewire changes one more thing: the folder
-inside the zip is `<name>/`, as the origin's is, where `Publish-PackZip` writes `<name>_<version>/`.
+`Publish-PackZip`, which also removed `<name>_<x.y.z>` and `<name>` directories — ~~the modpack's
+rewire has to decide whether it still needs that~~ **it does** (`dc63a87`): `stage-pack` still
+removes those directories itself, and leaves the zips to the packer. The rewire changes one more
+thing: the folder inside the zip is `<name>/`, as the origin's is, where `Publish-PackZip` wrote
+`<name>_<version>/`.
 The portal and the game take either. Two refusals are new too: the same mod given
 twice, and a directory outside any git work tree. And every manifest is now read before any zip is
 written, so a refused mod stops the run with nothing packed, where the origin had already packed
@@ -271,9 +290,39 @@ source is a re-run: on 2026-09-28 each of the eight was applied to the script as
 (`bb8991c`), and each turned at least one of its 14 cases red
 ([#25](https://github.com/trulsjo/grado-factorio-tools/issues/25)).
 
-**Contract half, not started.** `realistic-fusion-refreshed` (`pack-mods.ps1`, and
-`load-check.ps1 -FromZips`, which calls it) and `grado-factorio-modpack` (`Publish-PackZip`) each
-adopt it in a ticket of their own. Until both land, this is a copy, not an extraction.
+### The contract half
+
+~~**Contract half, not started.**~~ Each consumer adopted it in a ticket of its own, through a pull
+request that was rebase-merged. The measurements are the commits' own and none was re-run here;
+the one check made here is the last paragraph's, that no copy is left.
+
+| Consumer | Ticket | Merged | Commit | Pin | What it did |
+|---|---|---|---|---|---|
+| `realistic-fusion-refreshed` | [#466](https://github.com/trulsjo/realistic-fusion-refreshed/issues/466) | [PR #471](https://github.com/trulsjo/realistic-fusion-refreshed/pull/471), 2026-09-28 18:22 UTC | `69f36a2` | `99d4b57` → `fc322ff` | deleted `scripts/pack-mods.ps1`; `load-check.ps1 -FromZips` passes its three mod directories to the shared packer |
+| `grado-factorio-modpack` | [#64](https://github.com/trulsjo/grado-factorio-modpack/issues/64) | [PR #67](https://github.com/trulsjo/grado-factorio-modpack/pull/67), 2026-09-28 22:19 UTC | `dc63a87`, and `5c89815` from its review | `99d4b57` → `d09fba3` | deleted `Publish-PackZip`; `stage-pack.ps1` zips a pack and every pack under it in one call to the shared packer |
+
+**`realistic-fusion-refreshed`**, measured in `69f36a2`: before its copy was deleted, the old and
+shared packers gave the same three zips at `5671460`, with the same top-level folder and the same
+239 entries by name, size and CRC-32. On 2026-09-28, against Factorio 2.0.77 build 84539,
+`load-check.ps1 -FromZips` loaded all three mods, `-SelfTest -FromZips` passed, and `ship-check.ps1`
+ran 210 checks with no failure.
+
+**`grado-factorio-modpack`**, measured in `dc63a87`: a stage of `Grado_NonChanging` loaded through
+the load harness on 2.0.77 on 2026-09-28, base only — 29 mods validated, a map created — and the
+`stage-pack` self-test passed 13 of 13. No `info.json` was modified. `5c89815` widened that
+self-test to stage a two-pack chain, as a real stage does.
+
+**The two pins differ since 2026-09-28.** `fc322ff` is where PR #22 (#19) merged; `d09fba3`
+carries #23's fix, `607ceef`, so `realistic-fusion-refreshed` packs with the name check that ignores case, and the
+modpack with the one that does not. Both are this file, at two commits, which is what a pin is
+for — not a copy. Moving `realistic-fusion-refreshed` onto #23 is a bump of its own, and its
+decision.
+
+**Nothing is left duplicated.** Checked here on 2026-09-29, against `realistic-fusion-refreshed`
+`main` at `433cc4b` and `grado-factorio-modpack` `main` at `5c89815`: `scripts/pack-mods.ps1` is gone
+from the first, `Publish-PackZip` is defined nowhere in the second, and outside `vendor/` neither
+writes a zip. The only zip code left in either reads or unpacks one: `bench-reactors.ps1` and
+`load-check.ps1 -FromZips` there, and `stage-pack`'s self-test in the modpack.
 
 ## What has to be written, not moved
 
