@@ -14,12 +14,15 @@
 
       pick     For each mod, its newest release whose factorio_version equals -Line and whose
                mandatory `base` constraint -Build meets. Newest by version number, which is what the
-               mod manager installs.
+               mod manager installs. Only an exact `base` counts: a release declaring `Base` is
+               picked, and the walk reports that line.
       walk     The mandatory closure from those picks: every dependency with no prefix or a `~`
                prefix. `?`, `(?)` and `!` are not followed. The game's own mods -- base,
                space-age, quality, elevated-rails -- are left out: they come with the build, not
-               the portal. Matched in exact case, as the game does: a mandatory `Space-Age` is
-               reported against the line that declares it, not taken as bundled.
+               the portal. Matched in exact case, as the game does -- Factorio 2.0.77 (build 84539),
+               measured headless in grado-factorio-tools 607ceef, fails a dependency on `Alpha`
+               when only `alpha` is present. So a mandatory `Space-Age` is reported against the
+               line that declares it, not taken as bundled.
       check    Every dependency line of every member of a pack's closure, against the other
                members: a mandatory version constraint, a `!` incompatibility, and a version range
                on an optional dependency whose mod is in the closure.
@@ -43,7 +46,7 @@
     not know rather than silently dropped.
 
     Only a mandatory line naming a game mod in the wrong case is reported; a `?`, `(?)` or `!` one
-    is ignored, as the game ignores one naming a mod that does not exist. Names other than the
+    is ignored. What the game does with such a line has not been measured. Names other than the
     game's are still matched without regard to case inside a closure, so `krastorio2` is taken as
     satisfied by a `Krastorio2` already picked, where the game would refuse it.
 
@@ -371,7 +374,8 @@ function Invoke-SelfTest {
             $r[0].Picks['soft-base'] -eq '1.0.0' -and $r[0].Floor -eq '2.0.10' -and -not $r[0].Unresolved } }
         @{ Name = 'a game mod named in the wrong case is not bundled: its mandatory line is reported, and sets no floor'; Test = {
             $r = & $resolve (& $pack 'P' @('Base >= 2.0.0', 'shouty'))
-            $r[0].Picks['shouty'] -eq '1.0.0' -and -not $r[0].Floor -and -not $r[0].Declared -and $r[0].Unresolved.Count -eq 3 -and
+            $r[0].Picks['shouty'] -eq '1.0.0' -and -not $r[0].Floor -and -not $r[0].Declared -and -not $r[0].Violations -and
+                $r[0].Unresolved.Count -eq 3 -and
                 ($r[0].Unresolved -join ' ') -cmatch "P 0\.1\.0 declares 'Base >= 2\.0\.0'" -and
                 ($r[0].Unresolved -join ' ') -cmatch "shouty 1\.0\.0 declares 'Base >= 2\.0\.99'.*'base'" -and
                 ($r[0].Unresolved -join ' ') -cmatch "shouty 1\.0\.0 declares 'Space-Age >= 2\.0\.0'.*'space-age'" } }
