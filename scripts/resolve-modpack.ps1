@@ -60,7 +60,8 @@
 
 .PARAMETER InfoJson
     One or more pack info.json paths: a pack plus the packs it depends on. Each is reported. The
-    trailing arguments, so `pwsh -File` can pass several.
+    trailing arguments, so `pwsh -File` can pass several. Two packs whose names differ only in case
+    are refused before anything is looked up: the pin file could not hold both.
 
 .PARAMETER Line
     The declared line, `2.0` or `2.1`. A release qualifies only if its factorio_version is exactly
@@ -171,7 +172,7 @@ function Resolve-Packs {
         releases, or $null for a name the portal does not know -- the seam -SelfTest drives.
 
         Returns one row per pack: Name, Declared (its own base minimum), Floor and FloorBy, Picks
-        (ordered name -> release), Violations and Unresolved (strings).  #>
+        (ordered name -> version), Violations and Unresolved (strings).  #>
     param(
         [Parameter(Mandatory)] [System.Collections.IDictionary] $Packs,
         [Parameter(Mandatory)] [scriptblock] $GetReleases,
@@ -281,6 +282,26 @@ function Resolve-Packs {
     }
 }
 
+function Read-Packs {
+    <#  The packs' info.json files, keyed by name in exact case. Two names that differ only in case
+        are refused: the pin file keys its sets by pack name, and Import-PowerShellDataFile reads
+        such keys as duplicates.  #>
+    param([Parameter(Mandatory)] [string[]] $Path)
+
+    $packs = [System.Collections.Specialized.OrderedDictionary]::new([StringComparer]::Ordinal)
+    $seen = [hashtable]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($p in $Path) {
+        $info = Get-Content -LiteralPath $p -Raw | ConvertFrom-Json -AsHashtable
+        $other = $seen[$info.name]
+        if ($other -and $other.Name -cne $info.name) {
+            throw "$p names its pack '$($info.name)' and $($other.Path) names its pack '$($other.Name)': pack names that differ only in case cannot both be pinned."
+        }
+        $seen[$info.name] = @{ Name = $info.name; Path = $p }
+        $packs[$info.name] = $info
+    }
+    $packs
+}
+
 function ConvertTo-PinFile {
     <#  The pinned list: one set per pack, portal route only -- see -PinFile.  #>
     param([Parameter(Mandatory)] [object[]] $Results, [string] $Line, [string] $Build)
@@ -354,7 +375,7 @@ function Invoke-SelfTest {
     $pack = { param($name, [string[]] $deps) @{ name = $name; version = '0.1.0'; dependencies = $deps } }
     $resolve = {
         param([hashtable[]] $infos)
-        $packs = [ordered]@{}
+        $packs = [System.Collections.Specialized.OrderedDictionary]::new([StringComparer]::Ordinal)
         foreach ($i in $infos) { $packs[$i.name] = $i }
         @(Resolve-Packs -Packs $packs -GetReleases $get -Line '2.0' -Build '2.0.77')
     }
@@ -410,6 +431,19 @@ function Invoke-SelfTest {
             $r = & $resolve (& $pack 'Low' @('lib')), (& $pack 'High' @('Low', 'hater'))
             $r[0].Picks.Keys -join ',' -eq 'lib' -and -not $r[0].Violations -and
                 (($r[1].Picks.Keys | Sort-Object) -join ',') -eq 'hater,lib' -and $r[1].Violations.Count -eq 1 } }
+        @{ Name = 'two packs whose names differ only in case are refused, naming both files'; Test = {
+            $dir = Join-Path ([IO.Path]::GetTempPath()) "resolve-selftest-$([guid]::NewGuid().ToString('N'))"
+            try {
+                $a = Join-Path $dir 'a/info.json'; $b = Join-Path $dir 'b/info.json'
+                foreach ($f in @{ $a = 'MyPack'; $b = 'mypack' }.GetEnumerator()) {
+                    New-Item -ItemType Directory -Force (Split-Path $f.Key) | Out-Null
+                    & $pack $f.Value @('lib') | ConvertTo-Json | Set-Content -LiteralPath $f.Key
+                }
+                if (-not (Read-Packs -Path $a).Contains('MyPack')) { return $false }
+                try { $null = Read-Packs -Path $a, $b; $false }
+                catch { $_.Exception.Message.Contains($a) -and $_.Exception.Message.Contains($b) }
+            }
+            finally { Remove-Item -LiteralPath $dir -Recurse -ErrorAction SilentlyContinue } } }
         @{ Name = 'the pinned list reads back as one set of Name and Version per pack'; Test = {
             $r = & $resolve (& $pack 'P' @('content'))
             $file = Join-Path ([IO.Path]::GetTempPath()) "resolve-selftest-$([guid]::NewGuid().ToString('N')).psd1"
@@ -439,11 +473,7 @@ if ($SelfTest) { Invoke-SelfTest }
 
 if (-not $InfoJson -or -not $Line -or -not $Build) { throw 'Give -InfoJson, -Line and -Build, or -SelfTest.' }
 
-$packs = [System.Collections.Specialized.OrderedDictionary]::new([StringComparer]::Ordinal)
-foreach ($path in $InfoJson) {
-    $info = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json -AsHashtable
-    $packs[$info.name] = $info
-}
+$packs = Read-Packs -Path $InfoJson
 
 $getReleases = {
     param($name)
@@ -467,7 +497,7 @@ if ($PinFile) {
     Write-Host "pinned list: $PinFile"
 }
 
-$all = @($results | ForEach-Object { $_.Picks.Keys } | Sort-Object -Unique)
+$all = @($results | ForEach-Object { $_.Picks.Keys } | Sort-Object -Unique -CaseSensitive)
 Write-Host ''
 if (-not $pass) { Write-Host "FAILED - $($all.Count) mods resolved; see the UNRESOLVED and VIOLATION lines above."; exit 1 }
 Write-Host "OK - $($all.Count) mods across $($results.Count) pack(s), every one resolved, no constraint violated."
