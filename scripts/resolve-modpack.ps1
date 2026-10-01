@@ -18,7 +18,8 @@
       walk     The mandatory closure from those picks: every dependency with no prefix or a `~`
                prefix. `?`, `(?)` and `!` are not followed. The game's own mods -- base,
                space-age, quality, elevated-rails -- are left out: they come with the build, not
-               the portal.
+               the portal. Matched in exact case, as the game does: a mandatory `Space-Age` is
+               reported against the line that declares it, not taken as bundled.
       check    Every dependency line of every member of a pack's closure, against the other
                members: a mandatory version constraint, a `!` incompatibility, and a version range
                on an optional dependency whose mod is in the closure.
@@ -40,6 +41,11 @@
     the designed ABCX/ABCS split). A dependency prefix Factorio does not define -- `+` has been
     seen in the wild -- is read as part of the name, so it is reported as a mod the portal does
     not know rather than silently dropped.
+
+    Only a mandatory line naming a game mod in the wrong case is reported; a `?`, `(?)` or `!` one
+    is ignored, as the game ignores one naming a mod that does not exist. Names other than the
+    game's are still matched without regard to case inside a closure, so `krastorio2` is taken as
+    satisfied by a `Krastorio2` already picked, where the game would refuse it.
 
 .PARAMETER InfoJson
     One or more pack info.json paths: a pack plus the packs it depends on. Each is reported. The
@@ -142,7 +148,7 @@ function Select-Release {
         $ok = $true
         foreach ($d in @($r.info_json.PSObject.Properties['dependencies']?.Value | Where-Object { $_ })) {
             $dep = ConvertFrom-Dependency $d
-            if ($dep.Name -eq 'base' -and $dep.Kind -in 'required', 'unordered' -and -not (Test-Constraint $Build $dep.Op $dep.Version)) { $ok = $false }
+            if ($dep.Name -ceq 'base' -and $dep.Kind -in 'required', 'unordered' -and -not (Test-Constraint $Build $dep.Op $dep.Version)) { $ok = $false }
         }
         if ($ok) { $r }
     }
@@ -188,7 +194,7 @@ function Resolve-Packs {
         $queue.Enqueue($packName)
         while ($queue.Count) {
             $name = $queue.Dequeue()
-            if ($closure.Contains($name) -or $name -in $GAME_MODS) { continue }
+            if ($closure.Contains($name) -or $name -cin $GAME_MODS) { continue }
             if ($Packs.Contains($name)) {
                 $info = $Packs[$name]
                 $closure[$name] = @{ Version = $info.version; Dependencies = @($info.dependencies); Local = $true }
@@ -203,7 +209,14 @@ function Resolve-Packs {
             }
             foreach ($d in $closure[$name].Dependencies) {
                 $dep = ConvertFrom-Dependency $d
-                if ($dep.Kind -in 'required', 'unordered') { $queue.Enqueue($dep.Name) }
+                if ($dep.Kind -notin 'required', 'unordered') { continue }
+                # The game compares mod names exactly, so a game mod in another case is not bundled.
+                $game = $GAME_MODS | Where-Object { $_ -eq $dep.Name -and $_ -cne $dep.Name }
+                if ($game) {
+                    $problem = "$name $($closure[$name].Version) declares '$d', but the game's mod is '$game' and mod names are case-sensitive"
+                    if (-not $unresolved.Contains($problem)) { $unresolved.Add($problem) }
+                }
+                else { $queue.Enqueue($dep.Name) }
             }
         }
 
@@ -213,13 +226,13 @@ function Resolve-Packs {
             $member = $closure[$name]
             foreach ($d in $member.Dependencies) {
                 $dep = ConvertFrom-Dependency $d
-                if ($dep.Name -eq 'base') {
+                if ($dep.Name -ceq 'base') {
                     if (-not $member.Local -and $dep.Kind -in 'required', 'unordered' -and $dep.Op -in '>=', '>' -and (-not $floor -or (ConvertTo-Version $dep.Version) -gt (ConvertTo-Version $floor))) {
                         $floor = $dep.Version; $floorBy = "$name $($member.Version)"
                     }
                     continue
                 }
-                if ($dep.Name -in $GAME_MODS) { continue }
+                if ($dep.Name -cin $GAME_MODS) { continue }
                 $present = $closure.Contains($dep.Name)
                 $who = "$name $($member.Version) declares '$d'"
                 if ($dep.Kind -eq 'incompatible') {
@@ -232,7 +245,7 @@ function Resolve-Packs {
         }
 
         $declared = @($Packs[$packName].dependencies | ForEach-Object { ConvertFrom-Dependency $_ } |
-            Where-Object { $_.Name -eq 'base' -and $_.Kind -in 'required', 'unordered' -and $_.Op }) | Select-Object -First 1
+            Where-Object { $_.Name -ceq 'base' -and $_.Kind -in 'required', 'unordered' -and $_.Op }) | Select-Object -First 1
         $picks = [ordered]@{}
         foreach ($name in $closure.Keys) { if (-not $closure[$name].Local) { $picks[$name] = $closure[$name].Version } }
 
@@ -310,6 +323,8 @@ function Invoke-SelfTest {
         'no-deps'  = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0' } })
         'soft-base' = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0'; dependencies = @('? base >= 2.0.99', 'base >= 2.0.10') } })
         'empty'    = @()
+        # Game mods in the wrong case: the game compares mod names exactly, so neither is bundled.
+        'shouty'   = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0'; dependencies = @('Base >= 2.0.99', 'Space-Age >= 2.0.0', '? Quality') } })
     }
     # Through JSON, so each release has the shape Invoke-RestMethod hands back rather than a hashtable's.
     foreach ($k in @($portal.Keys)) { $portal[$k] = @(ConvertTo-Json -InputObject @($portal[$k]) -Depth 6 | ConvertFrom-Json) }
@@ -354,6 +369,12 @@ function Invoke-SelfTest {
         @{ Name = 'an optional base line neither disqualifies a release nor sets the floor'; Test = {
             $r = & $resolve (& $pack 'P' @('soft-base'))
             $r[0].Picks['soft-base'] -eq '1.0.0' -and $r[0].Floor -eq '2.0.10' -and -not $r[0].Unresolved } }
+        @{ Name = 'a game mod named in the wrong case is not bundled: its mandatory line is reported, and sets no floor'; Test = {
+            $r = & $resolve (& $pack 'P' @('Base >= 2.0.0', 'shouty'))
+            $r[0].Picks['shouty'] -eq '1.0.0' -and -not $r[0].Floor -and -not $r[0].Declared -and $r[0].Unresolved.Count -eq 3 -and
+                ($r[0].Unresolved -join ' ') -cmatch "P 0\.1\.0 declares 'Base >= 2\.0\.0'" -and
+                ($r[0].Unresolved -join ' ') -cmatch "shouty 1\.0\.0 declares 'Base >= 2\.0\.99'.*'base'" -and
+                ($r[0].Unresolved -join ' ') -cmatch "shouty 1\.0\.0 declares 'Space-Age >= 2\.0\.0'.*'space-age'" } }
         @{ Name = 'a pack named by another pack is walked locally, and each pack gets its own closure'; Test = {
             $r = & $resolve (& $pack 'Low' @('lib')), (& $pack 'High' @('Low', 'hater'))
             $r[0].Picks.Keys -join ',' -eq 'lib' -and -not $r[0].Violations -and
