@@ -52,8 +52,11 @@
     case is reported because the portal does not serve that spelling; if it ever served both, the
     line would resolve to the other mod, silently -- which is what the game would load. A `?`,
     `(?)` or `!` line that differs from a closure member only in case does not match that member,
-    so it is checked against nothing: `! Lib` beside a picked `lib` is not a violation. What the
-    game does with such a line has not been measured.
+    so it is checked against nothing: `! Lib` beside a picked `lib` is not a violation. The game
+    agrees -- Factorio 2.0.77 (build 84539), measured headless on 2026-10-02 with load-harness.ps1
+    at grado-factorio-tools 499bf8d, loads a mod declaring `! Lib` beside `lib`, and one declaring
+    `? Lib >= 2.0.0` or `(?) Lib >= 2.0.0` beside `lib` 1.0.0, while it refuses each of those
+    lines spelled `lib`.
 
 .PARAMETER InfoJson
     One or more pack info.json paths: a pack plus the packs it depends on. Each is reported. The
