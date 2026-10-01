@@ -22,10 +22,10 @@
                the portal. Every mod name is matched in exact case, as the game does -- Factorio
                2.0.77 (build 84539), measured headless in grado-factorio-tools 607ceef, fails a
                dependency on `Alpha` when only `alpha` is present -- and as the portal does:
-               /api/mods/Krastorio2 answers, /api/mods/krastorio2 does not. So a mandatory
-               `Space-Age` is not taken as bundled, `krastorio2` is not satisfied by a `Krastorio2`
-               already picked, and `mypack` is not the local pack `MyPack`: each is reported against
-               the line that declares it.
+               on 2026-10-01, /api/mods/Krastorio2 answered 200 and /api/mods/krastorio2 404. So a
+               mandatory `Space-Age` is not taken as bundled, `krastorio2` is not satisfied by a
+               `Krastorio2` already picked, and `mypack` is not the local pack `MyPack`. Each is
+               looked up under its own spelling.
       check    Every dependency line of every member of a pack's closure, against the other
                members: a mandatory version constraint, a `!` incompatibility, and a version range
                on an optional dependency whose mod is in the closure.
@@ -48,9 +48,12 @@
     seen in the wild -- is read as part of the name, so it is reported as a mod the portal does
     not know rather than silently dropped.
 
-    Only a mandatory line naming a mod in the wrong case is reported. A `?`, `(?)` or `!` one names
-    a mod that is not in the closure, so it is checked against nothing. What the game does with
-    such a line has not been measured.
+    A wrong case is detected as such only for a game mod. Any other mandatory line in the wrong
+    case is reported because the portal does not serve that spelling; if it ever served both, the
+    line would resolve to the other mod, silently -- which is what the game would load. A `?`,
+    `(?)` or `!` line that differs from a closure member only in case does not match that member,
+    so it is checked against nothing: `! Lib` beside a picked `lib` is not a violation. What the
+    game does with such a line has not been measured.
 
 .PARAMETER InfoJson
     One or more pack info.json paths: a pack plus the packs it depends on. Each is reported. The
