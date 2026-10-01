@@ -19,10 +19,13 @@
       walk     The mandatory closure from those picks: every dependency with no prefix or a `~`
                prefix. `?`, `(?)` and `!` are not followed. The game's own mods -- base,
                space-age, quality, elevated-rails -- are left out: they come with the build, not
-               the portal. Matched in exact case, as the game does -- Factorio 2.0.77 (build 84539),
-               measured headless in grado-factorio-tools 607ceef, fails a dependency on `Alpha`
-               when only `alpha` is present. So a mandatory `Space-Age` is reported against the
-               line that declares it, not taken as bundled.
+               the portal. Every mod name is matched in exact case, as the game does -- Factorio
+               2.0.77 (build 84539), measured headless in grado-factorio-tools 607ceef, fails a
+               dependency on `Alpha` when only `alpha` is present -- and as the portal does:
+               /api/mods/Krastorio2 answers, /api/mods/krastorio2 does not. So a mandatory
+               `Space-Age` is not taken as bundled, `krastorio2` is not satisfied by a `Krastorio2`
+               already picked, and `mypack` is not the local pack `MyPack`: each is reported against
+               the line that declares it.
       check    Every dependency line of every member of a pack's closure, against the other
                members: a mandatory version constraint, a `!` incompatibility, and a version range
                on an optional dependency whose mod is in the closure.
@@ -45,10 +48,9 @@
     seen in the wild -- is read as part of the name, so it is reported as a mod the portal does
     not know rather than silently dropped.
 
-    Only a mandatory line naming a game mod in the wrong case is reported; a `?`, `(?)` or `!` one
-    is ignored. What the game does with such a line has not been measured. Names other than the
-    game's are still matched without regard to case inside a closure, so `krastorio2` is taken as
-    satisfied by a `Krastorio2` already picked, where the game would refuse it.
+    Only a mandatory line naming a mod in the wrong case is reported. A `?`, `(?)` or `!` one names
+    a mod that is not in the closure, so it is checked against nothing. What the game does with
+    such a line has not been measured.
 
 .PARAMETER InfoJson
     One or more pack info.json paths: a pack plus the packs it depends on. Each is reported. The
@@ -171,18 +173,22 @@ function Resolve-Packs {
         [Parameter(Mandatory)] [string] $Build
     )
 
+    # Every name below is matched in exact case, as the game and the portal match it: a `krastorio2`
+    # line is not satisfied by `Krastorio2`, so the closure, the cache, the picks and the local-pack
+    # lookup are all ordinal. PowerShell's own @{} and [ordered]@{} ignore case.
+
     # One lookup per name across every pack: name -> @{ Release; Problem }.
-    $picked = @{}
+    $picked = [hashtable]::new([StringComparer]::Ordinal)
     $pick = {
         param($name)
         if (-not $picked.ContainsKey($name)) {
             $releases = & $GetReleases $name
             $picked[$name] = if ($null -eq $releases) {
-                @{ Release = $null; Problem = "$name`: the portal does not know this name" }
+                @{ Release = $null; Problem = 'the portal does not know this name' }
             }
             elseif (-not ($r = Select-Release -Releases @($releases) -Line $Line -Build $Build)) {
                 $have = (@($releases) | ForEach-Object { "$($_.version) ($($_.info_json.factorio_version))" }) -join ', '
-                @{ Release = $null; Problem = "$name`: no release declares factorio_version $Line with a base floor $Build meets. It has: $have" }
+                @{ Release = $null; Problem = "no release declares factorio_version $Line with a base floor $Build meets. It has: $have" }
             }
             else { @{ Release = $r; Problem = $null } }
         }
@@ -190,22 +196,26 @@ function Resolve-Packs {
     }
 
     foreach ($packName in $Packs.Keys) {
-        # The closure: name -> @{ Version; Dependencies; Label }, local packs included.
-        $closure = [ordered]@{}
+        # The closure: name -> @{ Version; Dependencies; Local }, local packs included.
+        $closure = [System.Collections.Specialized.OrderedDictionary]::new([StringComparer]::Ordinal)
         $unresolved = [System.Collections.Generic.List[string]]::new()
-        $queue = [System.Collections.Generic.Queue[string]]::new()
-        $queue.Enqueue($packName)
+        # Each entry is a name and the line that declared it, so a name that does not resolve is
+        # reported against that line. The pack itself has none.
+        $queue = [System.Collections.Generic.Queue[object]]::new()
+        $queue.Enqueue(@{ Name = $packName; Who = $null })
         while ($queue.Count) {
-            $name = $queue.Dequeue()
+            $next = $queue.Dequeue()
+            $name = $next.Name
             if ($closure.Contains($name) -or $name -cin $GAME_MODS) { continue }
-            if ($Packs.Contains($name)) {
+            if ($Packs.Keys -ccontains $name) {
                 $info = $Packs[$name]
                 $closure[$name] = @{ Version = $info.version; Dependencies = @($info.dependencies); Local = $true }
             }
             else {
                 $p = & $pick $name
                 if (-not $p.Release) {
-                    if (-not $unresolved.Contains($p.Problem)) { $unresolved.Add($p.Problem) }
+                    $problem = "$($next.Who): $($p.Problem)"
+                    if (-not $unresolved.Contains($problem)) { $unresolved.Add($problem) }
                     continue
                 }
                 $closure[$name] = @{ Version = $p.Release.version; Dependencies = @($p.Release.info_json.PSObject.Properties['dependencies']?.Value | Where-Object { $_ }); Local = $false }
@@ -219,7 +229,7 @@ function Resolve-Packs {
                     $problem = "$name $($closure[$name].Version) declares '$d', but the game's mod is '$game' and mod names are case-sensitive"
                     if (-not $unresolved.Contains($problem)) { $unresolved.Add($problem) }
                 }
-                else { $queue.Enqueue($dep.Name) }
+                else { $queue.Enqueue(@{ Name = $dep.Name; Who = "$name $($closure[$name].Version) declares '$d'" }) }
             }
         }
 
@@ -249,7 +259,7 @@ function Resolve-Packs {
 
         $declared = @($Packs[$packName].dependencies | ForEach-Object { ConvertFrom-Dependency $_ } |
             Where-Object { $_.Name -ceq 'base' -and $_.Kind -in 'required', 'unordered' -and $_.Op }) | Select-Object -First 1
-        $picks = [ordered]@{}
+        $picks = [System.Collections.Specialized.OrderedDictionary]::new([StringComparer]::Ordinal)
         foreach ($name in $closure.Keys) { if (-not $closure[$name].Local) { $picks[$name] = $closure[$name].Version } }
 
         [pscustomobject]@{
@@ -328,10 +338,13 @@ function Invoke-SelfTest {
         'empty'    = @()
         # Game mods in the wrong case: the game compares mod names exactly, so neither is bundled.
         'shouty'   = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0'; dependencies = @('Base >= 2.0.99', 'Space-Age >= 2.0.0', '? Quality') } })
+        # Another mod in the wrong case: the portal serves `lib`, not `LIB`.
+        'wrongcase' = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0'; dependencies = @('LIB') } })
     }
     # Through JSON, so each release has the shape Invoke-RestMethod hands back rather than a hashtable's.
     foreach ($k in @($portal.Keys)) { $portal[$k] = @(ConvertTo-Json -InputObject @($portal[$k]) -Depth 6 | ConvertFrom-Json) }
-    $get = { param($n) if ($portal.ContainsKey($n)) { return , $portal[$n] } else { $null } }
+    # Exact case, as the portal answers: /api/mods/Krastorio2 does, /api/mods/krastorio2 does not.
+    $get = { param($n) if ($portal.Keys -ccontains $n) { return , $portal[$n] } else { $null } }
     $pack = { param($name, [string[]] $deps) @{ name = $name; version = '0.1.0'; dependencies = $deps } }
     $resolve = {
         param([hashtable[]] $infos)
@@ -364,11 +377,11 @@ function Invoke-SelfTest {
             $r[0].Violations.Count -eq 1 -and $r[0].Violations[0] -match "'\? lib < 2\.0\.0'" } }
         @{ Name = 'an unknown name and a mod with no qualifying release are both reported'; Test = {
             $r = & $resolve (& $pack 'P' @('ghost', 'only-2.1'))
-            $r[0].Unresolved.Count -eq 2 -and ($r[0].Unresolved -join ' ') -match 'ghost: the portal does not know' -and
-                ($r[0].Unresolved -join ' ') -match 'only-2\.1: no release declares factorio_version 2\.0' } }
+            $r[0].Unresolved.Count -eq 2 -and ($r[0].Unresolved -join ' ') -match "P 0\.1\.0 declares 'ghost': the portal does not know" -and
+                ($r[0].Unresolved -join ' ') -match "P 0\.1\.0 declares 'only-2\.1': no release declares factorio_version 2\.0" } }
         @{ Name = 'a mod with no releases is not reported as unknown; a release with no dependencies resolves'; Test = {
             $r = & $resolve (& $pack 'P' @('empty', 'no-deps'))
-            $r[0].Unresolved.Count -eq 1 -and $r[0].Unresolved[0] -match '^empty: no release declares' -and $r[0].Picks['no-deps'] -eq '1.0.0' } }
+            $r[0].Unresolved.Count -eq 1 -and $r[0].Unresolved[0] -match "^P 0\.1\.0 declares 'empty': no release declares" -and $r[0].Picks['no-deps'] -eq '1.0.0' } }
         @{ Name = 'an optional base line neither disqualifies a release nor sets the floor'; Test = {
             $r = & $resolve (& $pack 'P' @('soft-base'))
             $r[0].Picks['soft-base'] -eq '1.0.0' -and $r[0].Floor -eq '2.0.10' -and -not $r[0].Unresolved } }
@@ -379,6 +392,14 @@ function Invoke-SelfTest {
                 ($r[0].Unresolved -join ' ') -cmatch "P 0\.1\.0 declares 'Base >= 2\.0\.0'" -and
                 ($r[0].Unresolved -join ' ') -cmatch "shouty 1\.0\.0 declares 'Base >= 2\.0\.99'.*'base'" -and
                 ($r[0].Unresolved -join ' ') -cmatch "shouty 1\.0\.0 declares 'Space-Age >= 2\.0\.0'.*'space-age'" } }
+        # `lib` is picked before `LIB` is reached, and `Low` walked before `low`, so ignoring case in
+        # the closure, the lookup cache or the local-pack table each lets one of the two lines pass.
+        @{ Name = 'any other mod named in the wrong case is not the one in the closure or the local pack: its line is reported'; Test = {
+            $r = & $resolve (& $pack 'Low' @('lib')), (& $pack 'High' @('Low', 'wrongcase', 'low'))
+            (($r[1].Picks.Keys | Sort-Object) -join ',') -ceq 'lib,wrongcase' -and -not $r[1].Violations -and
+                $r[1].Unresolved.Count -eq 2 -and
+                ($r[1].Unresolved -join ' ') -cmatch "wrongcase 1\.0\.0 declares 'LIB': the portal does not know this name" -and
+                ($r[1].Unresolved -join ' ') -cmatch "High 0\.1\.0 declares 'low': the portal does not know this name" } }
         @{ Name = 'a pack named by another pack is walked locally, and each pack gets its own closure'; Test = {
             $r = & $resolve (& $pack 'Low' @('lib')), (& $pack 'High' @('Low', 'hater'))
             $r[0].Picks.Keys -join ',' -eq 'lib' -and -not $r[0].Violations -and
@@ -412,7 +433,7 @@ if ($SelfTest) { Invoke-SelfTest }
 
 if (-not $InfoJson -or -not $Line -or -not $Build) { throw 'Give -InfoJson, -Line and -Build, or -SelfTest.' }
 
-$packs = [ordered]@{}
+$packs = [System.Collections.Specialized.OrderedDictionary]::new([StringComparer]::Ordinal)
 foreach ($path in $InfoJson) {
     $info = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json -AsHashtable
     $packs[$info.name] = $info
