@@ -108,7 +108,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$GAME_MODS = @('base', 'space-age', 'quality', 'elevated-rails')
+. "$PSScriptRoot/game-mods.ps1"
 
 function ConvertFrom-Dependency {
     <#  One info.json dependency string as Kind, Name, Op and Version. Kind is required, unordered
@@ -217,7 +217,7 @@ function Resolve-Packs {
         while ($queue.Count) {
             $next = $queue.Dequeue()
             $name = $next.Name
-            if ($closure.Contains($name) -or $name -cin $GAME_MODS) { continue }
+            if ($closure.Contains($name) -or (Test-GameMod $name)) { continue }
             if ($Packs.Keys -ccontains $name) {
                 $info = $Packs[$name]
                 $closure[$name] = @{ Version = $info.version; Dependencies = @($info.dependencies); Local = $true }
@@ -235,7 +235,7 @@ function Resolve-Packs {
                 $dep = ConvertFrom-Dependency $d
                 if ($dep.Kind -notin 'required', 'unordered') { continue }
                 # The game compares mod names exactly, so a game mod in another case is not bundled.
-                $game = $GAME_MODS | Where-Object { $_ -eq $dep.Name -and $_ -cne $dep.Name }
+                $game = Get-MiscasedGameMod $dep.Name
                 if ($game) {
                     $problem = "$name $($closure[$name].Version) declares '$d', but the game's mod is '$game' and mod names are case-sensitive"
                     if (-not $unresolved.Contains($problem)) { $unresolved.Add($problem) }
@@ -256,7 +256,7 @@ function Resolve-Packs {
                     }
                     continue
                 }
-                if ($dep.Name -cin $GAME_MODS) { continue }
+                if (Test-GameMod $dep.Name) { continue }
                 $present = $closure.Contains($dep.Name)
                 $who = "$name $($member.Version) declares '$d'"
                 if ($dep.Kind -eq 'incompatible') {
