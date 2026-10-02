@@ -81,11 +81,14 @@ function Invoke-SelfTest {
     $temp = Join-Path ([IO.Path]::GetTempPath()) ('load-harness-selftest-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
     New-Item -ItemType Directory -Path $temp -Force | Out-Null
 
+    # Each info.json carries an empty key, as fluid-connection-indicators 0.2.9's `package` table
+    # does: valid JSON that ConvertFrom-Json refuses without -AsHashtable. So cases 1 and 2 read it
+    # from a directory and from a zip, and the game is shown to load it.
     $newMod = {
         param([string] $Dir, [string] $Name, [string] $Data)
         New-Item -ItemType Directory -Path $Dir -Force | Out-Null
         @{ name = $Name; version = '1.0.0'; title = $Name; author = 'load-harness.ps1'
-           factorio_version = '2.0'; dependencies = @('base') } | ConvertTo-Json | Set-Content (Join-Path $Dir 'info.json')
+           factorio_version = '2.0'; dependencies = @('base'); package = @{ '' = '' } } | ConvertTo-Json | Set-Content (Join-Path $Dir 'info.json')
         $Data | Set-Content (Join-Path $Dir 'data.lua')
     }
     $good = Join-Path $temp 'src/harness-good'

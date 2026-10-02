@@ -321,6 +321,8 @@ function Get-HarnessMods {
         reported as a pass for mods that were never loaded. So is one name found twice.  #>
     param([Parameter(Mandatory)] [string[]] $Path)
 
+    # As a hashtable: an info.json may hold an empty key, which ConvertFrom-Json refuses otherwise
+    # (fluid-connection-indicators 0.2.9, grado-factorio-tools#38).
     $readInfo = {
         param($item)
         if ($item -is [IO.FileInfo]) {
@@ -329,13 +331,13 @@ function Get-HarnessMods {
                 $entry = $zip.Entries | Where-Object { $_.FullName -match '^[^/]+/info\.json$' } | Select-Object -First 1
                 if (-not $entry) { throw "$($item.FullName) holds no <folder>/info.json, so it is not a mod zip." }
                 $reader = [IO.StreamReader]::new($entry.Open())
-                try { $info = $reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() }
+                try { $info = $reader.ReadToEnd() | ConvertFrom-Json -AsHashtable } finally { $reader.Dispose() }
             }
             finally { $zip.Dispose() }
             $kind = 'zip'
         }
         else {
-            $info = Get-Content -LiteralPath (Join-Path $item.FullName 'info.json') -Raw | ConvertFrom-Json
+            $info = Get-Content -LiteralPath (Join-Path $item.FullName 'info.json') -Raw | ConvertFrom-Json -AsHashtable
             $kind = 'directory'
         }
         [pscustomobject]@{ Name = $info.name; Version = $info.version; Kind = $kind; Path = $item.FullName }

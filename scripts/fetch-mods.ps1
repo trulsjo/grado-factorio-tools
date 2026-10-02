@@ -228,12 +228,16 @@ function Resolve-ModSet {
 # ---------------------------------------------------------------------------------------------
 
 function Get-ModVersion {
-    <#  The version a fetched directory actually declares, or $null if it is not a mod at all.  #>
+    <#  The version a fetched directory actually declares, or $null if it is not a mod at all.
+
+        Read as a hashtable because an empty key is legal JSON and ConvertFrom-Json refuses it
+        otherwise. fluid-connection-indicators 0.2.9's `package` table holds `"": ""`, and until
+        grado-factorio-tools#38 that ordinary zip was reported as having no readable info.json.  #>
     param([Parameter(Mandatory)] [string] $Path)
 
     $info = Join-Path $Path 'info.json'
     if (-not (Test-Path -LiteralPath $info)) { return $null }
-    try { return (Get-Content -LiteralPath $info -Raw | ConvertFrom-Json).version }
+    try { return (Get-Content -LiteralPath $info -Raw | ConvertFrom-Json -AsHashtable).version }
     catch { return $null }
 }
 
@@ -602,11 +606,14 @@ function Invoke-SelfTest {
         ConvertTo-Json | Set-Content -LiteralPath $creds -Encoding utf8
 
     # The zip the fake portal serves: a real archive holding a real info.json, so the unpack and the
-    # version check downstream are exercised rather than stubbed.
+    # version check downstream are exercised rather than stubbed. Its `package` table carries an
+    # empty key, as fluid-connection-indicators 0.2.9's does: valid JSON that ConvertFrom-Json
+    # refuses without -AsHashtable, which is why Get-ModVersion once could not read that release.
+    # 5/6 fails if it again cannot.
     $stage = Join-Path $temp ('stage\' + $modName + '_1.0.0')
     New-Item -ItemType Directory -Path $stage -Force | Out-Null
     @{ name = $modName; version = '1.0.0'; title = 'fetch-mods self-test fixture'
-       author = 'fetch-mods.ps1'; factorio_version = '2.0'; dependencies = @('base') } |
+       author = 'fetch-mods.ps1'; factorio_version = '2.0'; dependencies = @('base'); package = @{ '' = '' } } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $stage 'info.json') -Encoding utf8
     $zip = Join-Path $temp 'served.zip'
     Compress-Archive -Path $stage -DestinationPath $zip -Force
