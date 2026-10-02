@@ -58,10 +58,12 @@
 
     WHAT IT CANNOT SEE. It does not load anything: a zip that is shaped right can still fail in
     game. It does not read info.json beyond `name` and `version`, so a bad `factorio_version` or
-    dependency line reaches the portal as it stands. A tracked path git reports under a mod
-    directory but that is not a file -- a nested submodule -- is refused as missing. "Nothing is
-    written" covers every refusal the script makes itself; a read or write failure while zipping
-    the second mod leaves the first mod's zip written and its other versions deleted.
+    dependency line reaches the portal as it stands. Keys are matched case-exactly, so a second
+    key differing only in case, such as `Name` beside `name`, is ignored rather than refused. A
+    tracked path git reports under a mod directory but that is not a file -- a nested submodule --
+    is refused as missing. "Nothing is written" covers every refusal the script makes itself; a
+    read or write failure while zipping the second mod leaves the first mod's zip written and its
+    other versions deleted.
 
 .PARAMETER ModDirectory
     One or more mod directories, each holding info.json and each inside a git work tree. The
@@ -109,7 +111,8 @@ function Get-ModManifest {
     if (-not (Test-Path -LiteralPath $infoPath)) { throw "$leaf has no info.json" }
     # As a hashtable: an info.json may hold an empty key, which ConvertFrom-Json refuses otherwise
     # (fluid-connection-indicators 0.2.9, grado-factorio-tools#40). Its keys then match case
-    # exactly, so `"Name"` is no longer read as `name`.
+    # exactly, so `"Name"` is no longer read as `name`, and an info.json holding both `name` and
+    # `Name`, which ConvertFrom-Json also refused, is now read, from `name`.
     $info = Get-Content -LiteralPath $infoPath -Raw | ConvertFrom-Json -AsHashtable
 
     # -cne, as the one-copy rule's -cmatch: Factorio compares mod names case-sensitively (see the
