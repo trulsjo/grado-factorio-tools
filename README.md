@@ -63,6 +63,10 @@ rather than the portal. It prints, per pack, the effective floor and every viola
 unresolvable member, and exits non-zero on either. `-PinFile` writes the picks as one set per pack.
 `-SelfTest` proves it can fail, with no network. What it cannot see is in its header.
 
+The game's own mods (`base`, `space-age`, `quality`, `elevated-rails`) and the exact-case rule they
+are matched by live in `scripts/game-mods.ps1`. The resolver dot-sources it, and so does a
+consumer that has to agree with the resolver on which names are the game's.
+
 ## Checking that mods coexist
 
 Three steps, no glue between them: resolve a pack (above) to a pin file, fetch that set into a
