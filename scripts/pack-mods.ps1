@@ -107,7 +107,10 @@ function Get-ModManifest {
 
     $infoPath = Join-Path $dir 'info.json'
     if (-not (Test-Path -LiteralPath $infoPath)) { throw "$leaf has no info.json" }
-    $info = Get-Content -LiteralPath $infoPath -Raw | ConvertFrom-Json
+    # As a hashtable: an info.json may hold an empty key, which ConvertFrom-Json refuses otherwise
+    # (fluid-connection-indicators 0.2.9, grado-factorio-tools#40). Its keys then match case
+    # exactly, so `"Name"` is no longer read as `name`.
+    $info = Get-Content -LiteralPath $infoPath -Raw | ConvertFrom-Json -AsHashtable
 
     # -cne, as the one-copy rule's -cmatch: Factorio compares mod names case-sensitively (see the
     # header), so the two must agree or a name this accepts is one that rule does not clean up after.
@@ -255,7 +258,10 @@ function Invoke-SelfTest {
         New-Item -ItemType Directory -Path (Split-Path $p -Parent) -Force | Out-Null
         Set-Content -LiteralPath $p -Value $body -NoNewline
     }
-    $info = { param($name, $version) "{`"name`":`"$name`",`"version`":`"$version`"}" }
+    # Every fixture's info.json carries an empty key, as fluid-connection-indicators 0.2.9's
+    # `package` table does: valid JSON that ConvertFrom-Json refuses without -AsHashtable. So every
+    # mod a case packs or refuses holds one, and case 1 fails if Get-ModManifest again cannot read one.
+    $info = { param($name, $version) "{`"name`":`"$name`",`"version`":`"$version`",`"package`":{`"`":`"`"}}" }
     $entries = {
         param($zip)
         $a = [IO.Compression.ZipFile]::OpenRead($zip)
@@ -290,7 +296,7 @@ function Invoke-SelfTest {
     $gamma = Join-Path $repo 'gamma'
 
     $cases = @(
-        @{ Name = 'each zip is <name>_<version>.zip, every entry under one top-level folder holding info.json'; Test = {
+        @{ Name = 'each zip is <name>_<version>.zip, every entry under one top-level folder holding info.json, which may hold an empty key'; Test = {
             $b = @(Invoke-Pack -Directory $alpha, $beta -Destination $out -Quiet -WarningAction SilentlyContinue)
             $names = @($b | ForEach-Object { Split-Path $_.Zip -Leaf })
             $a = & $entries $b[0].Zip
