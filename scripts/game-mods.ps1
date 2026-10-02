@@ -2,8 +2,9 @@
     matched against them. Dot-sourced by resolve-modpack.ps1 and by grado-factorio-modpack's
     stage-pack.ps1, so the list and its case rule have one home (grado-factorio-modpack#99).
 
-    Matched in exact case, as the game does: Factorio 2.0.77 (build 84539), measured headless in
-    grado-factorio-tools 607ceef, fails a dependency on `Alpha` when only `alpha` is present.  #>
+    Matched in exact case. Factorio 2.0.77 (build 84539), measured headless in 607ceef, fails a
+    dependency on `Alpha` when only `alpha` is present. That was an ordinary mod, not a game mod:
+    that the game treats `Space-Age` the same way is inferred from it, not measured.  #>
 
 $GAME_MODS = @('base', 'space-age', 'quality', 'elevated-rails')
 
