@@ -61,7 +61,8 @@
 .PARAMETER InfoJson
     One or more pack info.json paths: a pack plus the packs it depends on. Each is reported. The
     trailing arguments, so `pwsh -File` can pass several. Two packs whose names differ only in case
-    are refused before anything is looked up: the pin file could not hold both.
+    are refused before anything is looked up, with or without -PinFile: a pin file could not hold
+    both.
 
 .PARAMETER Line
     The declared line, `2.0` or `2.1`. A release qualifies only if its factorio_version is exactly
@@ -284,8 +285,8 @@ function Resolve-Packs {
 
 function Read-Packs {
     <#  The packs' info.json files, keyed by name in exact case. Two names that differ only in case
-        are refused: the pin file keys its sets by pack name, and Import-PowerShellDataFile reads
-        such keys as duplicates.  #>
+        are refused: the pin file keys its sets by pack name, and Import-PowerShellDataFile refuses
+        to parse a file whose keys differ only in case.  #>
     param([Parameter(Mandatory)] [string[]] $Path)
 
     $packs = [System.Collections.Specialized.OrderedDictionary]::new([StringComparer]::Ordinal)
