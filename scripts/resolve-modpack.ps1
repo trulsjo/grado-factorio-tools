@@ -60,9 +60,12 @@
 
 .PARAMETER InfoJson
     One or more pack info.json paths: a pack plus the packs it depends on. Each is reported. The
-    trailing arguments, so `pwsh -File` can pass several. Two packs whose names differ only in case
-    are refused before anything is looked up, with or without -PinFile: a pin file could not hold
-    both.
+    trailing arguments, so `pwsh -File` can pass several. Each is read before anything is looked
+    up, with or without -PinFile, and the resolve is refused, naming the files, if one has no
+    `name`, or if two declare the same name or names that differ only in case: a pin file holds
+    one set per name, and the second file would silently replace the first. The same file given
+    twice is refused too, as two declarations of one name -- one refusal is simpler than deciding
+    when two paths are the same file.
 
 .PARAMETER Line
     The declared line, `2.0` or `2.1`. A release qualifies only if its factorio_version is exactly
@@ -284,18 +287,25 @@ function Resolve-Packs {
 }
 
 function Read-Packs {
-    <#  The packs' info.json files, keyed by name in exact case. Two names that differ only in case
-        are refused: the pin file keys its sets by pack name, and Import-PowerShellDataFile refuses
-        to parse a file whose keys differ only in case.  #>
+    <#  The packs' info.json files, keyed by name in exact case. A file with no name is refused, and
+        so are two names that are the same or differ only in case: the pin file keys its sets by
+        pack name, and Import-PowerShellDataFile refuses to parse a file whose keys differ only in
+        case. One file given twice declares its name twice, and is refused the same way.  #>
     param([Parameter(Mandatory)] [string[]] $Path)
 
     $packs = [System.Collections.Specialized.OrderedDictionary]::new([StringComparer]::Ordinal)
     $seen = [hashtable]::new([StringComparer]::OrdinalIgnoreCase)
     foreach ($p in $Path) {
         $info = Get-Content -LiteralPath $p -Raw | ConvertFrom-Json -AsHashtable
+        if ($info -isnot [System.Collections.IDictionary] -or -not $info['name']) {
+            throw "$p has no name: a pack info.json must name its pack."
+        }
         $other = $seen[$info.name]
         if ($other -and $other.Name -cne $info.name) {
             throw "$p names its pack '$($info.name)' and $($other.Path) names its pack '$($other.Name)': pack names that differ only in case cannot both be pinned."
+        }
+        if ($other) {
+            throw "$p and $($other.Path) both name their pack '$($info.name)': give each pack once."
         }
         $seen[$info.name] = @{ Name = $info.name; Path = $p }
         $packs[$info.name] = $info
@@ -313,7 +323,7 @@ function ConvertTo-PinFile {
     [void] $out.AppendLine('    Sets = @{')
     foreach ($r in $Results) {
         [void] $out.AppendLine("        '$($r.Name -replace "'", "''")' = @(")
-        foreach ($name in ($r.Picks.Keys | Sort-Object)) {
+        foreach ($name in ($r.Picks.Keys | Sort-Object -CaseSensitive)) {
             [void] $out.AppendLine("            @{ Name = '$($name -replace "'", "''")'; Version = '$($r.Picks[$name])' }")
         }
         [void] $out.AppendLine('        )')
@@ -380,6 +390,17 @@ function Invoke-SelfTest {
         foreach ($i in $infos) { $packs[$i.name] = $i }
         @(Resolve-Packs -Packs $packs -GetReleases $get -Line '2.0' -Build '2.0.77')
     }
+    # Pack files on disk, for Read-Packs: each info.json in a directory of its own, and the message
+    # Read-Packs refuses them with, or $null if it does not.
+    $dir = Join-Path ([IO.Path]::GetTempPath()) "resolve-selftest-$([guid]::NewGuid().ToString('N'))"
+    $write = {
+        param($info)
+        $f = Join-Path $dir "$([guid]::NewGuid().ToString('N'))/info.json"
+        New-Item -ItemType Directory -Force (Split-Path $f) | Out-Null
+        $info | ConvertTo-Json | Set-Content -LiteralPath $f
+        $f
+    }
+    $refusal = { param([string[]] $paths) try { $null = Read-Packs -Path $paths; $null } catch { $_.Exception.Message } }
 
     $cases = @(
         @{ Name = 'picks the newest release on the line that the build can install'; Test = {
@@ -387,7 +408,7 @@ function Invoke-SelfTest {
             $r[0].Picks['lib'] -eq '2.4.0' } }
         @{ Name = 'walks bare and ~, not ?, (?), ! or game mods; reads names with spaces'; Test = {
             $r = & $resolve (& $pack 'P' @('content'))
-            (($r[0].Picks.Keys | Sort-Object) -join ',') -eq 'content,lib,mod with spaces' -and -not $r[0].Unresolved } }
+            (($r[0].Picks.Keys | Sort-Object -CaseSensitive) -join ',') -ceq 'content,lib,mod with spaces' -and -not $r[0].Unresolved } }
         @{ Name = 'the floor is the highest base >= among the picks'; Test = {
             $r = & $resolve (& $pack 'P' @('base >= 2.0.0', 'content'))
             $r[0].Floor -eq '2.0.60' -and $r[0].FloorBy -eq 'lib 2.4.0' -and $r[0].Declared -eq '>= 2.0.0' } }
@@ -424,27 +445,33 @@ function Invoke-SelfTest {
         # the closure, the lookup cache or the local-pack table each lets one of the two lines pass.
         @{ Name = 'any other mod named in the wrong case is not the one in the closure or the local pack: its line is reported'; Test = {
             $r = & $resolve (& $pack 'Low' @('lib')), (& $pack 'High' @('Low', 'wrongcase', 'low'))
-            (($r[1].Picks.Keys | Sort-Object) -join ',') -ceq 'lib,wrongcase' -and -not $r[1].Violations -and
+            (($r[1].Picks.Keys | Sort-Object -CaseSensitive) -join ',') -ceq 'lib,wrongcase' -and -not $r[1].Violations -and
                 $r[1].Unresolved.Count -eq 2 -and
                 ($r[1].Unresolved -join ' ') -cmatch "wrongcase 1\.0\.0 declares 'LIB': the portal does not know this name" -and
                 ($r[1].Unresolved -join ' ') -cmatch "High 0\.1\.0 declares 'low': the portal does not know this name" } }
         @{ Name = 'a pack named by another pack is walked locally, and each pack gets its own closure'; Test = {
             $r = & $resolve (& $pack 'Low' @('lib')), (& $pack 'High' @('Low', 'hater'))
             $r[0].Picks.Keys -join ',' -eq 'lib' -and -not $r[0].Violations -and
-                (($r[1].Picks.Keys | Sort-Object) -join ',') -eq 'hater,lib' -and $r[1].Violations.Count -eq 1 } }
+                (($r[1].Picks.Keys | Sort-Object -CaseSensitive) -join ',') -ceq 'hater,lib' -and $r[1].Violations.Count -eq 1 } }
         @{ Name = 'two packs whose names differ only in case are refused, naming both files'; Test = {
-            $dir = Join-Path ([IO.Path]::GetTempPath()) "resolve-selftest-$([guid]::NewGuid().ToString('N'))"
-            try {
-                $a = Join-Path $dir 'a/info.json'; $b = Join-Path $dir 'b/info.json'
-                foreach ($f in @{ $a = 'MyPack'; $b = 'mypack' }.GetEnumerator()) {
-                    New-Item -ItemType Directory -Force (Split-Path $f.Key) | Out-Null
-                    & $pack $f.Value @('lib') | ConvertTo-Json | Set-Content -LiteralPath $f.Key
-                }
-                if (-not (Read-Packs -Path $a).Contains('MyPack')) { return $false }
-                try { $null = Read-Packs -Path $a, $b; $false }
-                catch { $_.Exception.Message.Contains($a) -and $_.Exception.Message.Contains($b) }
+            $a = & $write (& $pack 'MyPack' @('lib')); $b = & $write (& $pack 'mypack' @('lib'))
+            $m = & $refusal $a, $b
+            (Read-Packs -Path $a).Contains('MyPack') -and $m -and $m.Contains($a) -and $m.Contains($b) } }
+        @{ Name = 'two pack files declaring the same name are refused, naming both; so is one file given twice'; Test = {
+            $a = & $write (& $pack 'MyPack' @('lib')); $b = & $write (& $pack 'MyPack' @('hater'))
+            $m = & $refusal $a, $b
+            $m -and $m.Contains($a) -and $m.Contains($b) -and (& $refusal $a, $a) } }
+        @{ Name = 'a pack file with no name is refused, naming the file'; Test = {
+            $a = & $write @{ version = '0.1.0'; dependencies = @('lib') }
+            $m = & $refusal $a
+            $m -and $m.Contains($a) -and $m -match 'name' } }
+        @{ Name = 'the pin file orders picks differing only in case by name, whatever order they came in'; Test = {
+            $files = foreach ($order in @('zed', 'Zed'), @('Zed', 'zed')) {
+                $picks = [System.Collections.Specialized.OrderedDictionary]::new([StringComparer]::Ordinal)
+                foreach ($n in $order) { $picks[$n] = '1.0.0' }
+                ConvertTo-PinFile -Results @([pscustomobject]@{ Name = 'P'; Picks = $picks }) -Line '2.0' -Build '2.0.77'
             }
-            finally { Remove-Item -LiteralPath $dir -Recurse -ErrorAction SilentlyContinue } } }
+            $files[0] -ceq $files[1] } }
         @{ Name = 'the pinned list reads back as one set of Name and Version per pack'; Test = {
             $r = & $resolve (& $pack 'P' @('content'))
             $file = Join-Path ([IO.Path]::GetTempPath()) "resolve-selftest-$([guid]::NewGuid().ToString('N')).psd1"
@@ -458,12 +485,15 @@ function Invoke-SelfTest {
 
     $failures = 0
     $n = 0
-    foreach ($c in $cases) {
-        $n++
-        $ok = try { [bool] (& $c.Test) } catch { Write-Host "    threw: $($_.Exception.Message)"; $false }
-        Write-Host ("self-test {0}/{1}: {2} -- {3}" -f $n, $cases.Count, $c.Name, $(if ($ok) { 'ok' } else { 'FAILED' }))
-        if (-not $ok) { $failures++ }
+    try {
+        foreach ($c in $cases) {
+            $n++
+            $ok = try { [bool] (& $c.Test) } catch { Write-Host "    threw: $($_.Exception.Message)"; $false }
+            Write-Host ("self-test {0}/{1}: {2} -- {3}" -f $n, $cases.Count, $c.Name, $(if ($ok) { 'ok' } else { 'FAILED' }))
+            if (-not $ok) { $failures++ }
+        }
     }
+    finally { Remove-Item -LiteralPath $dir -Recurse -ErrorAction SilentlyContinue }
     Write-Host ''
     if ($failures) { Write-Host "FAILED - self-test: $failures of $($cases.Count) case(s) did not hold."; exit 1 }
     Write-Host "OK - self-test passed: all $($cases.Count) cases."
