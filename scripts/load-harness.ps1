@@ -24,14 +24,16 @@
     naming the info.json's path and what is wrong, the same through this script and through
     Get-HarnessMods in the library. The harness uses the name before the game can run: a
     directory is junctioned in under it, and a zip is copied in as <name>_<version>.zip, which
-    uses the version too. A directory's version it does not use, and that refusal is there because
-    the game requires the key. Without the refusal a missing key stopped it with a PowerShell
-    error naming no mod, or sent a directory on with a blank version. The game refuses a lone
-    `"Name"` or `"Version"` too; that is measured in pack-mods.ps1's header, whose wording this
-    refusal shares. To see the game's refusal and not this one, build the harness from a valid
-    info.json and rewrite it before Invoke-HarnessLoad, as that header describes. Only the keys
-    are checked, not their values, and an info.json that is not JSON at all still fails with
-    PowerShell's parse error, naming no mod.
+    uses the version too. A directory's version it does not use; a directory with no `version`
+    key is refused because the game requires the key. Without the refusal, a missing key stopped
+    this script with a PowerShell error naming no mod. Through the library, from a caller without
+    strict mode, a directory with no `name` also stopped with one, and a directory with no
+    `version`, or a zip missing either key, went on with a blank name or version. The game
+    refuses a lone `"Name"` or `"Version"` too; that is measured in pack-mods.ps1's header, whose
+    wording this refusal shares. To see the game's refusal and not this one, build the harness
+    from a valid info.json and rewrite it before Invoke-HarnessLoad, as that header describes.
+    Only the keys are checked, not their values, and an info.json that is not JSON at all still
+    fails with PowerShell's parse error, naming no mod.
 
     THE PLAYER'S GAME IS NEVER TOUCHED. The mods go into a mod directory under a temp directory,
     and Factorio runs with a write-data directory of its own there, so the player's mods,

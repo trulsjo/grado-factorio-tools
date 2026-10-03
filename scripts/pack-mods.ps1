@@ -78,13 +78,21 @@
         Loading mod probe-pair-name 1.0.0 (data.lua)
     and a mod `probe-pair-version` holding `"Version":"9.9.9"` beside `"version":"1.0.0"` logs
         Loading mod probe-pair-version 1.0.0 (data.lua)
-    each with the pair in either order, and each creates a map, as a lower-case control does. Only
-    those two pairs were measured. To repeat it: write each mod directory with an info.json
-    holding the pair beside `title`, `author`, `factorio_version` `2.0` and a `base` dependency,
-    and a data.lua holding only a comment, as each measured mod had. Dot-source
-    load-harness-lib.ps1, call New-LoadHarness on the directory and then Invoke-HarnessLoad, and
-    read the OutFile it returns. Nothing is rewritten, because the harness reads the lower-case
-    key too.
+    each creating a map, as a lower-case control `probe-control` does. Mods `probe-pair-name-rev`
+    and `probe-pair-version-rev`, holding the lower-case key first, do the same under their own
+    names. The first line does not show which key was read, because the directory is named
+    `probe-pair-name` too. This does: a directory `probe-swap` holding `"Name":"probe-swap"`
+    beside `"name":"probe-other"` logs
+        Error Util.cpp:81: Failed to load mod "probe-swap": Directory name of mod <path>\probe-swap doesn't match the expected probe-other or probe-other_1.0.0 (case sensitive!)
+    so the name the game expects is the lower-case key's. Only those two pairs were measured. To
+    repeat it: write each mod directory with an info.json holding the pair beside `title`,
+    `author`, `factorio_version` `2.0` and a `base` dependency, and a data.lua holding only a
+    comment, as each measured mod had. Dot-source load-harness-lib.ps1, call New-LoadHarness on
+    the directory and then Invoke-HarnessLoad, and look for the mod's name in the OutFile it
+    returns. Nothing is rewritten, because the harness reads the lower-case key too. The exception
+    is `probe-swap`: the harness would junction it in as `probe-other`, so build the harness from
+    `"name":"probe-swap"` alone and rewrite the junctioned info.json, as for a lone wrong-case
+    key.
 
     AN INFO.JSON THAT IS NOT A JSON OBJECT IS REFUSED, naming the mod: `null`, an empty file, or an
     array, including a one-element array holding an object. That reason is this script's, not a
