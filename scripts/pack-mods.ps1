@@ -96,12 +96,13 @@
     Prove this script can fail. Builds a scratch git repository of fixture mods and checks, among
     other things -- each case prints its own name -- the naming, the layout, the version bounds,
     the one-copy rule, that it and the name check agree on case, the refusal of a lone `"Name"` or
-    `"Version"` key and of an info.json that is `null`, `[1]` or a one-element array holding an
-    object, and -- the half that matters -- the exclusion, by planting a git-ignored file inside a
-    mod directory and proving it does not reach the zip while its tracked neighbour does. Without
-    that half, "no junk in the zip" is a claim about a directory that happened to be clean. Among
-    the cases it does not run are an empty info.json and a `"Name"` beside `name`. Needs git;
-    touches no repository but its own.
+    `"Version"` key and of an info.json that is `null`, empty, `[1]` or a one-element array holding
+    an object, that a `"Name"` beside `name` and a `"Version"` beside `version` are packed from the
+    lower-case keys, and -- the half that matters -- the exclusion, by planting a git-ignored file
+    inside a mod directory and proving it does not reach the zip while its tracked neighbour does.
+    Without that half, "no junk in the zip" is a claim about a directory that happened to be clean.
+    That list is a sample, not the whole of what the script runs. Needs git; touches no repository
+    but its own.
 
 .EXAMPLE
     pwsh -File scripts/pack-mods.ps1 -OutputDirectory dist my-mod my-mod-graphics
@@ -319,6 +320,8 @@ function Invoke-SelfTest {
     & $put 'gamma/info.json' (& $info 'gamma' '1.0.0')
     & $put 'misnamed/info.json' (& $info 'somebody-else' '1.0.0')
     & $put 'Delta/info.json' (& $info 'delta' '1.0.0')
+    # Written whole, like epsilon's: the wrong-case keys beside the right ones are the case.
+    & $put 'zeta/info.json' '{"Name":"not-zeta","name":"zeta","Version":"9.9.9","version":"1.0.0"}'
     git -C $repo add -A
     # After the add, so neither is tracked. The plant is IGNORED, not merely untracked, or it
     # demonstrates the wrong thing: ls-files --cached leaves out untracked files too, so an
@@ -379,7 +382,7 @@ function Invoke-SelfTest {
             ($left -join ',') -eq 'alpha_1.2.3.zip,alpha_extra_1.0.0.zip,alpha-2_1.0.0.zip,my-alpha_1.0.0.zip' } }
         @{ Name = 'a directory whose name is not info.json''s name is refused'; Test = {
             & $refused { Invoke-Pack -Directory (Join-Path $repo 'misnamed') -Destination $out -Quiet } "declares name 'somebody-else'" } }
-        @{ Name = 'an info.json spelling a key "Name" or "Version" is refused as missing that key, not as an empty value; one that is not an object is refused by name'; Test = {
+        @{ Name = 'an info.json spelling a key "Name" or "Version" is refused as missing that key, not as an empty value; one that is not an object, or is empty, is refused by name'; Test = {
             # The new message alone would prove the wording; the old one is named too, so the case
             # fails if a refusal ever says both.
             $all = foreach ($k in @(@('{"Name":"epsilon","version":"1.0.0"}', 'name'), @('{"name":"epsilon","Version":"1.0.0"}', 'version'))) {
@@ -387,11 +390,14 @@ function Invoke-SelfTest {
                 $m = try { Invoke-Pack -Directory (Join-Path $repo 'epsilon') -Destination $out -Quiet | Out-Null; '' } catch { $_.Exception.Message }
                 $m -match "epsilon/info\.json has no ""$($k[1])"" key, which the game requires" -and $m -notmatch "declares name ''|version '' is not"
             }
-            $notObject = foreach ($j in 'null', '[1]', '[{"name":"epsilon","version":"1.0.0"}]') {
+            $notObject = foreach ($j in 'null', '', '[1]', '[{"name":"epsilon","version":"1.0.0"}]') {
                 & $put 'epsilon/info.json' $j
                 & $refused { Invoke-Pack -Directory (Join-Path $repo 'epsilon') -Destination $out -Quiet } 'epsilon/info\.json is not a JSON object'
             }
             -not ($all -contains $false) -and -not ($notObject -contains $false) } }
+        @{ Name = 'a "Name" beside name, and a "Version" beside version, are packed, read from the lower-case keys'; Test = {
+            $b = @(Invoke-Pack -Directory (Join-Path $repo 'zeta') -Destination $out -Quiet)
+            (Split-Path $b[0].Zip -Leaf) -ceq 'zeta_1.0.0.zip' -and (& $entries $b[0].Zip) -contains 'zeta/info.json' } }
         @{ Name = 'names are compared case-sensitively by both halves: a case-only mismatch is refused, and another case''s zip stays'; Test = {
             # Both halves in one case, so either one going case-insensitive on its own turns it red.
             # On a case-insensitive file system the path is also passed in the wrong case, which
