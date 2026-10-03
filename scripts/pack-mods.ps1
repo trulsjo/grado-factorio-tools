@@ -113,11 +113,12 @@ function Get-ModManifest {
     # (fluid-connection-indicators 0.2.9, grado-factorio-tools#40). Its keys then match case
     # exactly, so `"Name"` is no longer read as `name`, and an info.json holding both `name` and
     # `Name`, which ConvertFrom-Json also refused, is now read, from `name`.
-    $info = Get-Content -LiteralPath $infoPath -Raw | ConvertFrom-Json -AsHashtable
+    # -NoEnumerate, or a one-element array holding an object is unrolled and read as that object.
+    $info = Get-Content -LiteralPath $infoPath -Raw | ConvertFrom-Json -AsHashtable -NoEnumerate
     # Before the value checks, which would otherwise report a `"Name"` key as an empty name.
     if ($info -isnot [System.Collections.IDictionary]) { throw "$leaf/info.json is not a JSON object." }
     foreach ($key in 'name', 'version') {
-        if (-not $info.ContainsKey($key)) { throw "$leaf/info.json has no ""$key"" key, which is the one the game reads; keys match case exactly." }
+        if (-not $info.ContainsKey($key)) { throw "$leaf/info.json has no ""$key"" key, which is the one this script reads; keys match case exactly." }
     }
 
     # -cne, as the one-copy rule's -cmatch: Factorio compares mod names case-sensitively (see the
@@ -266,9 +267,11 @@ function Invoke-SelfTest {
         New-Item -ItemType Directory -Path (Split-Path $p -Parent) -Force | Out-Null
         Set-Content -LiteralPath $p -Value $body -NoNewline
     }
-    # Every fixture's info.json carries an empty key, as fluid-connection-indicators 0.2.9's
+    # Every info.json built by $info carries an empty key, as fluid-connection-indicators 0.2.9's
     # `package` table does: valid JSON that ConvertFrom-Json refuses without -AsHashtable. So every
-    # mod a case packs or refuses holds one, and case 1 fails if Get-ModManifest again cannot read one.
+    # mod a case packs or refuses holds one, and case 1 fails if Get-ModManifest again cannot read
+    # one. The exception is epsilon, whose info.json is written whole because its case is the file's
+    # shape: a key in the wrong case, or no object at all.
     $info = { param($name, $version) "{`"name`":`"$name`",`"version`":`"$version`",`"package`":{`"`":`"`"}}" }
     $entries = {
         param($zip)
@@ -359,7 +362,7 @@ function Invoke-SelfTest {
                 $m = try { Invoke-Pack -Directory (Join-Path $repo 'epsilon') -Destination $out -Quiet | Out-Null; '' } catch { $_.Exception.Message }
                 $m -match "epsilon/info\.json has no ""$($k[1])"" key" -and $m -notmatch "declares name ''|version '' is not"
             }
-            $notObject = foreach ($j in 'null', '[1]') {
+            $notObject = foreach ($j in 'null', '[1]', '[{"name":"epsilon","version":"1.0.0"}]') {
                 & $put 'epsilon/info.json' $j
                 & $refused { Invoke-Pack -Directory (Join-Path $repo 'epsilon') -Destination $out -Quiet } 'epsilon/info\.json is not a JSON object'
             }
