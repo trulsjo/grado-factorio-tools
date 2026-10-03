@@ -99,6 +99,10 @@
     measured game rule: it has no `name` to read, and PowerShell would otherwise unroll the
     one-element array and pack the object inside it as if it were the info.json.
 
+    SO IS ONE THAT IS NOT JSON AT ALL, such as a file cut off partway. The refusal names the mod
+    and gives the parser's own reason after it. That reason is this script's too, not a measured
+    game rule: without it the run stopped with the parser's error alone, naming no mod.
+
     WHAT IT CANNOT SEE. It does not load anything: a zip that is shaped right can still fail in
     game. It does not read info.json beyond `name` and `version`, so a bad `factorio_version` or
     dependency line reaches the portal as it stands. A tracked path git reports under a mod
@@ -160,7 +164,10 @@ function Get-ModManifest {
     # exactly, so `"Name"` is no longer read as `name`, and an info.json holding both `name` and
     # `Name`, which ConvertFrom-Json also refused, is now read, from `name`.
     # -NoEnumerate, or a one-element array holding an object is unrolled and read as that object.
-    $info = Get-Content -LiteralPath $infoPath -Raw | ConvertFrom-Json -AsHashtable -NoEnumerate
+    # Read outside the try, so a file that cannot be read is not reported as one that is not JSON.
+    $text = Get-Content -LiteralPath $infoPath -Raw
+    try { $info = $text | ConvertFrom-Json -AsHashtable -NoEnumerate }
+    catch { throw "$leaf/info.json is not JSON: $($_.Exception.Message)" }
     # Before the value checks, which would otherwise report a `"Name"` key as an empty name.
     if ($info -isnot [System.Collections.IDictionary]) { throw "$leaf/info.json is not a JSON object." }
     # The game refuses a wrong-case key too (see the header), so this refusal names the game.
@@ -319,7 +326,7 @@ function Invoke-SelfTest {
     # mod built by it that a case packs or refuses holds one, and case 1 fails if Get-ModManifest
     # again cannot read one. The exceptions are epsilon and zeta, whose info.json is written whole
     # because the case is the file's shape: a key in the wrong case, alone or beside the right one,
-    # or no object at all.
+    # no object at all, or no JSON at all.
     $info = { param($name, $version) "{`"name`":`"$name`",`"version`":`"$version`",`"package`":{`"`":`"`"}}" }
     $entries = {
         param($zip)
@@ -417,6 +424,11 @@ function Invoke-SelfTest {
                 & $refused { Invoke-Pack -Directory (Join-Path $repo 'epsilon') -Destination $out -Quiet } 'epsilon/info\.json is not a JSON object'
             }
             -not ($all -contains $false) -and -not ($notObject -contains $false) } }
+        @{ Name = 'an info.json that is not JSON is refused by name with the parser''s reason, and no zip is written for a mod given beside it'; Test = {
+            & $put 'epsilon/info.json' '{"name":"epsilon",'
+            Set-Content -LiteralPath (Join-Path $out 'gamma_0.0.1.zip') -Value 'earlier'
+            (& $refused { Invoke-Pack -Directory $gamma, (Join-Path $repo 'epsilon') -Destination $out -Quiet } 'epsilon/info\.json is not JSON: Conversion from JSON failed with error: Unexpected end') -and
+                (Get-Content -LiteralPath (Join-Path $out 'gamma_0.0.1.zip') -Raw).Trim() -eq 'earlier' } }
         @{ Name = 'a "Name" beside name, and a "Version" beside version, are packed, read from the lower-case keys'; Test = {
             $b = @(Invoke-Pack -Directory (Join-Path $repo 'zeta') -Destination $out -Quiet)
             (Split-Path $b[0].Zip -Leaf) -ceq 'zeta_1.0.0.zip' -and (& $entries $b[0].Zip) -contains 'zeta/info.json' } }
