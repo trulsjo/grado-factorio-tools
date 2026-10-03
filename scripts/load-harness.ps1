@@ -19,6 +19,18 @@
     one prototype name load without a word -- the second replaces the first. And it runs no ticks:
     whatever breaks only once the game runs is out of reach. Those are a caller's checks to bring.
 
+    WHAT IT REFUSES BEFORE THE GAME RUNS. A mod directory or zip whose info.json is not a JSON
+    object, or has no `name` key or no `version` key in exact case, is refused with a message
+    naming the info.json's path and what is wrong, the same through this script and through
+    Get-HarnessMods in the library. The harness needs both values before the game can run: a
+    directory is junctioned in under its name and a zip is copied in as <name>_<version>.zip.
+    Without the refusal a missing key stopped it with a PowerShell error naming no mod, or sent a
+    directory on with a blank version. The game refuses a lone `"Name"` or `"Version"` too; that
+    is measured in pack-mods.ps1's header, whose wording this refusal shares. To see the game's
+    refusal and not this one, build the harness from a valid info.json and rewrite it before
+    Invoke-HarnessLoad, as that header describes. Only the keys are checked, not their values, and
+    an info.json that is not JSON at all still fails with PowerShell's parse error, naming no mod.
+
     THE PLAYER'S GAME IS NEVER TOUCHED. The mods go into a mod directory under a temp directory,
     and Factorio runs with a write-data directory of its own there, so the player's mods,
     mod-list.json, saves and player-data.json are neither read nor written. -SelfTest asserts it.
@@ -52,8 +64,9 @@
 .PARAMETER SelfTest
     Prove the harness can fail and that it passes what it should, against the install: a good mod
     loads from a directory, a zip and a cache-shaped directory; a broken one fails with the game's
-    error text; a failing -Check fails the run; the mods' sources and the player's game are left
-    as they were.
+    error text; a failing -Check fails the run; an info.json with no `name` or `version` key, or
+    that is not an object, is refused by path; the mods' sources and the player's game are left as
+    they were.
 
 .EXAMPLE
     pwsh -File scripts/load-harness.ps1 .mod-cache/Grado_ABC
@@ -104,6 +117,21 @@ function Invoke-SelfTest {
     & $newMod $zipped 'harness-zipped' 'data:extend({ { type = "item", name = "harness-zipped-item", stack_size = 50, icon = "__base__/graphics/icons/iron-plate.png" } })'
     Compress-Archive -Path $zipped -DestinationPath (Join-Path $cache 'anything.zip')
     New-Item -ItemType Directory -Path (Join-Path $cache '.zips') -Force | Out-Null
+
+    # What the harness refuses itself, before the game runs: an info.json with no `name` key, one
+    # in a zip with no `version` key, and two that are not a JSON object. Kept out of src/ and the
+    # cache, which the cases above load.
+    $keyless = Join-Path $temp 'keyless'
+    $putInfo = {
+        param([string] $Dir, [string] $Json)
+        New-Item -ItemType Directory -Path $Dir -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path $Dir 'info.json') -Value $Json -NoNewline
+    }
+    & $putInfo (Join-Path $keyless 'no-name') '{"Name":"harness-keyless","version":"1.0.0"}'
+    & $putInfo (Join-Path $keyless 'stage/no-version') '{"name":"harness-keyless","Version":"1.0.0"}'
+    Compress-Archive -Path (Join-Path $keyless 'stage/no-version') -DestinationPath (Join-Path $keyless 'no-version.zip')
+    & $putInfo (Join-Path $keyless 'array') '[{"name":"harness-keyless","version":"1.0.0"}]'
+    & $putInfo (Join-Path $keyless 'empty') ''
 
     # The check a caller would bring: it dumps the data stage through the library and requires
     # every item it is told to expect.
@@ -161,6 +189,20 @@ exit 0
         @{ Name = 'a directory holding no mod is refused, not loaded as nothing'; Test = {
             $r = & $run @((Join-Path $cache '.zips'))
             $r.Code -ne 0 -and $r.Text -match 'holds no mods' } }
+        @{ Name = 'an info.json with no name or version key, or that is not an object, is refused by path before the game runs, the same through the library'; Test = {
+            $all = foreach ($k in @(@('no-name', 'has no "name" key, which the game requires'), @('no-version.zip', 'has no "version" key, which the game requires'),
+                    @('array', 'is not a JSON object'), @('empty', 'is not a JSON object'))) {
+                $path = Join-Path $keyless $k[0]
+                $viaLibrary = try { Get-HarnessMods -Path $path | Out-Null; '' } catch { $_.Exception.Message }
+                $r = & $run @($path)
+                Write-Host "    $viaLibrary"
+                $viaLibrary -match [regex]::Escape($path) -and $viaLibrary -match [regex]::Escape($k[1]) -and
+                    $r.Code -ne 0 -and $r.Text -notmatch 'load-harness: \d+ mod' -and
+                    # The entry point's error is wrapped to the console's width, each further line
+                    # behind a bar; the library's is not.
+                    ($r.Text -replace '[\s|]', '').Contains(($viaLibrary -replace '[\s|]', ''))
+            }
+            -not ($all -contains $false) } }
         @{ Name = 'every mod source is still there after the junctions went'; Test = {
             $after = @(Get-ChildItem -LiteralPath (Join-Path $temp 'src'), $cache -Recurse -File -Force | ForEach-Object FullName)
             $sourceBefore.Count -gt 0 -and -not (Compare-Object $sourceBefore $after) } }

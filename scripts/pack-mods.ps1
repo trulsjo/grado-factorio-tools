@@ -67,8 +67,8 @@
     while a lower-case control loads. Only those two keys were measured, and only with the
     lower-case key absent. To repeat it: dot-source load-harness-lib.ps1, build the harness with
     New-LoadHarness from a valid info.json, then rewrite the junctioned info.json with the
-    wrong-case key and call Invoke-HarnessLoad. The rewrite comes after New-LoadHarness because,
-    for `"Name"`, the harness's own read of info.json stops before the game is run.
+    wrong-case key and call Invoke-HarnessLoad. The rewrite comes after New-LoadHarness because the
+    harness refuses such an info.json itself, before the game is run.
 
     A `"Name"` BESIDE `name`, OR A `"Version"` BESIDE `version`, IS PACKED, AND THE GAME READS IT
     THE SAME WAY. The mod is read from the lower-case key and the other is ignored. Measured against
