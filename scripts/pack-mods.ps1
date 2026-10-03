@@ -70,6 +70,21 @@
     wrong-case key and call Invoke-HarnessLoad. The rewrite comes after New-LoadHarness because,
     for `"Name"`, the harness's own read of info.json stops before the game is run.
 
+    A `"Name"` BESIDE `name`, OR A `"Version"` BESIDE `version`, IS PACKED, AND THE GAME READS IT
+    THE SAME WAY. The mod is read from the lower-case key and the other is ignored. Measured against
+    Factorio 2.0.77 (build 84539), headless, isolated from the player's mods
+    (grado-factorio-tools#53, for grado-factorio-tools#51). A mod directory `probe-pair-name`
+    holding `"Name":"probe-other"` beside `"name":"probe-pair-name"` logs
+        Loading mod probe-pair-name 1.0.0 (data.lua)
+    and a mod `probe-pair-version` holding `"Version":"9.9.9"` beside `"version":"1.0.0"` logs
+        Loading mod probe-pair-version 1.0.0 (data.lua)
+    each with the pair in either order, and each creates a map, as a lower-case control does. Only
+    those two pairs were measured. To repeat it: write each mod directory with an otherwise valid
+    info.json holding the pair, and a data.lua, which is what puts the line in the log. Dot-source
+    load-harness-lib.ps1, call New-LoadHarness on the directory and then Invoke-HarnessLoad, and
+    read the OutFile it returns. Nothing is rewritten, because the harness reads the lower-case
+    key too.
+
     AN INFO.JSON THAT IS NOT A JSON OBJECT IS REFUSED, naming the mod: `null`, an empty file, or an
     array, including a one-element array holding an object. That reason is this script's, not a
     measured game rule: it has no `name` to read, and PowerShell would otherwise unroll the
@@ -77,13 +92,10 @@
 
     WHAT IT CANNOT SEE. It does not load anything: a zip that is shaped right can still fail in
     game. It does not read info.json beyond `name` and `version`, so a bad `factorio_version` or
-    dependency line reaches the portal as it stands. A `"Name"` beside `name`, or a `"Version"`
-    beside `version`, is not refused: the mod is read from the lower-case key and the other is
-    ignored. What the game does with such a pair was not measured. A tracked path git reports
-    under a mod directory but that is not a file -- a nested submodule -- is refused as missing.
-    "Nothing is written" covers every refusal the script makes itself; a read or write failure
-    while zipping the second mod leaves the first mod's zip written and its other versions
-    deleted.
+    dependency line reaches the portal as it stands. A tracked path git reports under a mod
+    directory but that is not a file -- a nested submodule -- is refused as missing. "Nothing is
+    written" covers every refusal the script makes itself; a read or write failure while zipping
+    the second mod leaves the first mod's zip written and its other versions deleted.
 
 .PARAMETER ModDirectory
     One or more mod directories, each holding info.json and each inside a git work tree. The
