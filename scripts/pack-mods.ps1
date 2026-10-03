@@ -56,10 +56,26 @@
     is left alone, and so is anything that is not a zip -- an unpacked `<name>` directory there is
     not this script's to remove. A mod that fails leaves any earlier zip of it untouched.
 
+    INFO.JSON KEYS ARE CASE-SENSITIVE, AND THAT IS THE GAME'S RULE. An info.json whose only name
+    key is spelled `"Name"`, or whose only version key is `"Version"`, is refused as having no
+    `name` or `version` key. Measured against Factorio 2.0.77 (build 84539), headless, isolated
+    from the player's mods (grado-factorio-tools#49, for #47): it logs
+        Error Util.cpp:81: Failed to load mod "probe-name": Key "name" not found in property tree at ROOT
+    and the same line naming `version` for `"Version"`, while a lower-case control loads. To repeat
+    it: dot-source load-harness-lib.ps1, build the harness with New-LoadHarness from a valid
+    info.json, then rewrite the junctioned info.json with the wrong-case key and call
+    Invoke-HarnessLoad. The rewrite comes after New-LoadHarness because Get-HarnessMods reads
+    `name` and `version` itself and would stop first. A `"Name"` beside `name` is not refused: the
+    mod is read from `name`, and the `"Name"` is ignored.
+
+    AN INFO.JSON THAT IS NOT A JSON OBJECT IS REFUSED, naming the mod: `null`, an empty file, or an
+    array, including a one-element array holding an object. That reason is this script's, not a
+    measured game rule: it has no `name` to read, and PowerShell would otherwise unroll the
+    one-element array and pack the object inside it as if it were the info.json.
+
     WHAT IT CANNOT SEE. It does not load anything: a zip that is shaped right can still fail in
     game. It does not read info.json beyond `name` and `version`, so a bad `factorio_version` or
-    dependency line reaches the portal as it stands. Keys are matched case-exactly, so a second
-    key differing only in case, such as `Name` beside `name`, is ignored rather than refused. A
+    dependency line reaches the portal as it stands. A
     tracked path git reports under a mod directory but that is not a file -- a nested submodule --
     is refused as missing. "Nothing is written" covers every refusal the script makes itself; a
     read or write failure while zipping the second mod leaves the first mod's zip written and its
@@ -73,11 +89,15 @@
     Where to write the zips. Created if missing.
 
 .PARAMETER SelfTest
-    Prove this script can fail. Builds a scratch git repository of fixture mods and checks the
-    naming, the layout, the version bounds, the one-copy rule, that it and the name check agree on
-    case, and -- the half that matters -- the exclusion, by planting a git-ignored file inside a
+    Prove this script can fail. Builds a scratch git repository of fixture mods and checks, among
+    other things -- each case prints its own name -- the naming, the layout, the version bounds,
+    the one-copy rule, that it and the name check agree on case, the refusal of a lone `"Name"` or
+    `"Version"` key and of an info.json that is `null`, `[1]` or a one-element array holding an
+    object, and -- the half that matters -- the exclusion, by planting a git-ignored file inside a
     mod directory and proving it does not reach the zip while its tracked neighbour does. Without
-    that half, "no junk in the zip" is a claim about a directory that happened to be clean. Needs git; touches no repository but its own.
+    that half, "no junk in the zip" is a claim about a directory that happened to be clean. It does
+    not run an empty info.json, or a `"Name"` beside `name`. Needs git; touches no repository but
+    its own.
 
 .EXAMPLE
     pwsh -File scripts/pack-mods.ps1 -OutputDirectory dist my-mod my-mod-graphics
@@ -115,10 +135,11 @@ function Get-ModManifest {
     # `Name`, which ConvertFrom-Json also refused, is now read, from `name`.
     # -NoEnumerate, or a one-element array holding an object is unrolled and read as that object.
     $info = Get-Content -LiteralPath $infoPath -Raw | ConvertFrom-Json -AsHashtable -NoEnumerate
-    # Before the value checks, which would otherwise report a `"Name"` key as an empty name.
+    # Before the value checks, which would otherwise report a `"Name"` key as an empty name. The
+    # game refuses such an info.json too (see the header), so the refusal names the game.
     if ($info -isnot [System.Collections.IDictionary]) { throw "$leaf/info.json is not a JSON object." }
     foreach ($key in 'name', 'version') {
-        if (-not $info.ContainsKey($key)) { throw "$leaf/info.json has no ""$key"" key, which is the one this script reads; keys match case exactly." }
+        if (-not $info.ContainsKey($key)) { throw "$leaf/info.json has no ""$key"" key, which Factorio 2.0.77 requires; keys match case exactly." }
     }
 
     # -cne, as the one-copy rule's -cmatch: Factorio compares mod names case-sensitively (see the
@@ -360,7 +381,7 @@ function Invoke-SelfTest {
             $all = foreach ($k in @(@('{"Name":"epsilon","version":"1.0.0"}', 'name'), @('{"name":"epsilon","Version":"1.0.0"}', 'version'))) {
                 & $put 'epsilon/info.json' $k[0]
                 $m = try { Invoke-Pack -Directory (Join-Path $repo 'epsilon') -Destination $out -Quiet | Out-Null; '' } catch { $_.Exception.Message }
-                $m -match "epsilon/info\.json has no ""$($k[1])"" key" -and $m -notmatch "declares name ''|version '' is not"
+                $m -match "epsilon/info\.json has no ""$($k[1])"" key, which Factorio 2\.0\.77 requires" -and $m -notmatch "declares name ''|version '' is not"
             }
             $notObject = foreach ($j in 'null', '[1]', '[{"name":"epsilon","version":"1.0.0"}]') {
                 & $put 'epsilon/info.json' $j
