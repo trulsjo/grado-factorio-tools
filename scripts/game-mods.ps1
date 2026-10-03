@@ -6,8 +6,8 @@
     2.0.77 (build 84539), headless, fails a dependency on `Alpha` when only `alpha` is present
     (grado-factorio-tools 607ceef), and on each game mod in another case
     (grado-factorio-tools#46, for #44). To repeat it: a throwaway mod `probe-spaceage` whose
-    info.json declares the one dependency `Space-Age`, loaded alone through `load-harness.ps1 -With space-age`, which keeps it
-    from the player's mods. The game logs
+    info.json declares the one dependency `Space-Age`, loaded alone through
+    `load-harness.ps1 -With space-age`, which keeps it from the player's mods. The game logs
         Error Util.cpp:81: Failed to load mod "probe-spaceage":
         • probe-spaceage
             • Missing required dependency Space-Age
