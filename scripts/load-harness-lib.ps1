@@ -318,11 +318,16 @@ function Get-HarnessMods {
         come from the mod's own info.json, never from a file or directory name.
 
         An empty directory is an error, not an empty set: a load of nothing would otherwise be
-        reported as a pass for mods that were never loaded. So is one name found twice.  #>
+        reported as a pass for mods that were never loaded. So is one name found twice.
+
+        An info.json that is not a JSON object, or has no `name` or no `version` key in exact case,
+        is refused here, naming its path -- see WHAT IT REFUSES BEFORE THE GAME RUNS in
+        load-harness.ps1.  #>
     param([Parameter(Mandatory)] [string[]] $Path)
 
     # As a hashtable: an info.json may hold an empty key, which ConvertFrom-Json refuses otherwise
-    # (fluid-connection-indicators 0.2.9, grado-factorio-tools#38).
+    # (fluid-connection-indicators 0.2.9, grado-factorio-tools#38). Its keys then match case
+    # exactly. -NoEnumerate, or a one-element array holding an object is read as that object.
     $readInfo = {
         param($item)
         if ($item -is [IO.FileInfo]) {
@@ -331,14 +336,21 @@ function Get-HarnessMods {
                 $entry = $zip.Entries | Where-Object { $_.FullName -match '^[^/]+/info\.json$' } | Select-Object -First 1
                 if (-not $entry) { throw "$($item.FullName) holds no <folder>/info.json, so it is not a mod zip." }
                 $reader = [IO.StreamReader]::new($entry.Open())
-                try { $info = $reader.ReadToEnd() | ConvertFrom-Json -AsHashtable } finally { $reader.Dispose() }
+                try { $info = $reader.ReadToEnd() | ConvertFrom-Json -AsHashtable -NoEnumerate } finally { $reader.Dispose() }
+                $where = "$($entry.FullName) in $($item.FullName)"
             }
             finally { $zip.Dispose() }
             $kind = 'zip'
         }
         else {
-            $info = Get-Content -LiteralPath (Join-Path $item.FullName 'info.json') -Raw | ConvertFrom-Json -AsHashtable
+            $where = Join-Path $item.FullName 'info.json'
+            $info = Get-Content -LiteralPath $where -Raw | ConvertFrom-Json -AsHashtable -NoEnumerate
             $kind = 'directory'
+        }
+        # The wording is pack-mods.ps1's, which refuses the same info.json for the same reasons.
+        if ($info -isnot [System.Collections.IDictionary]) { throw "$where is not a JSON object." }
+        foreach ($key in 'name', 'version') {
+            if (-not $info.ContainsKey($key)) { throw "$where has no ""$key"" key, which the game requires; keys match case exactly." }
         }
         [pscustomobject]@{ Name = $info.name; Version = $info.version; Kind = $kind; Path = $item.FullName }
     }
