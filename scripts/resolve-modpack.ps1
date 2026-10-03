@@ -24,10 +24,11 @@
                dependency on `Alpha` when only `alpha` is present -- and as the portal does:
                on 2026-10-01, /api/mods/Krastorio2 answered 200 and /api/mods/krastorio2 404.
                The game's own mods are matched the same way: on the same build, a dependency on
-               `Space-Age`, `Base` or `Quality` is refused (grado-factorio-tools#44; the run is
-               in game-mods.ps1). So a mandatory `Space-Age` is not taken as bundled,
-               `krastorio2` is not satisfied by a `Krastorio2` already picked, and `mypack` is
-               not the local pack `MyPack`. Each is looked up under its own spelling.
+               `Space-Age`, `Base`, `Quality` or `Elevated-Rails` is refused
+               (grado-factorio-tools 9a5f664; the run is in game-mods.ps1). So a mandatory
+               `Space-Age` is not taken as bundled, `krastorio2` is not satisfied by a
+               `Krastorio2` already picked, and `mypack` is not the local pack `MyPack`. Each is
+               looked up under its own spelling.
       check    Every dependency line of every member of a pack's closure, against the other
                members: a mandatory version constraint, a `!` incompatibility, and a version range
                on an optional dependency whose mod is in the closure.
