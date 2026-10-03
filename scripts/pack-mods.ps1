@@ -56,17 +56,19 @@
     is left alone, and so is anything that is not a zip -- an unpacked `<name>` directory there is
     not this script's to remove. A mod that fails leaves any earlier zip of it untouched.
 
-    INFO.JSON KEYS ARE CASE-SENSITIVE, AND THAT IS THE GAME'S RULE. An info.json whose only name
-    key is spelled `"Name"`, or whose only version key is `"Version"`, is refused as having no
-    `name` or `version` key. Measured against Factorio 2.0.77 (build 84539), headless, isolated
-    from the player's mods (grado-factorio-tools#49, for #47): it logs
+    A WRONG-CASE NAME OR VERSION KEY IS REFUSED, AND THAT IS THE GAME'S RULE. An info.json whose
+    only name key is spelled `"Name"`, or whose only version key is `"Version"`, is refused as
+    having no `name` or `version` key. Measured against Factorio 2.0.77 (build 84539), headless,
+    isolated from the player's mods (grado-factorio-tools#49, for grado-factorio-tools#47). A mod
+    `probe-name` spelling `"Name"` logs
         Error Util.cpp:81: Failed to load mod "probe-name": Key "name" not found in property tree at ROOT
-    and the same line naming `version` for `"Version"`, while a lower-case control loads. To repeat
-    it: dot-source load-harness-lib.ps1, build the harness with New-LoadHarness from a valid
-    info.json, then rewrite the junctioned info.json with the wrong-case key and call
-    Invoke-HarnessLoad. The rewrite comes after New-LoadHarness because Get-HarnessMods reads
-    `name` and `version` itself and would stop first. A `"Name"` beside `name` is not refused: the
-    mod is read from `name`, and the `"Name"` is ignored.
+    and a mod `probe-version` spelling `"Version"` logs
+        Error Util.cpp:81: Failed to load mod "probe-version": Key "version" not found in property tree at ROOT
+    while a lower-case control loads. Only those two keys were measured, and only with the
+    lower-case key absent. To repeat it: dot-source load-harness-lib.ps1, build the harness with
+    New-LoadHarness from a valid info.json, then rewrite the junctioned info.json with the
+    wrong-case key and call Invoke-HarnessLoad. The rewrite comes after New-LoadHarness because,
+    for `"Name"`, the harness's own read of info.json stops before the game is run.
 
     AN INFO.JSON THAT IS NOT A JSON OBJECT IS REFUSED, naming the mod: `null`, an empty file, or an
     array, including a one-element array holding an object. That reason is this script's, not a
@@ -75,11 +77,13 @@
 
     WHAT IT CANNOT SEE. It does not load anything: a zip that is shaped right can still fail in
     game. It does not read info.json beyond `name` and `version`, so a bad `factorio_version` or
-    dependency line reaches the portal as it stands. A
-    tracked path git reports under a mod directory but that is not a file -- a nested submodule --
-    is refused as missing. "Nothing is written" covers every refusal the script makes itself; a
-    read or write failure while zipping the second mod leaves the first mod's zip written and its
-    other versions deleted.
+    dependency line reaches the portal as it stands. A `"Name"` beside `name`, or a `"Version"`
+    beside `version`, is not refused: the mod is read from the lower-case key and the other is
+    ignored. What the game does with such a pair was not measured. A tracked path git reports
+    under a mod directory but that is not a file -- a nested submodule -- is refused as missing.
+    "Nothing is written" covers every refusal the script makes itself; a read or write failure
+    while zipping the second mod leaves the first mod's zip written and its other versions
+    deleted.
 
 .PARAMETER ModDirectory
     One or more mod directories, each holding info.json and each inside a git work tree. The
@@ -95,9 +99,9 @@
     `"Version"` key and of an info.json that is `null`, `[1]` or a one-element array holding an
     object, and -- the half that matters -- the exclusion, by planting a git-ignored file inside a
     mod directory and proving it does not reach the zip while its tracked neighbour does. Without
-    that half, "no junk in the zip" is a claim about a directory that happened to be clean. It does
-    not run an empty info.json, or a `"Name"` beside `name`. Needs git; touches no repository but
-    its own.
+    that half, "no junk in the zip" is a claim about a directory that happened to be clean. Among
+    the cases it does not run are an empty info.json and a `"Name"` beside `name`. Needs git;
+    touches no repository but its own.
 
 .EXAMPLE
     pwsh -File scripts/pack-mods.ps1 -OutputDirectory dist my-mod my-mod-graphics
@@ -135,11 +139,11 @@ function Get-ModManifest {
     # `Name`, which ConvertFrom-Json also refused, is now read, from `name`.
     # -NoEnumerate, or a one-element array holding an object is unrolled and read as that object.
     $info = Get-Content -LiteralPath $infoPath -Raw | ConvertFrom-Json -AsHashtable -NoEnumerate
-    # Before the value checks, which would otherwise report a `"Name"` key as an empty name. The
-    # game refuses such an info.json too (see the header), so the refusal names the game.
+    # Before the value checks, which would otherwise report a `"Name"` key as an empty name.
     if ($info -isnot [System.Collections.IDictionary]) { throw "$leaf/info.json is not a JSON object." }
+    # The game refuses a wrong-case key too (see the header), so this refusal names the game.
     foreach ($key in 'name', 'version') {
-        if (-not $info.ContainsKey($key)) { throw "$leaf/info.json has no ""$key"" key, which Factorio 2.0.77 requires; keys match case exactly." }
+        if (-not $info.ContainsKey($key)) { throw "$leaf/info.json has no ""$key"" key, which the game requires; keys match case exactly." }
     }
 
     # -cne, as the one-copy rule's -cmatch: Factorio compares mod names case-sensitively (see the
@@ -381,7 +385,7 @@ function Invoke-SelfTest {
             $all = foreach ($k in @(@('{"Name":"epsilon","version":"1.0.0"}', 'name'), @('{"name":"epsilon","Version":"1.0.0"}', 'version'))) {
                 & $put 'epsilon/info.json' $k[0]
                 $m = try { Invoke-Pack -Directory (Join-Path $repo 'epsilon') -Destination $out -Quiet | Out-Null; '' } catch { $_.Exception.Message }
-                $m -match "epsilon/info\.json has no ""$($k[1])"" key, which Factorio 2\.0\.77 requires" -and $m -notmatch "declares name ''|version '' is not"
+                $m -match "epsilon/info\.json has no ""$($k[1])"" key, which the game requires" -and $m -notmatch "declares name ''|version '' is not"
             }
             $notObject = foreach ($j in 'null', '[1]', '[{"name":"epsilon","version":"1.0.0"}]') {
                 & $put 'epsilon/info.json' $j
