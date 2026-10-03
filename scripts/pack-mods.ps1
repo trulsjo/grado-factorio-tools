@@ -79,8 +79,9 @@
     and a mod `probe-pair-version` holding `"Version":"9.9.9"` beside `"version":"1.0.0"` logs
         Loading mod probe-pair-version 1.0.0 (data.lua)
     each with the pair in either order, and each creates a map, as a lower-case control does. Only
-    those two pairs were measured. To repeat it: write each mod directory with an otherwise valid
-    info.json holding the pair, and a data.lua, which is what puts the line in the log. Dot-source
+    those two pairs were measured. To repeat it: write each mod directory with an info.json
+    holding the pair beside `title`, `author`, `factorio_version` `2.0` and a `base` dependency,
+    and a data.lua holding only a comment, as each measured mod had. Dot-source
     load-harness-lib.ps1, call New-LoadHarness on the directory and then Invoke-HarnessLoad, and
     read the OutFile it returns. Nothing is rewritten, because the harness reads the lower-case
     key too.
@@ -307,9 +308,10 @@ function Invoke-SelfTest {
     }
     # Every info.json built by $info carries an empty key, as fluid-connection-indicators 0.2.9's
     # `package` table does: valid JSON that ConvertFrom-Json refuses without -AsHashtable. So every
-    # mod a case packs or refuses holds one, and case 1 fails if Get-ModManifest again cannot read
-    # one. The exception is epsilon, whose info.json is written whole because its case is the file's
-    # shape: a key in the wrong case, or no object at all.
+    # mod built by it that a case packs or refuses holds one, and case 1 fails if Get-ModManifest
+    # again cannot read one. The exceptions are epsilon and zeta, whose info.json is written whole
+    # because the case is the file's shape: a key in the wrong case, alone or beside the right one,
+    # or no object at all.
     $info = { param($name, $version) "{`"name`":`"$name`",`"version`":`"$version`",`"package`":{`"`":`"`"}}" }
     $entries = {
         param($zip)
