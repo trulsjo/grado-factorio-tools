@@ -126,7 +126,7 @@ table and keeps only its own scope vocabulary. A rejected message names the page
 Three things are this repository's own:
 
 - **Scope vocabulary.** Use the tool (`coexistence`, `tree-viewer`, `pack`, `upload`,
-  `commit-check`) or the area (`docs`, `repo`).
+  `commit-check`, `resolve-modpack`) or the area (`docs`, `repo`).
 - **What counts as a breaking change.** Here: anything that breaks a consuming repository's
   interface. The `!` and the `BREAKING CHANGE:` footer are shared mechanics; what triggers them is
   domain knowledge, and a sibling's answer is its own — save compatibility in the mod repo, a

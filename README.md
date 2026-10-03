@@ -107,7 +107,8 @@ prototype name is that mod's business. If a script needs to know `rf-`, it stays
 ## Layout
 
 ```
-scripts/     PowerShell entry points, one job each
+scripts/     PowerShell entry points, one job each, and two libraries that are
+             dot-sourced, not run: load-harness-lib.ps1 and game-mods.ps1
 .githooks/   this repo's own commit-msg hook, opted into once per clone
 docs/        the commit convention, the ADRs, the notes agents read, and the
              extraction record — what moved, from where, and why
