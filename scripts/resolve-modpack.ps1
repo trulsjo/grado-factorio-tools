@@ -23,8 +23,9 @@
                2.0.77 (build 84539), measured headless in grado-factorio-tools 607ceef, fails a
                dependency on `Alpha` when only `alpha` is present -- and as the portal does:
                on 2026-10-01, /api/mods/Krastorio2 answered 200 and /api/mods/krastorio2 404.
-               `Alpha` was an ordinary mod; that a game mod behaves the same is inferred, not
-               measured (game-mods.ps1). So a mandatory `Space-Age` is not taken as bundled,
+               The game's own mods are matched the same way: on the same build, a dependency on
+               `Space-Age`, `Base` or `Quality` is refused (grado-factorio-tools#44; the run is
+               in game-mods.ps1). So a mandatory `Space-Age` is not taken as bundled,
                `krastorio2` is not satisfied by a `Krastorio2` already picked, and `mypack` is
                not the local pack `MyPack`. Each is looked up under its own spelling.
       check    Every dependency line of every member of a pack's closure, against the other
@@ -236,7 +237,7 @@ function Resolve-Packs {
                 $dep = ConvertFrom-Dependency $d
                 if ($dep.Kind -notin 'required', 'unordered') { continue }
                 # Mod names compare exactly, so a game mod in another case is taken as not bundled
-                # (inferred for game mods; see game-mods.ps1).
+                # (measured for game mods; see game-mods.ps1).
                 $game = Get-MiscasedGameMod $dep.Name
                 if ($game) {
                     $problem = "$name $($closure[$name].Version) declares '$d', but the game's mod is '$game' and mod names are case-sensitive"
