@@ -114,6 +114,10 @@ function Get-ModManifest {
     # exactly, so `"Name"` is no longer read as `name`, and an info.json holding both `name` and
     # `Name`, which ConvertFrom-Json also refused, is now read, from `name`.
     $info = Get-Content -LiteralPath $infoPath -Raw | ConvertFrom-Json -AsHashtable
+    # Before the value checks, which would otherwise report a `"Name"` key as an empty name.
+    foreach ($key in 'name', 'version') {
+        if (-not $info.ContainsKey($key)) { throw "$leaf/info.json has no ""$key"" key, which is the one the game reads; keys match case exactly." }
+    }
 
     # -cne, as the one-copy rule's -cmatch: Factorio compares mod names case-sensitively (see the
     # header), so the two must agree or a name this accepts is one that rule does not clean up after.
@@ -346,6 +350,15 @@ function Invoke-SelfTest {
             ($left -join ',') -eq 'alpha_1.2.3.zip,alpha_extra_1.0.0.zip,alpha-2_1.0.0.zip,my-alpha_1.0.0.zip' } }
         @{ Name = 'a directory whose name is not info.json''s name is refused'; Test = {
             & $refused { Invoke-Pack -Directory (Join-Path $repo 'misnamed') -Destination $out -Quiet } "declares name 'somebody-else'" } }
+        @{ Name = 'an info.json spelling a key "Name" or "Version" is refused as missing that key, not as an empty value'; Test = {
+            # The new message alone would prove the wording; the old one is named too, so the case
+            # fails if a refusal ever says both.
+            $all = foreach ($k in @(@('{"Name":"epsilon","version":"1.0.0"}', 'name'), @('{"name":"epsilon","Version":"1.0.0"}', 'version'))) {
+                & $put 'epsilon/info.json' $k[0]
+                $m = try { Invoke-Pack -Directory (Join-Path $repo 'epsilon') -Destination $out -Quiet | Out-Null; '' } catch { $_.Exception.Message }
+                $m -match "epsilon/info\.json has no ""$($k[1])"" key" -and $m -notmatch "declares name ''|version '' is not"
+            }
+            -not ($all -contains $false) } }
         @{ Name = 'names are compared case-sensitively by both halves: a case-only mismatch is refused, and another case''s zip stays'; Test = {
             # Both halves in one case, so either one going case-insensitive on its own turns it red.
             # On a case-insensitive file system the path is also passed in the wrong case, which
