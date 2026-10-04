@@ -36,8 +36,10 @@
     from a valid info.json and rewrite it before Invoke-HarnessLoad, as that header describes.
     The two values are checked to be non-empty strings and nothing more: `null`, a number, an
     object and `""` are refused, naming the key; a string of only spaces passes. That reason is
-    this script's, not a measured game rule: a blank name or version would go into a junction's
-    or a zip's name. A version's format
+    this script's, not a measured game rule: a blank name would go into a junction's or a zip's
+    name, and a blank version into a zip's. A directory's version goes into no name; it is refused
+    the same way so that no mod Get-HarnessMods returns has a blank version, which this script
+    prints beside the name. A version's format
     is not checked, nor that the name matches the directory or zip it came from. pack-mods.ps1
     checks both, because it names a zip for the portal; this loads mods from a cache it did not
     build, and what the game accepts there has not been measured. One string is refused that
