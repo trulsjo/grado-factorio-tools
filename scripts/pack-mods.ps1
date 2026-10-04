@@ -122,12 +122,12 @@
     other things -- each case prints its own name -- the naming, the layout, the version bounds,
     the one-copy rule, that it and the name check agree on case, the refusal of a lone `"Name"` or
     `"Version"` key and of an info.json that is `null`, empty, `[1]` or a one-element array holding
-    an object, that a `"Name"` beside `name` and a `"Version"` beside `version` are packed from the
-    lower-case keys, and -- the half that matters -- the exclusion, by planting a git-ignored file
-    inside a mod directory and proving it does not reach the zip while its tracked neighbour does.
-    Without that half, "no junk in the zip" is a claim about a directory that happened to be clean.
-    That list is a sample, not the whole of what the script runs. Needs git; touches no repository
-    but its own.
+    an object, or that is not JSON at all, that a `"Name"` beside `name` and a `"Version"` beside
+    `version` are packed from the lower-case keys, and -- the half that matters -- the exclusion,
+    by planting a git-ignored file inside a mod directory and proving it does not reach the zip
+    while its tracked neighbour does. Without that half, "no junk in the zip" is a claim about a
+    directory that happened to be clean. That list is a sample, not the whole of what the script
+    runs. Needs git; touches no repository but its own.
 
 .EXAMPLE
     pwsh -File scripts/pack-mods.ps1 -OutputDirectory dist my-mod my-mod-graphics
