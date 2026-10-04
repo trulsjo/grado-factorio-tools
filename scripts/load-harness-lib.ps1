@@ -355,7 +355,9 @@ function Get-HarnessMods {
             if (-not $info.ContainsKey($key)) { throw "$where has no ""$key"" key, which the game requires; keys match case exactly." }
         }
         # After both key checks, so a missing key is never reported as a bad value. This one is
-        # the harness's own: the name and version go into file names before the game runs.
+        # the harness's own: the name goes into a junction's or a zip's name before the game
+        # runs, and a zip's version into the zip's. A directory's version goes into no name, and
+        # is refused the same way so that no mod returned has a blank one.
         foreach ($key in 'name', 'version') {
             if ($info[$key] -isnot [string] -or -not $info[$key]) { throw "$where has a ""$key"" that is not a non-empty string." }
         }
