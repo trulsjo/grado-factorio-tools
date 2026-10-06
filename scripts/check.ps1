@@ -20,8 +20,8 @@
 
         pwsh -File scripts/load-harness.ps1 -SelfTest
 
-    A script that gains a -SelfTest and is named in neither list below fails this check, so a new
-    one is not left out in silence.
+    A script that declares a -SelfTest the way these do and is named in neither list below fails
+    this check, so a new one is not left out in silence. One declared some other way is missed.
 
     WHAT IT CANNOT SEE. A parse proves syntax and nothing else: a misspelled cmdlet or variable
     parses. No linter runs. It reads the working tree, so through the pre-push hook it checks
@@ -35,7 +35,7 @@
 #Requires -Version 7
 $ErrorActionPreference = 'Stop'
 
-$SELF_TESTS = 'commit-check.ps1', 'fetch-mods.ps1', 'mod-info.ps1', 'pack-mods.ps1', 'resolve-modpack.ps1'
+$SELF_TESTS = @('commit-check.ps1', 'fetch-mods.ps1', 'mod-info.ps1', 'pack-mods.ps1', 'resolve-modpack.ps1')
 # Has a self-test this does not run, and why: it needs Factorio installed.
 $NEEDS_GAME = @('load-harness.ps1')
 
@@ -57,10 +57,13 @@ foreach ($script in Get-ChildItem -LiteralPath $PSScriptRoot -Filter *.ps1 | Sor
 
 foreach ($name in $SELF_TESTS) {
     $said = & pwsh -NoProfile -File (Join-Path $PSScriptRoot $name) -SelfTest 2>&1 | Out-String
-    Write-Host "check: $name -SelfTest -- $($LASTEXITCODE ? 'FAILED' : 'ok')"
-    if ($LASTEXITCODE) {
+    # Exit 0 having run no case is not a pass: mod-info.ps1 has no param block, so it would take
+    # a -SelfTest it no longer answers in silence.
+    $ran = $said -match 'self-test'
+    Write-Host "check: $name -SelfTest -- $($LASTEXITCODE -or -not $ran ? 'FAILED' : 'ok')"
+    if ($LASTEXITCODE -or -not $ran) {
         $said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
-        $failed.Add("$name -SelfTest exited $LASTEXITCODE")
+        $failed.Add($ran ? "$name -SelfTest exited $LASTEXITCODE" : "$name -SelfTest ran no case")
     }
 }
 

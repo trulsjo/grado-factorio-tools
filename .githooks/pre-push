@@ -20,4 +20,9 @@ if [ ! -f "$CHECK" ]; then
     exit 0
 fi
 
+# Git can hand a hook GIT_DIR and its kin, and they outrank `git -C`. pack-mods.ps1's self-test
+# builds a scratch repository with `git -C`, so with GIT_DIR set it would stage its fixtures into
+# this repository's index. Cleared here, after the last git call this hook makes for itself.
+unset $(git rev-parse --local-env-vars)
+
 exec pwsh -NoProfile -File "$CHECK"

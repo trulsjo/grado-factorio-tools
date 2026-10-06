@@ -75,10 +75,11 @@ because declaring 🔀 would then have meant the same edit in three files on the
 ## Consequences
 
 - **Three homes remain, not two.** This document, the script's `$TYPES`/`$SITUATIONAL` literals,
-  and the script's own header, which restates several rules in prose and still names `CLAUDE.md`
-  as where they live. All three are named on the page itself under "What the check is blind to".
-  The header is [issue #10](https://github.com/trulsjo/grado-factorio-tools/issues/10), deferred
-  because editing the script would end the byte-identical transfer this extraction rests on.
+  and the script's own header, which restates several rules in prose ~~and still names `CLAUDE.md`
+  as where they live~~. All three are named on the page itself under "What the check is blind to".
+  ~~The header is [issue #10](https://github.com/trulsjo/grado-factorio-tools/issues/10), deferred
+  because editing the script would end the byte-identical transfer this extraction rests on.~~
+  **Done 2026-09-22:** #10 pointed the header at this document. The three homes remain.
 - **The `build` row's per-repository wording is lost**, deliberately. `realistic-fusion-refreshed`
   said "mod zip, `info.json`", the modpack said "the common one here"; the shared row says
   "packaging, dependencies". This is a real if small cost of centralising, accepted rather than
