@@ -112,7 +112,7 @@ scripts/     PowerShell entry points, one job each, and two libraries that are
 .githooks/   this repo's own commit-msg hook, opted into once per clone
 docs/        the commit convention, the ADRs, the notes agents read, and the
              extraction record — what moved, from where, and why
-CONTEXT.md   the glossary this repo's own prose is held to
+GLOSSARY.md  the glossary this repo's own prose is held to
 LICENSE      MIT; see CLAUDE.md for why this repo's licence is not a sibling's
 ```
 

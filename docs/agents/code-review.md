@@ -52,7 +52,7 @@ branch:
 | finding | score | what it was |
 |---|---|---|
 | the rejection rationale | 75 | `docs/extraction-plan.md` said the vendored copy "was rejected partly on cost". ADR 0001, added in the same PR, rejects it on the no-network constraint and on principle — cost is what ruled out the *published module*. Two documents in one changeset disagreed about their own decision |
-| the banned word | 75 | `CLAUDE.md` wrote "one checker" in the same commit that added `CONTEXT.md` listing `checker` under `_Avoid_`, for the concept `CONTEXT.md` uses as its worked example |
+| the banned word | 75 | `CLAUDE.md` wrote "one checker" in the same commit that added `GLOSSARY.md` listing `checker` under `_Avoid_`, for the concept `GLOSSARY.md` uses as its worked example |
 | the situational count | 75 | the commit message and PR body claimed the sibling has "seven" situational emoji. It lists six. The seventh, 🔀, existed only in `commit-check.ps1` — **declared 2026-09-21** in `docs/commit-convention.md`, and recharacterised by ADR 0002 as undetected drift rather than a deliberate omission |
 
 A fourth, `CLAUDE.md`'s State section still enumerating the repository as three files, scored 60,
@@ -85,7 +85,7 @@ in this repository and every one was false.
 
 **When a change supersedes a figure, grep the repository for the old one**, and read every hit in a
 file that records a measurement. Here that is `docs/extraction-plan.md`, `docs/adr/`, `CLAUDE.md`,
-`CONTEXT.md` and this file. A correction landing in three places and missing the fourth is worse
+`GLOSSARY.md` and this file. A correction landing in three places and missing the fourth is worse
 than none, because the survivor then reads as deliberate.
 
 **An old figure inside a block that says what replaced it is not a defect; an unmarked one is.** The
