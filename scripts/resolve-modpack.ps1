@@ -64,11 +64,12 @@
 .PARAMETER InfoJson
     One or more pack info.json paths: a pack plus the packs it depends on. Each is reported. The
     trailing arguments, so `pwsh -File` can pass several. Each is read before anything is looked
-    up, with or without -PinFile, and the resolve is refused, naming the files, if one has no
-    `name`, or if two declare the same name or names that differ only in case: a pin file holds
-    one set per name, and the second file would silently replace the first. The same file given
-    twice is refused too, as two declarations of one name -- one refusal is simpler than deciding
-    when two paths are the same file.
+    up, with or without -PinFile, through mod-info.ps1, which every script here that reads an
+    info.json shares: a pack is a mod, and a file that reader refuses is refused here, naming it.
+    The resolve is refused too, naming the files, if two declare the same name or names that
+    differ only in case: a pin file holds one set per name, and the second file would silently
+    replace the first. The same file given twice is refused too, as two declarations of one
+    name -- one refusal is simpler than deciding when two paths are the same file.
 
 .PARAMETER Line
     The declared line, `2.0` or `2.1`. A release qualifies only if its factorio_version is exactly
@@ -112,6 +113,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 . "$PSScriptRoot/game-mods.ps1"
+. "$PSScriptRoot/mod-info.ps1"
 
 function ConvertFrom-Dependency {
     <#  One info.json dependency string as Kind, Name, Op and Version. Kind is required, unordered
@@ -291,19 +293,17 @@ function Resolve-Packs {
 }
 
 function Read-Packs {
-    <#  The packs' info.json files, keyed by name in exact case. A file with no name is refused, and
-        so are two names that are the same or differ only in case: the pin file keys its sets by
-        pack name, and Import-PowerShellDataFile refuses to parse a file whose keys differ only in
-        case. One file given twice declares its name twice, and is refused the same way.  #>
+    <#  The packs' info.json files, keyed by name in exact case. A file Read-ModInfo refuses is
+        refused, and so are two names that are the same or differ only in case: the pin file keys
+        its sets by pack name, and Import-PowerShellDataFile refuses to parse a file whose keys
+        differ only in case. One file given twice declares its name twice, and is refused the
+        same way.  #>
     param([Parameter(Mandatory)] [string[]] $Path)
 
     $packs = [System.Collections.Specialized.OrderedDictionary]::new([StringComparer]::Ordinal)
     $seen = [hashtable]::new([StringComparer]::OrdinalIgnoreCase)
     foreach ($p in $Path) {
-        $info = Get-Content -LiteralPath $p -Raw | ConvertFrom-Json -AsHashtable
-        if ($info -isnot [System.Collections.IDictionary] -or -not $info['name']) {
-            throw "$p has no name: a pack info.json must name its pack."
-        }
+        $info = Read-ModInfo -Text (Get-Content -LiteralPath $p -Raw) -Where $p
         $other = $seen[$info.name]
         if ($other -and $other.Name -cne $info.name) {
             throw "$p names its pack '$($info.name)' and $($other.Path) names its pack '$($other.Name)': pack names that differ only in case cannot both be pinned."
@@ -465,10 +465,10 @@ function Invoke-SelfTest {
             $a = & $write (& $pack 'MyPack' @('lib')); $b = & $write (& $pack 'MyPack' @('hater'))
             $m = & $refusal $a, $b
             $m -and $m.Contains($a) -and $m.Contains($b) -and (& $refusal $a, $a) } }
-        @{ Name = 'a pack file with no name is refused, naming the file'; Test = {
+        @{ Name = 'a pack file the shared reader refuses is refused, naming the file'; Test = {
             $a = & $write @{ version = '0.1.0'; dependencies = @('lib') }
             $m = & $refusal $a
-            $m -and $m.Contains($a) -and $m -match 'name' } }
+            $m -and $m.Contains($a) -and $m -match 'has no "name" key' } }
         @{ Name = 'the pin file orders picks differing only in case by name, whatever order they came in'; Test = {
             $files = foreach ($order in @('zed', 'Zed'), @('Zed', 'zed')) {
                 $picks = [System.Collections.Specialized.OrderedDictionary]::new([StringComparer]::Ordinal)

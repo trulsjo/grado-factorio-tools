@@ -94,14 +94,10 @@
     `"name":"probe-swap"` alone and rewrite the junctioned info.json, as for a lone wrong-case
     key.
 
-    AN INFO.JSON THAT IS NOT A JSON OBJECT IS REFUSED, naming the mod: `null`, an empty file, or an
-    array, including a one-element array holding an object. That reason is this script's, not a
-    measured game rule: it has no `name` to read, and PowerShell would otherwise unroll the
-    one-element array and pack the object inside it as if it were the info.json.
-
-    SO IS ONE THAT IS NOT JSON AT ALL, such as a file cut off partway. The refusal names the mod
-    and gives the parser's own reason after it. That reason is this script's too, not a measured
-    game rule: without it the run stopped with the parser's error alone, naming no mod.
+    INFO.JSON IS READ THROUGH mod-info.ps1, which every script here that reads one shares
+    (grado-factorio-tools#59). What that reader refuses is refused here under the mod's name, and
+    its header gives each refusal and its reason. The name check and the version bounds above are
+    this script's own, and come after it.
 
     WHAT IT CANNOT SEE. It does not load anything: a zip that is shaped right can still fail in
     game. It does not read info.json beyond `name` and `version`, so a bad `factorio_version` or
@@ -141,6 +137,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
+. "$PSScriptRoot/mod-info.ps1"
 
 function Get-ModManifest {
     <#  What a mod is called, what version it declares, and which files belong to it.  #>
@@ -154,21 +151,7 @@ function Get-ModManifest {
 
     $infoPath = Join-Path $dir 'info.json'
     if (-not (Test-Path -LiteralPath $infoPath)) { throw "$leaf has no info.json" }
-    # As a hashtable: an info.json may hold an empty key, which ConvertFrom-Json refuses otherwise
-    # (fluid-connection-indicators 0.2.9, grado-factorio-tools#40). Its keys then match case
-    # exactly, so `"Name"` is no longer read as `name`, and an info.json holding both `name` and
-    # `Name`, which ConvertFrom-Json also refused, is now read, from `name`.
-    # -NoEnumerate, or a one-element array holding an object is unrolled and read as that object.
-    # Read outside the try, so a file that cannot be read is not reported as one that is not JSON.
-    $text = Get-Content -LiteralPath $infoPath -Raw
-    try { $info = $text | ConvertFrom-Json -AsHashtable -NoEnumerate }
-    catch { throw "$leaf/info.json is not JSON: $($_.Exception.Message)" }
-    # Before the value checks, which would otherwise report a `"Name"` key as an empty name.
-    if ($info -isnot [System.Collections.IDictionary]) { throw "$leaf/info.json is not a JSON object." }
-    # The game refuses a wrong-case key too (see the header), so this refusal names the game.
-    foreach ($key in 'name', 'version') {
-        if (-not $info.ContainsKey($key)) { throw "$leaf/info.json has no ""$key"" key, which the game requires; keys match case exactly." }
-    }
+    $info = Read-ModInfo -Text (Get-Content -LiteralPath $infoPath -Raw) -Where "$leaf/info.json"
 
     # -cne, as the one-copy rule's -cmatch: Factorio compares mod names case-sensitively (see the
     # header), so the two must agree or a name this accepts is one that rule does not clean up after.
@@ -316,13 +299,7 @@ function Invoke-SelfTest {
         New-Item -ItemType Directory -Path (Split-Path $p -Parent) -Force | Out-Null
         Set-Content -LiteralPath $p -Value $body -NoNewline
     }
-    # Every info.json built by $info carries an empty key, as fluid-connection-indicators 0.2.9's
-    # `package` table does: valid JSON that ConvertFrom-Json refuses without -AsHashtable. So every
-    # mod built by it that a case packs or refuses holds one, and case 1 fails if Get-ModManifest
-    # again cannot read one. The exceptions are epsilon and zeta, whose info.json is written whole
-    # because the case is the file's shape: a key in the wrong case, alone or beside the right one,
-    # no object at all, or no JSON at all.
-    $info = { param($name, $version) "{`"name`":`"$name`",`"version`":`"$version`",`"package`":{`"`":`"`"}}" }
+    $info = { param($name, $version) "{`"name`":`"$name`",`"version`":`"$version`"}" }
     $entries = {
         param($zip)
         $a = [IO.Compression.ZipFile]::OpenRead($zip)
@@ -344,8 +321,6 @@ function Invoke-SelfTest {
     & $put 'gamma/info.json' (& $info 'gamma' '1.0.0')
     & $put 'misnamed/info.json' (& $info 'somebody-else' '1.0.0')
     & $put 'Delta/info.json' (& $info 'delta' '1.0.0')
-    # Written whole, like epsilon's: the wrong-case keys beside the right ones are the case.
-    & $put 'zeta/info.json' '{"Name":"not-zeta","name":"zeta","Version":"9.9.9","version":"1.0.0"}'
     git -C $repo add -A
     # After the add, so neither is tracked. The plant is IGNORED, not merely untracked, or it
     # demonstrates the wrong thing: ls-files --cached leaves out untracked files too, so an
@@ -359,7 +334,7 @@ function Invoke-SelfTest {
     $gamma = Join-Path $repo 'gamma'
 
     $cases = @(
-        @{ Name = 'each zip is <name>_<version>.zip, every entry under one top-level folder holding info.json, which may hold an empty key'; Test = {
+        @{ Name = 'each zip is <name>_<version>.zip, every entry under one top-level folder holding info.json'; Test = {
             $b = @(Invoke-Pack -Directory $alpha, $beta -Destination $out -Quiet -WarningAction SilentlyContinue)
             $names = @($b | ForEach-Object { Split-Path $_.Zip -Leaf })
             $a = & $entries $b[0].Zip
@@ -406,27 +381,11 @@ function Invoke-SelfTest {
             ($left -join ',') -eq 'alpha_1.2.3.zip,alpha_extra_1.0.0.zip,alpha-2_1.0.0.zip,my-alpha_1.0.0.zip' } }
         @{ Name = 'a directory whose name is not info.json''s name is refused'; Test = {
             & $refused { Invoke-Pack -Directory (Join-Path $repo 'misnamed') -Destination $out -Quiet } "declares name 'somebody-else'" } }
-        @{ Name = 'an info.json spelling a key "Name" or "Version" is refused as missing that key, not as an empty value; one that is not an object, or is empty, is refused by name'; Test = {
-            # The new message alone would prove the wording; the old one is named too, so the case
-            # fails if a refusal ever says both.
-            $all = foreach ($k in @(@('{"Name":"epsilon","version":"1.0.0"}', 'name'), @('{"name":"epsilon","Version":"1.0.0"}', 'version'))) {
-                & $put 'epsilon/info.json' $k[0]
-                $m = try { Invoke-Pack -Directory (Join-Path $repo 'epsilon') -Destination $out -Quiet | Out-Null; '' } catch { $_.Exception.Message }
-                $m -match "epsilon/info\.json has no ""$($k[1])"" key, which the game requires" -and $m -notmatch "declares name ''|version '' is not"
-            }
-            $notObject = foreach ($j in 'null', '', '[1]', '[{"name":"epsilon","version":"1.0.0"}]') {
-                & $put 'epsilon/info.json' $j
-                & $refused { Invoke-Pack -Directory (Join-Path $repo 'epsilon') -Destination $out -Quiet } 'epsilon/info\.json is not a JSON object'
-            }
-            -not ($all -contains $false) -and -not ($notObject -contains $false) } }
-        @{ Name = 'an info.json that is not JSON is refused by name with the parser''s reason, and no zip is written for a mod given beside it'; Test = {
+        @{ Name = 'an info.json the shared reader refuses is refused under the mod''s name, and no zip is written for a mod given beside it'; Test = {
             & $put 'epsilon/info.json' '{"name":"epsilon",'
             Set-Content -LiteralPath (Join-Path $out 'gamma_0.0.1.zip') -Value 'earlier'
-            (& $refused { Invoke-Pack -Directory $gamma, (Join-Path $repo 'epsilon') -Destination $out -Quiet } 'epsilon/info\.json is not JSON: Conversion from JSON failed with error: Unexpected end') -and
+            (& $refused { Invoke-Pack -Directory $gamma, (Join-Path $repo 'epsilon') -Destination $out -Quiet } '^epsilon/info\.json is not JSON: ') -and
                 (Get-Content -LiteralPath (Join-Path $out 'gamma_0.0.1.zip') -Raw).Trim() -eq 'earlier' } }
-        @{ Name = 'a "Name" beside name, and a "Version" beside version, are packed, read from the lower-case keys'; Test = {
-            $b = @(Invoke-Pack -Directory (Join-Path $repo 'zeta') -Destination $out -Quiet)
-            (Split-Path $b[0].Zip -Leaf) -ceq 'zeta_1.0.0.zip' -and (& $entries $b[0].Zip) -contains 'zeta/info.json' } }
         @{ Name = 'names are compared case-sensitively by both halves: a case-only mismatch is refused, and another case''s zip stays'; Test = {
             # Both halves in one case, so either one going case-insensitive on its own turns it red.
             # On a case-insensitive file system the path is also passed in the wrong case, which

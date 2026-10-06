@@ -51,6 +51,15 @@
     resolve-modpack.ps1's before it. Exit 0 says the mods are on disk at their pins, never that they
     load together.
 
+    ITS INFO.JSON READ IS ITS OWN. Every other script here reads a mod's info.json through
+    mod-info.ps1 (grado-factorio-tools#59). This one wants only the version, to hold against a
+    pin, and answers "not a mod" for anything it cannot read. The shared reader would refuse
+    fetched mods this accepts today -- one with no `name` key, one whose info.json is a
+    one-element array holding an object, one whose version is not a string -- and each would be
+    reported as having no readable info.json. The load that follows reads through the shared
+    reader and refuses those by name. So an info.json this reads and the others do not, or the
+    reverse, is a defect to fix in Get-ModVersion as well as there.
+
 .PARAMETER PinFile
     The manifest: a .psd1 holding the pinned sets, which is the caller's and not this script's.
 
@@ -232,7 +241,8 @@ function Get-ModVersion {
 
         Read as a hashtable because an empty key is legal JSON and ConvertFrom-Json refuses it
         otherwise. fluid-connection-indicators 0.2.9's `package` table holds `"": ""`, and until
-        grado-factorio-tools#38 that ordinary zip was reported as having no readable info.json.  #>
+        grado-factorio-tools#38 that ordinary zip was reported as having no readable info.json.
+        Not read through mod-info.ps1: see ITS INFO.JSON READ IS ITS OWN in the header.  #>
     param([Parameter(Mandatory)] [string] $Path)
 
     $info = Join-Path $Path 'info.json'

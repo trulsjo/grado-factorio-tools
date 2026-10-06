@@ -36,6 +36,7 @@
 #>
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
+. "$PSScriptRoot/mod-info.ps1"
 
 function Resolve-FactorioExe {
     <#  Preferred path, then $env:FACTORIO_EXE, then the Steam path on the machine this was written
@@ -320,14 +321,10 @@ function Get-HarnessMods {
         An empty directory is an error, not an empty set: a load of nothing would otherwise be
         reported as a pass for mods that were never loaded. So is one name found twice.
 
-        An info.json that is not JSON, is not a JSON object, has no `name` or no `version` key in
-        exact case, or holds a `name` or `version` that is not a non-empty string, is refused
-        here, naming its path -- see WHAT IT REFUSES BEFORE THE GAME RUNS in load-harness.ps1.  #>
+        An info.json that Read-ModInfo in mod-info.ps1 refuses is refused here, naming its path
+        -- see WHAT IT REFUSES BEFORE THE GAME RUNS in load-harness.ps1.  #>
     param([Parameter(Mandatory)] [string[]] $Path)
 
-    # As a hashtable: an info.json may hold an empty key, which ConvertFrom-Json refuses otherwise
-    # (fluid-connection-indicators 0.2.9, grado-factorio-tools#38). Its keys then match case
-    # exactly. -NoEnumerate, or a one-element array holding an object is read as that object.
     $readInfo = {
         param($item)
         if ($item -is [IO.FileInfo]) {
@@ -347,20 +344,7 @@ function Get-HarnessMods {
             $text = Get-Content -LiteralPath $where -Raw
             $kind = 'directory'
         }
-        try { $info = $text | ConvertFrom-Json -AsHashtable -NoEnumerate }
-        catch { throw "$where is not JSON: $($_.Exception.Message)" }
-        # The wording is pack-mods.ps1's, which refuses the same info.json for the same reasons.
-        if ($info -isnot [System.Collections.IDictionary]) { throw "$where is not a JSON object." }
-        foreach ($key in 'name', 'version') {
-            if (-not $info.ContainsKey($key)) { throw "$where has no ""$key"" key, which the game requires; keys match case exactly." }
-        }
-        # After both key checks, so a missing key is never reported as a bad value. This one is
-        # the harness's own: the name goes into a junction's or a zip's name before the game
-        # runs, and a zip's version into the zip's. A directory's version goes into no name, and
-        # is refused the same way so that no mod returned has a blank one.
-        foreach ($key in 'name', 'version') {
-            if ($info[$key] -isnot [string] -or -not $info[$key]) { throw "$where has a ""$key"" that is not a non-empty string." }
-        }
+        $info = Read-ModInfo -Text $text -Where $where
         [pscustomobject]@{ Name = $info.name; Version = $info.version; Kind = $kind; Path = $item.FullName }
     }
     $isMod = { param($i) ($i -is [IO.FileInfo] -and $i.Extension -eq '.zip') -or
