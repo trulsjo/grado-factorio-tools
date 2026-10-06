@@ -19,32 +19,23 @@
     one prototype name load without a word -- the second replaces the first. And it runs no ticks:
     whatever breaks only once the game runs is out of reach. Those are a caller's checks to bring.
 
-    WHAT IT REFUSES BEFORE THE GAME RUNS. A mod directory or zip whose info.json is not JSON, is
-    not a JSON object, has no `name` key or no `version` key in exact case, or holds a `name` or
-    `version` that is not a non-empty string, is refused with a message naming the info.json's
-    path -- for a zip, the entry and the zip -- and what is wrong, the same through this script
-    and through Get-HarnessMods in the library. One that is not JSON is refused with the parser's
-    own reason after the path. The harness uses the name before the game can run: a
-    directory is junctioned in under it, and a zip is copied in as <name>_<version>.zip, which
-    uses the version too. A directory's version it does not use; a directory with no `version`
-    key is refused because the game requires the key. Without the refusal, a missing key stopped
-    this script with a PowerShell error naming no mod. Through the library, from a caller without
-    strict mode, a directory with no `name` also stopped with one, and a directory with no
-    `version`, or a zip missing either key, went on with a blank name or version. The game
-    refuses a lone `"Name"` or `"Version"` too; that is measured in pack-mods.ps1's header, whose
-    wording this refusal shares. To see the game's refusal and not this one, build the harness
-    from a valid info.json and rewrite it before Invoke-HarnessLoad, as that header describes.
-    The two values are checked to be non-empty strings and nothing more: `null`, a number, an
-    object and `""` are refused, naming the key; a string of only spaces passes. That reason is
-    this script's, not a measured game rule: a blank name would go into a junction's or a zip's
-    name, and a blank version into a zip's. A directory's version goes into no name; it is refused
-    the same way so that no mod Get-HarnessMods returns has a blank version, which this script
-    prints beside the name. A version's format
-    is not checked, nor that the name matches the directory or zip it came from. pack-mods.ps1
-    checks both, because it names a zip for the portal; this loads mods from a cache it did not
-    build, and what the game accepts there has not been measured. One string is refused that
-    should not be: a value shaped like a date and time, such as "2020-01-01T00:00:00", which
-    PowerShell reads as a date and not a string.
+    WHAT IT REFUSES BEFORE THE GAME RUNS. A mod directory or zip whose info.json the shared reader
+    refuses -- mod-info.ps1, whose header gives each refusal and its reason -- is refused with a
+    message naming the info.json's path, or for a zip the entry and the zip, the same through this
+    script and through Get-HarnessMods in the library. The harness uses the name before the game
+    can run: a directory is junctioned in under it, and a zip is copied in as
+    <name>_<version>.zip, which uses the version too. A directory's version it does not use; it
+    is refused the same way because the game requires the key, and so that no mod Get-HarnessMods
+    returns has a blank version, which this script prints beside the name. Without the refusal, a
+    missing key stopped this script with a PowerShell error naming no mod. Through the library,
+    from a caller without strict mode, a directory with no `name` also stopped with one, and a
+    directory with no `version`, or a zip missing either key, went on with a blank name or
+    version. To see the game's own refusal of a lone `"Name"` or `"Version"` and not this one,
+    build the harness from a valid info.json and rewrite it before Invoke-HarnessLoad, as
+    pack-mods.ps1's header describes. A version's format is not checked, nor that the name matches
+    the directory or zip it came from. pack-mods.ps1 checks both, because it names a zip for the
+    portal; this loads mods from a cache it did not build, and what the game accepts there has
+    not been measured.
 
     THE PLAYER'S GAME IS NEVER TOUCHED. The mods go into a mod directory under a temp directory,
     and Factorio runs with a write-data directory of its own there, so the player's mods,
@@ -131,10 +122,10 @@ function Invoke-SelfTest {
     Compress-Archive -Path $zipped -DestinationPath (Join-Path $cache 'anything.zip')
     New-Item -ItemType Directory -Path (Join-Path $cache '.zips') -Force | Out-Null
 
-    # What the harness refuses itself, before the game runs: an info.json with no `name` key, one
-    # in a zip with no `version` key, two that are not a JSON object, two that are not JSON, and
-    # five whose name or version is not a non-empty string. Kept out of src/ and the cache, which
-    # the cases above load.
+    # What the harness refuses before the game runs is the shared reader's to test, in
+    # mod-info.ps1 -SelfTest. These two show the harness calls it, and names a directory by its
+    # path and a zip by its entry and the zip. Kept out of src/ and the cache, which the cases
+    # above load.
     $keyless = Join-Path $temp 'keyless'
     $putInfo = {
         param([string] $Dir, [string] $Json)
@@ -142,24 +133,8 @@ function Invoke-SelfTest {
         Set-Content -LiteralPath (Join-Path $Dir 'info.json') -Value $Json -NoNewline
     }
     & $putInfo (Join-Path $keyless 'no-name') '{"Name":"harness-keyless","version":"1.0.0"}'
-    & $putInfo (Join-Path $keyless 'stage/no-version') '{"name":"harness-keyless","Version":"1.0.0"}'
-    Compress-Archive -Path (Join-Path $keyless 'stage/no-version') -DestinationPath (Join-Path $keyless 'no-version.zip')
-    & $putInfo (Join-Path $keyless 'array') '[{"name":"harness-keyless","version":"1.0.0"}]'
-    & $putInfo (Join-Path $keyless 'empty') ''
-    # Not JSON at all: cut off partway, in a directory and in a zip.
-    & $putInfo (Join-Path $keyless 'cut-off') '{"name":"harness-keyless",'
     & $putInfo (Join-Path $keyless 'stage/cut-off-zipped') '{"name":"harness-keyless",'
     Compress-Archive -Path (Join-Path $keyless 'stage/cut-off-zipped') -DestinationPath (Join-Path $keyless 'cut-off.zip')
-    # Both keys there, and a value that is empty or not a string.
-    & $putInfo (Join-Path $keyless 'empty-name') '{"name":"","version":"1.0.0"}'
-    & $putInfo (Join-Path $keyless 'stage/empty-version') '{"name":"harness-keyless","version":""}'
-    Compress-Archive -Path (Join-Path $keyless 'stage/empty-version') -DestinationPath (Join-Path $keyless 'empty-version.zip')
-    & $putInfo (Join-Path $keyless 'null-name') '{"name":null,"version":"1.0.0"}'
-    & $putInfo (Join-Path $keyless 'number-version') '{"name":"harness-keyless","version":1}'
-    & $putInfo (Join-Path $keyless 'object-name') '{"name":{"a":"b"},"version":"1.0.0"}'
-    # A "Name" beside name, with different values: read from `name`, as the game reads it.
-    $paired = Join-Path $temp 'paired/harness-paired'
-    & $putInfo $paired '{"Name":"harness-other","name":"harness-paired","Version":"9.9.9","version":"1.0.0"}'
 
     # The check a caller would bring: it dumps the data stage through the library and requires
     # every item it is told to expect.
@@ -237,19 +212,9 @@ exit 0
         @{ Name = 'a directory holding no mod is refused, not loaded as nothing'; Test = {
             $r = & $run @((Join-Path $cache '.zips'))
             $r.Code -ne 0 -and $r.Text -match 'holds no mods' } }
-        @{ Name = 'an info.json with no name or version key, or that is not an object, is refused by path before the game runs, the same through the library'; Test = {
-            & $refusedByPath @(@('no-name', 'has no "name" key, which the game requires'), @('no-version.zip', 'has no "version" key, which the game requires'),
-                @('array', 'is not a JSON object'), @('empty', 'is not a JSON object')) } }
-        @{ Name = 'an info.json that is not JSON is refused by path, or by entry and zip, with the parser''s reason, the same through the library'; Test = {
-            & $refusedByPath @(@('cut-off', 'info.json is not JSON: Conversion from JSON failed with error: Unexpected end'),
-                @('cut-off.zip', 'cut-off-zipped/info.json in ', 'is not JSON: Conversion from JSON failed with error: Unexpected end')) } }
-        @{ Name = 'a name or version that is empty or not a string is refused by path and key, the same through the library'; Test = {
-            & $refusedByPath @(@('empty-name', 'has a "name" that is not a non-empty string'), @('empty-version.zip', 'has a "version" that is not a non-empty string'),
-                @('null-name', 'has a "name" that is not a non-empty string'), @('number-version', 'has a "version" that is not a non-empty string'),
-                @('object-name', 'has a "name" that is not a non-empty string')) } }
-        @{ Name = 'a "Name" beside name is still read from name'; Test = {
-            $m = @(Get-HarnessMods -Path $paired)
-            $m.Count -eq 1 -and $m[0].Name -ceq 'harness-paired' -and $m[0].Version -ceq '1.0.0' } }
+        @{ Name = 'an info.json the shared reader refuses is refused before the game runs, by path or by entry and zip, the same through the library'; Test = {
+            & $refusedByPath @(@('no-name', 'has no "name" key, which the game requires'),
+                @('cut-off.zip', 'cut-off-zipped/info.json in ', 'is not JSON: ')) } }
         @{ Name = 'every mod source is still there after the junctions went'; Test = {
             $after = @(Get-ChildItem -LiteralPath (Join-Path $temp 'src'), $cache -Recurse -File -Force | ForEach-Object FullName)
             $sourceBefore.Count -gt 0 -and -not (Compare-Object $sourceBefore $after) } }
