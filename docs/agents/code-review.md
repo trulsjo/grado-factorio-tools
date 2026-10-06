@@ -8,6 +8,8 @@ measured, and the past findings behind each rule, are in
 
 - **Once per change, on the pull request.** Skip the review step inside `/implement` or any other
   skill: open the pull request, then review it. Each session had run it twice over one diff.
+  Asked to review again, review only the commits since. The session reads its own fix commit
+  before pushing it.
 - **Two lanes.** A bug scan, which runs `scripts/check.ps1` and, when the harness or `mod-info.ps1`
   changed, the harness's self-test; and a prose lane applying the rules below, which takes in the
   plugin's `CLAUDE.md` and code-comment lanes. Its history and earlier-pull-request-comments lanes
@@ -30,7 +32,8 @@ measured, and the past findings behind each rule, are in
 A wrong sentence here has no gate to fail, and most defects found here were prose that was wrong
 about a correct artefact. These bind the reviewer, not only the author.
 
-- **Check every number in prose against the diff, and do the arithmetic.**
+- **Check every number in prose, the pull request body included, against the diff, and do the
+  arithmetic.**
 - **Treat a quantifier as an instruction to enumerate.** "All" and "none" are checked by walking
   the set, never by agreeing with the tone.
 - **When a change supersedes a figure, grep for the old one**, and read every hit in

@@ -65,8 +65,8 @@ submodule, [ADR 0001](docs/adr/0001-siblings-consume-this-repo-as-a-submodule.md
 
 ## Agent skills
 
-- **Issue tracker**: GitHub issues, through `gh`; the branch, pull request and follow-up-ticket
-  conventions too. `docs/agents/issue-tracker.md`.
+- **Before the first commit**, read `docs/agents/issue-tracker.md`: work goes on a branch, never
+  `main`. The tracker, pull request and follow-up-ticket conventions are there too.
 - **Triage labels**: `docs/agents/triage-labels.md`.
 - **Code review**: **load `docs/agents/code-review.md` before running a review.** One review, on
   the pull request; the prose is reviewed as carefully as the code.
