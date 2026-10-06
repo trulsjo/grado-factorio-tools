@@ -3,8 +3,9 @@
 The rules are in [code-review.md](code-review.md), which is what a review loads. This page holds
 what was measured and what was found, so that page can stay short and nothing measured is lost.
 Moved here from that page on 2026-10-06
-([#65](https://github.com/trulsjo/grado-factorio-tools/issues/65)); the text of each section is as
-it stood there, apart from the first.
+([#65](https://github.com/trulsjo/grado-factorio-tools/issues/65)). The tables are as they stood
+there. The prose around them was edited to stand without the rules it sat beside, and the first
+section is new.
 
 ## How a review is run
 
@@ -56,6 +57,9 @@ rubric itself defines as
 
 is discarded by construction. A finding can be verified, important, and dropped.
 
+The threshold is deliberately conservative and stays where it is, which is why the rule is to
+report a filtered finding and not to re-score it.
+
 **Measured here, on the first pull request this repository ever had.**
 [PR #5](https://github.com/trulsjo/grado-factorio-tools/pull/5): five review lanes, eight findings,
 **zero posted**. Three scored 75, all three were real, and all three were fixed by rewriting the
@@ -83,6 +87,9 @@ here to run, no gate to fail.~~ **Changed 2026-09-21:** `scripts/commit-check.ps
 gates every commit. Nothing can still be loaded in Factorio to contradict a claim, and the one gate
 there is reads the *shape* of a commit message and says so in its own header — so the point is
 undiminished. A wrong sentence in this repository has no natural enemy.
+
+An old figure is struck through and not erased because that is the house style: the old reading
+stays, beside what settled it, with a date and usually an ADR or issue number.
 
 Three quantified claims — "the check exists exactly once", "nothing has been extracted", "that repo
 was never ungated" — were each written in this repository, and each was false.

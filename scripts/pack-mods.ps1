@@ -94,7 +94,7 @@
     `"name":"probe-swap"` alone and rewrite the junctioned info.json, as for a lone wrong-case
     key.
 
-    INFO.JSON IS READ THROUGH mod-info.ps1, which every script here that reads one shares
+    INFO.JSON IS READ THROUGH mod-info.ps1, which the load harness and the resolver share
     (grado-factorio-tools#59). What that reader refuses is refused here under the mod's name, and
     its header gives each refusal and its reason. The name check and the version bounds above are
     this script's own, and come after it.

@@ -64,8 +64,8 @@
 .PARAMETER InfoJson
     One or more pack info.json paths: a pack plus the packs it depends on. Each is reported. The
     trailing arguments, so `pwsh -File` can pass several. Each is read before anything is looked
-    up, with or without -PinFile, through mod-info.ps1, which every script here that reads an
-    info.json shares: a pack is a mod, and a file that reader refuses is refused here, naming it.
+    up, with or without -PinFile, through mod-info.ps1, which the packer and the load harness
+    share: a pack is a mod, and a file that reader refuses is refused here, naming it.
     The resolve is refused too, naming the files, if two declare the same name or names that
     differ only in case: a pin file holds one set per name, and the second file would silently
     replace the first. The same file given twice is refused too, as two declarations of one

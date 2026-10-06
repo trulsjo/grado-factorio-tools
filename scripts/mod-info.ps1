@@ -1,6 +1,6 @@
 #Requires -Version 7
 <#
-    How a mod's info.json is read, by every script here that reads one. Dot-sourced by
+    How a mod's info.json is read by the scripts here that refuse a bad one. Dot-sourced by
     pack-mods.ps1, load-harness-lib.ps1 and resolve-modpack.ps1, so a refusal has one wording and
     a defect in the reading is fixed once (grado-factorio-tools#59). Before it, each script parsed
     the file on its own and the same defect was ticketed once per script.
@@ -39,7 +39,9 @@
     does. One string is refused that should not be: a value shaped like a date and time, such as
     "2020-01-01T00:00:00", which ConvertFrom-Json reads as a date and not a string.
 
-    fetch-mods.ps1 does not read through this; its Get-ModVersion says why.
+    TWO READS DO NOT COME THROUGH HERE. fetch-mods.ps1's Get-ModVersion, whose header says why,
+    and Get-BundledMods in load-harness-lib.ps1, which reads the game's own mods from its data
+    directory and refuses nothing.
 
     `pwsh -File scripts/mod-info.ps1 -SelfTest` proves each refusal can happen, with no game and
     no network. Exit 0 means every case held. Dot-sourced, the self-test is not reachable.

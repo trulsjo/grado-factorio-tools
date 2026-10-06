@@ -51,8 +51,8 @@
     resolve-modpack.ps1's before it. Exit 0 says the mods are on disk at their pins, never that they
     load together.
 
-    ITS INFO.JSON READ IS ITS OWN. Every other script here reads a mod's info.json through
-    mod-info.ps1 (grado-factorio-tools#59). This one wants only the version, to hold against a
+    ITS INFO.JSON READ IS ITS OWN. The packer, the load harness and the resolver read a mod's
+    info.json through mod-info.ps1 (grado-factorio-tools#59). This one wants only the version, to hold against a
     pin, and answers "not a mod" for anything it cannot read. The shared reader would refuse
     fetched mods this accepts today -- one with no `name` key, one whose info.json is a
     one-element array holding an object, one whose version is not a string -- and each would be
