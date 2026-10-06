@@ -15,6 +15,25 @@ the modpack did on its own.
    2026-09-03, widened 2026-09-14 settling
    [realistic-fusion-refreshed#331](https://github.com/trulsjo/realistic-fusion-refreshed/issues/331).
 
+## How a review is run
+
+Decided 2026-10-06, settling
+[#62](https://github.com/trulsjo/grado-factorio-tools/issues/62). The figures are that ticket's,
+from the ten sessions of 2026-10-01 to 2026-10-06.
+
+- **Once per change, on the pull request.** Skip the review step inside `/implement` or any other
+  skill: open the pull request, then review it. Each session ran the review twice over one diff,
+  and the second pass is where the comments, when there were any, came from.
+- **Two lanes.** A bug scan, which runs `scripts/check.ps1` and, when the harness or `mod-info.ps1`
+  changed, the harness's self-test; and a prose lane applying this page's rules, which takes in the
+  plugin's `CLAUDE.md` and code-comment lanes. The plugin's history lane and its
+  earlier-pull-request-comments lane are dropped: they came back empty in nearly every review.
+- **The reviewing session scores each finding itself**, on the plugin's rubric, with no scoring
+  agents. Reviews ran 8 to 14 subagents and 8 to 27 million cache-read tokens for diffs of 16 to
+  115 added lines, and posted two comments across eight pull requests.
+
+The rule below stands: every finding is reported, whatever it scored.
+
 ## The threshold gates the comment, not the report
 
 The `/code-review` workflow scores each candidate finding and drops anything below 80. **That filter
