@@ -110,12 +110,23 @@ prototype name is that mod's business. If a script needs to know `rf-`, it stays
 scripts/     PowerShell entry points, one job each, and the libraries they
              dot-source: load-harness-lib.ps1, game-mods.ps1, and mod-info.ps1,
              which reads a mod's info.json for the rest
-.githooks/   this repo's own commit-msg hook, opted into once per clone
+.githooks/   this repo's own commit-msg and pre-push hooks, opted into once per
+             clone
+.github/     the workflow that runs scripts/check.ps1 on pull requests and main
 docs/        the commit convention, the ADRs, the notes agents read, and the
              extraction record — what moved, from where, and why
 GLOSSARY.md  the glossary this repo's own prose is held to
-LICENSE      MIT; see CLAUDE.md for why this repo's licence is not a sibling's
+commit-scopes.txt
+             the scopes this repo's commits and pull request titles take
+LICENSE      MIT; see Licence below for why it is not a sibling's
 ```
 
 There is no Python here, and nothing is written in anticipation of any. An entry appears above once
 it exists.
+
+## Licence
+
+MIT, in `LICENSE`. Decided 2026-09-21. The sibling `realistic-fusion-refreshed` is LGPLv3 because
+it carries Krastorio 2 code; that reasoning does not transfer to tooling written from scratch.
+Forced then rather than later because a submodule makes this repo a build dependency of two
+others, so "all rights reserved by default" stopped being harmless.
