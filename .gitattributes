@@ -1,0 +1,4 @@
+# Stored with LF and checked out with LF on every machine, whatever core.autocrlf says. The index
+# already holds LF, so this changes no file's content; it stops the working tree and the
+# "LF will be replaced by CRLF" warning from depending on the machine. The hooks need LF to run.
+* text=auto eol=lf
