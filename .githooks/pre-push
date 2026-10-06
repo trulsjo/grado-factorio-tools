@@ -1,0 +1,23 @@
+#!/bin/sh
+# Runs scripts/check.ps1 before a push leaves: a parse of every script and every self-test that
+# needs neither the game nor the network. What it does not run and cannot see is in that script's
+# header. This file is only the wiring, as commit-msg is, and is installed by the same one step:
+#
+#     git config core.hooksPath .githooks
+#
+# It checks the working tree, not the commits being pushed, so it reads nothing git hands it.
+#
+# The posture on a missing pwsh or a missing check is commit-msg's, for commit-msg's reason: a
+# machine that was never going to run the gates is told so and not blocked.
+if ! command -v pwsh >/dev/null 2>&1; then
+    echo "pre-push: pwsh not found, so the self-tests were NOT run." >&2
+    exit 0
+fi
+
+CHECK="$(git rev-parse --show-toplevel)/scripts/check.ps1"
+if [ ! -f "$CHECK" ]; then
+    echo "pre-push: $CHECK not found, so the self-tests were NOT run." >&2
+    exit 0
+fi
+
+exec pwsh -NoProfile -File "$CHECK"
