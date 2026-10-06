@@ -32,7 +32,7 @@
     directory with no `version`, or a zip missing either key, went on with a blank name or
     version. To see the game's own refusal of a lone `"Name"` or `"Version"` and not this one,
     build the harness from a valid info.json and rewrite it before Invoke-HarnessLoad, as
-    pack-mods.ps1's header describes. A version's format is not checked, nor that the name matches
+    docs/measurements.md describes. A version's format is not checked, nor that the name matches
     the directory or zip it came from. pack-mods.ps1 checks both, because it names a zip for the
     portal; this loads mods from a cache it did not build, and what the game accepts there has
     not been measured.

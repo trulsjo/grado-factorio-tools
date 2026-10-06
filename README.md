@@ -114,8 +114,9 @@ scripts/     PowerShell entry points, one job each, and the libraries they
 .githooks/   this repo's own commit-msg and pre-push hooks, opted into once per
              clone
 .github/     the workflow that runs scripts/check.ps1 on pull requests and main
-docs/        the commit convention, the ADRs, the notes agents read, and the
-             extraction record — what moved, from where, and why
+docs/        the commit convention, the ADRs, the notes agents read, the
+             extraction record — what moved, from where, and why — and
+             measurements.md, the runs behind the rules the scripts state
 GLOSSARY.md  the glossary this repo's own prose is held to
 commit-scopes.txt
              the scopes this repo's commits and pull request titles take

@@ -11,18 +11,10 @@
 
     WHY IT EXISTS. `realistic-fusion-refreshed`, where this was written, had said "Wrap at 72" in
     its CLAUDE.md since that repository started, and nothing was reading it. Measured by this
-    script against the last fifty commits on its main, 2026-09-06:
-    21 of the 50 are rejected, on 183 body lines over 72 and 5 subject lines over 72 -- the
-    longest subject being 82 characters. The argument reached for at review time was that a rule
-    main breaks this widely must not really apply. That is backwards: a rule nothing enforces is a
-    rule that rots, and the fix is the enforcement rather than the excuse.
-
-    A FIRST COUNT OF THIS SAID 201 LINES IN EVERY ONE OF THE FIFTY, and it was wrong in the
-    direction that flatters the finding. It was an awk one-liner over `git log`, and it charged
-    every `Co-Authored-By:` and every session URL to the rule -- lines this script exempts on
-    purpose and git would corrupt if they wrapped. The real number is smaller and it is still 21
-    commits in 50. Stated because a gate whose own justification is unmeasured is the thing it
-    exists to prevent.
+    script against the last fifty commits on its main, 2026-09-06: 21 of the 50 are rejected, on
+    183 body lines over 72 and 5 subject lines over 72. A rule nothing enforces is a rule that
+    rots, and the fix is the enforcement rather than the excuse. The argument that count answered,
+    and an earlier count of 201 lines that was wrong, are in docs/measurements.md.
 
     WHAT IT CHECKS, and every rule here is quoted from docs/commit-convention.md, which is where
     this repository and both consumers declare the convention -- see ADR 0002:

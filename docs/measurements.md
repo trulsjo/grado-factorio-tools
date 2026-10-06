@@ -1,0 +1,113 @@
+# Measurements
+
+What the game, the mod portal and a repository's history did when a rule in `scripts/` was
+measured: the quoted output, and the steps to repeat each run. A script's header states the rule,
+what was measured and the citation in a sentence, and points here for the rest.
+
+Moved from the script headers on 2026-10-06
+([#68](https://github.com/trulsjo/grado-factorio-tools/issues/68)), because a header loads
+whenever its script is read and these records were up to a third of it. The wording of each record
+is the header's, reflowed. A record is dated and names its build; a newer build may answer
+differently, and a new measurement is a new entry, not an edit to an old one.
+
+Every game run here is headless and isolated from the player's mods, through
+`scripts/load-harness.ps1` or its library.
+
+## `pack-mods.ps1`
+
+### Mod names are case-sensitive
+
+The 2.0.77 mod-structure documentation says nothing about case, so it was measured on 2026-09-26
+against Factorio 2.0.77 (build 84539): a zip `Alpha_1.0.0.zip` or a directory `Alpha` holding a
+mod named `alpha` is refused with "doesn't match the expected alpha_1.0.0.zip (case sensitive!)",
+and a dependency on `Alpha` with only `alpha` present fails as "Missing required dependency
+Alpha". The mod portal agrees: /api/mods/Krastorio2 answers and /api/mods/krastorio2 is "Mod not
+found". So `Alpha` and `alpha` are two mods.
+
+### A wrong-case `name` or `version` key is refused by the game
+
+Measured against Factorio 2.0.77 (build 84539), headless, isolated from the player's mods
+(grado-factorio-tools#49, for grado-factorio-tools#47). A mod `probe-name` spelling `"Name"` logs
+
+    Error Util.cpp:81: Failed to load mod "probe-name": Key "name" not found in property tree at ROOT
+
+and a mod `probe-version` spelling `"Version"` logs
+
+    Error Util.cpp:81: Failed to load mod "probe-version": Key "version" not found in property tree at ROOT
+
+while a lower-case control loads. Only those two keys were measured, and only with the lower-case
+key absent.
+
+To repeat it: dot-source load-harness-lib.ps1, build the harness with New-LoadHarness from a valid
+info.json, then rewrite the junctioned info.json with the wrong-case key and call
+Invoke-HarnessLoad. The rewrite comes after New-LoadHarness because the harness refuses such an
+info.json itself, before the game is run.
+
+### A `"Name"` beside `name`, or a `"Version"` beside `version`, is read from the lower-case key
+
+Measured against Factorio 2.0.77 (build 84539), headless, isolated from the player's mods
+(grado-factorio-tools#53, for grado-factorio-tools#51). A mod directory `probe-pair-name` holding
+`"Name":"probe-other"` beside `"name":"probe-pair-name"` logs
+
+    Loading mod probe-pair-name 1.0.0 (data.lua)
+
+and a mod `probe-pair-version` holding `"Version":"9.9.9"` beside `"version":"1.0.0"` logs
+
+    Loading mod probe-pair-version 1.0.0 (data.lua)
+
+each creating a map, as a lower-case control `probe-control` does. Mods `probe-pair-name-rev` and
+`probe-pair-version-rev`, holding the lower-case key first, do the same under their own names.
+
+The first line does not show which key was read, because the directory is named `probe-pair-name`
+too. This does: a directory `probe-swap` holding `"Name":"probe-swap"` beside
+`"name":"probe-other"` logs
+
+    Error Util.cpp:81: Failed to load mod "probe-swap": Directory name of mod <path>\probe-swap doesn't match the expected probe-other or probe-other_1.0.0 (case sensitive!)
+
+so the name the game expects is the lower-case key's. Only those two pairs were measured.
+
+To repeat it: write each mod directory with an info.json holding the pair beside `title`,
+`author`, `factorio_version` `2.0` and a `base` dependency, and a data.lua holding only a comment,
+as each measured mod had. Dot-source load-harness-lib.ps1, call New-LoadHarness on the directory
+and then Invoke-HarnessLoad, and look for the mod's name in the OutFile it returns. Nothing is
+rewritten, because the harness reads the lower-case key too. The exception is `probe-swap`: the
+harness would junction it in as `probe-other`, so build the harness from `"name":"probe-swap"`
+alone and rewrite the junctioned info.json, as for a lone wrong-case key.
+
+## `game-mods.ps1`
+
+### The game's own mods are matched in exact case
+
+Measured for all four game mods as well as for an ordinary one. Factorio 2.0.77 (build 84539),
+headless, fails a dependency on `Alpha` when only `alpha` is present (grado-factorio-tools
+607ceef), and on each game mod in another case (grado-factorio-tools#46, for #44).
+
+To repeat it: a throwaway mod `probe-spaceage` whose info.json declares the one dependency
+`Space-Age`, loaded alone through `load-harness.ps1 -With space-age`, which keeps it from the
+player's mods. The game logs
+
+    Error Util.cpp:81: Failed to load mod "probe-spaceage":
+    • probe-spaceage
+        • Missing required dependency Space-Age
+
+and refuses `Base`, `Quality` and `Elevated-Rails`, declared the same way, with the same line
+naming each. A control declaring `space-age` in lower case, run the same way, loads.
+
+## `commit-check.ps1`
+
+### Why the check exists: a rule nothing was reading
+
+`realistic-fusion-refreshed`, where the check was written, had said "Wrap at 72" in its CLAUDE.md
+since that repository started, and nothing was reading it. Measured by the script against the last
+fifty commits on its main, 2026-09-06: 21 of the 50 are rejected, on 183 body lines over 72 and 5
+subject lines over 72 -- the longest subject being 82 characters. The argument reached for at
+review time was that a rule main breaks this widely must not really apply. That is backwards: a
+rule nothing enforces is a rule that rots, and the fix is the enforcement rather than the excuse.
+
+### A first count said 201 lines in every one of the fifty
+
+It was wrong in the direction that flatters the finding. It was an awk one-liner over `git log`,
+and it charged every `Co-Authored-By:` and every session URL to the rule -- lines the script
+exempts on purpose and git would corrupt if they wrapped. The real number is smaller and it is
+still 21 commits in 50. Stated because a gate whose own justification is unmeasured is the thing
+it exists to prevent.

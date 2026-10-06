@@ -35,17 +35,14 @@
     directory, and a zip named after one mod and filled from another is one the portal would
     accept, since it only reads the name.
 
-    NAMES ARE CASE-SENSITIVE. That documentation says nothing about case, so it was measured on
-    2026-09-26 against Factorio 2.0.77 (build 84539): a zip `Alpha_1.0.0.zip` or a directory
-    `Alpha` holding a mod named `alpha` is refused with "doesn't match the expected
-    alpha_1.0.0.zip (case sensitive!)", and a dependency on `Alpha` with only `alpha` present
-    fails as "Missing required dependency Alpha". The mod portal agrees: /api/mods/Krastorio2
-    answers and /api/mods/krastorio2 is "Mod not found". So `Alpha` and `alpha` are two mods. The
-    name check refuses a case-only mismatch, and the one-copy rule leaves the other case's zips
-    alone -- whatever the check accepts, the rule cleans up after. Two places cannot follow that,
-    because at one version the two mods' zips are one file on a case-insensitive file system:
-    packing `alpha` 1.0.0 replaces an `Alpha_1.0.0.zip` already there, and giving both in one run
-    is refused as the same mod twice.
+    NAMES ARE CASE-SENSITIVE. The 2.0.77 mod-structure documentation says nothing about case, so
+    it was measured on 2026-09-26 against Factorio 2.0.77 (build 84539), and the mod portal
+    agrees: a zip, a directory or a dependency whose name differs from the mod's only in case is
+    refused. So `Alpha` and `alpha` are two mods. The name check refuses a case-only mismatch, and
+    the one-copy rule leaves the other case's zips alone -- whatever the check accepts, the rule
+    cleans up after. Two places cannot follow that, because at one version the two mods' zips are
+    one file on a case-insensitive file system: packing `alpha` 1.0.0 replaces an
+    `Alpha_1.0.0.zip` already there, and giving both in one run is refused as the same mod twice.
 
     THE VERSION BOUNDS are the portal's: major.minor.sub, each 0-65535, and 0.0.0 invalid. A regex
     of three digit-runs accepts 0.0.0 and 1.0.99999, which the portal rejects at upload, so the
@@ -58,41 +55,17 @@
 
     A WRONG-CASE NAME OR VERSION KEY IS REFUSED, AND THAT IS THE GAME'S RULE. An info.json whose
     only name key is spelled `"Name"`, or whose only version key is `"Version"`, is refused as
-    having no `name` or `version` key. Measured against Factorio 2.0.77 (build 84539), headless,
-    isolated from the player's mods (grado-factorio-tools#49, for grado-factorio-tools#47). A mod
-    `probe-name` spelling `"Name"` logs
-        Error Util.cpp:81: Failed to load mod "probe-name": Key "name" not found in property tree at ROOT
-    and a mod `probe-version` spelling `"Version"` logs
-        Error Util.cpp:81: Failed to load mod "probe-version": Key "version" not found in property tree at ROOT
-    while a lower-case control loads. Only those two keys were measured, and only with the
-    lower-case key absent. To repeat it: dot-source load-harness-lib.ps1, build the harness with
-    New-LoadHarness from a valid info.json, then rewrite the junctioned info.json with the
-    wrong-case key and call Invoke-HarnessLoad. The rewrite comes after New-LoadHarness because the
-    harness refuses such an info.json itself, before the game is run.
+    having no `name` or `version` key. Measured against Factorio 2.0.77 (build 84539)
+    (grado-factorio-tools#49, for grado-factorio-tools#47): the game refuses each as a key not
+    found. Only those two keys were measured, and only with the lower-case key absent.
 
     A `"Name"` BESIDE `name`, OR A `"Version"` BESIDE `version`, IS PACKED, AND THE GAME READS IT
-    THE SAME WAY. The mod is read from the lower-case key and the other is ignored. Measured against
-    Factorio 2.0.77 (build 84539), headless, isolated from the player's mods
-    (grado-factorio-tools#53, for grado-factorio-tools#51). A mod directory `probe-pair-name`
-    holding `"Name":"probe-other"` beside `"name":"probe-pair-name"` logs
-        Loading mod probe-pair-name 1.0.0 (data.lua)
-    and a mod `probe-pair-version` holding `"Version":"9.9.9"` beside `"version":"1.0.0"` logs
-        Loading mod probe-pair-version 1.0.0 (data.lua)
-    each creating a map, as a lower-case control `probe-control` does. Mods `probe-pair-name-rev`
-    and `probe-pair-version-rev`, holding the lower-case key first, do the same under their own
-    names. The first line does not show which key was read, because the directory is named
-    `probe-pair-name` too. This does: a directory `probe-swap` holding `"Name":"probe-swap"`
-    beside `"name":"probe-other"` logs
-        Error Util.cpp:81: Failed to load mod "probe-swap": Directory name of mod <path>\probe-swap doesn't match the expected probe-other or probe-other_1.0.0 (case sensitive!)
-    so the name the game expects is the lower-case key's. Only those two pairs were measured. To
-    repeat it: write each mod directory with an info.json holding the pair beside `title`,
-    `author`, `factorio_version` `2.0` and a `base` dependency, and a data.lua holding only a
-    comment, as each measured mod had. Dot-source load-harness-lib.ps1, call New-LoadHarness on
-    the directory and then Invoke-HarnessLoad, and look for the mod's name in the OutFile it
-    returns. Nothing is rewritten, because the harness reads the lower-case key too. The exception
-    is `probe-swap`: the harness would junction it in as `probe-other`, so build the harness from
-    `"name":"probe-swap"` alone and rewrite the junctioned info.json, as for a lone wrong-case
-    key.
+    THE SAME WAY. The mod is read from the lower-case key and the other is ignored, in either key
+    order. Measured against Factorio 2.0.77 (build 84539) (grado-factorio-tools#53, for
+    grado-factorio-tools#51). Only those two pairs were measured.
+
+    WHAT THE GAME LOGGED in each of those runs, and how to repeat one, is in
+    docs/measurements.md, beside this script's directory.
 
     INFO.JSON IS READ THROUGH mod-info.ps1, which the load harness and the resolver share
     (grado-factorio-tools#59). What that reader refuses is refused here under the mod's name, and
