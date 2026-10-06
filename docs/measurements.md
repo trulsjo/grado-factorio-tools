@@ -137,8 +137,9 @@ by about that much: no step carries the difference.
 The same check had taken far longer earlier that day: 63 seconds, 108 seconds and 373 seconds.
 The last two ran while two review lanes were each running it, and one of them the game, at the
 same time. What else was running during the 63-second run was not recorded. A run timed step by
-step between those and the quiet ones took 36 seconds, with every step about twice its quiet time,
-`commit-check.ps1 -SelfTest` included, which starts no process and opens no file but its own.
+step between those and the quiet ones took 37 seconds. `fetch-mods.ps1`, `pack-mods.ps1` and
+`resolve-modpack.ps1` each took about twice their quiet time, and `commit-check.ps1 -SelfTest`,
+which starts no process and opens no file but its own, took 3.6 seconds against 1.0.
 
 What that shows is that the time follows the load on the machine and not anything the check does.
 What it does not show is why the machine is slower when quiet. It runs Microsoft Defender for
