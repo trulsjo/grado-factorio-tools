@@ -111,3 +111,36 @@ and it charged every `Co-Authored-By:` and every session URL to the rule -- line
 exempts on purpose and git would corrupt if they wrapped. The real number is smaller and it is
 still 21 commits in 50. Stated because a gate whose own justification is unmeasured is the thing
 it exists to prevent.
+
+## `check.ps1`
+
+### How long it takes, on the development machine and in CI
+
+Measured 2026-10-06 (grado-factorio-tools#70), in seconds, from the check's own output. The
+development machine was quiet for these three runs; CI is the `check` workflow's run on
+grado-factorio-tools#71, on `windows-latest`.
+
+| step | development machine, three runs | CI |
+|---|---|---|
+| parse of every script | 0.8 to 0.9 | 0.1 |
+| `commit-check.ps1 -SelfTest` | 1.0 to 1.1 | 0.6 |
+| `fetch-mods.ps1 -SelfTest` | 8.7 to 9.5 | 5.2 |
+| `mod-info.ps1 -SelfTest` | 0.7 to 0.9 | 0.5 |
+| `pack-mods.ps1 -SelfTest` | 3.5 to 3.6 | 1.9 |
+| `resolve-modpack.ps1 -SelfTest` | 1.6 to 1.7 | 0.8 |
+| page sizes and links | 0.1 | 0.1 |
+| all | 16.5 to 17.9 | 9.2 |
+
+So a quiet development machine takes a little under twice as long as CI, and each step is slower
+by about that much: no step carries the difference.
+
+The same check had taken far longer earlier that day: 63 seconds, 108 seconds and 373 seconds.
+The last two ran while two review lanes were each running it, and one of them the game, at the
+same time. What else was running during the 63-second run was not recorded. A run timed step by
+step between those and the quiet ones took 36 seconds, with every step about twice its quiet time,
+`commit-check.ps1 -SelfTest` included, which starts no process and opens no file but its own.
+
+What that shows is that the time follows the load on the machine and not anything the check does.
+What it does not show is why the machine is slower when quiet. It runs Microsoft Defender for
+Endpoint with real-time and behaviour monitoring on, which scans each process as it starts; that
+was not turned off to see, so it is a likely cause and not a measured one.
