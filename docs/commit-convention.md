@@ -19,7 +19,8 @@ and **what counts as a breaking change**. Everything else on this page is shared
 ## Subject line
 
 - Imperative mood, lowercase after the colon, no trailing period, whole line ≤ 72 characters.
-- `<scope>` is optional but preferred. Each repository declares its own scope vocabulary.
+- `<scope>` is optional but preferred. Each repository declares its own scope vocabulary, and one
+  that hands the check its list (`-ScopeFile`) has a scope outside it refused.
 - The emoji is the *rendered* character, not the `:shortcode:`.
 
 ## Types, and the emoji that goes with each
@@ -48,6 +49,12 @@ and other visual assets, 🚧 for work in progress, 🔀 for a merge commit writ
 🔀 is declared here because the check has always accepted it and no document said so — a drift
 found on 2026-09-21 while extracting the check. `realistic-fusion-refreshed` had eight hand-written
 merge commits depending on it at `8a4fb90` (2026-09-21).
+
+## Pull request titles
+
+A pull request title is a subject line, with one difference: **the scope is required**.
+`scripts/commit-check.ps1 -Title '<title>'` checks it, against the repository's vocabulary when
+`-ScopeFile` is given too. A title has no body, so a `!` needs no footer there.
 
 ## Body
 
@@ -85,9 +92,10 @@ A gate that overstates its coverage is worse than no gate, so:
   machine that was never going to run the gates is not blocked by them.
 - **Imperative mood.** Not mechanically checkable, and not checked. "adds a gate" passes.
 - **Whether the type is the right one.** `feat` on a bug fix is accepted.
-- **Whether the scope means anything.** Any non-empty text without parentheses in it is accepted,
-  and no repository's vocabulary is read. `()` and a scope containing parentheses are rejected, but
-  by the format rule rather than by anything that knows what a scope is.
+- **Whether the scope means anything.** With no `-ScopeFile`, any non-empty text without
+  parentheses in it is accepted; `()` and a scope containing parentheses are rejected, but by the
+  format rule rather than by anything that knows what a scope is. With one, the scope has to be
+  listed and nothing more: `pack` on a commit that touches only the resolver is accepted.
 - **Trailer lines are exempt from the 72-character body rule.** A `Key: value` block at the end of
   the message is skipped, because `Co-Authored-By:` and `Claude-Session:` end in an address or a
   URL that cannot be broken, and git parses that block by position.
@@ -98,7 +106,4 @@ A gate that overstates its coverage is worse than no gate, so:
 - **This page.** The type table and the situational list are literals in `scripts/commit-check.ps1`,
   and the script's header restates several of these rules in prose — so this convention has three
   homes, not two, and none is compared against another. Deliberate, and reasoned in
-  [ADR 0002](adr/0002-the-commit-convention-is-declared-in-one-document.md). That header also still
-  names `CLAUDE.md` as where the rules live, which it no longer is; that is
-  [issue #10](https://github.com/trulsjo/grado-factorio-tools/issues/10), deferred because editing
-  the script would end the byte-identical transfer the extraction rests on.
+  [ADR 0002](adr/0002-the-commit-convention-is-declared-in-one-document.md).
