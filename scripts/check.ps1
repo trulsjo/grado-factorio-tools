@@ -39,7 +39,10 @@
     And fetch-mods.ps1's self-test listens on a loopback port, so it fails where that is refused.
     Of a link it checks the file and nothing after a `#`: an anchor to a heading that is gone
     passes. A link to another site is not followed, a reference-style link (`[x]: path`) is not
-    read, and neither is a path that is only named in backticks.
+    read, and neither is a path that is only named in backticks. On Windows, which is also what
+    CI runs, a link in the wrong case or with a backslash passes, though the site that renders
+    the page would not follow it. And a path holding a space or a parenthesis is misread and
+    fails, as does one that starts at the repository root with `/`: write the link without them.
 
     HOW LONG IT TAKES ON THE DEVELOPMENT MACHINE DEPENDS ON WHAT ELSE IS RUNNING THERE
     (grado-factorio-tools#70). On a quiet machine it is under twice CI's time; it was reported as
@@ -104,15 +107,18 @@ foreach ($page in $PAGE_LIMITS.Keys) {
         $failed.Add("$page, which has a size limit, was not found")
         continue
     }
-    $bytes = [Text.Encoding]::UTF8.GetByteCount(([IO.File]::ReadAllText($path) -replace "`r`n", "`n"))
+    # Decoded from the bytes, not with ReadAllText, which drops a byte-order mark the file stores.
+    $text = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($path))
+    $bytes = [Text.Encoding]::UTF8.GetByteCount(($text -replace "`r`n", "`n"))
     $over = $bytes -ge $PAGE_LIMITS[$page]
     Write-Host "check: $page is $bytes bytes, limit $($PAGE_LIMITS[$page]) -- $($over ? 'FAILED' : 'ok')"
     if ($over) { $failed.Add("$page is $bytes bytes and must be under $($PAGE_LIMITS[$page])") }
 }
 
 # Tracked files only, so a scratch note or another tool's output is not this check's business.
-$pages = @(git -C $root -c core.quotePath=false ls-files -- '*.md')
-if ($LASTEXITCODE -ne 0 -or -not $pages) {
+# The try is for a machine with no git at all, which would otherwise end the run before its verdict.
+$pages = @(try { git -C $root -c core.quotePath=false ls-files -- '*.md' } catch { })
+if (-not $pages) {
     Write-Host 'check: git listed no tracked Markdown file, so no link was checked -- FAILED'
     $failed.Add('no tracked Markdown file to check links in')
 }
@@ -121,7 +127,9 @@ $broken = 0
 foreach ($page in $pages) {
     $path = Join-Path $root $page
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }   # deleted, not yet committed
-    foreach ($m in [regex]::Matches((Get-Content -LiteralPath $path -Raw), '\]\(\s*<?([^)\s>#]+)[^)]*\)')) {
+    # Code is taken out first: a fenced block or a `span` that shows link syntax is not a link.
+    $prose = (Get-Content -LiteralPath $path -Raw) -replace '(?s)```.*?```' -replace '`[^`\r\n]*`'
+    foreach ($m in [regex]::Matches($prose, '\]\(\s*<?([^)\s>#]+)[^)]*\)')) {
         $target = $m.Groups[1].Value
         if ($target -match '^[A-Za-z][A-Za-z0-9+.-]*:') { continue }       # another site, or mailto:
         $links++

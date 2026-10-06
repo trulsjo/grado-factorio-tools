@@ -6,12 +6,12 @@ what was measured and the citation in a sentence, and points here for the rest.
 
 Moved from the script headers on 2026-10-06
 ([#68](https://github.com/trulsjo/grado-factorio-tools/issues/68)), because a header loads
-whenever its script is read and these records were up to a third of it. The wording of each record
+whenever its script is read and these records were between 9% and 41% of it. The wording of each record
 is the header's, reflowed. A record is dated and names its build; a newer build may answer
 differently, and a new measurement is a new entry, not an edit to an old one.
 
-Every game run here is headless and isolated from the player's mods, through
-`scripts/load-harness.ps1` or its library.
+A game run recorded here as headless and isolated went through `scripts/load-harness.ps1` or its
+library. The record of 2026-09-26 does not say how it was run.
 
 ## `pack-mods.ps1`
 
@@ -129,11 +129,11 @@ grado-factorio-tools#71, on `windows-latest`.
 | `pack-mods.ps1 -SelfTest` | 3.5 to 3.6 | 1.9 |
 | `resolve-modpack.ps1 -SelfTest` | 1.6 to 1.7 | 0.8 |
 | page sizes and links | 0.1 | 0.1 |
-| all | 16.5 to 17.9 | 9.2 |
+| all, each run summed | 16.5 to 17.7 | 9.2 |
 
 So a quiet development machine takes a little under twice as long as CI. Each self-test takes
-between 1.4 and 2.1 times its CI time, and the parse 0.7 seconds more: no step carries the
-difference.
+between 1.4 and 2.1 times its CI time, and the parse 0.7 to 0.8 seconds more: no step carries the
+difference. The CI column is one run; the run after it summed to 11.0 seconds.
 
 The same check had taken far longer earlier that day: 63 seconds, 108 seconds and 373 seconds.
 The last two ran while two review lanes were each running it, and one of them the game, at the
@@ -141,6 +141,10 @@ same time. What else was running during the 63-second run was not recorded. A ru
 step between those and the quiet ones took 37 seconds. `fetch-mods.ps1`, `pack-mods.ps1` and
 `resolve-modpack.ps1` each took about twice their quiet time, and `commit-check.ps1 -SelfTest`,
 which starts no process and opens no file but its own, took 3.6 seconds against 1.0.
+
+And that evening, with the machine's processors fully busy with something that was not this
+check, the parse of the nine scripts alone took 56.7 seconds against 0.8 to 0.9 quiet, and the
+run was stopped at two minutes with no self-test finished.
 
 What that shows is that the time follows the load on the machine and not anything the check does.
 What it does not show is why the machine is slower when quiet. It runs Microsoft Defender for

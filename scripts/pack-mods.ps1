@@ -36,9 +36,9 @@
     accept, since it only reads the name.
 
     NAMES ARE CASE-SENSITIVE. The 2.0.77 mod-structure documentation says nothing about case, so
-    it was measured on 2026-09-26 against Factorio 2.0.77 (build 84539), and the mod portal
-    agrees: a zip, a directory or a dependency whose name differs from the mod's only in case is
-    refused. So `Alpha` and `alpha` are two mods. The name check refuses a case-only mismatch, and
+    it was measured on 2026-09-26 against Factorio 2.0.77 (build 84539): a zip, a directory or a
+    dependency whose name differs from the mod's only in case is refused. The mod portal agrees,
+    answering for a name in one case only. So `Alpha` and `alpha` are two mods. The name check refuses a case-only mismatch, and
     the one-copy rule leaves the other case's zips alone -- whatever the check accepts, the rule
     cleans up after. Two places cannot follow that, because at one version the two mods' zips are
     one file on a case-insensitive file system: packing `alpha` 1.0.0 replaces an
