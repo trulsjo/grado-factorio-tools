@@ -100,6 +100,11 @@ and that checkout is actively developed. An undated one is a finding.
 a proxy this repository's own method section admits is an undercount. See below: its best case was
 wrong.
 
+**Flag a header or comment that lists what the code lists.** A list of self-test cases or
+fixtures, a count of them, a list of refusals: each went stale when the code changed, and was most
+of what the reviews of #31 to #56 found. A header says what exit 0 means, why each rule exists and
+what the script cannot see; `-SelfTest` prints the cases.
+
 **This binds the reviewer.** An author who greps before opening the pull request saves a round, but
 the obligation lives in the review.
 

@@ -43,8 +43,8 @@
     scrubbed before it is rethrown; and the ErrorRecord PowerShell files in $Error is DROPPED, because
     a scrubbed message is not the only copy -- the record's TargetObject holds the request URI, token
     and all, even when the message does not. `-SelfTest` proves all of it with a sentinel rather than
-    asserting it, and checks 3/6 and 6/6 are two different checks for that reason: a child process
-    takes its $Error to the grave, so only an in-process call can see that leak.
+    asserting it, and it checks the captured output and $Error separately for that reason: a child
+    process takes its $Error to the grave, so only an in-process call can see that leak.
 
     WHAT IT CANNOT SEE. It fetches what the manifest names and nothing else: a dependency the
     manifest omits is not fetched, and nothing here reports it -- that is the load's job, and
@@ -113,10 +113,10 @@
     no real credentials.
 
 .PARAMETER SelfTest
-    Prove this script does what it claims: that a union pinning one mod at two versions is refused
-    rather than silently resolved, that a missing credential is reported as such, that the token
-    reaches no output, and that a corrupted cached zip is rejected rather than used. It brings its
-    own fixture manifest. Given -PinFile as well, it also certifies that file's lanes.
+    Prove what a passing fetch does not show, against a portal on the loopback address and a
+    fixture manifest of its own: each check prints what it must show and whether it did. It uses
+    no real credentials and no network beyond loopback. Given -PinFile as well, it also certifies
+    that file's lanes.
 
 .EXAMPLE
     pwsh -File vendor/grado-factorio-tools/scripts/fetch-mods.ps1 -PinFile scripts/mod-sets.psd1 -Set krastorio2
@@ -570,12 +570,12 @@ function Start-FakePortal {
 }
 
 function Invoke-SelfTest {
-    <#  Prove the six things a passing fetch does not show.
+    <#  Prove what a passing fetch does not show.
 
         Every portal check but the last runs the real script in a child process against the loopback
         portal above, so what is exercised is the shipped code path rather than a re-implementation
-        of it. The last, 6/6, calls Save-PortalMod in this process, because a child takes its $Error
-        with it and that is the leak 6/6 looks for.  #>
+        of it. The last calls Save-PortalMod in this process, because a child takes its $Error with
+        it and that is the leak it looks for.  #>
     param([Parameter(Mandatory)] [string] $ScriptPath, [string] $UserPinFile)
 
     $temp = Join-Path ([IO.Path]::GetTempPath()) ('fetchmods-selftest-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
@@ -609,7 +609,7 @@ function Invoke-SelfTest {
     # version check downstream are exercised rather than stubbed. Its `package` table carries an
     # empty key, as fluid-connection-indicators 0.2.9's does: valid JSON that ConvertFrom-Json
     # refuses without -AsHashtable, which is why Get-ModVersion once could not read that release.
-    # 5/6 fails if it again cannot.
+    # The good-download check fails if it again cannot.
     $stage = Join-Path $temp ('stage\' + $modName + '_1.0.0')
     New-Item -ItemType Directory -Path $stage -Force | Out-Null
     @{ name = $modName; version = '1.0.0'; title = 'fetch-mods self-test fixture'
@@ -653,7 +653,7 @@ function Invoke-SelfTest {
     }
 
     try {
-        # --- 1/6 -------------------------------------------------------------------------------
+        # -------------------------------------------------------------------------------------
         # THE MANIFEST BEFORE THE PORTAL. This half needs no network and no credentials, so a
         # broken set list is reported before a fake portal is spent on it.
         #
@@ -662,7 +662,7 @@ function Invoke-SelfTest {
         # versions, where picking either is a version decision that belongs in the manifest rather
         # than in a helper. The fixture's `low` + `high` is that case, and it is not a lane, so
         # without this the guard would never run.
-        Write-Host 'self-test 1/6: a union of two sets pinning one mod at two versions must be refused.'
+        Write-Host 'self-test: a union of two sets pinning one mod at two versions must be refused.'
 
         # THE EXPECTED SIZES ARE DERIVED, NOT WRITTEN DOWN. Refreshing the pins is editing numbers
         # in a manifest, and a refresh that grows a set must not fail the one check meant to
@@ -723,8 +723,8 @@ function Invoke-SelfTest {
                         'mods, each matching its sets'' distinct count with no name appearing twice')
         }
 
-        # --- 2/6 -------------------------------------------------------------------------------
-        Write-Host 'self-test 2/6: a machine with no Factorio credentials must say so.'
+        # -------------------------------------------------------------------------------------
+        Write-Host 'self-test: a machine with no Factorio credentials must say so.'
         try {
             Get-PortalCredential -Path (Join-Path $temp 'absent.json') | Out-Null
             Write-Host '  FAILED: a missing player-data.json did not throw.'; $failures++
@@ -746,8 +746,8 @@ function Invoke-SelfTest {
             else { Write-Host "  FAILED: wrong message -- $($_.Exception.Message)"; $failures++ }
         }
 
-        # --- 3/6 -------------------------------------------------------------------------------
-        Write-Host 'self-test 3/6: the token must travel, and must reach no captured output.'
+        # -------------------------------------------------------------------------------------
+        Write-Host 'self-test: the token must travel, and must reach no captured output.'
         $log = Join-Path $temp 'requests-fail.log'
         New-Item -ItemType File -Path $log -Force | Out-Null
         $job = Start-FakePortal -Port $port -RequestLog $log -Name $modName -Version '1.0.0' `
@@ -778,8 +778,8 @@ function Invoke-SelfTest {
             }
         }
 
-        # --- 4/6 -------------------------------------------------------------------------------
-        Write-Host 'self-test 4/6: a download whose sha1 does not match must be refused.'
+        # -------------------------------------------------------------------------------------
+        Write-Host 'self-test: a download whose sha1 does not match must be refused.'
         $log2 = Join-Path $temp 'requests-badsha.log'
         New-Item -ItemType File -Path $log2 -Force | Out-Null
         $job = Start-FakePortal -Port $port -RequestLog $log2 -Name $modName -Version '1.0.0' `
@@ -799,8 +799,8 @@ function Invoke-SelfTest {
         }
         else { Write-Host '  ok: the mismatch is named and nothing reaches the cache' }
 
-        # --- 5/6 -------------------------------------------------------------------------------
-        Write-Host 'self-test 5/6: a good download lands, and a second run reuses the cached zip.'
+        # -------------------------------------------------------------------------------------
+        Write-Host 'self-test: a good download lands, and a second run reuses the cached zip.'
         $log3 = Join-Path $temp 'requests-good.log'
         New-Item -ItemType File -Path $log3 -Force | Out-Null
         $job = Start-FakePortal -Port $port -RequestLog $log3 -Name $modName -Version '1.0.0' `
@@ -825,12 +825,12 @@ function Invoke-SelfTest {
             Write-Host '      zip against the portal sha1 rather than downloading it again'
         }
 
-        # --- 6/6 -------------------------------------------------------------------------------
-        # THE LEAK THE CHILD-PROCESS CHECK CANNOT SEE. 2/4 above reads files the child wrote, and a
-        # child that exits takes its $Error with it -- so a token sitting in the ErrorRecord looks
+        # -------------------------------------------------------------------------------------
+        # THE LEAK THE CHILD-PROCESS CHECK CANNOT SEE. The token check above reads files the child
+        # wrote, and a child that exits takes its $Error with it -- so a token sitting in the ErrorRecord looks
         # identical to no token at all. This calls Save-PortalMod IN THIS PROCESS, where $Error
         # survives the failure and can be read, which is the only way to tell those apart.
-        Write-Host 'self-test 6/6: a failed download must leave no token in $Error either.'
+        Write-Host 'self-test: a failed download must leave no token in $Error either.'
         $log4 = Join-Path $temp 'requests-errorscan.log'
         New-Item -ItemType File -Path $log4 -Force | Out-Null
         $job = Start-FakePortal -Port $port -RequestLog $log4 -Name $modName -Version '1.0.0' `
@@ -875,10 +875,7 @@ function Invoke-SelfTest {
         Write-Host "FAILED - self-test: $failures check(s) did not hold."
         exit 1
     }
-    Write-Host 'OK - self-test passed: a conflicting union is refused, a missing credential is named,'
-    Write-Host '     the token travels to the portal and reaches neither captured output nor $Error, a'
-    Write-Host '     bad sha1 is refused, and a good download is cached and re-verified rather than'
-    Write-Host '     refetched.'
+    Write-Host 'OK - self-test passed.'
     exit 0
 }
 

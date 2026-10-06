@@ -77,12 +77,8 @@
     always removed.
 
 .PARAMETER SelfTest
-    Prove the harness can fail and that it passes what it should, against the install: a good mod
-    loads from a directory, a zip and a cache-shaped directory; a broken one fails with the game's
-    error text; a failing -Check fails the run; an info.json that is not JSON, is not an object,
-    has no `name` or `version` key, or holds an empty or non-string one, is refused by path; a
-    `"Name"` beside `name` is read from `name`; the mods' sources and the player's game are left as
-    they were.
+    Prove the harness can fail and that it passes what it should, by running the game: each case
+    prints its name and whether it held. Needs Factorio installed.
 
 .EXAMPLE
     pwsh -File scripts/load-harness.ps1 .mod-cache/Grado_ABC
@@ -111,8 +107,9 @@ function Invoke-SelfTest {
     New-Item -ItemType Directory -Path $temp -Force | Out-Null
 
     # Each info.json $newMod writes carries an empty key, as fluid-connection-indicators 0.2.9's
-    # `package` table does: valid JSON that ConvertFrom-Json refuses without -AsHashtable. So cases
-    # 1 and 2 read it from a directory and from a zip, and the game is shown to load it.
+    # `package` table does: valid JSON that ConvertFrom-Json refuses without -AsHashtable. So the
+    # cases that load a good mod read it from a directory and from a zip, and the game is shown to
+    # load it.
     $newMod = {
         param([string] $Dir, [string] $Name, [string] $Data)
         New-Item -ItemType Directory -Path $Dir -Force | Out-Null
