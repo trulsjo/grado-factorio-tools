@@ -131,8 +131,9 @@ grado-factorio-tools#71, on `windows-latest`.
 | page sizes and links | 0.1 | 0.1 |
 | all | 16.5 to 17.9 | 9.2 |
 
-So a quiet development machine takes a little under twice as long as CI, and each step is slower
-by about that much: no step carries the difference.
+So a quiet development machine takes a little under twice as long as CI. Each self-test takes
+between 1.4 and 2.1 times its CI time, and the parse 0.7 seconds more: no step carries the
+difference.
 
 The same check had taken far longer earlier that day: 63 seconds, 108 seconds and 373 seconds.
 The last two ran while two review lanes were each running it, and one of them the game, at the
