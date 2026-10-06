@@ -21,7 +21,7 @@
                         holding an object and read that object as the info.json.
       a missing key     No `name` or no `version` key in exact case. The game's rule: Factorio
                         2.0.77 (build 84539) refuses a lone `"Name"` or `"Version"`. The run, and
-                        how to repeat it, is in pack-mods.ps1's header.
+                        how to repeat it, is in docs/measurements.md.
       a bad value       A `name` or `version` that is not a non-empty string: `null`, a number,
                         an object, `""`. This reader's rule, not a measured game rule: both go
                         into the name of a zip or a junction, and a blank or a number there names
@@ -30,8 +30,8 @@
     WHAT IT READS, WHERE ConvertFrom-Json ALONE WOULD NOT. An empty key, which is legal JSON:
     fluid-connection-indicators 0.2.9's `package` table holds `"": ""`
     (grado-factorio-tools#38, and #40 for the packer). And a `"Name"` beside `name`, or a `"Version"` beside `version`:
-    the lower-case key is read and the other ignored, which is how the game reads them -- measured
-    in pack-mods.ps1's header.
+    the lower-case key is read and the other ignored, which is how the game reads them -- the run
+    is in docs/measurements.md.
 
     WHAT IT CANNOT SEE. It reads `name` and `version` and checks nothing else about them: not a
     version's format, not that the name matches the directory or zip the file came from, and a
