@@ -91,6 +91,12 @@ move; the harness might.
 
 ## Conventions
 
+- **Tests are each script's `-SelfTest`**; there is no `tests/` directory.
+  `pwsh -File scripts/check.ps1` runs all but the load harness's, which needs the game:
+  `pwsh -File scripts/load-harness.ps1 -SelfTest`.
+- **Factorio is installed on the development machine**, and `load-harness.ps1` runs it headless and
+  isolated from the player's game. So a ticket that needs a measurement of the game is
+  `ready-for-agent`.
 - Default branch `main`. Commit email is set per-repo — do not change it.
 - `CLAUDE.local.md` is personal and git-ignored. Never commit it, and never move its contents into a
   tracked file.
