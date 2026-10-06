@@ -70,7 +70,8 @@
 .PARAMETER SelfTest
     Prove this check can FAIL. A gate that only ever passes is a gate that has stopped reading, so
     this runs a table of messages that must each be rejected for a named reason, and a table that
-    must be accepted. It starts nothing and takes about a second.
+    must be accepted, printing each and whether it held. It starts nothing and takes about a
+    second.
 
 .EXAMPLE
     pwsh -File scripts/commit-check.ps1 .git/COMMIT_EDITMSG
@@ -318,17 +319,19 @@ if ($SelfTest) {
     foreach ($case in $mustFail) {
         $checks++
         $got = Test-CommitMessage $case.msg
-        if (-not $got.Count) {
-            $failures.Add("expected a failure mentioning '$($case.why)' and it passed: $($case.msg[0])")
+        $wrong = if (-not $got.Count) {
+            "expected a failure mentioning '$($case.why)' and it passed: $($case.msg[0])"
         } elseif (-not ($got | Where-Object { $_ -like "*$($case.why)*" })) {
-            $failures.Add(("expected a failure mentioning '$($case.why)' and got: " +
-                ($got -join '; ')))
+            "expected a failure mentioning '$($case.why)' and got: " + ($got -join '; ')
         }
+        Write-Host "self-test: rejected for '$($case.why)': $($case.msg[0]) -- $($wrong ? 'FAILED' : 'ok')"
+        if ($wrong) { $failures.Add($wrong) }
     }
 
     foreach ($case in $mustPass) {
         $checks++
         $got = Test-CommitMessage $case.msg
+        Write-Host "self-test: accepted: $($case.msg[0]) -- $($got.Count ? 'FAILED' : 'ok')"
         if ($got.Count) {
             $failures.Add("expected a pass and got: $($got -join '; ') -- for: $($case.msg[0])")
         }
