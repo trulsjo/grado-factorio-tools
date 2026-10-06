@@ -25,10 +25,13 @@ fi
 # was never initialised. pwsh answers that with exit 64 and a usage dump, which blocks the commit
 # and tells the author nothing. ADR 0001 requires the other posture for exactly this case, so guard
 # the path rather than letting pwsh fail on it.
-CHECK="$(git rev-parse --show-toplevel)/scripts/commit-check.ps1"
+ROOT="$(git rev-parse --show-toplevel)"
+CHECK="$ROOT/scripts/commit-check.ps1"
 if [ ! -f "$CHECK" ]; then
     echo "commit-msg: $CHECK not found, so the message format was NOT checked." >&2
     exit 0
 fi
 
-exec pwsh -NoProfile -File "$CHECK" "$1"
+# commit-scopes.txt is this repository's scope vocabulary. The check holds a scope to it only
+# because it is named here; a sibling that names none has every scope accepted.
+exec pwsh -NoProfile -File "$CHECK" -ScopeFile "$ROOT/commit-scopes.txt" "$1"

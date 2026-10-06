@@ -13,6 +13,16 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
 
+## Branches, pull requests and follow-up tickets
+
+- **Work happens on a branch named `<issue>-<slug>`, never on `main`.** Pull requests are
+  rebase-merged, which rewrites every SHA on the branch: cite the pull request, not a branch commit.
+- **A pull request carries one `Closes #N` line per ticket it closes.** Its title is checked; see
+  *Pull request titles* in [`docs/commit-convention.md`](../commit-convention.md).
+- **The bar for a follow-up ticket** (Truls, 2026-10-06): a leftover from a review or a session
+  becomes a ticket only if a real mod hit it or a consumer's gate needs it. Anything else is named
+  in the session report and not filed.
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_

@@ -38,6 +38,16 @@
                 commits in history carry one, so this too is safe to enforce.
       blank     A blank line between the subject and the body.
       wrap      Every body line, 72 characters or fewer.
+      scope     Only with -ScopeFile: the scope has to be one the file lists. A commit on
+                grado-factorio-tools#53 used `load-harness`, which that repository does not
+                list, and nothing said so. A message with no scope still passes.
+      title     Only with -Title: the subject rules, and a scope is required. A pull request
+                there was opened as `fix: ...` with none and retitled by hand.
+
+    A CONSUMING REPOSITORY GETS THE SCOPE RULE ONLY BY SUPPLYING ITS VOCABULARY
+    (grado-factorio-tools#63). The vocabulary is each repository's own, so it is not written
+    here, and without -ScopeFile every scope passes as it always has. Bumping a pin therefore
+    changes no verdict in a repository that passes none.
 
     WHAT IT DELIBERATELY LETS THROUGH:
 
@@ -67,6 +77,15 @@
     history. Split on spaces and passed to `git rev-list`, so anything that takes is a range.
     Reports every commit that fails and exits non-zero if any did.
 
+.PARAMETER Title
+    Check a pull request title instead of a file: the subject rules, with a scope required. A
+    title has no body, so a `!` asks for no footer here.
+
+.PARAMETER ScopeFile
+    The repository's scope vocabulary: one scope to a line, `#` starting a comment. With it, a
+    scope the file does not list is rejected, naming the scope and the list. Goes with a file,
+    -Range or -Title.
+
 .PARAMETER SelfTest
     Prove this check can FAIL. A gate that only ever passes is a gate that has stopped reading, so
     this runs a table of messages that must each be rejected for a named reason, and a table that
@@ -83,6 +102,9 @@
     pwsh -File scripts/commit-check.ps1 -Range '-50 main'
 
 .EXAMPLE
+    pwsh -File scripts/commit-check.ps1 -ScopeFile commit-scopes.txt -Title '🐛 fix(pack): name the mod'
+
+.EXAMPLE
     pwsh -File scripts/commit-check.ps1 -SelfTest
 #>
 
@@ -91,7 +113,9 @@
 param(
     [Parameter(ParameterSetName = 'File', Position = 0)] [string] $Path,
     [Parameter(ParameterSetName = 'Range', Mandatory)]   [string] $Range,
-    [Parameter(ParameterSetName = 'SelfTest', Mandatory)] [switch] $SelfTest
+    [Parameter(ParameterSetName = 'Title', Mandatory)]   [string] $Title,
+    [Parameter(ParameterSetName = 'SelfTest', Mandatory)] [switch] $SelfTest,
+    [string] $ScopeFile
 )
 
 $ErrorActionPreference = 'Stop'
@@ -118,6 +142,16 @@ $TYPES = [ordered]@{
 # "A few situational ones worth knowing", which the convention lists without binding to a type --
 # so they are accepted with any type. 🔀 is the one addition; see ON 🔀 above.
 $SITUATIONAL = @('🎉', '🚚', '🔥', '🌐', '💄', '🚧', '🔀')
+
+# The consuming repository's scopes, when it names a file of them. Read here and nowhere else:
+# given no file, the check still reads nothing but the message it is handed.
+$SCOPES = @()
+if ($ScopeFile) {
+    if (-not (Test-Path -LiteralPath $ScopeFile)) { throw "no such scope file: $ScopeFile" }
+    $SCOPES = @(Get-Content -LiteralPath $ScopeFile -Encoding utf8 |
+        ForEach-Object { ($_ -replace '#.*').Trim() } | Where-Object { $_ })
+    if (-not $SCOPES) { throw "$ScopeFile lists no scope, so every scope would be rejected." }
+}
 
 # ♻️, ⚡️ and ⏪️ carry a variation selector (U+FE0F) and are also legible without one. Comparing
 # with it stripped accepts both spellings and is why this is a function rather than an -eq.
@@ -185,8 +219,10 @@ function Test-Wrappable([string] $line) {
 <#
 .SYNOPSIS
     Every rule broken by one message, as a list of sentences. An empty list means it passes.
+    $scopes is the vocabulary to hold the scope to, or nothing; $isTitle reads $raw as a pull
+    request title.
 #>
-function Test-CommitMessage([string[]] $raw) {
+function Test-CommitMessage([string[]] $raw, [string[]] $scopes = $SCOPES, [bool] $isTitle = $false) {
     $bad   = [System.Collections.Generic.List[string]]::new()
     $lines = Get-MessageLines $raw
 
@@ -217,9 +253,10 @@ function Test-CommitMessage([string[]] $raw) {
     if ($rest -notmatch '^(?<type>[a-z]+)(\((?<scope>[^()]+)\))?(?<bang>!)?: (?<subject>.+)$') {
         $bad.Add('the subject must read "<emoji> <type>(<scope>): <subject>", with the scope optional')
     } else {
-        $type = $Matches.type
-        $bang = [bool]$Matches.bang
-        $text = $Matches.subject
+        $type  = $Matches.type
+        $scope = $Matches.scope
+        $bang  = [bool]$Matches.bang
+        $text  = $Matches.subject
 
         if (-not $TYPES.Contains($type)) {
             $bad.Add("'$type' is not one of the types the convention lists: $($TYPES.Keys -join ', ')")
@@ -231,7 +268,16 @@ function Test-CommitMessage([string[]] $raw) {
         if ($text -cmatch '^[A-Z]') { $bad.Add("lowercase after the colon: '$text'") }
         if ($text.EndsWith('.'))    { $bad.Add('no trailing period on the subject') }
 
-        if ($bang -and -not ($lines | Where-Object { $_ -match '^BREAKING CHANGE: ' })) {
+        # -cnotin: a scope is a name somebody chose, and `Pack` is not the `pack` that was listed.
+        if ($scope -and $scopes -and $scope -cnotin $scopes) {
+            $bad.Add("'$scope' is not a scope this repository lists: $($scopes -join ', ')")
+        }
+        if ($isTitle -and -not $scope) {
+            $bad.Add('a pull request title needs a scope: "<emoji> <type>(<scope>): <subject>"')
+        }
+
+        # A title has no body to carry the footer.
+        if ($bang -and -not $isTitle -and -not ($lines | Where-Object { $_ -match '^BREAKING CHANGE: ' })) {
             $bad.Add('a "!" before the colon needs a "BREAKING CHANGE:" footer explaining the migration')
         }
     }
@@ -292,6 +338,12 @@ if ($SelfTest) {
         @{ why = 'body line 3';      msg = @('🐛 fix(repo): a subject', '', ('wrappable ' * 12).Trim()) }
         @{ why = '<emoji> <type>';   msg = @('🐛 no colon in this subject') }
         @{ why = 'the message is empty'; msg = @('# just a comment', '') }
+        @{ why = "'load-harness' is not a scope this repository lists: repo, pack"
+           scopes = 'repo', 'pack'; msg = @('🐛 fix(load-harness): a scope outside the vocabulary') }
+        @{ why = "'Pack' is not a scope"; scopes = 'repo', 'pack'; msg = @('🐛 fix(Pack): a listed scope in another case') }
+        @{ why = 'a pull request title needs a scope'; title = $true; msg = @('🐛 fix: no scope') }
+        @{ why = "'load-harness' is not a scope"; title = $true; scopes = 'repo', 'pack'
+           msg = @('🐛 fix(load-harness): a title is held to the vocabulary too') }
     )
 
     $mustPass = @(
@@ -311,6 +363,10 @@ if ($SelfTest) {
         @{ msg = @('🐛 fix(repo): comments and scissors are stripped', '',
                    'Body.', '# a comment', '# ------------------------ >8 ------------------------',
                    "diff --git $long") }
+        @{ msg = @('🐛 fix(load-harness): with no vocabulary any scope passes') }
+        @{ scopes = 'repo', 'pack'; msg = @('🐛 fix(pack): a scope the vocabulary lists') }
+        @{ scopes = 'repo', 'pack'; msg = @('🐛 fix: a commit may still leave the scope out') }
+        @{ title = $true; msg = @('✨ feat(pack)!: a breaking title has no body for a footer') }
     )
 
     $checks = 0
@@ -318,7 +374,7 @@ if ($SelfTest) {
 
     foreach ($case in $mustFail) {
         $checks++
-        $got = Test-CommitMessage $case.msg
+        $got = Test-CommitMessage $case.msg $case.scopes ([bool] $case.title)
         $wrong = if (-not $got.Count) {
             "expected a failure mentioning '$($case.why)' and it passed: $($case.msg[0])"
         } elseif (-not ($got | Where-Object { $_ -like "*$($case.why)*" })) {
@@ -330,7 +386,7 @@ if ($SelfTest) {
 
     foreach ($case in $mustPass) {
         $checks++
-        $got = Test-CommitMessage $case.msg
+        $got = Test-CommitMessage $case.msg $case.scopes ([bool] $case.title)
         Write-Host "self-test: accepted: $($case.msg[0]) -- $($got.Count ? 'FAILED' : 'ok')"
         if ($got.Count) {
             $failures.Add("expected a pass and got: $($got -join '; ') -- for: $($case.msg[0])")
@@ -340,7 +396,7 @@ if ($SelfTest) {
     # The floor, for the same reason ship-check carries one: this passes by finding nothing, so a
     # table that stopped being read would print green while checking nothing at all.
     $checks++
-    if ($mustFail.Count -lt 13 -or $mustPass.Count -lt 14) {
+    if ($mustFail.Count -lt 17 -or $mustPass.Count -lt 18) {
         $failures.Add('the self-test tables shrank, so this proves much less than it claims')
     }
 
@@ -379,11 +435,15 @@ if ($PSCmdlet.ParameterSetName -eq 'Range') {
     exit ($bad ? 1 : 0)
 }
 
-# ------------------------------------------------------------------------------------------ file
-if (-not $Path) { throw 'give a message file to check, or -Range, or -SelfTest.' }
-if (-not (Test-Path -LiteralPath $Path)) { throw "no such message file: $Path" }
-
-$problems = Test-CommitMessage @(Get-Content -LiteralPath $Path -Encoding utf8)
+# -------------------------------------------------------------------------------- title, or file
+$isTitle = $PSCmdlet.ParameterSetName -eq 'Title'
+if ($isTitle) {
+    $problems = Test-CommitMessage @($Title) $SCOPES $true
+} else {
+    if (-not $Path) { throw 'give a message file to check, or -Range, -Title or -SelfTest.' }
+    if (-not (Test-Path -LiteralPath $Path)) { throw "no such message file: $Path" }
+    $problems = Test-CommitMessage @(Get-Content -LiteralPath $Path -Encoding utf8)
+}
 if ($problems.Count) {
     # WHERE THE RULES ARE WRITTEN, derived from this script's own location rather than printed as
     # a path relative to the repository being committed to. In a consumer the document sits inside
@@ -398,7 +458,7 @@ if ($problems.Count) {
     $convention = Join-Path (Split-Path $PSScriptRoot -Parent) 'docs/commit-convention.md'
 
     Write-Host ''
-    Write-Host 'This commit message does not match the convention:'
+    Write-Host "This $($isTitle ? 'pull request title' : 'commit message') does not match the convention:"
     foreach ($p in $problems) { Write-Host "  - $p" }
     Write-Host ''
     Write-Host '  <emoji> <type>(<scope>): <subject>      subject and body both wrap at 72'
@@ -406,7 +466,7 @@ if ($problems.Count) {
     Write-Host '  build 📦  chore 🔧  style 🎨  revert ⏪️'
     Write-Host ''
     Write-Host "The rules are written in $convention"
-    Write-Host 'The message is kept, so `git commit -e -F .git/COMMIT_EDITMSG` reopens it.'
+    if (-not $isTitle) { Write-Host 'The message is kept, so `git commit -e -F .git/COMMIT_EDITMSG` reopens it.' }
     exit 1
 }
 exit 0

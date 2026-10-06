@@ -1,0 +1,11 @@
+# This repository's commit scopes, one to a line. .githooks/commit-msg hands this file to
+# scripts/commit-check.ps1, which refuses a scope that is not here; CI holds a pull request's
+# title to it too. CLAUDE.md says what the scopes are for, and lists the same ones.
+coexistence
+tree-viewer
+pack
+upload
+commit-check
+resolve-modpack
+docs
+repo
