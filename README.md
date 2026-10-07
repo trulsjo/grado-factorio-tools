@@ -19,7 +19,8 @@ holding a copy. No copy of it remains anywhere.
 and nowhere else: `realistic-fusion-refreshed` deleted its copies and takes both from the
 submodule. So is `scripts/pack-mods.ps1`, below: `realistic-fusion-refreshed` deleted its copy,
 the modpack deleted its own zipper, and both pack through this one. Everything else earmarked
-still lives in `realistic-fusion-refreshed`, working and gated. See
+still lives in `realistic-fusion-refreshed`, working and gated, but for three scripts of the
+modpack ruled to move on 2026-10-08 and not yet moved. See
 [docs/extraction-plan.md](docs/extraction-plan.md) for what is earmarked, how entangled each piece
 is, what has moved, and what has to be written from nothing.
 
