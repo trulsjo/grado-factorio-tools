@@ -1,6 +1,8 @@
 # Extraction plan
 
 What is earmarked to move here from `realistic-fusion-refreshed`, and how hard each one will be.
+Since 2026-10-08 three scripts of `grado-factorio-modpack` are ruled to move too: see *Ruled to
+move from the modpack* below.
 
 **One script has been extracted, and that extraction is finished.** `scripts/commit-check.ps1` is
 here and nowhere else; both siblings resolve it from this repo as a submodule.
@@ -13,7 +15,7 @@ its own, and takes every harness function from this repository's `load-harness-l
 **So is a fourth.** `pack-mods.ps1` is here and nowhere else: `realistic-fusion-refreshed`
 deleted its copy and `grado-factorio-modpack` deleted `Publish-PackZip`, its own zipper, and both
 pack through this repository's. See *The packer, expanded and contracted* below. Everything else
-still lives in `realistic-fusion-refreshed`.
+in the table below still lives in `realistic-fusion-refreshed`.
 
 This file is an inventory, and — for whatever has moved — the record of where it came from.
 
@@ -323,6 +325,41 @@ decision.
 from the first, `Publish-PackZip` is defined nowhere in the second, and outside `vendor/` neither
 writes a zip. The only zip code left in either reads or unpacks one: `bench-reactors.ps1` and
 `load-check.ps1 -FromZips` there, and `stage-pack`'s self-test in the modpack.
+
+## Ruled to move from the modpack
+
+**Ruled by Truls on 2026-10-08, on
+[#73](https://github.com/trulsjo/grado-factorio-tools/issues/73): all three move.** Nothing has
+moved yet. `grado-factorio-modpack` wrote the three in its PR #170, merged 2026-10-06, because
+their tickets were there. Each move is an expand-contract pair, a ticket here and one in the
+modpack, so no copy is left behind. The order of the three is not ruled.
+
+| Script in `grado-factorio-modpack` | Lines | Last changed | Blob | Move | Contraction |
+|---|---|---|---|---|---|
+| `scripts/markdown-check.ps1` | 380 | `fa61c15` | `a2d8ff8` | [#74](https://github.com/trulsjo/grado-factorio-tools/issues/74) | [grado-factorio-modpack#182](https://github.com/trulsjo/grado-factorio-modpack/issues/182) |
+| `scripts/get-dump.ps1`, the dump cache | 272 | `d6157a9` | `bf96c8c` | [#75](https://github.com/trulsjo/grado-factorio-tools/issues/75) | [grado-factorio-modpack#183](https://github.com/trulsjo/grado-factorio-modpack/issues/183) |
+| `scripts/refuse-cd-into-mod-cache.ps1`, the hook | 189 | `d6157a9` | `7e5d07a` | [#76](https://github.com/trulsjo/grado-factorio-tools/issues/76) | [grado-factorio-modpack#184](https://github.com/trulsjo/grado-factorio-modpack/issues/184) |
+
+Measured 2026-10-08 against that repository's `main` at `4cc5805`, and read from each file, not
+counted by grep:
+
+- **The Markdown check** names nothing of the modpack or of Factorio in its code, and finds the
+  repository through git. Its header and one comment cite modpack pages. Run with `-All` here at
+  `ac96493` it read 13 files and found nothing; in `realistic-fusion-refreshed` at `c608044` it
+  found 6 things in 109 files, all under `docs/research/`. It overlaps `check.ps1`'s relative-link
+  check, which asks the disk and not git; #74 has to say whether both stay. No existing linter
+  replaces it: grado-factorio-modpack#174, closed 2026-10-07.
+- **The dump cache** takes the repository root from its own path, which in a submodule is
+  `vendor/`, and knows `.mod-cache/<Pack>`, `.dump-cache` and `stage-pack.ps1`. All of it becomes
+  parameters or is dropped. No gate calls it there, and it has one consumer:
+  `realistic-fusion-refreshed` dumps through its own `load-check.ps1`.
+- **The hook** takes the root the same way and holds `.mod-cache` as a literal. Its self-test
+  reads the consumer's `.claude/settings.json`, which a submodule cannot supply, so the wiring
+  stays with each consumer. `realistic-fusion-refreshed` ignores `.claude/*` and could not wire
+  it from a tracked file as it stands.
+
+None of the three has a commit scope here yet, and `CLAUDE.md`, which lists the scopes, is at
+3,998 of the 4,000 bytes `check.ps1` allows it.
 
 ## What has to be written, not moved
 
