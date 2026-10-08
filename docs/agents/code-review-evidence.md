@@ -35,10 +35,10 @@ of #31 to #56 were such a list gone stale, and #48 and #52 were tickets for exac
 
 **A fix commit is run, not only read.** Changed 2026-10-09, settling
 [#84](https://github.com/trulsjo/grado-factorio-tools/issues/84): the rule had been that the
-session reads its own fix commit before pushing it. In one session two commits, the commit on PR #78 that
-answered its review and the first commit of PR #81, each carried a sentence about behaviour that
-was not written from a run, and reading the commit caught neither. Each took one command to
-check. The ticket calls both fix commits; the history shows PR #81's was its first.
+session reads its own fix commit before pushing it. In one session two commits, the commit on
+PR #78 that answered its review and the first commit of PR #81, each carried a sentence about
+behaviour that was not written from a run, and reading the commit caught neither. The ticket
+calls both fix commits; the history shows PR #81's was its first.
 
 | pull request | date | what the commit said | what a run showed |
 |---|---|---|---|
