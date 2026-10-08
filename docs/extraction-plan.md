@@ -350,9 +350,9 @@ counted by grep:
   check, which asks the disk and not git; #74 has to say whether both stay. No existing linter
   replaces it: grado-factorio-modpack#174, closed 2026-10-07.
 - **The dump cache** takes the repository root from its own path, which in a submodule is
-  `vendor/`, and knows `.mod-cache/<Pack>`, `.dump-cache` and `stage-pack.ps1`. All of it becomes
-  parameters or is dropped. No gate calls it there, and it has one consumer:
-  `realistic-fusion-refreshed` dumps through its own `load-check.ps1`.
+  `vendor/grado-factorio-tools`, and knows `.mod-cache/<Pack>`, `.dump-cache` and `stage-pack.ps1`. All of it becomes
+  parameters or is dropped. No gate calls it there, and the modpack is its one consumer:
+  `realistic-fusion-refreshed` dumps through its own `load-check.ps1` and does not call it.
 - **The hook** takes the root the same way and holds `.mod-cache` as a literal. Its self-test
   reads the consumer's `.claude/settings.json`, which a submodule cannot supply, so the wiring
   stays with each consumer. `realistic-fusion-refreshed` ignores `.claude/*` and could not wire
