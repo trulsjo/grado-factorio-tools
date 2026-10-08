@@ -58,9 +58,8 @@ submodule, [ADR 0001](docs/adr/0001-siblings-consume-this-repo-as-a-submodule.md
 `<emoji> <type>(<scope>): <subject>`. The rules are in
 [`docs/commit-convention.md`](docs/commit-convention.md). Three things are this repository's own:
 
-- **Scopes**: the tool (`coexistence`, `tree-viewer`, `pack`, `upload`, `commit-check`,
-  `resolve-modpack`, `markdown-check`, `cd-hook`) or the area (`docs`, `repo`). The check reads
-  them from `commit-scopes.txt`.
+- **Scopes**: a scope is the tool or the area. They are listed in `commit-scopes.txt` and nowhere
+  else; the check reads it.
 - **A breaking change** is anything that breaks a consuming repository's interface.
 - **An extraction** is 🚚 `refactor`, naming the origin repo and commit in the body.
 

@@ -20,7 +20,8 @@ and **what counts as a breaking change**. Everything else on this page is shared
 
 - Imperative mood, lowercase after the colon, no trailing period, whole line ≤ 72 characters.
 - `<scope>` is optional but preferred. Each repository declares its own scope vocabulary, and one
-  that hands the check its list (`-ScopeFile`) has a scope outside it refused.
+  that hands the check its list (`-ScopeFile`) has a scope outside it refused. This repository's
+  list is [`commit-scopes.txt`](../commit-scopes.txt), and it is listed nowhere else.
 - The emoji is the *rendered* character, not the `:shortcode:`.
 
 ## Types, and the emoji that goes with each
@@ -65,10 +66,9 @@ purpose, both listed under *What the check is blind to*.
 
 Put `!` before the colon *and* a `BREAKING CHANGE:` footer explaining the migration.
 
-**What counts as a breaking change is each repository's own**, and stays in its `CLAUDE.md`
-alongside its scope vocabulary. This page owns the mechanism; the definition is domain knowledge,
-and this repository's rule is that one mod's domain does not live here. A mod repository's answer
-is save compatibility; a modpack's is a dependency change an existing save cannot survive; this
+**What counts as a breaking change is each repository's own**, and stays in its `CLAUDE.md`. This page owns the mechanism; the definition is domain knowledge, and
+this repository's rule is that one mod's domain does not live here. A mod repository's answer is
+save compatibility; a modpack's is a dependency change an existing save cannot survive; this
 repository's is a consuming repository's interface. Three different rules, one `!` and one footer.
 
 ## Example

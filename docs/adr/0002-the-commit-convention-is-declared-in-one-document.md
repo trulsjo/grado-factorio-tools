@@ -42,6 +42,11 @@ own domain rather than shared mechanics: **its scope vocabulary**, and **what co
 change**. The `!` and the `BREAKING CHANGE:` footer are mechanism and are shared; what triggers
 them is domain knowledge and stays local.
 
+**Changed 2026-10-09, for this repository only**
+([#82](https://github.com/trulsjo/grado-factorio-tools/issues/82)): its scope vocabulary is listed
+in `commit-scopes.txt`, which the check reads, and no longer in its `CLAUDE.md`, which says what a
+scope is and points there. Both siblings still list theirs in their `CLAUDE.md` (read 2026-10-09).
+
 The script's `$TYPES` and `$SITUATIONAL` literals are **not** checked against that document, and
 that is deliberate rather than an oversight.
 
