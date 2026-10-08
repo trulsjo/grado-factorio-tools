@@ -23,10 +23,10 @@ still lives in `realistic-fusion-refreshed`, working and gated. See
 [docs/extraction-plan.md](docs/extraction-plan.md) for what is earmarked, how entangled each piece
 is, what has moved, and what has to be written from nothing.
 
-**Two scripts have moved here from `grado-factorio-modpack`, and that repository still holds its
-copies.** `scripts/markdown-check.ps1` and `scripts/get-dump.ps1`, both below, were ruled to move
-on 2026-10-08 with one more that has not moved yet. Each copy goes when the modpack's contraction
-ticket for it lands.
+**Three scripts have moved here from `grado-factorio-modpack`, and that repository still holds
+its copies.** `scripts/markdown-check.ps1`, `scripts/get-dump.ps1` and
+`scripts/refuse-cd-into-mod-cache.ps1`, all below, were ruled to move on 2026-10-08. Each copy
+goes when the modpack's contraction ticket for it lands.
 
 **One tool written here from nothing:** `scripts/resolve-modpack.ps1`, below
 ([#14](https://github.com/trulsjo/grado-factorio-tools/issues/14)).
@@ -100,6 +100,45 @@ The path is the last line it prints. The cache is `.dump-cache` under the curren
 `-CacheDirectory`; keep it out of git. A set is the game build, the bundled mods enabled and each
 mod's name, version and size, so the same mods in another directory are served the same dump. It
 reads sizes and not contents: what that misses is in its header. `-SelfTest` needs no game.
+
+## Keeping an agent session out of the mod cache
+
+An agent session's tooling writes state files into the directory its shell stands in, and a file
+inside a mod in the cache is part of what the game loads. `scripts/refuse-cd-into-mod-cache.ps1`
+is a hook that refuses a shell command which would stand in `.mod-cache` under a repository root,
+and lets through one that reads the cache by path.
+
+This repository cannot wire it for a consumer: a session reads its hooks from the consumer's own
+tracked settings. In the consumer's `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "i=$(cat); case $i in *mod-cache*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-cd-into-mod-cache.ps1\" -Root \"$CLAUDE_PROJECT_DIR\";; esac"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+`-Root` is the repository whose cache is guarded, and `-CacheName` names a cache that is not
+`.mod-cache`; the `case` has to name it too. The `case` keeps PowerShell from starting before
+every shell command. Exit 2 refuses and says what to do instead. Any other failure exits
+non-zero and not 2, and says on stderr that the command was not checked: no `-Root`, or a tool
+call it cannot read. A submodule that is not initialised is the same posture from pwsh itself,
+which exits 64 for a script that is not there (measured 2026-10-08, PowerShell 7.6.6).
+
+`-SelfTest` proves what is refused and what is not, and that the command above reaches the
+script. A consumer runs `-SelfTest -Settings .claude/settings.json` to prove its own wiring still
+does. What the hook cannot see is in its header.
 
 ## Packing mods
 
