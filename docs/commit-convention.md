@@ -66,10 +66,11 @@ purpose, both listed under *What the check is blind to*.
 
 Put `!` before the colon *and* a `BREAKING CHANGE:` footer explaining the migration.
 
-**What counts as a breaking change is each repository's own**, and stays in its `CLAUDE.md`. This page owns the mechanism; the definition is domain knowledge, and
-this repository's rule is that one mod's domain does not live here. A mod repository's answer is
-save compatibility; a modpack's is a dependency change an existing save cannot survive; this
-repository's is a consuming repository's interface. Three different rules, one `!` and one footer.
+**What counts as a breaking change is each repository's own**, and stays in its `CLAUDE.md`.
+This page owns the mechanism; the definition is domain knowledge, and this repository's rule is
+that one mod's domain does not live here. A mod repository's answer is save compatibility; a
+modpack's is a dependency change an existing save cannot survive; this repository's is a
+consuming repository's interface. Three different rules, one `!` and one footer.
 
 ## Example
 

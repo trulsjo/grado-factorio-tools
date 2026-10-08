@@ -382,10 +382,11 @@ run in, from its root, and that `check.ps1` here runs it with `-All`.
 ([#83](https://github.com/trulsjo/grado-factorio-tools/issues/83)). Run from a directory below the
 root, the copy that moved misreported links that resolve, and with `-All` threw at the first file:
 `git ls-files` and `git ls-tree` answer for the current directory, and `git show` reads from the
-root. Every git call here now runs from the root, so each mode says there what it says at the
-root, and `-SelfTest` has a fourteenth case for it. The modpack's copy is as it was, and stays so
-until grado-factorio-modpack#182 deletes it: its `pre-commit` hook runs at the root, where the two
-copies say the same. The header's "from its root" is gone with the limitation.
+root. Every git call that lists or reads a file now runs from the root, which one `git rev-parse`
+finds, so each mode says below the root what it says at it, and `-SelfTest` has a fourteenth
+case for it. The modpack's copy is as it was, and stays so until grado-factorio-modpack#182
+deletes it: its `pre-commit` hook runs at the root, where the two copies say the same. The
+header no longer says the script has to be run at the root.
 
 **`check.ps1`'s own relative-link check is replaced by it, not kept beside it.** `check.ps1` now
 runs the Markdown check with `-All`. What that changes for this repository's Markdown:

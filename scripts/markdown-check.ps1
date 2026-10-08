@@ -43,8 +43,8 @@
     Check every tracked Markdown file, as staged.
 
 .PARAMETER SelfTest
-    Prove each of the three can fail and a clean file passes, and that a commit's staged content is
-    what is read. Needs git, for a fixture repository in a temp directory.
+    Run the cases that hold the check to what this header says, naming each as it runs. Needs git,
+    for a fixture repository in a temp directory.
 
 .EXAMPLE
     pwsh -File scripts/markdown-check.ps1
@@ -344,7 +344,8 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
             New-Item -ItemType Directory -Path $below | Out-Null
             Set-Content -LiteralPath (Join-Path $temp 'top.md') -Value 'fine'
             Set-Content -LiteralPath (Join-Path $below 'page.md') -Value '[up](../top.md), [beside](page.md) and [dead](nowhere.md)'
-            $commit = { git -C $temp -c user.name=self-test -c user.email=self-test@example.invalid -c commit.gpgsign=false commit --quiet --allow-empty -m $args[0] 2>&1 | Out-Null }
+            $commit = { git -C $temp -c user.name=self-test -c user.email=self-test@example.invalid -c commit.gpgsign=false commit --quiet --allow-empty -m $args[0] 2>&1 | Out-Null
+                if ($LASTEXITCODE -ne 0) { throw "git could not commit '$($args[0])' in the fixture repository." } }
             & $commit 'empty'
             git -C $temp add top.md below/page.md
             $same = $true
