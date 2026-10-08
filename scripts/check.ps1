@@ -1,8 +1,8 @@
 <#
 .SYNOPSIS
     Parses every script under scripts/, runs every self-test that needs neither the game nor the
-    network, and holds the agent pages to their size limits and Markdown links to files that
-    exist. Exit 0 means all of that held.
+    network, holds the agent pages to their size limits, and runs markdown-check.ps1 over the
+    tracked Markdown. Exit 0 means all of that held.
 
 .DESCRIPTION
     THE ONE COMMAND BEFORE A PUSH (grado-factorio-tools#60). The only gate here was commit-msg,
@@ -21,8 +21,10 @@
     $PAGE_LIMITS and nowhere else. A page is measured with LF line endings, which is how the
     repository stores it, so a checkout with CRLF gets the same answer.
 
-    A RELATIVE LINK IN A TRACKED MARKDOWN FILE HAS TO NAME A FILE THAT EXISTS. A page that moves
-    leaves its links behind, and nothing else reads them.
+    THE TRACKED MARKDOWN IS READ BY markdown-check.ps1 -All (grado-factorio-tools#74). A page that
+    moves leaves its links behind, and nothing else reads them. This script had a link check of
+    its own until that one moved here; it asked the disk, in any case, and read no `[x]: path`
+    line. What is checked now, and what is not, is in that script's header.
 
     WHAT IT DOES NOT RUN. load-harness.ps1 -SelfTest, because it starts Factorio, and a CI runner
     has no game. After a change to the harness or to mod-info.ps1, which the harness reads
@@ -36,13 +38,8 @@
     WHAT IT CANNOT SEE. A parse proves syntax and nothing else: a misspelled cmdlet or variable
     parses. No linter runs. It reads the working tree, so through the pre-push hook it checks
     what is on disk, which is not the commits being pushed when the tree has uncommitted edits.
+    The Markdown is the exception: it is read as staged, so an edit not yet staged is not seen.
     And fetch-mods.ps1's self-test listens on a loopback port, so it fails where that is refused.
-    Of a link it checks the file and nothing after a `#`: an anchor to a heading that is gone
-    passes. A link to another site is not followed, a reference-style link (`[x]: path`) is not
-    read, and neither is a path that is only named in backticks. On Windows, which is also what
-    CI runs, a link in the wrong case or with a backslash passes, though the site that renders
-    the page would not follow it. And a path holding a space or a parenthesis is misread and
-    fails, as does one that starts at the repository root with `/`: write the link without them.
 
     HOW LONG IT TAKES ON THE DEVELOPMENT MACHINE DEPENDS ON WHAT ELSE IS RUNNING THERE
     (grado-factorio-tools#70). On a quiet machine it is under twice CI's time; it was reported as
@@ -57,7 +54,7 @@
 #Requires -Version 7
 $ErrorActionPreference = 'Stop'
 
-$SELF_TESTS = @('commit-check.ps1', 'fetch-mods.ps1', 'mod-info.ps1', 'pack-mods.ps1', 'resolve-modpack.ps1')
+$SELF_TESTS = @('commit-check.ps1', 'fetch-mods.ps1', 'markdown-check.ps1', 'mod-info.ps1', 'pack-mods.ps1', 'resolve-modpack.ps1')
 # Has a self-test this does not run, and why: it needs Factorio installed.
 $NEEDS_GAME = @('load-harness.ps1')
 # Bytes, with LF line endings; a page must be under its limit. Paths are from the repository root.
@@ -115,32 +112,17 @@ foreach ($page in $PAGE_LIMITS.Keys) {
     if ($over) { $failed.Add("$page is $bytes bytes and must be under $($PAGE_LIMITS[$page])") }
 }
 
-# Tracked files only, so a scratch note or another tool's output is not this check's business.
-# The try is for a machine with no git at all, which would otherwise end the run before its verdict.
-$pages = @(try { git -C $root -c core.quotePath=false ls-files -- '*.md' } catch { })
-if (-not $pages) {
-    Write-Host 'check: git listed no tracked Markdown file, so no link was checked -- FAILED'
-    $failed.Add('no tracked Markdown file to check links in')
+# In the repository root, because the Markdown check reads the repository it stands in. No file
+# read is a failure too: a run outside a repository must not pass for having had nothing to read.
+$clock.Restart()
+Push-Location $root
+try { $said = & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'markdown-check.ps1') -All 2>&1 | Out-String } finally { Pop-Location }
+$bad = $LASTEXITCODE -or $said -notmatch 'markdown-check: [1-9]\d* Markdown file'
+Write-Host "check: markdown-check.ps1 -All -- $($bad ? 'FAILED' : 'ok') $(& $took)"
+if ($bad) {
+    $said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
+    $failed.Add('markdown-check.ps1 -All found something, or read no file')
 }
-$links = 0
-$broken = 0
-foreach ($page in $pages) {
-    $path = Join-Path $root $page
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }   # deleted, not yet committed
-    # Code is taken out first: a fenced block or a `span` that shows link syntax is not a link.
-    $prose = (Get-Content -LiteralPath $path -Raw) -replace '(?s)```.*?```' -replace '`[^`\r\n]*`'
-    foreach ($m in [regex]::Matches($prose, '\]\(\s*<?([^)\s>#]+)[^)]*\)')) {
-        $target = $m.Groups[1].Value
-        if ($target -match '^[A-Za-z][A-Za-z0-9+.-]*:') { continue }       # another site, or mailto:
-        $links++
-        if (-not (Test-Path -LiteralPath (Join-Path (Split-Path $path -Parent) ([uri]::UnescapeDataString($target))))) {
-            $broken++
-            Write-Host "check: $page links to $target, which does not exist -- FAILED"
-            $failed.Add("$page links to $target, which does not exist")
-        }
-    }
-}
-Write-Host "check: $links relative link(s) in $($pages.Count) tracked Markdown file(s), $broken broken -- $($broken ? 'FAILED' : 'ok') $(& $took)"
 
 Write-Host ''
 if ($failed) { Write-Host "FAILED - check: $($failed -join '; ')."; exit 1 }

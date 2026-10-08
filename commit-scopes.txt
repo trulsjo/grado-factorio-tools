@@ -7,5 +7,6 @@ pack
 upload
 commit-check
 resolve-modpack
+markdown-check
 docs
 repo

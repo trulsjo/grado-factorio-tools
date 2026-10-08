@@ -1,8 +1,8 @@
 # Grado Factorio Tools — agent notes
 
-Shared tooling for the Factorio mod projects. `README.md` says what belongs here and what each
-script does; [`docs/extraction-plan.md`](docs/extraction-plan.md) says what has moved here and
-what is still earmarked.
+`README.md` says what belongs here and what each script does;
+[`docs/extraction-plan.md`](docs/extraction-plan.md) says what has moved here and what is still
+earmarked.
 
 **Long-term context lives in the brain**, not here. `CLAUDE.local.md` has the path. Read it at
 session start.
@@ -59,7 +59,8 @@ submodule, [ADR 0001](docs/adr/0001-siblings-consume-this-repo-as-a-submodule.md
 [`docs/commit-convention.md`](docs/commit-convention.md). Three things are this repository's own:
 
 - **Scopes**: the tool (`coexistence`, `tree-viewer`, `pack`, `upload`, `commit-check`,
-  `resolve-modpack`) or the area (`docs`, `repo`). The check reads them from `commit-scopes.txt`.
+  `resolve-modpack`, `markdown-check`) or the area (`docs`, `repo`). The check reads them from
+  `commit-scopes.txt`.
 - **A breaking change** is anything that breaks a consuming repository's interface.
 - **An extraction** is 🚚 `refactor`, naming the origin repo and commit in the body.
 

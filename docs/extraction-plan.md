@@ -1,8 +1,8 @@
 # Extraction plan
 
 What is earmarked to move here from `realistic-fusion-refreshed`, and how hard each one will be.
-Since 2026-10-08 three scripts of `grado-factorio-modpack` are ruled to move too: see *Ruled to
-move from the modpack* below.
+Since 2026-10-08 three scripts of `grado-factorio-modpack` are ruled to move too: see *From the
+modpack* below.
 
 **One script has been extracted, and that extraction is finished.** `scripts/commit-check.ps1` is
 here and nowhere else; both siblings resolve it from this repo as a submodule.
@@ -326,13 +326,15 @@ from the first, `Publish-PackZip` is defined nowhere in the second, and outside 
 writes a zip. The only zip code left in either reads or unpacks one: `bench-reactors.ps1` and
 `load-check.ps1 -FromZips` there, and `stage-pack`'s self-test in the modpack.
 
-## Ruled to move from the modpack
+## From the modpack
 
 **Ruled by Truls on 2026-10-08, on
-[#73](https://github.com/trulsjo/grado-factorio-tools/issues/73): all three move.** Nothing has
-moved yet. `grado-factorio-modpack` wrote the three in its PR #170, merged 2026-10-06, because
+[#73](https://github.com/trulsjo/grado-factorio-tools/issues/73): all three move.** ~~Nothing has
+moved yet.~~ **The Markdown check is expanded, 2026-10-08, and not contracted:** two copies stand
+until its contraction ticket lands. The other two have not moved. `grado-factorio-modpack` wrote the three in its PR #170, merged 2026-10-06, because
 their tickets were there. Each move is an expand-contract pair, a ticket here and one in the
-modpack, so no copy is left behind. The order of the three is not ruled.
+modpack, so no copy is left behind. ~~The order of the three is not ruled.~~ Ruled the same day:
+#74, #75, #76.
 
 | Script in `grado-factorio-modpack` | Lines | Last changed | Blob | Move | Contraction |
 |---|---|---|---|---|---|
@@ -358,8 +360,34 @@ counted by grep:
   stays with each consumer. `realistic-fusion-refreshed` ignores `.claude/*` and could not wire
   it from a tracked file as it stands.
 
-None of the three has a commit scope here yet, and `CLAUDE.md`, which lists the scopes, is at
-3,998 of the 4,000 bytes `check.ps1` allows it.
+~~None of the three has a commit scope here yet, and `CLAUDE.md`, which lists the scopes, is at
+3,998 of the 4,000 bytes `check.ps1` allows it.~~ Each gets its scope as it moves; `CLAUDE.md`
+lost its opening sentence, which the README's first line says, to make the room.
+
+### The Markdown check, the expand half
+
+**`scripts/markdown-check.ps1`** — from `grado-factorio-modpack` at
+`4cc5805e35f42223ff3550a03fd67943b26b6349` (the file last changed in `fa61c15`; blob `a2d8ff8`), on 2026-10-08,
+[#74](https://github.com/trulsjo/grado-factorio-tools/issues/74). The modpack's copy and its
+`pre-commit` hook are untouched; grado-factorio-modpack#182 deletes the one and rewires the other.
+
+No line of code changed but the closing message, which named the script by the path it had there.
+The header and one comment named two of the modpack's pages and its hook, and now name neither.
+`-SelfTest` passes the 13 cases it passed there.
+
+**`check.ps1`'s own relative-link check is replaced by it, not kept beside it.** `check.ps1` now
+runs the Markdown check with `-All`. What that changes for this repository's Markdown:
+
+| | The old link check | Now |
+|---|---|---|
+| A link's target is asked of | the disk | git, in exact case |
+| A `[label]: path` line | not read | read |
+| A link from the repository root, `/docs/x.md` | failed, as misread | resolved |
+| Emphasis or a code span left open, a ragged table row | not looked for | reported |
+| The Markdown is read from | the working tree | the index, so an unstaged edit is not seen |
+
+Run on this repository at `145b221` it reads 13 files and finds nothing, and a file staged with a
+dead link and an open `*` turned `check.ps1` red with both named.
 
 ## What has to be written, not moved
 

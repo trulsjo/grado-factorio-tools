@@ -19,10 +19,13 @@ holding a copy. No copy of it remains anywhere.
 and nowhere else: `realistic-fusion-refreshed` deleted its copies and takes both from the
 submodule. So is `scripts/pack-mods.ps1`, below: `realistic-fusion-refreshed` deleted its copy,
 the modpack deleted its own zipper, and both pack through this one. Everything else earmarked
-still lives in `realistic-fusion-refreshed`, working and gated, but for three scripts of the
-modpack ruled to move on 2026-10-08 and not yet moved. See
+still lives in `realistic-fusion-refreshed`, working and gated. See
 [docs/extraction-plan.md](docs/extraction-plan.md) for what is earmarked, how entangled each piece
 is, what has moved, and what has to be written from nothing.
+
+**One script has moved here from `grado-factorio-modpack`, and that repository still holds its
+copy.** `scripts/markdown-check.ps1`, below, was ruled to move on 2026-10-08 with two more that
+have not moved yet. The copy goes when the modpack's contraction ticket lands.
 
 **One tool written here from nothing:** `scripts/resolve-modpack.ps1`, below
 ([#14](https://github.com/trulsjo/grado-factorio-tools/issues/14)).
@@ -100,6 +103,22 @@ are reported and left out. A version the portal would reject — not `x.y.z`, a 
 65535, or `0.0.0` — is refused, and nothing is written. Any other version's zip of the same mod in
 the output directory is deleted, so one copy is left. It uploads nothing. `-SelfTest` proves it
 can fail, in a scratch repository of its own.
+
+## Checking Markdown
+
+`scripts/markdown-check.ps1` reads Markdown for three things a machine can decide: emphasis or a
+code span left open at the end of its paragraph, a table row whose column count differs from its
+header's, and a link to a file git does not track, in exact case. It knows nothing of Factorio.
+
+    pwsh -File scripts/markdown-check.ps1
+    pwsh -File scripts/markdown-check.ps1 -Range origin/main..HEAD
+    pwsh -File scripts/markdown-check.ps1 -All
+
+With no arguments it reads the staged files as they are staged, which is what a `pre-commit` hook
+wants; `-Range` reads the files a range changed, and `-All` every tracked one. It reads the
+repository it is run in, so a consumer runs it from the submodule on its own Markdown.
+`scripts/check.ps1` runs it here with `-All`. `-SelfTest` proves each of the three can fail. What
+it reads as what, and what it cannot see, is in its header.
 
 ## What does not belong here
 
