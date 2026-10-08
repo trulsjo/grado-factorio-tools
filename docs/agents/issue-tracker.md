@@ -4,7 +4,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 ## Conventions
 
-- **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
+- **Create an issue**: `gh issue create --title "..." --body "..."`. Write a multi-line body to a file and pass `--body-file <path>`; the same goes for `gh issue comment` and `gh pr create`. Write the file with the Write tool: a heredoc that writes the file is no safer. On 2026-10-08 one command of three such heredocs, 118 lines writing the bodies of #74, #75 and #76, failed here under the Bash tool with `unexpected EOF while looking for matching '`, and `realistic-fusion-refreshed`'s tracker page records heredoc bodies failing with the same message.
 - **Read an issue**: `gh issue view <number> --comments`, filtering comments by `jq` and also fetching labels.
 - **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.
 - **Comment on an issue**: `gh issue comment <number> --body "..."`
