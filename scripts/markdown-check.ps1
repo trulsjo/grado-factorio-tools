@@ -10,9 +10,9 @@
     as a pre-commit hook does, it reads the staged Markdown files as they are staged, not as they
     are on disk. A review there on 2026-10-05 found emphasis that could not close, so the rest of
     a note rendered wrongly, and a reviewer had to find it. It reads the repository it is run in,
-    which need not be the one that holds it, and has to be run at that repository's root: from a
-    directory below it, links that resolve are reported, and -All stops at a file git cannot
-    read. In grado-factorio-tools, which holds it, scripts/check.ps1 runs it with -All.
+    which need not be the one that holds it, and from any directory inside that repository it
+    reads the same files and says the same. In grado-factorio-tools, which holds it,
+    scripts/check.ps1 runs it with -All.
 
     WHAT IT READS AS WHAT. A paragraph ends at a blank line, a heading, a list item, a table or a
     fenced code block; nothing inside a fence is read, and a fence never closed is reported. A
@@ -227,9 +227,9 @@ function Test-Markdown {
 function Invoke-Check {
     <#  Check the Markdown files git names, read at $Revision ('' is the index). Prints each
         finding and returns how many.  #>
-    param([string[]] $Files, [string] $Revision = '')
+    param([string[]] $Files, [string] $Revision = '', [Parameter(Mandatory)] [string] $Top)
 
-    $entries = if ($Revision) { git -c core.quotepath=off ls-tree -r $Revision } else { git -c core.quotepath=off ls-files -s }
+    $entries = if ($Revision) { git -C $Top -c core.quotepath=off ls-tree -r $Revision } else { git -C $Top -c core.quotepath=off ls-files -s }
     if ($LASTEXITCODE -ne 0) { throw "git could not list the files at '$Revision'." }
     $tracked = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     $submodules = @()
@@ -238,20 +238,19 @@ function Invoke-Check {
         if ($mode -eq '160000') { $submodules += $name }
         for ($p = $name; $p; $p = ($p -replace '/?[^/]*$')) { $null = $tracked.Add($p) }
     }
-    $top = git rev-parse --show-toplevel
     $exists = {
         param($p)
         if ($p -eq '' -or $tracked.Contains($p)) { return $true }
         $sub = $submodules | Where-Object { $p.StartsWith("$_/") } | Select-Object -First 1
         if (-not $sub) { return $false }
         # Not this repository's to list, so the working tree answers; an empty one cannot.
-        if (-not (Get-ChildItem -LiteralPath (Join-Path $top $sub) -Force -ErrorAction SilentlyContinue)) { return $null }
-        Test-Path -LiteralPath (Join-Path $top $p)
+        if (-not (Get-ChildItem -LiteralPath (Join-Path $Top $sub) -Force -ErrorAction SilentlyContinue)) { return $null }
+        Test-Path -LiteralPath (Join-Path $Top $p)
     }.GetNewClosure()
 
     $count = 0
     foreach ($f in $Files | Where-Object { $_ -match '\.md$' }) {
-        $lines = @(git show "${Revision}:$f")
+        $lines = @(git -C $Top show "${Revision}:$f")
         if ($LASTEXITCODE -ne 0) { throw "git could not read ${Revision}:$f." }
         foreach ($finding in Test-Markdown -Lines $lines -Path $f -Exists $exists | Sort-Object { $_.Line }) {
             Write-Host "${f}:$($finding.Line): $($finding.Message)"
@@ -340,6 +339,26 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
             Write-Host ($refused.Text.TrimEnd() -replace '(?m)^', '    ')
             $refused.Code -eq 1 -and $refused.Text -match '(?m)^bad\.md:3: the link to nowhere\.md' -and
                 $refused.Text -match '(?m)^bad\.md:3: emphasis opened' -and $passed.Code -eq 0 } }
+        @{ Name = 'run from a directory below the root, each mode says what it says at the root'; Test = {
+            $below = Join-Path $temp 'below'
+            New-Item -ItemType Directory -Path $below | Out-Null
+            Set-Content -LiteralPath (Join-Path $temp 'top.md') -Value 'fine'
+            Set-Content -LiteralPath (Join-Path $below 'page.md') -Value '[up](../top.md), [beside](page.md) and [dead](nowhere.md)'
+            $commit = { git -C $temp -c user.name=self-test -c user.email=self-test@example.invalid -c commit.gpgsign=false commit --quiet --allow-empty -m $args[0] 2>&1 | Out-Null }
+            & $commit 'empty'
+            git -C $temp add top.md below/page.md
+            $same = $true
+            $modes = @{ Staged = @(); Range = @('-Range', 'HEAD~1..HEAD'); All = @('-All') }
+            foreach ($mode in 'Staged', 'Range', 'All') {
+                if ($mode -eq 'Range') { & $commit 'pages' }
+                $atRoot = & $run $temp $modes[$mode]
+                $fromBelow = & $run $below $modes[$mode]
+                $ok = $atRoot.Code -eq 1 -and $atRoot.Text -match '(?m)^below/page\.md:1: the link to nowhere\.md' -and
+                    $atRoot.Text -match '1 finding\(s\)' -and $fromBelow.Code -eq 1 -and $fromBelow.Text -eq $atRoot.Text
+                if (-not $ok) { Write-Host "    ${mode}, at the root:`n$($atRoot.Text.TrimEnd() -replace '(?m)^', '      ')`n    ${mode}, from below it:`n$($fromBelow.Text.TrimEnd() -replace '(?m)^', '      ')" }
+                $same = $same -and $ok
+            }
+            $same } }
     )
 
     $failures = 0
@@ -361,19 +380,24 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
 
 if ($SelfTest) { Invoke-SelfTest }
 
+# git lists and reads from the root, so every path is the one it has there, whatever directory this
+# is run in: ls-files and ls-tree would otherwise answer for the current directory only.
+$top = git rev-parse --show-toplevel
+if ($LASTEXITCODE -ne 0) { throw 'git found no repository here. Run it inside the repository.' }
+
 if ($Range) {
     if ($Range -notmatch '\.\.+[^.]') { throw '-Range needs both ends, as origin/main..HEAD: the files are read at its end.' }
     $revision = $Range -replace '^.*\.\.+'
-    $files = @(git -c core.quotepath=off diff --name-only --diff-filter=ACMR $Range)
+    $files = @(git -C $top -c core.quotepath=off diff --name-only --diff-filter=ACMR $Range)
 }
 else {
     $revision = ''
-    $files = if ($All) { @(git -c core.quotepath=off ls-files) } else { @(git -c core.quotepath=off diff --cached --name-only --diff-filter=ACMR) }
+    $files = if ($All) { @(git -C $top -c core.quotepath=off ls-files) } else { @(git -C $top -c core.quotepath=off diff --cached --name-only --diff-filter=ACMR) }
 }
-if ($LASTEXITCODE -ne 0) { throw 'git could not list the files to check. Run it inside the repository.' }
+if ($LASTEXITCODE -ne 0) { throw 'git could not list the files to check.' }
 $files = @($files | Where-Object { $_ -match '\.md$' })
 
-$found = Invoke-Check -Files $files -Revision $revision
+$found = Invoke-Check -Files $files -Revision $revision -Top $top
 if ($found) {
     Write-Host ''
     Write-Host "FAILED - markdown-check: $found finding(s) in $($files.Count) Markdown file(s). What it reads as what: the header of markdown-check.ps1."
