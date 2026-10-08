@@ -10,8 +10,9 @@
     as a pre-commit hook does, it reads the staged Markdown files as they are staged, not as they
     are on disk. A review there on 2026-10-05 found emphasis that could not close, so the rest of
     a note rendered wrongly, and a reviewer had to find it. It reads the repository it is run in,
-    which need not be the one that holds it. This repository's scripts/check.ps1 runs it with
-    -All.
+    which need not be the one that holds it, and has to be run at that repository's root: from a
+    directory below it, files are missed and links misread. In grado-factorio-tools, which holds
+    it, scripts/check.ps1 runs it with -All.
 
     WHAT IT READS AS WHAT. A paragraph ends at a blank line, a heading, a list item, a table or a
     fenced code block; nothing inside a fence is read, and a fence never closed is reported. A

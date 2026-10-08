@@ -38,7 +38,8 @@
     WHAT IT CANNOT SEE. A parse proves syntax and nothing else: a misspelled cmdlet or variable
     parses. No linter runs. It reads the working tree, so through the pre-push hook it checks
     what is on disk, which is not the commits being pushed when the tree has uncommitted edits.
-    The Markdown is the exception: it is read as staged, so an edit not yet staged is not seen.
+    The Markdown is the exception: it is read as staged, so an edit not yet staged is not seen,
+    and a link to a file not yet added is reported.
     And fetch-mods.ps1's self-test listens on a loopback port, so it fails where that is refused.
 
     HOW LONG IT TAKES ON THE DEVELOPMENT MACHINE DEPENDS ON WHAT ELSE IS RUNNING THERE

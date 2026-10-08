@@ -349,7 +349,8 @@ counted by grep:
   repository through git. Its header and one comment cite modpack pages. Run with `-All` here at
   `ac96493` it read 13 files and found nothing; in `realistic-fusion-refreshed` at `c608044` it
   found 6 things in 109 files, all under `docs/research/`. It overlaps `check.ps1`'s relative-link
-  check, which asks the disk and not git; #74 has to say whether both stay. No existing linter
+  check, which asks the disk and not git; ~~#74 has to say whether both stay~~ #74 replaced it,
+  below. No existing linter
   replaces it: grado-factorio-modpack#174, closed 2026-10-07.
 - **The dump cache** takes the repository root from its own path, which in a submodule is
   `vendor/grado-factorio-tools`, and knows `.mod-cache/<Pack>`, `.dump-cache` and `stage-pack.ps1`. All of it becomes
@@ -372,7 +373,9 @@ lost its opening sentence, which the README's first line says, to make the room.
 `pre-commit` hook are untouched; grado-factorio-modpack#182 deletes the one and rewires the other.
 
 No line of code changed but the closing message, which named the script by the path it had there.
-The header and one comment named two of the modpack's pages and its hook, and now name neither.
+The header and one comment named two of the modpack's pages and its hook file, and now name none
+of the three. The header also gained two sentences: that the script reads the repository it is
+run in, from its root, and that `check.ps1` here runs it with `-All`.
 `-SelfTest` passes the 13 cases it passed there.
 
 **`check.ps1`'s own relative-link check is replaced by it, not kept beside it.** `check.ps1` now
