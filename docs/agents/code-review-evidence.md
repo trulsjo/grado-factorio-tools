@@ -33,6 +33,18 @@ The rule against a header listing what the code lists was added the same day, se
 [#61](https://github.com/trulsjo/grado-factorio-tools/issues/61): most findings across the reviews
 of #31 to #56 were such a list gone stale, and #48 and #52 were tickets for exactly that.
 
+**A fix commit is run, not only read.** Changed 2026-10-09, settling
+[#84](https://github.com/trulsjo/grado-factorio-tools/issues/84): the rule had been that the
+session reads its own fix commit before pushing it. In one session two commits, the commit on PR #78 that
+answered its review and the first commit of PR #81, each carried a sentence about behaviour that
+was not written from a run, and reading the commit caught neither. Each took one command to
+check. The ticket calls both fix commits; the history shows PR #81's was its first.
+
+| pull request | date | what the commit said | what a run showed |
+|---|---|---|---|
+| [PR #78](https://github.com/trulsjo/grado-factorio-tools/pull/78) | 2026-10-08 | in the Markdown check's header, that from a directory below the root "files are missed and links misread" | no file is missed in any mode: two modes misreport links and the third throws. A second review found it, and a further commit corrected it |
+| [PR #81](https://github.com/trulsjo/grado-factorio-tools/pull/81) | 2026-10-08 | in its first commit and on the tracker page, that a failed command was "writing the bodies" of three tickets | it was a parse error and wrote nothing. The prose review found it |
+
 ## Where the first two rules came from
 
 Both were decided by Truls in the sibling
