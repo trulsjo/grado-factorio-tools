@@ -23,9 +23,10 @@ still lives in `realistic-fusion-refreshed`, working and gated. See
 [docs/extraction-plan.md](docs/extraction-plan.md) for what is earmarked, how entangled each piece
 is, what has moved, and what has to be written from nothing.
 
-**One script has moved here from `grado-factorio-modpack`, and that repository still holds its
-copy.** `scripts/markdown-check.ps1`, below, was ruled to move on 2026-10-08 with two more that
-have not moved yet. The copy goes when the modpack's contraction ticket lands.
+**Two scripts have moved here from `grado-factorio-modpack`, and that repository still holds its
+copies.** `scripts/markdown-check.ps1` and `scripts/get-dump.ps1`, both below, were ruled to move
+on 2026-10-08 with one more that has not moved yet. Each copy goes when the modpack's contraction
+ticket for it lands.
 
 **One tool written here from nothing:** `scripts/resolve-modpack.ps1`, below
 ([#14](https://github.com/trulsjo/grado-factorio-tools/issues/14)).
@@ -89,6 +90,16 @@ player's mods, saves or `player-data.json`. `-With space-age` enables bundled mo
 checks of its own passes `-Check <script>`, or dot-sources `load-harness-lib.ps1` to dump the data
 stage and load again under other mod lists. Both scripts take `-SelfTest`; the harness's needs the
 game installed.
+
+`get-dump.ps1` gives the path of a `--dump-data` dump of a directory of mods, and runs the game
+only when its cache holds no dump of that set:
+
+    pwsh -File scripts/get-dump.ps1 .mod-cache/Grado_NonChanging -With space-age
+
+The path is the last line it prints. The cache is `.dump-cache` under the current directory, or
+`-CacheDirectory`; keep it out of git. A set is the game build, the bundled mods enabled and each
+mod's name, version and size, so the same mods in another directory are served the same dump. It
+reads sizes and not contents: what that misses is in its header. `-SelfTest` needs no game.
 
 ## Packing mods
 
