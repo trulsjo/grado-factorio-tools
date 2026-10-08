@@ -20,6 +20,10 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
   A SHA may be cited once it is on `main`.
 - **A pull request carries one `Closes #N` line per ticket it closes.** Its title is checked; see
   *Pull request titles* in [`docs/commit-convention.md`](../commit-convention.md).
+- **Pull request body**: written with the `mattpocock-skills:pr` skill, where that plugin is
+  installed. This repository adds to what it produces: above its template, the `Closes` lines of
+  the rule above, where the branch closes any ticket; below it, nothing.
+  [`code-review.md`](code-review.md) says what the pull request records once its review has run.
 - **The bar for a follow-up ticket** (Truls, 2026-10-06): a leftover from a review, a session or
   a retro becomes a ticket only if a real mod hit it or a consumer's gate needs it. Anything else
   is named in the session report and not filed. A ticket Truls asks for directly is not held to
