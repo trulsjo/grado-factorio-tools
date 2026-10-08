@@ -93,6 +93,32 @@ player's mods. The game logs
 and refuses `Base`, `Quality` and `Elevated-Rails`, declared the same way, with the same line
 naming each. A control declaring `space-age` in lower case, run the same way, loads.
 
+## `get-dump.ps1`
+
+### A real dump, a second request, and the modpack's copy agreeing on the key
+
+Measured 2026-10-08 against Factorio 2.0.77 (build 84539), headless and isolated, for
+grado-factorio-tools#75, the day the script moved here. The mods were `grado-factorio-modpack`'s
+staged `.mod-cache/Grado_NonChanging`: 29 enabled mods, 1,625 files. The cache was an empty
+scratch directory.
+
+    pwsh -File scripts/get-dump.ps1 <modpack>/.mod-cache/Grado_NonChanging -CacheDirectory <scratch>
+
+The first request printed `get-dump: made, no dump of this set was in the cache` and took 14
+seconds; the game's log gives `Prototype list checksum: 169335276`, and the dump is
+`Grado_NonChanging-169335276-23d35a4614d6.json`, 19,144,547 bytes. The same command again printed
+`get-dump: served from the cache, nothing run` and the same path. A count of the files under the
+mod directory was 1,625 before the first request and after the second.
+
+Then the modpack's own `scripts/get-dump.ps1`, as it is at that repository's `4cc5805`, was put
+in a scratch directory with the `scripts/` of this repository at `d251481`, the modpack's pin,
+under `vendor/grado-factorio-tools/`, and a junction to the same mod directory as
+`.mod-cache/Grado_NonChanging`. Asked for `Grado_NonChanging` against a copy of that cache, it
+printed `served from the cache, nothing run`. So the script here and the one it came from name
+the same set by the same key.
+
+Not measured: a dump with `-With` or `-Disabled`, and any build but 2.0.77.
+
 ## `commit-check.ps1`
 
 ### Why the check exists: a rule nothing was reading

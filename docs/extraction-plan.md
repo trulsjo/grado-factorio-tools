@@ -330,8 +330,8 @@ writes a zip. The only zip code left in either reads or unpacks one: `bench-reac
 
 **Ruled by Truls on 2026-10-08, on
 [#73](https://github.com/trulsjo/grado-factorio-tools/issues/73): all three move.** ~~Nothing has
-moved yet.~~ **The Markdown check is expanded, 2026-10-08, and not contracted:** two copies stand
-until its contraction ticket lands. The other two have not moved. `grado-factorio-modpack` wrote the three in its PR #170, merged 2026-10-06, because
+moved yet.~~ **The Markdown check and the dump cache are expanded, 2026-10-08, and not contracted:** two
+copies of each stand until its contraction ticket lands. The hook has not moved. `grado-factorio-modpack` wrote the three in its PR #170, merged 2026-10-06, because
 their tickets were there. Each move is an expand-contract pair, a ticket here and one in the
 modpack, so no copy is left behind. ~~The order of the three is not ruled.~~ Ruled the same day:
 #74, #75, #76.
@@ -388,6 +388,38 @@ runs the Markdown check with `-All`. What that changes for this repository's Mar
 
 Run on this repository at `145b221` it reads 13 files and finds nothing, and a file staged with a
 dead link and an open `*` turned `check.ps1` red with both named.
+
+### The dump cache, the expand half
+
+**`scripts/get-dump.ps1`** — from `grado-factorio-modpack` at
+`4cc5805e35f42223ff3550a03fd67943b26b6349` (the file last changed in `d6157a9`; blob `bf96c8c`),
+on 2026-10-08, [#75](https://github.com/trulsjo/grado-factorio-tools/issues/75). The modpack's
+copy is untouched; grado-factorio-modpack#183 deletes its caching.
+
+| Was | Is now |
+|---|---|
+| A pack name, read as `.mod-cache/<Pack>` under the repository root | `-Mods`, a directory of mods, as the first argument |
+| The repository root, as the parent of the script's own directory | not read |
+| The harness library under `vendor/grado-factorio-tools/scripts/` | beside the script |
+| The cache defaulting to `.dump-cache` under the repository root | `-CacheDirectory`, defaulting to `.dump-cache` under the current directory, as `fetch-mods.ps1`'s cache does |
+| A dump named for the pack | named for the last part of the mod directory's path, which for `.mod-cache/<Pack>` is the same name |
+| A hint to run `stage-pack.ps1` when the pack is not staged | dropped; a directory that is not there is refused |
+
+`Get-PackDump` is `Get-CachedDump` and its `-Pack` is `-Name`. The lines that build the key did
+not change. It takes the `coexistence` scope and none of its own.
+
+**Measured 2026-10-08** against Factorio 2.0.77 (build 84539), on the modpack's staged
+`.mod-cache/Grado_NonChanging`, 29 mods: a first request made a dump in 14 seconds, a second was
+served from the cache with nothing run, and the 1,625 files under the mod directory were the same
+1,625 after. The modpack's copy at `4cc5805`, run with the harness library its pin `d251481`
+carries, was then asked for the same set against that cache and was served the dump this script
+made: the two write the same key. The run is in [measurements.md](measurements.md). `-SelfTest`
+passes the 11 cases it passed there.
+
+One thing the modpack's contraction has to know: its own `.dump-cache` held one dump of
+`Grado_NonChanging`, made 2026-10-07, and it was not served, because the pack's zip had been
+staged again since at another size, 2,892 bytes against 677. That is the key working, not the
+move.
 
 ## What has to be written, not moved
 
