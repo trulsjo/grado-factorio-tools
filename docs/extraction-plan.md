@@ -330,8 +330,8 @@ writes a zip. The only zip code left in either reads or unpacks one: `bench-reac
 
 **Ruled by Truls on 2026-10-08, on
 [#73](https://github.com/trulsjo/grado-factorio-tools/issues/73): all three move.** ~~Nothing has
-moved yet.~~ **The Markdown check and the dump cache are expanded, 2026-10-08, and not contracted:** two
-copies of each stand until its contraction ticket lands. The hook has not moved. `grado-factorio-modpack` wrote the three in its PR #170, merged 2026-10-06, because
+moved yet.~~ **All three are expanded, 2026-10-08, and none is contracted:** two copies of each stand until
+its contraction ticket lands. `grado-factorio-modpack` wrote the three in its PR #170, merged 2026-10-06, because
 their tickets were there. Each move is an expand-contract pair, a ticket here and one in the
 modpack, so no copy is left behind. ~~The order of the three is not ruled.~~ Ruled the same day:
 #74, #75, #76.
@@ -420,6 +420,33 @@ One thing the modpack's contraction has to know: its own `.dump-cache` held one 
 `Grado_NonChanging`, made 2026-10-07, and it was not served, because the pack's zip had been
 staged again since at another size, 2,892 bytes against 677. That is the key working, not the
 move.
+
+### The hook, the expand half
+
+**`scripts/refuse-cd-into-mod-cache.ps1`** — from `grado-factorio-modpack` at
+`4cc5805e35f42223ff3550a03fd67943b26b6349` (the file last changed in `d6157a9`; blob `7e5d07a`),
+on 2026-10-08, [#76](https://github.com/trulsjo/grado-factorio-tools/issues/76). The modpack's
+copy and its `.claude/settings.json` are untouched; grado-factorio-modpack#184 deletes the one
+and rewires the other.
+
+| Was | Is now |
+|---|---|
+| The repository root, as the parent of the script's own directory | `-Root`, which the wiring gives as `$CLAUDE_PROJECT_DIR`; without it nothing is checked, and that is said |
+| `.mod-cache`, a literal in the test and the refusal | `-CacheName`, defaulting to `.mod-cache`, where `fetch-mods.ps1` puts a cache |
+| The self-test's last case reading the modpack's `.claude/settings.json` | a fixture of its own, the command the header shows pointed at this script; or a consumer's settings file, given as `-Settings` |
+| The refusal naming the modpack's ticket and `<Pack>` | names neither |
+
+**The self-test's wiring half does both of what #76 allowed.** With no argument it runs a command
+of its own, so `check.ps1` proves here that the script works through `sh` with the tool call on
+stdin. Given `-Settings`, it runs the command a consumer wired, so the modpack keeps the case it
+had: one that fails when its settings stop reaching the hook.
+
+The 37 commands of the self-test's table moved as they were and give the answers they gave. Two
+cases are new, which makes 39 against the origin's 38: a cache given another name is the one
+guarded, and the wiring case above. Measured 2026-10-08, PowerShell 7.6.6: through the README's
+command a `cd` into the cache exits 2 with the reason, and a read by path exits 0 in silence;
+`-SelfTest -Settings` given the modpack's file passes, its first hook being the command it has
+at `4cc5805`, though what that wiring reaches today is the modpack's own copy.
 
 ## What has to be written, not moved
 

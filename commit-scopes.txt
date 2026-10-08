@@ -8,5 +8,6 @@ upload
 commit-check
 resolve-modpack
 markdown-check
+cd-hook
 docs
 repo
