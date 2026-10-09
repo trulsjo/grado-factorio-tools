@@ -8,7 +8,8 @@ measured, and the past findings behind each rule, are in
 
 - **Once per change, on the pull request.** Skip the review step inside `/implement` or any other
   skill: open the pull request, then review it. Asked to review again, review only the commits
-  since. Before pushing any commit to a pull request, the session runs whatever its diff or
+  since: when each of them answers a finding of the last review, one fresh agent runs both lanes
+  below, and anything else gets two. Before pushing any commit to a pull request, the session runs whatever its diff or
   message says a script or a command does, prints, refuses or exits with.
 - **Two lanes.** A bug scan, which runs `scripts/check.ps1` and, when the harness or `mod-info.ps1`
   changed, the harness's self-test; and a prose lane applying the rules below, which takes in the
