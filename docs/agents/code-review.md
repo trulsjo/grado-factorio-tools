@@ -7,15 +7,15 @@ measured, and the past findings behind each rule, are in
 ## How a review is run
 
 - **Once per change, on the pull request.** Skip the review step inside `/implement` or any other
-  skill: open the pull request, then review it. Each session had run it twice over one diff.
-  Asked to review again, review only the commits since. Before pushing a fix commit, the session
-  runs whatever its diff or message says a script does, prints, refuses or exits with.
+  skill: open the pull request, then review it. Asked to review again, review only the commits
+  since. Before pushing any commit to a pull request, the session runs whatever its diff or
+  message says a script or a command does, prints, refuses or exits with.
 - **Two lanes.** A bug scan, which runs `scripts/check.ps1` and, when the harness or `mod-info.ps1`
   changed, the harness's self-test; and a prose lane applying the rules below, which takes in the
   plugin's `CLAUDE.md` and code-comment lanes. Its history and earlier-pull-request-comments lanes
-  are dropped: they came back empty in nearly every review.
+  are dropped.
 - **The reviewing session scores each finding itself**, on the plugin's rubric, with no scoring
-  agents. Up to 14 subagents a review had posted two comments across eight pull requests.
+  agents.
 
 ## What is reported
 

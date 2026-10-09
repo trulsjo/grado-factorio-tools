@@ -45,6 +45,17 @@ calls both fix commits; the history shows PR #81's was its first.
 | [PR #78](https://github.com/trulsjo/grado-factorio-tools/pull/78) | 2026-10-08 | in the Markdown check's header, that from a directory below the root "files are missed and links misread" | no file is missed in any mode: two modes misreport links and the third throws. A second review found it, and a further commit corrected it |
 | [PR #81](https://github.com/trulsjo/grado-factorio-tools/pull/81) | 2026-10-08 | in its first commit and on the tracker page, that a failed command was "writing the bodies" of three tickets | it was a parse error and wrote nothing. The prose review found it |
 
+**Widened the same day, 2026-10-09**, settling
+[#86](https://github.com/trulsjo/grado-factorio-tools/issues/86). As #84 wrote it, the rule bound
+a fix commit and what it says of a script, and the second row above was outside both limits: a
+pull request's first commit, about a shell command. The rule now binds any commit the session
+pushes to a pull request, and a command as well as a script, so both rows are inside it.
+
+The room came from three sentences the rules page carried beside its rules, each a figure the
+list at the head of this section already held: that each session had run the review twice, that
+up to 14 subagents a review had posted two comments across eight pull requests, and that the two
+dropped lanes came back empty in nearly every review. Nothing had to move here.
+
 ## Where the first two rules came from
 
 Both were decided by Truls in the sibling
