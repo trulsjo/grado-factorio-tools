@@ -35,8 +35,9 @@
     table row, a line in a fence, a `# heading`, a `[label]: target` line, a line indented four
     spaces after a blank one outside a list, which is a code block, and a line with no space to
     break at within the limit. A space inside a code span is no such place, so a command in one
-    is never wrapped. A list is taken to end at a blank line followed by an unindented line, and
-    at a heading, a fence or a rule. Trailing spaces are not counted. A limit below 1 is refused.
+    is never wrapped. A list is taken to end at an unindented line that follows a blank line, a
+    closed fence or a rule, and at an unindented heading, fence or rule. Trailing spaces are not
+    counted. A limit below 1 is refused.
     What this cannot see: a heading underlined with `===` is held to the limit as prose, a
     block indented by a tab or with no blank line before it is not taken for code, and an address
     with no scheme is counted.
@@ -190,21 +191,23 @@ function Test-Markdown {
     for ($i = 0; $i -lt $Lines.Count; $i++) {
         $line = $Lines[$i] -replace '^(\s*>)+\s?'
         if ($fence) {
-            if ($line -match "^\s*$([regex]::Escape($fence))+\s*$") { $fence = $null }
+            # A closed fence leaves no paragraph to continue, as a blank line leaves none.
+            if ($line -match "^\s*$([regex]::Escape($fence))+\s*$") { $fence = $null; $blankBefore = $true }
             continue
         }
         # For the length rule alone: whether the line is in a list item, and whether it is an
         # indented code block. Read here, before a fence or a table takes the line, since either
-        # ends a list, as a heading or a rule does. An unindented line with no blank line before
-        # it is a lazy continuation of the item, and ends nothing.
+        # ends a list, as an unindented heading or rule does. An unindented line straight after a
+        # line of the item's text is a lazy continuation, and ends nothing; after a blank line, a
+        # closed fence or a rule there is no text to continue, and it ends the list.
         if ($MaxLineLength -gt 0) {
+            $rule = $line -match '^\s*([-*_])(\s*\1){2,}\s*$'
             if ($line -match '\S') {
-                $rule = $line -match '^\s*([-*_])(\s*\1){2,}\s*$'
                 if (-not $rule -and $line -match '^\s{0,3}(?:[-*+]|\d+[.)])\s') { $inItem = $true }
                 elseif ($line -match '^\S' -and ($blankBefore -or $rule -or $line -match '^(#{1,6}\s|`{3,}|~{3,})')) { $inItem = $false }
                 $code = $line -match '^\s{4}' -and -not $inItem -and ($blankBefore -or $code)
             }
-            $blankBefore = $line -notmatch '\S'
+            $blankBefore = $rule -or $line -notmatch '\S'
         }
         if ($line -match '^\s*(`{3,}|~{3,})') { . $flush; $fence = $Matches[1]; $fenceLine = $i + 1; continue }
 
@@ -428,7 +431,9 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
             $afterTable = @(& $long "- item`n`n| a | b |`n|---|---|`n`n    $wide" 40)
             $afterRule = @(& $long "- item`n`n* * *`n`n    $wide" 40)
             $lazy = @(& $long "- item`nlazy line`n`n    $wide" 40)
-            $afterTable.Count -eq 0 -and $afterRule.Count -eq 0 -and $lazy.Count -eq 1 -and $lazy[0] -match '^4: the line is 63 characters' } }
+            # After a fence closes there is no paragraph left to continue, so the line ends the list.
+            $afterFence = @(& $long "- item`n`n  ``````text`n  code`n  ```````nunindented`n`n    $wide" 40)
+            $afterTable.Count -eq 0 -and $afterRule.Count -eq 0 -and $afterFence.Count -eq 0 -and $lazy.Count -eq 1 -and $lazy[0] -match '^4: the line is 63 characters' } }
         @{ Name = 'a <placeholder> is counted, where an <https:> address is not'; Test = {
             $f = @(& $long "$('word ' * 7)<owner>/<repo>`n`n$('word ' * 7)<https://example.com/a>" 40)
             $f.Count -eq 1 -and $f[0] -match '^1: the line is 49 characters' } }
