@@ -13,7 +13,7 @@
     a note rendered wrongly, and a reviewer had to find it. It reads the repository it is run in,
     which need not be the one that holds it, and from any directory inside that repository it
     reads the same files and says the same. In grado-factorio-tools, which holds it,
-    scripts/check.ps1 runs it with -All.
+    scripts/check.ps1 runs it with -All and a line limit.
 
     WHAT IT READS AS WHAT. A paragraph ends at a blank line, a heading, a list item, a table or a
     fenced code block; nothing inside a fence is read, and a fence never closed is reported. A
@@ -30,16 +30,20 @@
     LINE LENGTH, ONLY WHEN HANDED A LIMIT (grado-factorio-tools#93). With no -MaxLineLength the
     check is silent on length, so a repository that never asked is not held to one. With it, a
     line longer than the limit is reported with its length, counted as written less the target
-    of each `[text](target)` link and each bare address, neither of which can be wrapped. Not
-    held to it: a table row, a line in a fence, a heading, a `[label]: target` line, a line
-    indented four spaces after a blank one outside a list, which is a code block, and a line with
-    no space to break at within the limit. A space inside a code span is no such place, so a
-    command in one is never wrapped. It cannot tell a line that is over only by trailing spaces
-    from one that fits: trailing spaces are not counted.
+    of each `[text](target)` link and each address, `https://...` bare or `<scheme:...>` in
+    angle brackets, none of which can be wrapped. A `<placeholder>` is counted. Not held to it: a
+    table row, a line in a fence, a `# heading`, a `[label]: target` line, a line indented four
+    spaces after a blank one outside a list, which is a code block, and a line with no space to
+    break at within the limit. A space inside a code span is no such place, so a command in one
+    is never wrapped. A list is taken to end at a blank line followed by an unindented line, and
+    at a heading, a fence or a rule. Trailing spaces are not counted. A limit below 1 is refused.
+    What this cannot see: a heading underlined with `===` is held to the limit as prose, a
+    block indented by a tab or with no blank line before it is not taken for code, and an address
+    with no scheme is counted.
 
     WHAT IT CANNOT SEE. Prose: numbers, dates and quantifiers stay the reviewer's. Whether a
     `#fragment` names a heading. A code block made by
-    indenting, which is read as text. Emphasis that closes in the wrong place, or that a bullet nested in a
+    indenting, which all but the length rule read as text. Emphasis that closes in the wrong place, or that a bullet nested in a
     numbered item leaves open and the next numbered item closes. Markdown outside
     `.md` files. A link whose target a commit deletes or renames, unless the linking file is
     staged too: -All sees it. A link into a submodule is asked of the working tree, so neither its
@@ -54,7 +58,8 @@
     Check every tracked Markdown file, as staged.
 
 .PARAMETER MaxLineLength
-    Also report a prose line longer than this many characters. Without it, length is not read.
+    Also report a prose line longer than this many characters, 1 or more. Without it, length is
+    not read.
 
 .PARAMETER SelfTest
     Run the cases that hold the check to what this header says, naming each as it runs. Needs git,
@@ -188,6 +193,19 @@ function Test-Markdown {
             if ($line -match "^\s*$([regex]::Escape($fence))+\s*$") { $fence = $null }
             continue
         }
+        # For the length rule alone: whether the line is in a list item, and whether it is an
+        # indented code block. Read here, before a fence or a table takes the line, since either
+        # ends a list, as a heading or a rule does. An unindented line with no blank line before
+        # it is a lazy continuation of the item, and ends nothing.
+        if ($MaxLineLength -gt 0) {
+            if ($line -match '\S') {
+                $rule = $line -match '^\s*([-*_])(\s*\1){2,}\s*$'
+                if (-not $rule -and $line -match '^\s{0,3}(?:[-*+]|\d+[.)])\s') { $inItem = $true }
+                elseif ($line -match '^\S' -and ($blankBefore -or $rule -or $line -match '^(#{1,6}\s|`{3,}|~{3,})')) { $inItem = $false }
+                $code = $line -match '^\s{4}' -and -not $inItem -and ($blankBefore -or $code)
+            }
+            $blankBefore = $line -notmatch '\S'
+        }
         if ($line -match '^\s*(`{3,}|~{3,})') { . $flush; $fence = $Matches[1]; $fenceLine = $i + 1; continue }
 
         # Links, on every line outside a fence. Code spans are blanked first: a path in one is no link.
@@ -232,12 +250,7 @@ function Test-Markdown {
         # A line indented four spaces after a blank one is a code block, and quoted output cannot be
         # wrapped; inside a list item the same indent is the item's next paragraph, and is counted.
         if ($MaxLineLength -gt 0) {
-            if ($line -match '\S') {
-                if ($line -match '^\s{0,3}(?:[-*+]|\d+[.)])\s') { $inItem = $true } elseif ($line -match '^\S') { $inItem = $false }
-                $code = $line -match '^\s{4}' -and -not $inItem -and ($blankBefore -or $code)
-            }
-            $blankBefore = $line -notmatch '\S'
-            $counted = [regex]::Replace($Lines[$i].TrimEnd(), '(?<=\])\([^)\s]*(\s+"[^"]*")?\)|<[a-zA-Z][^>\s]*>|https?://[^\s)>]+', '')
+            $counted = [regex]::Replace($Lines[$i].TrimEnd(), '(?<=\])\([^)\s]*(\s+"[^"]*")?\)|<[a-zA-Z][a-zA-Z0-9+.-]*:[^>\s]*>|https?://[^\s)>]+', '')
             if ($counted.Length -gt $MaxLineLength -and -not $code -and $line -notmatch '^\s{0,3}#{1,6}\s' -and $prose -notmatch '^\s{0,3}\[[^\]^][^\]]*\]:') {
                 $lead = [regex]::Match($counted, '^(\s*>)*\s*(([-*+]|\d+[.)])\s+)?').Length
                 $solid = [regex]::Replace($counted, '(`+)(?:(?!\1).)+?\1', { param($m) 'x' * $m.Length })
@@ -410,6 +423,18 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
             $wide = 'word ' * 12
             $f = @(& $long "text`n`n    $wide`n    $wide`n`ntext`n`n- item`n`n    $wide" 40)
             $f.Count -eq 1 -and $f[0] -match '^10: the line is 63 characters' } }
+        @{ Name = 'a table or a rule ends a list, so a code block after it is not held to the limit; a lazy line does not, so the item''s next paragraph is'; Test = {
+            $wide = 'word ' * 12
+            $afterTable = @(& $long "- item`n`n| a | b |`n|---|---|`n`n    $wide" 40)
+            $afterRule = @(& $long "- item`n`n* * *`n`n    $wide" 40)
+            $lazy = @(& $long "- item`nlazy line`n`n    $wide" 40)
+            $afterTable.Count -eq 0 -and $afterRule.Count -eq 0 -and $lazy.Count -eq 1 -and $lazy[0] -match '^4: the line is 63 characters' } }
+        @{ Name = 'a <placeholder> is counted, where an <https:> address is not'; Test = {
+            $f = @(& $long "$('word ' * 7)<owner>/<repo>`n`n$('word ' * 7)<https://example.com/a>" 40)
+            $f.Count -eq 1 -and $f[0] -match '^1: the line is 49 characters' } }
+        @{ Name = 'a limit of 0 or less is refused, not taken as no limit'; Test = {
+            $zero = & $run $temp @('-MaxLineLength', '0')
+            $zero.Code -eq 1 -and $zero.Text -match '-MaxLineLength must be 1 or more' } }
         @{ Name = 'a link target, a bare address and a [label]: line are not counted, and the text around them is'; Test = {
             $target = 'there.md#' + ('a' * 60)
             $passes = @(& $long "see [this]($target) and https://example.com/$('b' * 60) too`n`n[label]: $target" 40)
@@ -443,6 +468,8 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
 }
 
 if ($SelfTest) { Invoke-SelfTest }
+# A limit that came out as 0 must not pass for a limit that was never asked for.
+if ($PSBoundParameters.ContainsKey('MaxLineLength') -and $MaxLineLength -lt 1) { throw '-MaxLineLength must be 1 or more. Leave it out for no limit.' }
 
 # git lists and reads from the root, so every path is the one it has there, whatever directory this
 # is run in: ls-files and ls-tree would otherwise answer for the current directory only.
