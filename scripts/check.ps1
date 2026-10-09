@@ -24,7 +24,9 @@
     THE TRACKED MARKDOWN IS READ BY markdown-check.ps1 -All (grado-factorio-tools#74). A page that
     moves leaves its links behind, and nothing else reads them. This script had a link check of
     its own until that one moved here; it asked the disk, in any case, and read no `[x]: path`
-    line. What is checked now, and what is not, is in that script's header.
+    line. What is checked now, and what is not, is in that script's header. It is handed
+    $MARKDOWN_LINE_LIMIT, so a prose line left unwrapped fails here (grado-factorio-tools#93); that
+    check is silent on length for a repository that hands it none.
 
     WHAT IT DOES NOT RUN. load-harness.ps1 -SelfTest, because it starts Factorio, and a CI runner
     has no game. After a change to the harness or to mod-info.ps1, which the harness reads
@@ -61,6 +63,8 @@ $SELF_TESTS = @('commit-check.ps1', 'fetch-mods.ps1', 'get-dump.ps1', 'markdown-
 $NEEDS_GAME = @('load-harness.ps1')
 # Bytes, with LF line endings; a page must be under its limit. Paths are from the repository root.
 $PAGE_LIMITS = [ordered]@{ 'CLAUDE.md' = 4000; 'docs/agents/code-review.md' = 3000 }
+# Characters a line of tracked Markdown prose may run to. What counts is in markdown-check.ps1's header.
+$MARKDOWN_LINE_LIMIT = 100
 
 $root = Split-Path $PSScriptRoot -Parent
 $failed = [System.Collections.Generic.List[string]]::new()
@@ -118,12 +122,12 @@ foreach ($page in $PAGE_LIMITS.Keys) {
 # read is a failure too: a run outside a repository must not pass for having had nothing to read.
 $clock.Restart()
 Push-Location $root
-try { $said = & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'markdown-check.ps1') -All 2>&1 | Out-String } finally { Pop-Location }
+try { $said = & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'markdown-check.ps1') -All -MaxLineLength $MARKDOWN_LINE_LIMIT 2>&1 | Out-String } finally { Pop-Location }
 $bad = $LASTEXITCODE -or $said -notmatch 'markdown-check: [1-9]\d* Markdown file'
-Write-Host "check: markdown-check.ps1 -All -- $($bad ? 'FAILED' : 'ok') $(& $took)"
+Write-Host "check: markdown-check.ps1 -All -MaxLineLength $MARKDOWN_LINE_LIMIT -- $($bad ? 'FAILED' : 'ok') $(& $took)"
 if ($bad) {
     $said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
-    $failed.Add('markdown-check.ps1 -All found something, or read no file')
+    $failed.Add("markdown-check.ps1 -All -MaxLineLength $MARKDOWN_LINE_LIMIT found something, or read no file")
 }
 
 Write-Host ''

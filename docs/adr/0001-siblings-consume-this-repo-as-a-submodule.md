@@ -21,7 +21,8 @@ The decision was taken against five constraints, established before the options 
   figure of 135 pull requests, quoted here and elsewhere without its subject, is
   `realistic-fusion-refreshed` alone; across the three repositories it is 144 (135, 6 and 3,
   recounted 2026-09-21). The constraint is unaffected — one author either way — but the number was
-  being read as a total. Designing for contributors who have not arrived would mean paying ceremony forever.
+  being read as a total. Designing for contributors who have not arrived would mean paying ceremony
+  forever.
 - **No action at a distance.** Editing a tool here must not change a sibling's behaviour until that
   sibling opts in. Deliberate version skew is not wanted; a half-finished edit silently becoming
   another repository's gate is.

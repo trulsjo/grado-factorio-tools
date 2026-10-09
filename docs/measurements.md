@@ -6,8 +6,8 @@ what was measured and the citation in a sentence, and points here for the rest.
 
 Moved from the script headers on 2026-10-06
 ([#68](https://github.com/trulsjo/grado-factorio-tools/issues/68)), because a header loads
-whenever its script is read and these records were between 9% and 41% of it. The wording of each record
-is the header's, reflowed. A record is dated and names its build; a newer build may answer
+whenever its script is read and these records were between 9% and 41% of it. The wording of each
+record is the header's, reflowed. A record is dated and names its build; a newer build may answer
 differently, and a new measurement is a new entry, not an edit to an old one.
 
 A game run recorded here as headless and isolated went through `scripts/load-harness.ps1` or its
