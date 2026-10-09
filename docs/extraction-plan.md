@@ -23,8 +23,8 @@ This file is an inventory, and — for whatever has moved — the record of wher
 
 Line counts and reference counts measured 2026-09-20 against
 `C:/src/factorio/realistic-fusion-refreshed`. "Project references" is
-`grep -ci "realistic-fusion\|rf-"` — a crude proxy for entanglement, but it separates *generic with a
-hardcoded path* from *generic in name only*. It undercounts: a script can be tied to the project
+`grep -ci "realistic-fusion\|rf-"` — a crude proxy for entanglement, but it separates *generic with
+a hardcoded path* from *generic in name only*. It undercounts: a script can be tied to the project
 through an assumed directory layout or an invariant without ever naming it.
 
 ## Candidates, least entangled first
@@ -78,9 +78,9 @@ the check at `5d3c561` and still prints the old rejection text.~~ **Both merged 
 column is what those bumps set, not what either `main` reads today. ~~**Both now pin `99d4b57`**,
 moved by `grado-factorio-modpack` `ad9ead7` on 2026-09-24 and by `realistic-fusion-refreshed`
 `84db1b6`, on that repository's `main` since PR #465 was merged on 2026-09-25 (see *The contract
-half* of *Expanded and contracted*).~~ **The pins differ since 2026-09-28:** each consumer moved off `99d4b57` to take the
-packer, `realistic-fusion-refreshed` to `fc322ff` and `grado-factorio-modpack` to `d09fba3` — see
-*The packer, expanded and contracted*.
+half* of *Expanded and contracted*).~~ **The pins differ since 2026-09-28:** each consumer moved off
+`99d4b57` to take the packer, `realistic-fusion-refreshed` to `fc322ff` and `grado-factorio-modpack`
+to `d09fba3` — see *The packer, expanded and contracted*.
 
 The modpack was wired first on purpose — it is the cheaper consumer to be wrong in, so a failure
 there would have been the mechanism rather than the other repository.
@@ -144,25 +144,26 @@ self-test fixture's name, twice, and its temp prefix, all renamed. They are:
 decisions, naming the project nowhere. The format did not have to be invented — each entry keeps
 the shape it had, and a `.psd1` takes the two hashtable literals verbatim, comments included.
 Measured: both literals lifted from `19e2d92` by AST into a `.psd1` resolve all seventeen —
-those sixteen and the old self-test fixture — identically through `-PinFile`, and `-SelfTest -PinFile` certifies that file's five lanes the
-way the old self-test certified its own. So #456 is a file move plus call sites. The self-test
-now brings a fixture manifest of its own, which is the one change to its first half; the credential
-path, `Protect-Token`, the `$Error` scrub and the sha1 checks are unchanged, halves 2 to 6 assert
-what they did — their child runs are only handed the fixture's `-PinFile` — and all six pass.
-`resolve-modpack.ps1` writes this format, and the chain runs with no glue: resolved, fetched and
-loaded on 2026-09-24, `Grado_NonChanging`'s 28 mods at 2.0.77 load and create a map.
+those sixteen and the old self-test fixture — identically through `-PinFile`, and
+`-SelfTest -PinFile` certifies that file's five lanes the way the old self-test certified its own.
+So #456 is a file move plus call sites. The self-test now brings a fixture manifest of its own,
+which is the one change to its first half; the credential path, `Protect-Token`, the `$Error` scrub
+and the sha1 checks are unchanged, halves 2 to 6 assert what they did — their child runs are only
+handed the fixture's `-PinFile` — and all six pass. `resolve-modpack.ps1` writes this format, and
+the chain runs with no glue: resolved, fetched and loaded on 2026-09-24, `Grado_NonChanging`'s 28
+mods at 2.0.77 load and create a map.
 
-**`scripts/load-harness.ps1` and `scripts/load-harness-lib.ps1`** — from `realistic-fusion-refreshed`
-at the same `19e2d92`: `load-check.ps1` (blob `ddf0672`, last changed `c3758f7`) and
-`factorio-lib.ps1` (blob `e7da675`, last changed `463aa6e`), on 2026-09-24,
+**`scripts/load-harness.ps1` and `scripts/load-harness-lib.ps1`** — from
+`realistic-fusion-refreshed` at the same `19e2d92`: `load-check.ps1` (blob `ddf0672`, last changed
+`c3758f7`) and `factorio-lib.ps1` (blob `e7da675`, last changed `463aa6e`), on 2026-09-24,
 [#16](https://github.com/trulsjo/grado-factorio-tools/issues/16).
 
-Taken from `factorio-lib.ps1` with names and code kept, and some doc comments trimmed to what is true outside that repository: `Resolve-FactorioExe`,
-`Get-FactorioDataDirectory`, `ConvertTo-NativeArgument`, `Invoke-Factorio`, `Write-FactorioTail`,
-`Remove-TempDirectory`, `Get-BundledMods`, `Resolve-BundledSelection`, `Write-ModList`,
-`Remove-ModJunctions`. `New-ModJunctions` takes a map of link name to source rather than a repo
-root and a list, because a harness does not know where the mods came from. The rest of that
-library did not move.
+Taken from `factorio-lib.ps1` with names and code kept, and some doc comments trimmed to what is
+true outside that repository: `Resolve-FactorioExe`, `Get-FactorioDataDirectory`,
+`ConvertTo-NativeArgument`, `Invoke-Factorio`, `Write-FactorioTail`, `Remove-TempDirectory`,
+`Get-BundledMods`, `Resolve-BundledSelection`, `Write-ModList`, `Remove-ModJunctions`.
+`New-ModJunctions` takes a map of link name to source rather than a repo root and a list, because a
+harness does not know where the mods came from. The rest of that library did not move.
 
 From `load-check.ps1`, the shape rather than the code: an isolated mod directory under temp, the
 mods junctioned or zipped in, a throwaway map, "exit 0 but no save" as a failure, and a
@@ -170,9 +171,9 @@ mods junctioned or zipped in, a throwaway map, "exit 0 but no save" as a failure
 `New-LoadHarness`, `Invoke-HarnessLoad`, `Invoke-HarnessDump` and `Remove-LoadHarness`, which a
 consumer dot-sources to run its own checks; `load-harness.ps1` is the same as a command, with
 `-Check` for a caller with one script to run. **Nothing of Realistic Fusion's own came across**:
-not the invariants (`check_prototypes()` runs them inside the game, on the map the harness creates), not the
-asset, containment, render, socket or mockup gates, and not `Find-MissingAssets`, which is generic but a
-check rather than harness and is a candidate of its own.
+not the invariants (`check_prototypes()` runs them inside the game, on the map the harness creates),
+not the asset, containment, render, socket or mockup gates, and not `Find-MissingAssets`, which is
+generic but a check rather than harness and is a candidate of its own.
 
 ### The contract half
 
@@ -238,9 +239,9 @@ is the pre-rebase form of `bf001d9`, which is on `main`. The file is blob `efb09
 
 **Why now:** `grado-factorio-modpack` grew a second, weaker zipper — `stage-pack.ps1`'s
 `Publish-PackZip` (grado-factorio-modpack#24, PR #56), which packed every file under the pack
-directory and checked only `x.y.z`. ~~So three zippers stand — the origin, `Publish-PackZip` and this
-one — until both rewires land.~~ **One stands since 2026-09-28**: both rewires landed and deleted
-the other two.
+directory and checked only `x.y.z`. ~~So three zippers stand — the origin, `Publish-PackZip` and
+this one — until both rewires land.~~ **One stands since 2026-09-28**: both rewires landed and
+deleted the other two.
 
 Of the seven references the grep counts, all seven are the self-test — its temp prefix, one comment,
 and five uses of `realistic-fusion-refreshed-core` as the fixture. The entanglement it missed is
@@ -315,26 +316,26 @@ the load harness on 2.0.77 on 2026-09-28, base only — 29 mods validated, a map
 self-test to stage a two-pack chain, as a real stage does.
 
 **The two pins differ since 2026-09-28.** `fc322ff` is where PR #22 (#19) merged; `d09fba3`
-carries #23's fix, `607ceef`, so `realistic-fusion-refreshed` packs with the name check that ignores case, and the
-modpack with the one that does not. Both are this file, at two commits, which is what a pin is
-for — not a copy. Moving `realistic-fusion-refreshed` onto #23 is a bump of its own, and its
-decision.
+carries #23's fix, `607ceef`, so `realistic-fusion-refreshed` packs with the name check that ignores
+case, and the modpack with the one that does not. Both are this file, at two commits, which is what
+a pin is for — not a copy. Moving `realistic-fusion-refreshed` onto #23 is a bump of its own, and
+its decision.
 
 **Nothing is left duplicated.** Checked here on 2026-09-29, against `realistic-fusion-refreshed`
-`main` at `433cc4b` and `grado-factorio-modpack` `main` at `5c89815`: `scripts/pack-mods.ps1` is gone
-from the first, `Publish-PackZip` is defined nowhere in the second, and outside `vendor/` neither
-writes a zip. The only zip code left in either reads or unpacks one: `bench-reactors.ps1` and
-`load-check.ps1 -FromZips` there, and `stage-pack`'s self-test in the modpack.
+`main` at `433cc4b` and `grado-factorio-modpack` `main` at `5c89815`: `scripts/pack-mods.ps1` is
+gone from the first, `Publish-PackZip` is defined nowhere in the second, and outside `vendor/`
+neither writes a zip. The only zip code left in either reads or unpacks one: `bench-reactors.ps1`
+and `load-check.ps1 -FromZips` there, and `stage-pack`'s self-test in the modpack.
 
 ## From the modpack
 
 **Ruled by Truls on 2026-10-08, on
 [#73](https://github.com/trulsjo/grado-factorio-tools/issues/73): all three move.** ~~Nothing has
-moved yet.~~ **All three are expanded, 2026-10-08, and none is contracted:** two copies of each stand until
-its contraction ticket lands. `grado-factorio-modpack` wrote the three in its PR #170, merged 2026-10-06, because
-their tickets were there. Each move is an expand-contract pair, a ticket here and one in the
-modpack, so no copy is left behind. ~~The order of the three is not ruled.~~ Ruled the same day:
-#74, #75, #76.
+moved yet.~~ **All three are expanded, 2026-10-08, and none is contracted:** two copies of each
+stand until its contraction ticket lands. `grado-factorio-modpack` wrote the three in its PR #170,
+merged 2026-10-06, because their tickets were there. Each move is an expand-contract pair, a ticket
+here and one in the modpack, so no copy is left behind. ~~The order of the three is not ruled.~~
+Ruled the same day: #74, #75, #76.
 
 | Script in `grado-factorio-modpack` | Lines | Last changed | Blob | Move | Contraction |
 |---|---|---|---|---|---|
@@ -353,9 +354,10 @@ counted by grep:
   below. No existing linter
   replaces it: grado-factorio-modpack#174, closed 2026-10-07.
 - **The dump cache** takes the repository root from its own path, which in a submodule is
-  `vendor/grado-factorio-tools`, and knows `.mod-cache/<Pack>`, `.dump-cache` and `stage-pack.ps1`. All of it becomes
-  parameters or is dropped. No gate calls it there, and the modpack is its one consumer:
-  `realistic-fusion-refreshed` dumps through its own `load-check.ps1` and does not call it.
+  `vendor/grado-factorio-tools`, and knows `.mod-cache/<Pack>`, `.dump-cache` and `stage-pack.ps1`.
+  All of it becomes parameters or is dropped. No gate calls it there, and the modpack is its one
+  consumer: `realistic-fusion-refreshed` dumps through its own `load-check.ps1` and does not call
+  it.
 - **The hook** takes the root the same way and holds `.mod-cache` as a literal. Its self-test
   reads the consumer's `.claude/settings.json`, which a submodule cannot supply, so the wiring
   stays with each consumer. `realistic-fusion-refreshed` ignores `.claude/*` and could not wire
@@ -368,9 +370,10 @@ lost its opening sentence, which the README's first line says, to make the room.
 ### The Markdown check, the expand half
 
 **`scripts/markdown-check.ps1`** — from `grado-factorio-modpack` at
-`4cc5805e35f42223ff3550a03fd67943b26b6349` (the file last changed in `fa61c15`; blob `a2d8ff8`), on 2026-10-08,
-[#74](https://github.com/trulsjo/grado-factorio-tools/issues/74). The modpack's copy and its
-`pre-commit` hook are untouched; grado-factorio-modpack#182 deletes the one and rewires the other.
+`4cc5805e35f42223ff3550a03fd67943b26b6349` (the file last changed in `fa61c15`; blob `a2d8ff8`), on
+2026-10-08, [#74](https://github.com/trulsjo/grado-factorio-tools/issues/74). The modpack's copy and
+its `pre-commit` hook are untouched; grado-factorio-modpack#182 deletes the one and rewires the
+other.
 
 No line of code changed but the closing message, which named the script by the path it had there.
 The header and one comment named two of the modpack's pages and its hook file, and now name none
@@ -387,6 +390,13 @@ finds, so each mode says below the root what it says at it, and `-SelfTest` has 
 case for it. The modpack's copy is as it was, and stays so until grado-factorio-modpack#182
 deletes it: its `pre-commit` hook runs at the root, where the two copies say the same. The
 header no longer says the script has to be run at the root.
+
+**Changed again 2026-10-09: an opt-in length limit**
+([#93](https://github.com/trulsjo/grado-factorio-tools/issues/93)). Handed `-MaxLineLength`, the
+check here also reports a prose line longer than that; handed none, it reports what it did
+before, so the modpack's `pre-commit` hook, which hands it none, would see no difference from
+this change. `check.ps1` here hands it 100. The modpack's copy has no such parameter, and the two
+copies now differ by this as well until grado-factorio-modpack#182.
 
 **`check.ps1`'s own relative-link check is replaced by it, not kept beside it.** `check.ps1` now
 runs the Markdown check with `-All`. What that changes for this repository's Markdown:
@@ -469,8 +479,8 @@ at `4cc5805`, though what that wiring reaches today is the modpack's own copy.
 > and it changes no version — the version is read out of the mod.
 
 The portal has a publish API that needs an API key (distinct from the `player-data.json` token
-`fetch-mods.ps1` uses for downloads). Writing it means deciding where the key lives and how a release
-is gated — neither decided.
+`fetch-mods.ps1` uses for downloads). Writing it means deciding where the key lives and how a
+release is gated — neither decided.
 
 ## Risks worth naming before anything moves
 

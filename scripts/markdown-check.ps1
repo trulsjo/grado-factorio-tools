@@ -2,8 +2,9 @@
 .SYNOPSIS
     Checks Markdown for three things a machine can decide: emphasis or a code span left open at
     the end of its paragraph, a table row whose column count differs from its header's, and a
-    link to a file in the repository that is not there. Exit 0 means none was found in the files
-    read; exit 1 names each as <file>:<line>: <what>.
+    link to a file in the repository that is not there. Handed -MaxLineLength, a fourth: a prose
+    line longer than that. Exit 0 means none was found in the files read; exit 1 names each as
+    <file>:<line>: <what>.
 
 .DESCRIPTION
     A PRE-COMMIT CHECK (grado-factorio-modpack#149, where it was written). Run with no arguments,
@@ -26,6 +27,16 @@
     scheme (`https:`, `mailto:`) or that is only a `#fragment` is not checked, and the rest must
     name a file or directory git tracks, in exact case, as GitHub serves it.
 
+    LINE LENGTH, ONLY WHEN HANDED A LIMIT (grado-factorio-tools#93). With no -MaxLineLength the
+    check is silent on length, so a repository that never asked is not held to one. With it, a
+    line longer than the limit is reported with its length, counted as written less the target
+    of each `[text](target)` link and each bare address, neither of which can be wrapped. Not
+    held to it: a table row, a line in a fence, a heading, a `[label]: target` line, a line
+    indented four spaces after a blank one outside a list, which is a code block, and a line with
+    no space to break at within the limit. A space inside a code span is no such place, so a
+    command in one is never wrapped. It cannot tell a line that is over only by trailing spaces
+    from one that fits: trailing spaces are not counted.
+
     WHAT IT CANNOT SEE. Prose: numbers, dates and quantifiers stay the reviewer's. Whether a
     `#fragment` names a heading. A code block made by
     indenting, which is read as text. Emphasis that closes in the wrong place, or that a bullet nested in a
@@ -41,6 +52,9 @@
 
 .PARAMETER All
     Check every tracked Markdown file, as staged.
+
+.PARAMETER MaxLineLength
+    Also report a prose line longer than this many characters. Without it, length is not read.
 
 .PARAMETER SelfTest
     Run the cases that hold the check to what this header says, naming each as it runs. Needs git,
@@ -58,6 +72,7 @@
 param(
     [string] $Range,
     [switch] $All,
+    [int] $MaxLineLength = 0,
     [switch] $SelfTest
 )
 
@@ -149,7 +164,8 @@ function Test-Markdown {
     param(
         [Parameter(Mandatory)] [AllowEmptyCollection()] [AllowEmptyString()] [string[]] $Lines,
         [Parameter(Mandatory)] [string] $Path,
-        [Parameter(Mandatory)] [scriptblock] $Exists
+        [Parameter(Mandatory)] [scriptblock] $Exists,
+        [int] $MaxLineLength = 0
     )
 
     $delimiter = '^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$'
@@ -165,6 +181,7 @@ function Test-Markdown {
     }
     $fence = $null
     $numbered = $false
+    $inItem = $false; $code = $false; $blankBefore = $true
     for ($i = 0; $i -lt $Lines.Count; $i++) {
         $line = $Lines[$i] -replace '^(\s*>)+\s?'
         if ($fence) {
@@ -208,6 +225,28 @@ function Test-Markdown {
             continue
         }
 
+        # Length, only where a limit was handed in: the line as written, less what cannot be wrapped.
+        # A heading and a `[label]: target` line cannot be broken at all, and neither can a line
+        # with no space at or before the limit, past its list marker and first word. A space inside
+        # a code span is no place to break: a command wrapped there is no longer the command.
+        # A line indented four spaces after a blank one is a code block, and quoted output cannot be
+        # wrapped; inside a list item the same indent is the item's next paragraph, and is counted.
+        if ($MaxLineLength -gt 0) {
+            if ($line -match '\S') {
+                if ($line -match '^\s{0,3}(?:[-*+]|\d+[.)])\s') { $inItem = $true } elseif ($line -match '^\S') { $inItem = $false }
+                $code = $line -match '^\s{4}' -and -not $inItem -and ($blankBefore -or $code)
+            }
+            $blankBefore = $line -notmatch '\S'
+            $counted = [regex]::Replace($Lines[$i].TrimEnd(), '(?<=\])\([^)\s]*(\s+"[^"]*")?\)|<[a-zA-Z][^>\s]*>|https?://[^\s)>]+', '')
+            if ($counted.Length -gt $MaxLineLength -and -not $code -and $line -notmatch '^\s{0,3}#{1,6}\s' -and $prose -notmatch '^\s{0,3}\[[^\]^][^\]]*\]:') {
+                $lead = [regex]::Match($counted, '^(\s*>)*\s*(([-*+]|\d+[.)])\s+)?').Length
+                $solid = [regex]::Replace($counted, '(`+)(?:(?!\1).)+?\1', { param($m) 'x' * $m.Length })
+                if ($solid.Substring($lead, [Math]::Max(0, $MaxLineLength + 1 - $lead)) -match '\S\s') {
+                    @{ Line = $i + 1; Message = "the line is $($counted.Length) characters, over the limit of $MaxLineLength, link targets and addresses not counted" }
+                }
+            }
+        }
+
         if ($line -notmatch '\S' -or $line -match '^\s*([-*_])(\s*\1){2,}\s*$') { . $flush; continue }
         if ($line -match '^\s{0,3}#{1,6}(\s|$)') { . $flush; $start = $i + 1; $paragraph.Add($line); . $flush; continue }
         # A number begins a list only as 1., so a wrapped line that begins "31. In" is still its
@@ -227,7 +266,7 @@ function Test-Markdown {
 function Invoke-Check {
     <#  Check the Markdown files git names, read at $Revision ('' is the index). Prints each
         finding and returns how many.  #>
-    param([string[]] $Files, [string] $Revision = '', [Parameter(Mandatory)] [string] $Top)
+    param([string[]] $Files, [string] $Revision = '', [Parameter(Mandatory)] [string] $Top, [int] $MaxLineLength = 0)
 
     $entries = if ($Revision) { git -C $Top -c core.quotepath=off ls-tree -r $Revision } else { git -C $Top -c core.quotepath=off ls-files -s }
     if ($LASTEXITCODE -ne 0) { throw "git could not list the files at '$Revision'." }
@@ -252,7 +291,7 @@ function Invoke-Check {
     foreach ($f in $Files | Where-Object { $_ -match '\.md$' }) {
         $lines = @(git -C $Top show "${Revision}:$f")
         if ($LASTEXITCODE -ne 0) { throw "git could not read ${Revision}:$f." }
-        foreach ($finding in Test-Markdown -Lines $lines -Path $f -Exists $exists | Sort-Object { $_.Line }) {
+        foreach ($finding in Test-Markdown -Lines $lines -Path $f -Exists $exists -MaxLineLength $MaxLineLength | Sort-Object { $_.Line }) {
             Write-Host "${f}:$($finding.Line): $($finding.Message)"
             $count++
         }
@@ -263,6 +302,7 @@ function Invoke-Check {
 function Invoke-SelfTest {
     $exists = { param($p) $p -cin 'docs', 'docs/there.md', 'README.md' }
     $find = { param([string] $text, [string] $path = 'docs/note.md') @(Test-Markdown -Lines ($text -split "`n") -Path $path -Exists $exists | ForEach-Object { "$($_.Line): $($_.Message)" }) }
+    $long = { param([string] $text, [int] $max) @(Test-Markdown -Lines ($text -split "`n") -Path 'docs/note.md' -Exists $exists -MaxLineLength $max | ForEach-Object { "$($_.Line): $($_.Message)" }) }
     $clean = @'
 # A title with `code_in_it` and a snake_case_name
 
@@ -360,6 +400,29 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
                 $same = $same -and $ok
             }
             $same } }
+        @{ Name = 'handed a limit, a prose line over it fails with its length and the limit, and one at the limit passes'; Test = {
+            $f = @(& $long "short`n$('word ' * 8)end`n$('word ' * 7)12345" 40)
+            $f.Count -eq 1 -and $f[0] -match '^2: the line is 43 characters, over the limit of 40' } }
+        @{ Name = 'a table row, a fenced line, a heading and a line with no space to break at outside a code span are not held to the limit'; Test = {
+            $wide = 'word ' * 12
+            @(& $long "| $wide | b |`n|---|---|`n| 1 | 2 |`n`n``````text`n$wide`n```````n`n## $wide`n`n- $('x' * 60)`n`n$('x' * 60) and more`n`n``$('gh pr ' * 10)`` and more" 40).Count -eq 0 } }
+        @{ Name = 'a line indented four spaces after a blank one is code and not held to the limit, unless it continues a list item'; Test = {
+            $wide = 'word ' * 12
+            $f = @(& $long "text`n`n    $wide`n    $wide`n`ntext`n`n- item`n`n    $wide" 40)
+            $f.Count -eq 1 -and $f[0] -match '^10: the line is 63 characters' } }
+        @{ Name = 'a link target, a bare address and a [label]: line are not counted, and the text around them is'; Test = {
+            $target = 'there.md#' + ('a' * 60)
+            $passes = @(& $long "see [this]($target) and https://example.com/$('b' * 60) too`n`n[label]: $target" 40)
+            $fails = @(& $long "$('word ' * 8)[this]($target)" 40)
+            $passes.Count -eq 0 -and $fails.Count -eq 1 -and $fails[0] -match '^1: the line is 46 characters' } }
+        @{ Name = 'handed no limit, a long line is not reported, by the function or by a run'; Test = {
+            Set-Content -LiteralPath (Join-Path $temp 'long.md') -Value ('word ' * 30)
+            git -C $temp add long.md
+            $silent = & $run $temp @()
+            $held = & $run $temp @('-MaxLineLength', '100')
+            Write-Host ($held.Text.TrimEnd() -replace '(?m)^', '    ')
+            @(& $find ('word ' * 30)).Count -eq 0 -and $silent.Code -eq 0 -and $silent.Text -notmatch 'characters' -and
+                $held.Code -eq 1 -and $held.Text -match '(?m)^long\.md:1: the line is 149 characters, over the limit of 100' } }
     )
 
     $failures = 0
@@ -398,7 +461,7 @@ else {
 if ($LASTEXITCODE -ne 0) { throw 'git could not list the files to check.' }
 $files = @($files | Where-Object { $_ -match '\.md$' })
 
-$found = Invoke-Check -Files $files -Revision $revision -Top $top
+$found = Invoke-Check -Files $files -Revision $revision -Top $top -MaxLineLength $MaxLineLength
 if ($found) {
     Write-Host ''
     Write-Host "FAILED - markdown-check: $found finding(s) in $($files.Count) Markdown file(s). What it reads as what: the header of markdown-check.ps1."

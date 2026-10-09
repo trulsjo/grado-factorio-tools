@@ -44,10 +44,11 @@ Three things, in the order Truls named them:
    Here: `fetch-mods.ps1` fills a cache with third-party mods at pinned versions, git first and the
    portal as fallback, and `load-harness.ps1` loads a set of mods in isolation and says whether it
    loaded. A mod's own invariants stay in its own repository and run on top — see below.
-2. **Technology tree viewer** — renders a mod set's tech tree as a self-contained zoomable HTML page.
-3. **Mod portal upload** — **does not exist yet, anywhere.** `pack-mods.ps1` builds the zips and says
-   so in its own header: *"It uploads nothing and it changes no version."* This repo is where that
-   machinery gets written.
+2. **Technology tree viewer** — renders a mod set's tech tree as a self-contained zoomable HTML
+   page.
+3. **Mod portal upload** — **does not exist yet, anywhere.** `pack-mods.ps1` builds the zips and
+   says so in its own header: *"It uploads nothing and it changes no version."* This repo is where
+   that machinery gets written.
 
 Likely to follow, because they are about *a* Factorio mod rather than *this* Factorio mod: the
 locale and prototype-name checks, and the parts of the shared PowerShell library that are not
@@ -169,6 +170,13 @@ wants; `-Range` reads the files a range changed, and `-All` every tracked one. I
 repository it is run in, so a consumer runs it from the submodule on its own Markdown.
 `scripts/check.ps1` runs it here with `-All`. `-SelfTest` proves each of the three can fail. What
 it reads as what, and what it cannot see, is in its header.
+
+    pwsh -File scripts/markdown-check.ps1 -All -MaxLineLength 100
+
+Handed `-MaxLineLength`, it also reports a prose line longer than that; without it, it is silent
+on length. `scripts/check.ps1` hands it 100 here. Neither sibling is asked to: counted on
+2026-10-09 by a throwaway script, `grado-factorio-modpack` had 326 such lines and
+`realistic-fusion-refreshed` 3,091.
 
 ## What does not belong here
 

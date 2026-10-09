@@ -50,8 +50,8 @@ calls both fix commits; the history shows PR #81's was its first.
 a fix commit and what it says of a script, and the second row above was outside both limits: a
 pull request's first commit, about a shell command. The rule now binds any commit the session
 pushes, and a command as well as a script, so both rows are inside it. It does not say "to a pull
-request", as the ticket did: PR #81's first commit was made about five minutes before that pull request
-was opened.
+request", as the ticket did: PR #81's first commit was made about five minutes before that pull
+request was opened.
 
 The room came from three sentences the rules page carried beside its rules, each a figure the
 list at the head of this section already held: that each session had run the review twice, that
