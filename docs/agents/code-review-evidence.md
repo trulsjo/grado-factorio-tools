@@ -92,6 +92,25 @@ the modpack did on its own.
 2. **Review the prose, not only the code** — decided 2026-09-03, widened 2026-09-14 settling
    [realistic-fusion-refreshed#331](https://github.com/trulsjo/realistic-fusion-refreshed/issues/331).
 
+**The first of them changed here on 2026-10-09**, ruled by Truls and settling
+[#91](https://github.com/trulsjo/grado-factorio-tools/issues/91). The threshold no longer gates
+the comment. Each review posts one comment on the pull request with every finding that survived
+verification, and 80 decides what must be fixed. This repository departs from
+`realistic-fusion-refreshed` in that; neither sibling's rules were read for the change, and
+neither changes. The sections below this one argue for the rule as it was adopted, and are left
+as they stood.
+
+Why: the report a filtered finding went into was the session's, and that is not kept. Measured
+on 2026-10-09 across the four reviews of PR #85 and PR #90:
+
+- No finding reached 80, so nothing was posted. `gh pr view <n> --json comments,reviews` held no
+  comment and no review for either.
+- This page cites that record, "four findings scored 50, 25, 25 and 25", and the second review of
+  PR #90 could not check it against the repository or GitHub.
+- Both pull request bodies carried a paragraph saying the review "ran once". A second review made
+  that false each time, and each time it was that review's highest finding, at 50. So the body
+  no longer recounts the review; the tracker page says so.
+
 ## Why the threshold cannot be read as "these findings do not matter"
 
 The `/code-review` workflow scores each candidate finding and drops anything below 80. The rubric

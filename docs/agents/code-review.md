@@ -21,13 +21,13 @@ measured, and the past findings behind each rule, are in
 
 ## What is reported
 
-- **Report every finding that survived verification, whatever it scored.** Post to the pull
-  request only what scores 80 or more. The rubric has no value between 75 and 100, so the filter
-  drops findings that are verified and real.
-- **A review that posts nothing still names each finding, its score, and whether it was
-  verified.** A silent pass and a filtered pass must never look the same.
-- **Do not re-score to get a finding posted.** Say it matters and let a human decide: an inflated
-  score destroys the only signal the score carries.
+- **Each review posts one comment on the pull request** once its findings are acted on: every
+  finding that survived verification, its score, whether it was verified and its outcome. A
+  review with no finding says so there.
+- **A finding at 80 or more must be fixed; the rest are recorded.** The rubric has no value
+  between 75 and 100, so the bar passes over findings that are verified and real.
+- **Do not re-score to make a finding binding.** Say it matters and let a human decide: an
+  inflated score destroys the only signal the score carries.
 
 ## Review the prose, not only the code
 
