@@ -89,6 +89,7 @@ the modpack did on its own.
 
 1. **The threshold gates the comment, not the report** — decided 2026-08-26, settling
    [realistic-fusion-refreshed#128](https://github.com/trulsjo/realistic-fusion-refreshed/issues/128).
+   Changed here on 2026-10-09; see below the list.
 2. **Review the prose, not only the code** — decided 2026-09-03, widened 2026-09-14 settling
    [realistic-fusion-refreshed#331](https://github.com/trulsjo/realistic-fusion-refreshed/issues/331).
 
@@ -97,8 +98,10 @@ the modpack did on its own.
 the comment. Each review posts one comment on the pull request with every finding that survived
 verification, and 80 decides what must be fixed. This repository departs from
 `realistic-fusion-refreshed` in that; neither sibling's rules were read for the change, and
-neither changes. The sections below this one argue for the rule as it was adopted, and are left
-as they stood.
+neither changes. The comment is posted once the findings are acted on, so that it carries each
+outcome, and is not edited afterwards. The plugin's own comment, "No issues found", is not used:
+the table is. Below, the section on the threshold and the last section argue for the rule as
+it was adopted; each sentence there that the change overtook is struck through and dated.
 
 Why: the report a filtered finding went into was the session's, and that is not kept. Measured
 on 2026-10-09 across the four reviews of PR #85 and PR #90:
@@ -123,8 +126,9 @@ rubric itself defines as
 
 is discarded by construction. A finding can be verified, important, and dropped.
 
-The threshold is deliberately conservative and stays where it is, which is why the rule is to
-report a filtered finding and not to re-score it.
+The threshold is deliberately conservative and stays where it is, ~~which is why the rule is to
+report a filtered finding and not to re-score it~~. **Changed 2026-10-09** (#91): every finding
+is on the pull request, 80 decides what must be fixed, and the rule is still not to re-score.
 
 **Measured here, on the first pull request this repository ever had.**
 [PR #5](https://github.com/trulsjo/grado-factorio-tools/pull/5): five review lanes, eight findings,
@@ -189,7 +193,8 @@ not this repository's to edit, and editing a cache would be undone by the next p
 this is a convention, and `CLAUDE.md` points at the rules page so a review session loads it before
 running.
 
-Nothing about the rubric or the 80 is changed. The reporting rule drops one assumption — that a
-filtered finding is a discarded one. The prose rules add one obligation the rubric never mentions,
-because a plugin that reviews code cannot know that here there was once no code at all. Since
-2026-10-06 the lanes and who scores are changed too, as the first section says.
+Nothing about the rubric or the 80 is changed. ~~The reporting rule drops one assumption — that a
+filtered finding is a discarded one.~~ **Changed 2026-10-09** (#91): no finding is filtered from
+the pull request, and 80 decides what must be fixed. The prose rules add one obligation the rubric
+never mentions, because a plugin that reviews code cannot know that here there was once no code at
+all. Since 2026-10-06 the lanes and who scores are changed too, as the first section says.
