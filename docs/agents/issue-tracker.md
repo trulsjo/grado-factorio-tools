@@ -5,6 +5,15 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 ## Conventions
 
 - **Create an issue**: `gh issue create --title "..." --body "..."`. Write a multi-line body to a file and pass `--body-file <path>`; the same goes for `gh issue comment` and `gh pr create`. Write the file with the Write tool: a heredoc that writes the file is no safer. On 2026-10-08 one command of three such heredocs, 118 lines meant to write the bodies of what became #74, #75 and #76, failed here under the Bash tool with `unexpected EOF while looking for matching '` (recorded on PR #81), and `realistic-fusion-refreshed`'s tracker page (read 2026-10-08) records heredoc bodies failing with the same message.
+- **A figure in a ticket carries the command that gave it**: a number, a count, a size, a commit,
+  or the date of a measurement is followed by the command that printed it, or by where it was
+  read and when. A figure with no command, such as one a harness reported in a session, says so,
+  with the date. The session that implements the ticket runs the command before it copies the
+  figure anywhere; if the two disagree, the page gets what the command printed and the pull
+  request says the ticket was wrong. On 2026-10-09 #87's ticket gave PR #85's first review the
+  merged pull request's line counts, 79 added and 27 deleted, where
+  `git diff --shortstat 49b0332~1 ac1108d` gives 73 and 24, and the figure reached a page before
+  a review caught it.
 - **Read an issue**: `gh issue view <number> --comments`, filtering comments by `jq` and also fetching labels.
 - **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.
 - **Comment on an issue**: `gh issue comment <number> --body "..."`
