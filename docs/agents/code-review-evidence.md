@@ -56,6 +56,26 @@ list at the head of this section already held: that each session had run the rev
 up to 14 subagents a review had posted two comments across eight pull requests, and that the two
 dropped lanes came back empty in nearly every review. Nothing had to move here.
 
+**A second review of review fixes is run by one agent.** Ruled by Truls on 2026-10-09, settling
+[#87](https://github.com/trulsjo/grado-factorio-tools/issues/87): when each commit since the last
+review answers one of its findings, whatever the size, one fresh agent runs both lanes. On
+[PR #85](https://github.com/trulsjo/grado-factorio-tools/pull/85) the second review cost about as
+much as the first and found nothing in the commit it read. The figures are that ticket's, from
+the token counts and durations the session's harness reported for each lane on 2026-10-09, and
+were not measured again when this was written.
+
+| review | what it read | bug scan | prose lane |
+|---|---|---|---|
+| first | 8 files, 79 lines added and 27 deleted | 80,284 tokens, 352 s | 106,510 tokens, 463 s |
+| second | the fix commit, 4 files, 18 lines added and 15 deleted, and the pull request body | 59,769 tokens, 811 s | 80,555 tokens, 920 s |
+
+The second review's four findings scored 50, 25, 25 and 25, and the 50 was a sentence in the pull
+request body, "ran once", that the second review itself made false. One agent is kept, and not
+none, because of PR #78's row in the table before this one: there a second review, of the fix
+commit only, found a real defect. Not ruled: whether a review's agent runs
+`scripts/check.ps1` again when CI has passed on the same commit. Both lanes of that second review
+did.
+
 ## Where the first two rules came from
 
 Both were decided by Truls in the sibling
