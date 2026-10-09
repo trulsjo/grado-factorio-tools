@@ -49,7 +49,9 @@ calls both fix commits; the history shows PR #81's was its first.
 [#86](https://github.com/trulsjo/grado-factorio-tools/issues/86). As #84 wrote it, the rule bound
 a fix commit and what it says of a script, and the second row above was outside both limits: a
 pull request's first commit, about a shell command. The rule now binds any commit the session
-pushes to a pull request, and a command as well as a script, so both rows are inside it.
+pushes, and a command as well as a script, so both rows are inside it. It does not say "to a pull
+request", as the ticket did: PR #81's first commit was made about five minutes before that pull request
+was opened.
 
 The room came from three sentences the rules page carried beside its rules, each a figure the
 list at the head of this section already held: that each session had run the review twice, that
@@ -60,13 +62,15 @@ dropped lanes came back empty in nearly every review. Nothing had to move here.
 [#87](https://github.com/trulsjo/grado-factorio-tools/issues/87): when each commit since the last
 review answers one of its findings, whatever the size, one fresh agent runs both lanes. On
 [PR #85](https://github.com/trulsjo/grado-factorio-tools/pull/85) the second review cost about as
-much as the first and found nothing in the commit it read. The figures are that ticket's, from
-the token counts and durations the session's harness reported for each lane on 2026-10-09, and
-were not measured again when this was written.
+much as the first and found nothing above 25 in the commit it read. The token counts and
+durations are that ticket's, as the session's harness reported them for each lane on 2026-10-09,
+and were not measured again when this was written. The ticket gave the first review 79 lines
+added and 27 deleted, which is the pull request as merged, fix commit included; the row below
+has what was on the branch when that review ran.
 
 | review | what it read | bug scan | prose lane |
 |---|---|---|---|
-| first | 8 files, 79 lines added and 27 deleted | 80,284 tokens, 352 s | 106,510 tokens, 463 s |
+| first | the three commits then on the branch: 8 files, 73 lines added and 24 deleted | 80,284 tokens, 352 s | 106,510 tokens, 463 s |
 | second | the fix commit, 4 files, 18 lines added and 15 deleted, and the pull request body | 59,769 tokens, 811 s | 80,555 tokens, 920 s |
 
 The second review's four findings scored 50, 25, 25 and 25, and the 50 was a sentence in the pull
