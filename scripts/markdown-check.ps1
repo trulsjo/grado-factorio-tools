@@ -38,19 +38,22 @@
     limit below 1 is refused.
     WHICH LINES ARE AN INDENTED CODE BLOCK IS ASKED OF POWERSHELL'S PARSER, ConvertFrom-Markdown
     (grado-factorio-tools#95), and of nothing here: the script follows no list, blank line or
-    rule to work it out. Fences, tables and headings are still read by this script, as they are with no
-    limit. The parser is not GitHub's renderer. On 2026-10-10, pwsh 7.6.6, the two agreed on 22
-    of 24 shapes run through both. They differed on a line indented four spaces after a rule
-    that is itself indented into a list item, which the parser calls code and GitHub the item's
-    paragraph; and after a `term` line followed by a `:   definition` line, which the parser
-    reads as a definition list, so the indented line is not code to it and is to GitHub.
+    rule to work it out. Fences, tables and headings are still read by this script, as they are
+    with no limit. The parser is not GitHub's renderer, and where the two disagree the check
+    follows the parser. Four shapes were found where they do, each an indented line (2026-10-10,
+    docs/measurements.md). Code to the parser and prose to GitHub: after a rule that is itself
+    indented into a list item, and straight after a `^^^` or a `:::` line. Prose to the parser
+    and code to GitHub: after a `term` line and a `:   definition` line, and on a first line
+    that follows a byte-order mark.
+    A page the parser gives up on, which it does on one nested too deep or holding a very large
+    table, is said to be unread by it, and then no line of the page is taken for code.
     What this cannot see: a heading underlined with `===` is held to the limit as prose, and an
     address with no scheme is counted.
 
     WHAT IT CANNOT SEE. Prose: numbers, dates and quantifiers stay the reviewer's. Whether a
-    `#fragment` names a heading. A code block made by
-    indenting, which all but the length rule read as text. Emphasis that closes in the wrong place, or that a bullet nested in a
-    numbered item leaves open and the next numbered item closes. Markdown outside
+    `#fragment` names a heading. A code block made by indenting, which all but the length rule
+    read as text. Emphasis that closes in the wrong place, or that a bullet nested in a numbered
+    item leaves open and the next numbered item closes. Markdown outside
     `.md` files. A link whose target a commit deletes or renames, unless the linking file is
     staged too: -All sees it. A link into a submodule is asked of the working tree, so neither its
     case nor whether git tracks it is checked; into one not initialised it is said to be unchecked,
@@ -196,9 +199,12 @@ function Test-Markdown {
     # code block, counted from 0. The parser is asked, and nothing here follows lists, blank lines
     # or rules to work it out (grado-factorio-tools#95). A fenced block has a type of its own.
     $codeLines = [System.Collections.Generic.HashSet[int]]::new()
-    if ($MaxLineLength -gt 0 -and $Lines -match '\S') {
+    if ($MaxLineLength -gt 0) {
         $pending = [System.Collections.Generic.Stack[object]]::new()
-        $pending.Push((ConvertFrom-Markdown -InputObject ($Lines -join "`n")).Tokens)
+        # The parser has a depth limit and throws past it. That must not end the run with no file
+        # named, nor pass the page: it is held to the limit with nothing exempt as code.
+        try { $pending.Push((ConvertFrom-Markdown -InputObject ($Lines -join "`n")).Tokens) }
+        catch { Write-Host "markdown-check: ${Path}: PowerShell's parser could not read it, so no line of it was taken for code: $($_.Exception.Message)" }
         while ($pending.Count) {
             $block = $pending.Pop()
             if ($block.GetType().Name -eq 'CodeBlock') { for ($l = 0; $l -lt $block.Lines.Count; $l++) { $null = $codeLines.Add($block.Line + $l) } }
@@ -441,9 +447,16 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
             $quoted = @(& $long "> text`n>`n>     $wide" 40)
             $inItem = @(& $long "1. item`n`n       $wide`n`n       $wide" 40)
             $noBlank = @(& $long "text`n    $wide" 40)
-            $empty = @(& $long '' 40)
-            $tab.Count -eq 0 -and $quoted.Count -eq 0 -and $inItem.Count -eq 0 -and $empty.Count -eq 0 -and
-                $noBlank.Count -eq 1 -and $noBlank[0] -match '^2: the line is 63 characters' } }
+            # The line straight after a block is prose again: the block must not run one line long.
+            $after = @(& $long "text`n`n    $wide`n$wide" 40)
+            $tab.Count -eq 0 -and $quoted.Count -eq 0 -and $inItem.Count -eq 0 -and @(& $long '' 40).Count -eq 0 -and
+                $noBlank.Count -eq 1 -and $noBlank[0] -match '^2: the line is 63 characters' -and
+                $after.Count -eq 1 -and $after[0] -match '^4: the line is 59 characters' } }
+        @{ Name = 'a page the parser gives up on is still held to the limit, with no line of it taken for code'; Test = {
+            $wide = 'word ' * 12
+            $deep = (0..89 | ForEach-Object { ('  ' * $_) + '- x' }) -join "`n"
+            $f = @(& $long "$deep`n`ntext`n`n    $wide" 40)
+            $f.Count -eq 1 -and $f[0] -match '^94: the line is 63 characters' } }
         @{ Name = 'a heading underlined with === is held to the limit as prose'; Test = {
             @(& $long "$('word ' * 12)`n===" 40).Count -eq 1 } }
         @{ Name = 'a <placeholder> is counted, where an <https:> address is not'; Test = {

@@ -176,3 +176,61 @@ What that shows is that the time follows the load on the machine and not anythin
 What it does not show is why the machine is slower when quiet. It runs Microsoft Defender for
 Endpoint with real-time and behaviour monitoring on, which scans each process as it starts; that
 was not turned off to see, so it is a likely cause and not a measured one.
+
+## `markdown-check.ps1`
+
+### Which indented lines PowerShell's parser and GitHub's renderer call code
+
+Measured 2026-10-10 (grado-factorio-tools#95), with pwsh 7.6.6 on the development machine. The
+length rule asks `ConvertFrom-Markdown` which lines are an indented code block, and a page is
+read on GitHub, so the two were compared. Each shape below ends in a line holding the word
+`WIDE`. It was rendered both ways and counted as code where `WIDE` came out inside
+`<pre><code>`:
+
+    (ConvertFrom-Markdown -InputObject $text).Html
+    gh api markdown -f text=$text -f mode=gfm
+
+| The line with `WIDE` is indented | Parser | GitHub |
+|---|---|---|
+| four spaces, after text and a blank line | code | code |
+| four spaces, after a bullet item, a blank line, a rule indented two spaces and a blank line | code | **prose** |
+| four spaces, after the same and a paragraph below the rule | code | code |
+| four spaces, after a bullet item, a blank line, a rule at the margin and a blank line | code | code |
+| four spaces, after a bullet item and a blank line | prose | prose |
+| six spaces, after a bullet item and a blank line | code | code |
+| four spaces, after a `1.` item and a blank line | prose | prose |
+| seven spaces, after a `1.` item and a blank line | code | code |
+| five spaces, after a `10.` item and a blank line | prose | prose |
+| six spaces, after a bullet nested in a bullet and a blank line | prose | prose |
+| eight spaces, after a bullet nested in a bullet and a blank line | code | code |
+| by a tab, after text and a blank line | code | code |
+| by a tab, after a bullet item and a blank line | prose | prose |
+| four spaces, straight after text | prose | prose |
+| four spaces, straight after a `#` heading | code | code |
+| four spaces, after a fence closed inside a bullet item, an unindented line and a blank line | code | code |
+| four spaces, after a bullet item, a lazy line and a blank line | prose | prose |
+| five spaces after `>`, after a quoted line and a bare `>` | code | code |
+| four spaces, after a bullet item, a table at the margin and a blank line | code | code |
+| four spaces, after a footnote definition and a blank line | prose | prose |
+| four spaces, after `---`, `title: x`, `---` and a blank line | code | code |
+| four spaces, after `<details>` and a blank line | code | code |
+| four spaces, after an empty bullet and a blank line | code | code |
+| four spaces, after a `term` line, a `:   def` line and a blank line | **prose** | code |
+
+They agree on 22 of the 24. PR #98's review ran a set of its own, 105 shapes that were not kept,
+and reported two more differences, each run again here on the same day:
+
+| The line with `WIDE` is indented | Parser | GitHub |
+|---|---|---|
+| four spaces, straight after a `^^^` line, and the same after a `:::note` line | code | **prose** |
+| four spaces, on the first line, after a byte-order mark | **prose** | code |
+
+The check follows the parser in all four. What the parser reads that GitHub does not is Markdig's
+extensions, as PowerShell turns them on: a definition list, a figure opened with `^^^`, a
+container opened with `:::`. That reading is from the block types the parser reported, not from
+its documentation.
+
+The parser also gives up on some input: a bullet list nested 90 deep throws "Markdown elements
+in the input are too deeply nested - depth limit exceeded", and PR #98's review reported the
+same for a table of 10 columns and 1,000 rows, with 10 by 500 parsing. The check says so for the
+page and takes none of its lines for code.
