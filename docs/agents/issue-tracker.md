@@ -35,7 +35,8 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
 
 - **Work happens on a branch named `<issue>-<slug>`, never on `main`.** Pull requests are
   rebase-merged, which rewrites every SHA on the branch: cite the pull request, not a branch commit.
-  A SHA may be cited once it is on `main`.
+  A SHA may be cited once it is on `main`. `scripts/pr-body-check.ps1` holds a body to this: CI
+  runs it, and so does the session, on the body file, before `gh pr create`.
 - **A pull request carries one `Closes #N` line per ticket it closes.** Its title is checked; see
   *Pull request titles* in [`docs/commit-convention.md`](../commit-convention.md).
 - **Pull request body**: written with the `mattpocock-skills:pr` skill, where that plugin is
