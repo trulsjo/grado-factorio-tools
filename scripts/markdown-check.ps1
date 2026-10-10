@@ -32,15 +32,20 @@
     line longer than the limit is reported with its length, counted as written less the target
     of each `[text](target)` link and each address, `https://...` bare or `<scheme:...>` in
     angle brackets, none of which can be wrapped. A `<placeholder>` is counted. Not held to it: a
-    table row, a line in a fence, a `# heading`, a `[label]: target` line, a line indented four
-    spaces after a blank one outside a list, which is a code block, and a line with no space to
-    break at within the limit. A space inside a code span is no such place, so a command in one
-    is never wrapped. A list is taken to end at an unindented line that follows a blank line, a
-    closed fence or a rule, and at an unindented heading, fence or rule. Trailing spaces are not
-    counted. A limit below 1 is refused.
-    What this cannot see: a heading underlined with `===` is held to the limit as prose, a
-    block indented by a tab or with no blank line before it is not taken for code, and an address
-    with no scheme is counted.
+    table row, a line in a fence, a `# heading`, a `[label]: target` line, a line of an indented
+    code block, and a line with no space to break at within the limit. A space inside a code span
+    is no such place, so a command in one is never wrapped. Trailing spaces are not counted. A
+    limit below 1 is refused.
+    WHICH LINES ARE AN INDENTED CODE BLOCK IS ASKED OF POWERSHELL'S PARSER, ConvertFrom-Markdown
+    (grado-factorio-tools#95), and of nothing here: the script follows no list, blank line or
+    rule to work it out. Fences, tables and headings are still read by this script, as they are with no
+    limit. The parser is not GitHub's renderer. On 2026-10-10, pwsh 7.6.6, the two agreed on 22
+    of 24 shapes run through both. They differed on a line indented four spaces after a rule
+    that is itself indented into a list item, which the parser calls code and GitHub the item's
+    paragraph; and after a `term` line followed by a `:   definition` line, which the parser
+    reads as a definition list, so the indented line is not code to it and is to GitHub.
+    What this cannot see: a heading underlined with `===` is held to the limit as prose, and an
+    address with no scheme is counted.
 
     WHAT IT CANNOT SEE. Prose: numbers, dates and quantifiers stay the reviewer's. Whether a
     `#fragment` names a heading. A code block made by
@@ -187,27 +192,24 @@ function Test-Markdown {
     }
     $fence = $null
     $numbered = $false
-    $inItem = $false; $code = $false; $blankBefore = $true
+    # For the length rule alone: the lines PowerShell's own Markdown parser puts in an indented
+    # code block, counted from 0. The parser is asked, and nothing here follows lists, blank lines
+    # or rules to work it out (grado-factorio-tools#95). A fenced block has a type of its own.
+    $codeLines = [System.Collections.Generic.HashSet[int]]::new()
+    if ($MaxLineLength -gt 0 -and $Lines -match '\S') {
+        $pending = [System.Collections.Generic.Stack[object]]::new()
+        $pending.Push((ConvertFrom-Markdown -InputObject ($Lines -join "`n")).Tokens)
+        while ($pending.Count) {
+            $block = $pending.Pop()
+            if ($block.GetType().Name -eq 'CodeBlock') { for ($l = 0; $l -lt $block.Lines.Count; $l++) { $null = $codeLines.Add($block.Line + $l) } }
+            elseif ($block -is [System.Collections.IEnumerable]) { foreach ($child in $block) { $pending.Push($child) } }
+        }
+    }
     for ($i = 0; $i -lt $Lines.Count; $i++) {
         $line = $Lines[$i] -replace '^(\s*>)+\s?'
         if ($fence) {
-            # A closed fence leaves no paragraph to continue, as a blank line leaves none.
-            if ($line -match "^\s*$([regex]::Escape($fence))+\s*$") { $fence = $null; $blankBefore = $true }
+            if ($line -match "^\s*$([regex]::Escape($fence))+\s*$") { $fence = $null }
             continue
-        }
-        # For the length rule alone: whether the line is in a list item, and whether it is an
-        # indented code block. Read here, before a fence or a table takes the line, since either
-        # ends a list, as an unindented heading or rule does. An unindented line straight after a
-        # line of the item's text is a lazy continuation, and ends nothing; after a blank line, a
-        # closed fence or a rule there is no text to continue, and it ends the list.
-        if ($MaxLineLength -gt 0) {
-            $rule = $line -match '^\s*([-*_])(\s*\1){2,}\s*$'
-            if ($line -match '\S') {
-                if (-not $rule -and $line -match '^\s{0,3}(?:[-*+]|\d+[.)])\s') { $inItem = $true }
-                elseif ($line -match '^\S' -and ($blankBefore -or $rule -or $line -match '^(#{1,6}\s|`{3,}|~{3,})')) { $inItem = $false }
-                $code = $line -match '^\s{4}' -and -not $inItem -and ($blankBefore -or $code)
-            }
-            $blankBefore = $rule -or $line -notmatch '\S'
         }
         if ($line -match '^\s*(`{3,}|~{3,})') { . $flush; $fence = $Matches[1]; $fenceLine = $i + 1; continue }
 
@@ -250,11 +252,10 @@ function Test-Markdown {
         # A heading and a `[label]: target` line cannot be broken at all, and neither can a line
         # with no space at or before the limit, past its list marker and first word. A space inside
         # a code span is no place to break: a command wrapped there is no longer the command.
-        # A line indented four spaces after a blank one is a code block, and quoted output cannot be
-        # wrapped; inside a list item the same indent is the item's next paragraph, and is counted.
+        # A line of an indented code block is quoted output, which cannot be wrapped.
         if ($MaxLineLength -gt 0) {
             $counted = [regex]::Replace($Lines[$i].TrimEnd(), '(?<=\])\([^)\s]*(\s+"[^"]*")?\)|<[a-zA-Z][a-zA-Z0-9+.-]*:[^>\s]*>|https?://[^\s)>]+', '')
-            if ($counted.Length -gt $MaxLineLength -and -not $code -and $line -notmatch '^\s{0,3}#{1,6}\s' -and $prose -notmatch '^\s{0,3}\[[^\]^][^\]]*\]:') {
+            if ($counted.Length -gt $MaxLineLength -and -not $codeLines.Contains($i) -and $line -notmatch '^\s{0,3}#{1,6}\s' -and $prose -notmatch '^\s{0,3}\[[^\]^][^\]]*\]:') {
                 $lead = [regex]::Match($counted, '^(\s*>)*\s*(([-*+]|\d+[.)])\s+)?').Length
                 $solid = [regex]::Replace($counted, '(`+)(?:(?!\1).)+?\1', { param($m) 'x' * $m.Length })
                 if ($solid.Substring($lead, [Math]::Max(0, $MaxLineLength + 1 - $lead)) -match '\S\s') {
@@ -434,6 +435,17 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
             # After a fence closes there is no paragraph left to continue, so the line ends the list.
             $afterFence = @(& $long "- item`n`n  ``````text`n  code`n  ```````nunindented`n`n    $wide" 40)
             $afterTable.Count -eq 0 -and $afterRule.Count -eq 0 -and $afterFence.Count -eq 0 -and $lazy.Count -eq 1 -and $lazy[0] -match '^4: the line is 63 characters' } }
+        @{ Name = 'what the parser calls a code block is not held to the limit: indented by a tab, inside a quote, inside a numbered item; an indented line with no blank line before it is its paragraph, and is'; Test = {
+            $wide = 'word ' * 12
+            $tab = @(& $long "text`n`n`t$wide" 40)
+            $quoted = @(& $long "> text`n>`n>     $wide" 40)
+            $inItem = @(& $long "1. item`n`n       $wide`n`n       $wide" 40)
+            $noBlank = @(& $long "text`n    $wide" 40)
+            $empty = @(& $long '' 40)
+            $tab.Count -eq 0 -and $quoted.Count -eq 0 -and $inItem.Count -eq 0 -and $empty.Count -eq 0 -and
+                $noBlank.Count -eq 1 -and $noBlank[0] -match '^2: the line is 63 characters' } }
+        @{ Name = 'a heading underlined with === is held to the limit as prose'; Test = {
+            @(& $long "$('word ' * 12)`n===" 40).Count -eq 1 } }
         @{ Name = 'a <placeholder> is counted, where an <https:> address is not'; Test = {
             $f = @(& $long "$('word ' * 7)<owner>/<repo>`n`n$('word ' * 7)<https://example.com/a>" 40)
             $f.Count -eq 1 -and $f[0] -match '^1: the line is 49 characters' } }
