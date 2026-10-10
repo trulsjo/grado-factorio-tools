@@ -59,8 +59,12 @@ A pull request title is a subject line, with one difference: **the scope is requ
 
 ## Body
 
-Explain *why*, not what the diff already shows. Wrap at 72 — with two exemptions the check makes on
-purpose, both listed under *What the check is blind to*.
+Say what changed and why, and cite the ticket where there is one. *What changed* is the change in
+a sentence, not a walk through what the diff already shows; the *why* is what the diff cannot
+show. What happened on an earlier pull request or in the session is the ticket's to tell.
+
+Wrap at 72 — with two exemptions the check makes on purpose, both listed under *What the check is
+blind to*.
 
 ## Breaking changes
 
@@ -97,6 +101,9 @@ A gate that overstates its coverage is worse than no gate, so:
   parentheses in it is accepted; `()` and a scope containing parentheses are rejected, but by the
   format rule rather than by anything that knows what a scope is. With one, the scope has to be
   listed and nothing more: `pack` on a commit that touches only the resolver is accepted.
+- **What a body says.** The check measures a body's lines and, under a `!`, looks for the
+  `BREAKING CHANGE:` footer. It reads nothing else there: a body that cites no ticket, or retells
+  an earlier pull request or the session, passes.
 - **Trailer lines are exempt from the 72-character body rule.** A `Key: value` block at the end of
   the message is skipped, because `Co-Authored-By:` and `Claude-Session:` end in an address or a
   URL that cannot be broken, and git parses that block by position.

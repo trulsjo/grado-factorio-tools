@@ -20,6 +20,9 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
   merged pull request's line counts, 79 added and 27 deleted, where
   `git diff --shortstat 49b0332~1 ac1108d` gives 73 and 24, and the figure reached a page before
   a review caught it.
+- **What a ticket states**: a statement about the repository or about a past pull request is read
+  from the source when the ticket is written. One that was not read is marked as an account, as
+  #89 does with "by its #195's account and not re-read here".
 - **Read an issue**: `gh issue view <number> --comments`, filtering comments by `jq` and also
   fetching labels.
 - **List issues**:
