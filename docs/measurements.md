@@ -194,7 +194,7 @@ read on GitHub, so the two were compared. Each shape below ends in a line holdin
 |---|---|---|
 | four spaces, after text and a blank line | code | code |
 | four spaces, after a bullet item, a blank line, a rule indented two spaces and a blank line | code | **prose** |
-| four spaces, after the same and a paragraph below the rule | code | code |
+| four spaces, after the same, a paragraph at the margin below the rule and a blank line | code | code |
 | four spaces, after a bullet item, a blank line, a rule at the margin and a blank line | code | code |
 | four spaces, after a bullet item and a blank line | prose | prose |
 | six spaces, after a bullet item and a blank line | code | code |
@@ -217,8 +217,13 @@ read on GitHub, so the two were compared. Each shape below ends in a line holdin
 | four spaces, after an empty bullet and a blank line | code | code |
 | four spaces, after a `term` line, a `:   def` line and a blank line | **prose** | code |
 
-They agree on 22 of the 24. PR #98's review ran a set of its own, 105 shapes that were not kept,
-and reported two more differences, each run again here on the same day:
+They agree on 22 of the 24. The second row's difference is the rule's: the parser ends the list
+at a rule indented into the item and GitHub keeps the rule inside it. So with the third row's
+paragraph indented two spaces as well, GitHub still has an item and calls the line prose, and
+the parser still calls it code (PR #98's second review, run again here the same day).
+
+PR #98's first review ran a set of its own, 105 shapes that were not kept,
+and reported two more differences, each run again here the same day:
 
 | The line with `WIDE` is indented | Parser | GitHub |
 |---|---|---|

@@ -403,9 +403,11 @@ copies now differ by this as well until grado-factorio-modpack#182.
 code block, and so not held to the limit, is now read from `ConvertFrom-Markdown` and no longer
 worked out by the script from lists, blank lines and rules. The parser is asked only when a limit
 is handed in, so the modpack's hook, which hands it none, would see no difference from this
-change either. The modpack's copy has the old tracking, so the two copies differ by this as well
-until grado-factorio-modpack#182. The header names the shapes found where the parser and GitHub's
-renderer disagree about code, and `docs/measurements.md` has the run.
+change either. The modpack's copy has no length rule, and so nothing that asks which lines are
+code (read 2026-10-10 at its `f17fd53`): the length rule the two copies differ by until
+grado-factorio-modpack#182 is now a rule that leans on the parser. The header names the shapes
+found where the parser and GitHub's renderer disagree about code, and `docs/measurements.md` has
+the run.
 
 **`check.ps1`'s own relative-link check is replaced by it, not kept beside it.** `check.ps1` now
 runs the Markdown check with `-All`. What that changes for this repository's Markdown:
