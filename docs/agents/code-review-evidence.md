@@ -102,15 +102,6 @@ neither changes. The comment is posted once the findings are acted on, so that i
 outcome. Below, the section on the threshold and the last section argue for the rule as it was
 adopted; each sentence there that the change overtook is struck through and dated.
 
-**Two rules moved to the rules page on 2026-10-10**, settling
-[#97](https://github.com/trulsjo/grado-factorio-tools/issues/97): that the comment is not edited
-once posted, and that the plugin's own comment, "No issues found", is not used, the table
-standing in its place. Until then both were said on this page only, which a review does not
-load, because the rules page had no room for them; PR #94's second review recorded that. The
-room came from one sentence the rules page carried as the reason for the 80 bar, that the rubric
-has no value between 75 and 100. That argument is the next section's and was already made there,
-so nothing had to move here.
-
 Why: the report a filtered finding went into was the session's, and that is not kept. Measured
 on 2026-10-09 across the four reviews of PR #85 and PR #90:
 
@@ -121,6 +112,15 @@ on 2026-10-09 across the four reviews of PR #85 and PR #90:
 - Both pull request bodies carried a paragraph saying the review "ran once". A second review made
   that false each time, and each time it was that review's highest finding, at 50. So the body
   no longer recounts the review; the tracker page says so.
+
+**Two rules moved to the rules page on 2026-10-10**, settling
+[#97](https://github.com/trulsjo/grado-factorio-tools/issues/97): that the comment is not edited
+once posted, and that the plugin's own comment, "No issues found", is not used, the table
+standing in its place. Until then both were said on this page only, which a review does not
+load, because the rules page had no room for them; PR #94's second review recorded that. The
+room came from one sentence the rules page carried as the reason for the 80 bar, that the rubric
+has no value between 75 and 100. That argument is the next section's and was already made there,
+so nothing had to move here.
 
 ## Why the threshold cannot be read as "these findings do not matter"
 

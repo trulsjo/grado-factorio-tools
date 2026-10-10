@@ -15,37 +15,40 @@
     digit or underscore against it, wherever it stands: prose, a code span, a fenced block, an
     address. Each is asked of git as a commit. One that names a commit is on main when
     `git merge-base --is-ancestor` says so. A word of digits alone is read like any other, since
-    an abbreviated SHA can be all digits; a count or a run id names no commit and is passed over.
+    an abbreviated SHA can be all digits; a count or a run id is passed over unless it happens
+    to abbreviate a commit here.
 
-    WHAT IT REFUSES, checking nothing: a directory outside a repository; a shallow clone, where
-    an ancestor cannot be told from a commit whose history was cut off; a main branch git cannot
-    resolve. CI therefore fetches the whole history for this.
+    A SHALLOW CLONE IS REFUSED, and nothing is checked: there an ancestor cannot be told from a
+    commit whose history was cut off. CI therefore fetches the whole history for this. Whatever
+    else git cannot answer fails the run too; nothing passes for not having been asked.
 
     WHAT IT CANNOT SEE. A word that names no commit in this clone is counted, said to be
     unchecked, and passes: a commit of a sibling repository, or one from before a rebase that a
     fresh clone no longer holds. Run locally, origin/main is as this clone last fetched it, so
     a commit that reached main since is reported. A commit cited by fewer than 7 characters is
     not read. Whether a commit on main is the one the prose means. Anything else a body says.
+    And a word is asked of git as a name, so a branch or a tag whose name is 7 to 40 hexadecimal
+    characters answers for the commit it points at.
 
 .PARAMETER Path
     The file holding the body, as handed to `gh pr create --body-file`.
 
 .PARAMETER Body
-    The body itself. For CI, which has it in the environment: -Body $env:PR_BODY.
+    The body itself. For CI, which has it in the environment: -Body "$env:PR_BODY". The quotes
+    matter: without them an empty body is no argument at all.
 
 .PARAMETER Main
     The branch a cited commit must be on. origin/main unless said.
 
 .PARAMETER SelfTest
-    Prove the check refuses a branch commit, passes one on main, passes over a word that names
-    no commit, and refuses to run where it cannot tell. Needs git, for fixture repositories in
-    a temp directory.
+    Run the cases that hold the check to what this header says, naming each as it runs. Needs
+    git, for fixture repositories in a temp directory.
 
 .EXAMPLE
     pwsh -File scripts/pr-body-check.ps1 ../scratch/body.md
 
 .EXAMPLE
-    pwsh -File scripts/pr-body-check.ps1 -Body $env:PR_BODY
+    ./scripts/pr-body-check.ps1 -Body "$env:PR_BODY"
 #>
 
 #Requires -Version 7
@@ -73,11 +76,11 @@ function Test-Body {
     if ((git -C $Top rev-parse --is-shallow-repository) -ne 'false') {
         throw "This clone is shallow, so a commit on $Main cannot be told from one whose history was cut off. Fetch the whole history (git fetch --unshallow)."
     }
-    $null = git -C $Top rev-parse --verify --quiet "$Main^{commit}"
+    $null = git -C $Top rev-parse --verify --quiet "$Main^{commit}" 2>$null
     if ($LASTEXITCODE -ne 0) { throw "git cannot resolve $Main here, so nothing can be checked against it. Fetch it, or name the branch with -Main." }
 
     $result = @{ Off = @(); On = 0; Unknown = 0 }
-    $words = [regex]::Matches($Text, '(?<![0-9A-Za-z_])[0-9a-fA-F]{7,40}(?![0-9A-Za-z_])') | ForEach-Object Value | Select-Object -Unique
+    $words = [regex]::Matches($Text, '(?<![0-9A-Za-z_])[0-9a-fA-F]{7,40}(?![0-9A-Za-z_])') | ForEach-Object Value | Sort-Object -Unique
     foreach ($word in $words) {
         $commit = git -C $Top rev-parse --verify --quiet "$word^{commit}" 2>$null
         if ($LASTEXITCODE -ne 0) { $result.Unknown++; continue }
@@ -116,17 +119,19 @@ function Invoke-SelfTest {
 
     $cases = @(
         @{ Name = 'a commit on the branch and not on main is refused, in full or abbreviated, and named once'; Test = {
-            $r = & $check "Run at ``$($onBranch.Substring(0, 7))``, which is $onBranch, and again at $($onBranch.Substring(0, 7))."
+            $r = & $check "Run at ``$($onBranch.Substring(0, 7))``, which is $onBranch, and again at $($onBranch.Substring(0, 7).ToUpperInvariant())."
             $r.Off.Count -eq 2 -and $r.Off -contains $onBranch -and $r.Off -contains $onBranch.Substring(0, 7) -and $r.On -eq 0 } }
-        @{ Name = 'a commit on main passes, in full, abbreviated, in capitals and at the end of an address'; Test = {
+        @{ Name = 'a commit on main passes, in full, abbreviated, in capitals and at the end of an address; -Main names another branch to be on'; Test = {
             $r = & $check "At $onMain, at ``$($root.Substring(0, 9))``, at $($onMain.Substring(0, 12).ToUpperInvariant()) and https://example.com/commit/$($root.Substring(0, 7))"
-            $r.Off.Count -eq 0 -and $r.On -eq 4 -and $r.Unknown -eq 0 } }
-        @{ Name = 'a word that names no commit here is counted as unchecked and passes: a run id, a count, a commit of another repository'; Test = {
-            $r = & $check 'Run 37917514429 took 1234567 ms; the modpack is at `0123abc` and defaced nothing.'
-            $r.Off.Count -eq 0 -and $r.On -eq 0 -and $r.Unknown -eq 4 } }
+            $other = & $check "At $onBranch." $repo 'HEAD'
+            $r.Off.Count -eq 0 -and $r.On -eq 4 -and $r.Unknown -eq 0 -and $other.Off.Count -eq 0 -and $other.On -eq 1 } }
+        @{ Name = 'a word that names no commit here is counted as unchecked and passes: a run id, a count, a commit of another repository, a tree'; Test = {
+            $tree = git -C $repo rev-parse 'HEAD^{tree}'
+            $r = & $check "Run 37917514429 took 1234567 ms; the modpack is at ``0123abc`` and defaced nothing. The tree is $tree."
+            $r.Off.Count -eq 0 -and $r.On -eq 0 -and $r.Unknown -eq 5 } }
         @{ Name = 'a word that is not 7 to 40 hexadecimal characters standing alone is not read'; Test = {
             $six = $onBranch.Substring(0, 6)
-            $r = & $check "Six, $six; inside a word, x$($onBranch.Substring(0, 8)) and $($onBranch.Substring(0, 8))_y; 41 of them, $($onBranch)0; and an empty body."
+            $r = & $check "Six, $six; inside a word, x$($onBranch.Substring(0, 8)), _$($onBranch.Substring(0, 8)) and $($onBranch.Substring(0, 8))_y; 41 of them, $($onBranch)0; and an empty body."
             $empty = & $check ''
             $r.Off.Count -eq 0 -and $r.On -eq 0 -and $r.Unknown -eq 0 -and $empty.Off.Count -eq 0 -and $empty.Unknown -eq 0 } }
         @{ Name = 'a shallow clone is refused, and so is a main branch git cannot resolve'; Test = {

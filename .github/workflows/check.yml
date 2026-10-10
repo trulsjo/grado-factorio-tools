@@ -1,4 +1,4 @@
-# What .githooks/pre-push runs, for a clone that never opted into the hooks, plus the one thing a
+# What .githooks/pre-push runs, for a clone that never opted into the hooks, plus two things a
 # hook cannot see: the pull request's title and the commits its body cites. `edited` is listed so
 # a retitle or an edited body is checked again.
 #
@@ -37,7 +37,7 @@ jobs:
         shell: pwsh
         run: ./scripts/commit-check.ps1 -ScopeFile commit-scopes.txt -Title $env:PR_TITLE
 
-      # `edited` runs this again too: a body is edited more often than a title is.
+      # `edited` runs this again too.
       - name: Check the commits the pull request body cites
         if: github.event_name == 'pull_request'
         env:
