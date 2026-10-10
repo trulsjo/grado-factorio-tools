@@ -398,6 +398,14 @@ before, so the modpack's `pre-commit` hook, which hands it none, would see no di
 this change. `check.ps1` here hands it 100. The modpack's copy has no such parameter, and the two
 copies now differ by this as well until grado-factorio-modpack#182.
 
+**Changed 2026-10-10: the length rule asks PowerShell's parser what is code**
+([#95](https://github.com/trulsjo/grado-factorio-tools/issues/95)). Which lines are an indented
+code block, and so not held to the limit, is now read from `ConvertFrom-Markdown` and no longer
+worked out by the script from lists, blank lines and rules. The parser is asked only when a limit
+is handed in, so the modpack's hook, which hands it none, would see no difference from this
+change either. The header names the two shapes found where the parser and GitHub's renderer
+disagree about code.
+
 **`check.ps1`'s own relative-link check is replaced by it, not kept beside it.** `check.ps1` now
 runs the Markdown check with `-All`. What that changes for this repository's Markdown:
 
