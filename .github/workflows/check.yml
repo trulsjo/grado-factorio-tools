@@ -1,5 +1,6 @@
 # What .githooks/pre-push runs, for a clone that never opted into the hooks, plus the one thing a
-# hook cannot see: the pull request's title. `edited` is listed so a retitle is checked again.
+# hook cannot see: the pull request's title and the commits its body cites. `edited` is listed so
+# a retitle or an edited body is checked again.
 #
 # Windows, because the scripts are: the harness junctions mods in, and fetch-mods.ps1 reads
 # %APPDATA%. No runner has Factorio, so load-harness.ps1 -SelfTest is not run here or anywhere
@@ -19,7 +20,11 @@ jobs:
   check:
     runs-on: windows-latest
     steps:
+      # The whole history, for the body check below: it asks whether a commit is on main, and a
+      # shallow clone cannot say. pr-body-check.ps1 refuses to run in one.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Parse every script and run the self-tests
         run: pwsh -NoProfile -File scripts/check.ps1
@@ -31,3 +36,11 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
         shell: pwsh
         run: ./scripts/commit-check.ps1 -ScopeFile commit-scopes.txt -Title $env:PR_TITLE
+
+      # `edited` runs this again too: a body is edited more often than a title is.
+      - name: Check the commits the pull request body cites
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        shell: pwsh
+        run: ./scripts/pr-body-check.ps1 -Body "$env:PR_BODY"

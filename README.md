@@ -28,8 +28,10 @@ its copies.** `scripts/markdown-check.ps1`, `scripts/get-dump.ps1` and
 `scripts/refuse-cd-into-mod-cache.ps1`, all below, were ruled to move on 2026-10-08. Each copy
 goes when the modpack's contraction ticket for it lands.
 
-**One tool written here from nothing:** `scripts/resolve-modpack.ps1`, below
-([#14](https://github.com/trulsjo/grado-factorio-tools/issues/14)).
+**Two tools written here from nothing:** `scripts/resolve-modpack.ps1`
+([#14](https://github.com/trulsjo/grado-factorio-tools/issues/14)) and
+`scripts/pr-body-check.ps1`
+([#96](https://github.com/trulsjo/grado-factorio-tools/issues/96)), both below.
 
 The commit-message convention this repo and its siblings share is declared in
 [docs/commit-convention.md](docs/commit-convention.md).
@@ -177,6 +179,18 @@ Handed `-MaxLineLength`, it also reports a prose line longer than that; without 
 on length. `scripts/check.ps1` hands it 100 here. Neither sibling is asked to: counted on
 2026-10-09 by a throwaway script, `grado-factorio-modpack` had 326 such lines and
 `realistic-fusion-refreshed` 3,091.
+
+## Checking a pull request body
+
+`scripts/pr-body-check.ps1` reads a pull request body for commits it cites, and fails on one that
+is not on `main`: a rebase-merge rewrites every SHA on a branch, so such a citation names a commit
+the merge deletes.
+
+    pwsh -File scripts/pr-body-check.ps1 ../scratch/body.md
+
+CI runs it on the body of every pull request here, and again when the body is edited. A word that
+names no commit in the clone, such as a commit of a sibling, is said to be unchecked and passes.
+What else it cannot see is in its header. `-SelfTest` proves it can fail.
 
 ## What does not belong here
 
