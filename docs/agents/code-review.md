@@ -23,9 +23,9 @@ measured, and the past findings behind each rule, are in
 
 - **Each review posts one comment on the pull request** once its findings are acted on: every
   finding that survived verification, its score, whether it was verified and its outcome. A
-  review with no finding says so there.
-- **A finding at 80 or more must be fixed; the rest are recorded.** The rubric has no value
-  between 75 and 100, so the bar passes over findings that are verified and real.
+  review with no finding says so there. The comment is not edited once posted, and the
+  plugin's own comment format is not used.
+- **A finding at 80 or more must be fixed; the rest are recorded.**
 - **Do not re-score to make a finding binding.** Say it matters and let a human decide: an
   inflated score destroys the only signal the score carries.
 
