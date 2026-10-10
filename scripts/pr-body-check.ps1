@@ -34,8 +34,9 @@
     The file holding the body, as handed to `gh pr create --body-file`.
 
 .PARAMETER Body
-    The body itself. For CI, which has it in the environment: -Body "$env:PR_BODY". The quotes
-    matter: without them an empty body is no argument at all.
+    The body itself. For CI, which has it in the environment: -Body "$env:PR_BODY". Under
+    `pwsh -File` the quotes matter: with the variable unset, the unquoted form hands over no
+    argument and the run fails. Called from a pwsh session, as CI calls it, either form passes.
 
 .PARAMETER Main
     The branch a cited commit must be on. origin/main unless said.
@@ -119,7 +120,7 @@ function Invoke-SelfTest {
 
     $cases = @(
         @{ Name = 'a commit on the branch and not on main is refused, in full or abbreviated, and named once'; Test = {
-            $r = & $check "Run at ``$($onBranch.Substring(0, 7))``, which is $onBranch, and again at $($onBranch.Substring(0, 7).ToUpperInvariant())."
+            $r = & $check "Run at ``$($onBranch.Substring(0, 7))``, which is $onBranch, and again at $($onBranch.ToUpperInvariant())."
             $r.Off.Count -eq 2 -and $r.Off -contains $onBranch -and $r.Off -contains $onBranch.Substring(0, 7) -and $r.On -eq 0 } }
         @{ Name = 'a commit on main passes, in full, abbreviated, in capitals and at the end of an address; -Main names another branch to be on'; Test = {
             $r = & $check "At $onMain, at ``$($root.Substring(0, 9))``, at $($onMain.Substring(0, 12).ToUpperInvariant()) and https://example.com/commit/$($root.Substring(0, 7))"

@@ -40,11 +40,11 @@
     (grado-factorio-tools#95), and of nothing here: the script follows no list, blank line or
     rule to work it out. Fences, tables and headings are still read by this script, as they are
     with no limit. The parser is not GitHub's renderer, and where the two disagree the check
-    follows the parser. Four shapes were found where they do, each an indented line (2026-10-10,
-    docs/measurements.md). Code to the parser and prose to GitHub: after a rule that is itself
-    indented into a list item, and straight after a `^^^` or a `:::` line. Prose to the parser
-    and code to GitHub: after a `term` line and a `:   definition` line, and on a first line
-    that follows a byte-order mark.
+    follows the parser. Where they were found to, each time over an indented line, is recorded
+    in docs/measurements.md (2026-10-10). Code to the parser and prose to GitHub: after a rule
+    that is itself indented into a list item, and straight after a `^^^` or a `:::` line. Prose
+    to the parser and code to GitHub: after a `term` line and a `:   definition` line, and on a
+    first line that follows a byte-order mark.
     A page the parser gives up on, which it does on one nested too deep or holding a very large
     table, is said to be unread by it, and then no line of the page is taken for code.
     What this cannot see: a heading underlined with `===` is held to the limit as prose, and an
@@ -454,6 +454,8 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
                 $after.Count -eq 1 -and $after[0] -match '^4: the line is 59 characters' } }
         @{ Name = 'a page the parser gives up on is still held to the limit, with no line of it taken for code'; Test = {
             $wide = 'word ' * 12
+            # 90 levels is past the parser's depth limit in pwsh 7.6.6. A PowerShell with a higher
+            # limit would read this page, take line 94 for code, and fail this case, not the check.
             $deep = (0..89 | ForEach-Object { ('  ' * $_) + '- x' }) -join "`n"
             $f = @(& $long "$deep`n`ntext`n`n    $wide" 40)
             $f.Count -eq 1 -and $f[0] -match '^94: the line is 63 characters' } }
