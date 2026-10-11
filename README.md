@@ -202,12 +202,14 @@ code span left open at the end of its paragraph, a table row whose column count 
 header's, and a link to a file git does not track, in exact case. It knows nothing of Factorio.
 
     pwsh -File scripts/markdown-check.ps1
-    pwsh -File scripts/markdown-check.ps1 -Range origin/main..HEAD
+    pwsh -File scripts/markdown-check.ps1 -Range origin/main...HEAD
     pwsh -File scripts/markdown-check.ps1 -All
 
 With no arguments it reads the staged files as they are staged, which is what a `pre-commit` hook
-wants; `-Range` reads the files a range changed, and `-All` every tracked one. It reads the
-repository it is run in, so a consumer runs it from the submodule on its own Markdown.
+wants; `-Range` reads the files a range changed, and `-All` every tracked one. With three dots
+the range's files are those the branch changed; two dots would also list each file its base has
+edited or deleted since the branch left it. It reads the repository it is run in, so a consumer
+runs it from the submodule on its own Markdown.
 `scripts/check.ps1` runs it here with `-All`. `-SelfTest` proves each of the three can fail. What
 it reads as what, and what it cannot see, is in its header.
 
