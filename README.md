@@ -58,8 +58,9 @@ Three things, in the order Truls named them:
    that machinery gets written.
 
 Likely to follow, because they are about *a* Factorio mod rather than *this* Factorio mod: the
-locale and prototype-name checks, and the parts of the shared PowerShell library that are not
-RFR-specific. The commit-message check has already moved — see Status above.
+parts of the shared PowerShell library that are not RFR-specific. The commit-message check and
+the locale check have already moved — see Status above. The prototype-name check was ruled on
+2026-10-11 to stay in `realistic-fusion-refreshed` for now; the extraction plan says why.
 
 ## Resolving a modpack
 

@@ -19,8 +19,8 @@ in the table below still lives in `realistic-fusion-refreshed`.
 
 **Two more are expanded and not contracted, since 2026-10-11.** The tree viewer and
 `locale-check.ps1` are here, with five helpers, and `realistic-fusion-refreshed` still
-holds its copy of each. `name-check.ps1` was measured and has not moved. See *The last three
-earmarked* below.
+holds its copy of each. `name-check.ps1` was measured and ruled to stay where it is for now. See
+*The last three earmarked* below.
 
 This file is an inventory, and — for whatever has moved — the record of where it came from.
 
@@ -41,7 +41,7 @@ through an assumed directory layout or an invariant without ever naming it.
 | ~~`scripts/pack-mods.ps1`~~ | 322 | 7 | **Moved 2026-09-28: expanded 2026-09-25, contracted 2026-09-28.** See *The packer, expanded and contracted* below. Builds one distributable zip per mod, named as the portal requires, and enforces the version bounds the portal enforces at upload. The natural home for the upload step that does not exist yet. |
 | `scripts/tree-viewer.ps1` + `tree-viewer.template.html` + `tree-layout-probe.js` | 533 + 2 files | 7 | **Expanded 2026-10-11**, see *The last three earmarked* below. ~~Move the set.~~ Renders a mod set's technology tree as a self-contained zoomable HTML viewer. Already takes a mod set rather than assuming one. |
 | `scripts/locale-check.ps1` | 391 | ~~—~~ 16 | **Expanded 2026-10-11**, see *The last three earmarked* below. ~~Probably move.~~ Fails if a prototype would show a player something other than its proper name. The rule is general; ~~only the prototype list is local~~ the mods and their prefix were local. |
-| `scripts/name-check.ps1` | ~~1,749~~ 1,847 | ~~—~~ 74 | **Measured 2026-10-11, not ruled**, see *The last three earmarked* below. **Probably move.** Fails if a repo defines a prototype name that is not its own, or one another mod already claims. General rule, large implementation. |
+| `scripts/name-check.ps1` | ~~1,749~~ 1,847 | ~~—~~ 74 | **Stays in `realistic-fusion-refreshed` for now**, ruled 2026-10-11, see *The last three earmarked* below. ~~Probably move.~~ Fails if a repo defines a prototype name that is not its own, or one another mod already claims. General rule, large implementation. |
 | `scripts/factorio-lib.ps1` | 1,357 | **22** | **Split, do not move whole.** The shared PowerShell library, and the most entangled file in the list. Needs a real read to separate what is generic from what is RFR's. |
 | `scripts/load-check.ps1` | 2,294 | many | **Harness expanded 2026-09-24, contracted 2026-09-25**, as `load-harness.ps1` and `load-harness-lib.ps1`; see below. **Move the harness, not the file.** Most of it is thirteen RFR-specific invariants that belong to that mod. What is generic is the surrounding machinery: build an isolated mod directory, junction or zip the mods in, create a throwaway map, report which way it loaded. That harness is the other half of the coexistence check. |
 
@@ -618,11 +618,28 @@ end `83 of 135 named prototypes also carry a description` and `OK - all 135 prot
 to a name`, and with `-With space-age` both say 165. `-SelfTest` on those mods passes both
 halves, and `-Prefix zz-` fails.
 
-### The name check, measured and not moved
+### The name check, measured and ruled to stay
 
 **`scripts/name-check.ps1`** was read whole on 2026-10-11, at `c48fadf`, for
 [#103](https://github.com/trulsjo/grado-factorio-tools/issues/103), whose comment holds the
-measurement and a recommendation. Whether it moves is Truls's, and is not ruled.
+measurement and a recommendation.
+
+**Ruled by Truls on 2026-10-11: it stays in `realistic-fusion-refreshed` for now.** The reasons
+are that comment's:
+
+- **There is no second consumer.** What moved would have one caller, and its general form would
+  be designed against one example.
+- **The rule's line count overstates what is portable.** 427 of its 862 lines are two
+  classifiers whose reasoning is that repository's own measurements. Moving them moves the place
+  a finding gets excused out of the repository whose findings it excuses.
+- **A third of the file is a self-test that would be rewritten, not moved**, and it holds 42 of
+  the 76 project references.
+
+What staying costs: a later mod with its own prefix gets no name check from here until the
+ruling changes. The comment names what could move then, five functions that take a prefix,
+allowed edits and reference rows as parameters; that is not ruled.
+
+The figures:
 
 - **1,847 lines** (`git show origin/main:scripts/name-check.ps1 | wc -l`), where the table said
   1,749 on 2026-09-20.
