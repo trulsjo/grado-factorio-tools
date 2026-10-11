@@ -28,6 +28,10 @@ its copies.** `scripts/markdown-check.ps1`, `scripts/get-dump.ps1` and
 `scripts/refuse-cd-into-mod-cache.ps1`, all below, were ruled to move on 2026-10-08. Each copy
 goes when the modpack's contraction ticket for it lands.
 
+**Two more have moved here from `realistic-fusion-refreshed`, which still holds its copies.**
+The tree viewer and `scripts/locale-check.ps1`, both below, came on 2026-10-11 with five helpers
+they share. Each copy goes when that repository's contraction ticket for it lands.
+
 **Two tools written here from nothing:** `scripts/resolve-modpack.ps1`
 ([#14](https://github.com/trulsjo/grado-factorio-tools/issues/14)) and
 `scripts/pr-body-check.ps1`
@@ -120,6 +124,20 @@ render. `tree-layout-probe.js` is pasted into the browser console on a rendered 
 layout alternatives. `-SelfTest` needs the game. `realistic-fusion-refreshed` still holds its own
 copy of all three files, until
 [its #676](https://github.com/trulsjo/realistic-fusion-refreshed/issues/676) lands.
+
+## Checking that a mod's prototypes have names
+
+`locale-check.ps1` fails when a prototype of the mods' own would show a player `Unknown key` in
+place of its name, or a name or description with an engine error left in it:
+
+    pwsh -File scripts/locale-check.ps1 path/to/my-mod -Prefix my-
+
+It takes the same mod paths as `load-harness.ps1`. `-Prefix` is how it tells the mods' own
+prototypes from the game's, so a mod whose prototype names share no prefix cannot use it. It
+takes two dumps and creates no map: a pass says nothing about the mod loading. `-SelfTest`
+plants three prototypes it must catch, and needs the game. `realistic-fusion-refreshed` still
+holds its own copy, until
+[its #677](https://github.com/trulsjo/realistic-fusion-refreshed/issues/677) lands.
 
 ## Keeping an agent session out of the mod cache
 

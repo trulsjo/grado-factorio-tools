@@ -17,6 +17,11 @@ deleted its copy and `grado-factorio-modpack` deleted `Publish-PackZip`, its own
 pack through this repository's. See *The packer, expanded and contracted* below. Everything else
 in the table below still lives in `realistic-fusion-refreshed`.
 
+**Two more are expanded and not contracted, since 2026-10-11.** The tree viewer and
+`locale-check.ps1` are here, with five helpers they share, and `realistic-fusion-refreshed` still
+holds its copy of each. `name-check.ps1` was measured and has not moved. See *The last three
+earmarked* below.
+
 This file is an inventory, and — for whatever has moved — the record of where it came from.
 
 ## Method
@@ -34,8 +39,8 @@ through an assumed directory layout or an invariant without ever naming it.
 | ~~`scripts/commit-check.ps1`~~ | 393 | **0** | **Moved 2026-09-21.** See *Extracted* below. |
 | ~~`scripts/fetch-mods.ps1`~~ | 1,049 | 3 | **Expanded 2026-09-24, contracted 2026-09-25.** See *Expanded and contracted* below. Fills a cache directory with third-party mods at pinned versions — git first, portal as fallback. This is half of the coexistence check and the more reusable half. |
 | ~~`scripts/pack-mods.ps1`~~ | 322 | 7 | **Moved 2026-09-28: expanded 2026-09-25, contracted 2026-09-28.** See *The packer, expanded and contracted* below. Builds one distributable zip per mod, named as the portal requires, and enforces the version bounds the portal enforces at upload. The natural home for the upload step that does not exist yet. |
-| `scripts/tree-viewer.ps1` + `tree-viewer.template.html` + `tree-layout-probe.js` | 533 + 2 files | 7 | **Move the set.** Renders a mod set's technology tree as a self-contained zoomable HTML viewer. Already takes a mod set rather than assuming one. |
-| `scripts/locale-check.ps1` | 391 | — | **Probably move.** Fails if a prototype would show a player something other than its proper name. The rule is general; only the prototype list is local. |
+| `scripts/tree-viewer.ps1` + `tree-viewer.template.html` + `tree-layout-probe.js` | 533 + 2 files | 7 | **Expanded 2026-10-11**, see *The last three earmarked* below. ~~Move the set.~~ Renders a mod set's technology tree as a self-contained zoomable HTML viewer. Already takes a mod set rather than assuming one. |
+| `scripts/locale-check.ps1` | 391 | ~~—~~ 16 | **Expanded 2026-10-11**, see *The last three earmarked* below. ~~Probably move.~~ Fails if a prototype would show a player something other than its proper name. The rule is general; only the prototype list is local. |
 | `scripts/name-check.ps1` | 1,749 | — | **Probably move.** Fails if a repo defines a prototype name that is not its own, or one another mod already claims. General rule, large implementation. |
 | `scripts/factorio-lib.ps1` | 1,357 | **22** | **Split, do not move whole.** The shared PowerShell library, and the most entangled file in the list. Needs a real read to separate what is generic from what is RFR's. |
 | `scripts/load-check.ps1` | 2,294 | many | **Harness expanded 2026-09-24, contracted 2026-09-25**, as `load-harness.ps1` and `load-harness-lib.ps1`; see below. **Move the harness, not the file.** Most of it is thirteen RFR-specific invariants that belong to that mod. What is generic is the surrounding machinery: build an isolated mod directory, junction or zip the mods in, create a throwaway map, report which way it loaded. That harness is the other half of the coexistence check. |
@@ -555,6 +560,44 @@ overlap candidates (100 base-flagged), 4 mods named`. The two pages' datasets we
 by key: `mods`, `packs`, `packLabels`, `techs` and `overlaps` are equal, and `meta` differs in
 the name handed in and in the order of its mod list, which the harness sorts by name. The page
 from here, loaded in headless Edge, drew 339 elements of class `card` and 626 of class `edge`.
+
+### The locale check, the expand half
+
+**`scripts/locale-check.ps1`** (blob `8d7c273`, last changed `f4cbb25`), expanded 2026-10-11 by
+[#102](https://github.com/trulsjo/grado-factorio-tools/issues/102). The contract half is
+[realistic-fusion-refreshed#677](https://github.com/trulsjo/realistic-fusion-refreshed/issues/677),
+open: until it lands that repository holds its own copy. It had 16 lines matching
+`rf-|realistic|rfr` (`git show origin/main:scripts/locale-check.ps1 | grep -c -i`, 2026-10-11,
+at `c48fadf`); the table above had no count for it.
+
+What changed on the way in:
+
+| Was, in the origin | Is, here |
+|---|---|
+| That repository's three mods, from `Get-RepoMods` | the mod paths `load-harness.ps1` takes, as trailing arguments |
+| `$PREFIX = 'rf-'` | `-Prefix`, required |
+| A prefix nothing carries passes, having checked 0 prototypes | it fails, and asks whether the prefix is right |
+| A type the game defines none of: add it to `$NAMELESS_TYPES` in the script | `-Nameless`, beside `animation`, which is built in |
+| Its own mod directory and junctions | `New-LoadHarness` and `Remove-LoadHarness` |
+| Each dump through `Invoke-Factorio` and its own exit check | `Invoke-FactorioStep` |
+| `-SelfTest` on that repository's mods, canary named `rf-localecheck-canary` | on the mods handed in, or on a mod it builds when handed none; the canary's prototypes take the prefix |
+
+`Test-Locale`, which makes the comparison, is the origin's code with `$PREFIX` renamed.
+
+**How the mods' own prototypes are told apart: a prefix, and nothing else.** #102 left this to
+be settled. A prototype is the mods' own when its name starts with `-Prefix`. A mod whose
+prototype names share no prefix cannot use the check, and the header says so. The alternative
+read was to take a second dump without the mods and call the difference theirs. It was not
+taken: it costs another run of the game, it would count the prototypes of every dependency
+loaded with the mods unless those were told apart as well, and the one consumer there is has a
+prefix. It is the way in for a mod without one, if one ever asks.
+
+**The same mods through both, 2026-10-11.** That repository's three mods, working tree at
+`c48fadf`, Factorio 2.0.77, the shared check handed `-Prefix rf-`. The two outputs differ in
+their first line only, which here also prints the prefix and lists the mods by name order: both
+end `83 of 135 named prototypes also carry a description` and `OK - all 135 prototypes resolve
+to a name`, and with `-With space-age` both say 165. `-SelfTest` on those mods passes both
+halves, and `-Prefix zz-` fails.
 
 ## What has to be written, not moved
 

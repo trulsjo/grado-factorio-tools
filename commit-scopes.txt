@@ -3,6 +3,7 @@
 # title to it too. CLAUDE.md says what a scope is; this file is the only list of them.
 coexistence
 tree-viewer
+locale-check
 pack
 upload
 commit-check
