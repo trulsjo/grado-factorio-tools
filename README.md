@@ -207,9 +207,9 @@ header's, and a link to a file git does not track, in exact case. It knows nothi
 
 With no arguments it reads the staged files as they are staged, which is what a `pre-commit` hook
 wants; `-Range` reads the files a range changed, and `-All` every tracked one. With three dots
-the range's files are those the branch changed; two dots would also list each file its base has
-edited or deleted since the branch left it. It reads the repository it is run in, so a consumer
-runs it from the submodule on its own Markdown.
+the files are those the branch at the range's end has changed since it left the base; two dots
+would also list each file the base has edited or deleted since then. The check reads the
+repository it is run in, so a consumer runs it from the submodule on its own Markdown.
 `scripts/check.ps1` runs it here with `-All`. `-SelfTest` proves each of the three can fail. What
 it reads as what, and what it cannot see, is in its header.
 

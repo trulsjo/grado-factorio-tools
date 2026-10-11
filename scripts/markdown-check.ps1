@@ -61,10 +61,10 @@
 
 .PARAMETER Range
     Check the Markdown files changed in a commit range, as they are at its end:
-    -Range origin/main...HEAD. With three dots the files are those the branch changed; two dots
-    would also list each file its base has edited or deleted since the branch left it. The
-    switch is commit-check.ps1's and the form is not: that script's range is a list of commits,
-    which two dots give.
+    -Range origin/main...HEAD. With three dots the files are those the branch at its end has
+    changed since it left the base; two dots would also list each file the base has edited or
+    deleted since then. The switch is commit-check.ps1's and the form is not: that script's range
+    is a list of commits, which two dots give.
 
 .PARAMETER All
     Check every tracked Markdown file, as staged.
