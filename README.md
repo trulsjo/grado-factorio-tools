@@ -201,8 +201,9 @@ prototype name is that mod's business. If a script needs to know `rf-`, it stays
 
 ```
 scripts/     PowerShell entry points, one job each, and the libraries they
-             dot-source: load-harness-lib.ps1, game-mods.ps1, and mod-info.ps1,
-             which reads a mod's info.json for three of them
+             dot-source: load-harness-lib.ps1, game-mods.ps1, mod-info.ps1,
+             which reads a mod's info.json for three of them, and
+             self-test-halves.ps1, the runner a -SelfTest hands its halves to
 .githooks/   this repo's own commit-msg and pre-push hooks, opted into once per
              clone
 .github/     the workflow that runs scripts/check.ps1 on pull requests and main

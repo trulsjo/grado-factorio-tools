@@ -21,6 +21,13 @@
     trimmed to what is true outside that repository; New-ModJunctions takes
     source paths rather than a repository root, and the harness functions are new.
 
+    FOUR MORE CAME LATER, from that repository's factorio-lib.ps1 at c48fadf
+    (grado-factorio-tools#100), for the scripts that take a dump and read it: Get-ModLinks,
+    Invoke-FactorioStep and Get-LocaleFailure are here with their names and code, and
+    Invoke-SelfTestHalves is in self-test-halves.ps1, which this file dot-sources. A caller with
+    paths to mods wants New-LoadHarness, which needs no Get-ModLinks; that one is for a caller
+    that builds its own mod directory with New-ModJunctions.
+
     IT NEVER TOUCHES THE PLAYER'S GAME. Mods go into a mod directory under a temp directory, and
     every run gets a write-data directory of its own there (Invoke-Factorio), so the player's mods,
     mod-list.json, saves and player-data.json are neither read nor written. Mod directories are
@@ -37,6 +44,7 @@
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 . "$PSScriptRoot/mod-info.ps1"
+. "$PSScriptRoot/self-test-halves.ps1"
 
 function Resolve-FactorioExe {
     <#  Preferred path, then $env:FACTORIO_EXE, then the Steam path on the machine this was written
@@ -148,6 +156,31 @@ function Write-FactorioTail {
         Write-Host "  --- $(Split-Path $f -Leaf) (last $Lines of $($captured.Count)) ---"
         $captured | Select-Object -Last $Lines | ForEach-Object { Write-Host "    $_" }
     }
+}
+
+function Invoke-FactorioStep {
+    <#  One Factorio run the caller cannot continue without: a non-zero exit is fatal rather than a
+        result, and the end of both captured streams is printed before it throws.
+
+        Invoke-Factorio deliberately decides nothing about what a failure means. A caller that
+        takes a dump or runs an exporter wants exactly this.
+
+        Returns the path to the captured stdout.  #>
+    param(
+        [Parameter(Mandatory)] [string]   $FactorioExe,
+        [Parameter(Mandatory)] [string]   $ModDirectory,
+        [Parameter(Mandatory)] [string[]] $Arguments,
+        [Parameter(Mandatory)] [string]   $OutputDirectory,
+        [Parameter(Mandatory)] [string]   $Tag
+    )
+
+    $result = Invoke-Factorio -FactorioExe $FactorioExe -ModDirectory $ModDirectory `
+        -Arguments $Arguments -OutputDirectory $OutputDirectory -Tag $Tag
+    if ($result.Code -ne 0) {
+        Write-FactorioTail $result
+        throw "Factorio exited $($result.Code) during '$Tag'."
+    }
+    return $result.OutFile
 }
 
 function Remove-TempDirectory {
@@ -272,6 +305,23 @@ function Write-ModList {
         Set-Content -Path (Join-Path $ModDirectory 'mod-list.json') -Encoding utf8
 }
 
+function Get-ModLinks {
+    <#  The -Links map New-ModJunctions takes, for mods that each sit in a directory named after
+        them under one root: a repository's own mods, or a directory of third-party mods.  #>
+    param(
+        [Parameter(Mandatory)] [string]   $Root,
+        [Parameter(Mandatory)] [string[]] $Mods
+    )
+
+    $links = @{}
+    foreach ($m in $Mods) {
+        $src = Join-Path $Root $m
+        if (-not (Test-Path -LiteralPath $src)) { throw "Mod directory not found: $src" }
+        $links[$m] = $src
+    }
+    return $links
+}
+
 function New-ModJunctions {
     <#  Link mod directories into a mod directory, each under the name given. Junctions rather than
         copies: no admin rights needed, nothing duplicated, and edits to the source are picked up
@@ -308,6 +358,59 @@ function Remove-ModJunctions {
     Get-ChildItem -Path $ModDirectory -Directory -ErrorAction SilentlyContinue |
         Where-Object { $_.LinkType -eq 'Junction' } |
         ForEach-Object { [IO.Directory]::Delete($_.FullName) }
+}
+
+# Text --dump-prototype-locale writes where a name a player can read ought to be. One place, so a
+# check and a viewer cannot drift apart on what the strings are.
+#
+# TWO LISTS, because the callers are asking different questions:
+#
+#   ENGINE ERRORS are the engine failing to resolve part of a string it did resolve -- a rich-text
+#   reference or a control code naming nothing. They arrive INSIDE the value, surrounded by
+#   whatever did resolve, so they are found by substring and not by equality. Whoever wrote that
+#   locale entry has a bug, so a gate over its OWN prototypes can fail on them.
+#
+#   A FOREIGN PLACEHOLDER is a string another mod ships on purpose. "Something went wrong" is not
+#   an engine string at all: it is the literal value Angels' own locale gives [item-name]
+#   angels-void, and the 334 recipes carrying it in that set at 2.0.77 point their localised_name
+#   at that key deliberately, to mark a recipe a missing dependency stranded. A viewer is right to
+#   refuse it as a LABEL. A gate over a mod's own prototypes must not fail on it.
+#
+# What the engine does NOT do is dump a name it could not work out. Measured on 2.0.77, in
+# realistic-fusion-refreshed: a prototype with no locale entry, one whose localised_name names a
+# missing key, and one whose nested parameter names a missing key are all simply ABSENT from the
+# dump; a localised string that is too deep or has too many parameters stops the data stage
+# outright and the game never starts. So every failure visible in a dumped value is one that
+# resolved to text.
+#
+# Pinned to 2.0.77. Matching engine wording literally is fragile, and a later engine phrasing it
+# differently puts the text back on the labels -- where it is at least visible to a human.
+$script:LocaleEngineErrors = @(
+    'Unknown key:',
+    'Unknown control sequence:'
+)
+$script:LocaleForeignPlaceholders = @(
+    'Something went wrong'
+)
+
+function Get-LocaleFailure {
+    <#  The marker that makes a dumped locale value unusable, or $null if it reads fine.
+
+        -EngineOnly narrows it to the engine's own errors, which is what a gate over a mod's own
+        prototypes wants: a foreign placeholder is a true finding about a label and a false one
+        about a locale entry. Without the switch both lists apply, which is a viewer's question.  #>
+    param(
+        [AllowEmptyString()] [AllowNull()] [string] $Value,
+        [switch] $EngineOnly
+    )
+
+    if (-not $Value) { return $null }
+    $markers = if ($EngineOnly) { $script:LocaleEngineErrors }
+               else { $script:LocaleEngineErrors + $script:LocaleForeignPlaceholders }
+    foreach ($marker in $markers) {
+        if ($Value.Contains($marker, [StringComparison]::Ordinal)) { return $marker }
+    }
+    return $null
 }
 
 function Get-HarnessMods {

@@ -215,6 +215,25 @@ exit 0
         @{ Name = 'an info.json the shared reader refuses is refused before the game runs, by path or by entry and zip, the same through the library'; Test = {
             & $refusedByPath @(@('no-name', 'has no "name" key, which the game requires'),
                 @('cut-off.zip', 'cut-off-zipped/info.json in ', 'is not JSON: ')) } }
+        @{ Name = 'Get-ModLinks maps each name to its directory under the root, and refuses a missing one'; Test = {
+            $links = Get-ModLinks -Root (Join-Path $temp 'src') -Mods 'harness-good', 'harness-broken'
+            $missing = try { Get-ModLinks -Root (Join-Path $temp 'src') -Mods 'harness-good', 'no-such-mod' | Out-Null; '' } catch { $_.Exception.Message }
+            $links.Count -eq 2 -and $links['harness-good'] -eq $good -and $missing -match 'Mod directory not found: .*no-such-mod' } }
+        @{ Name = 'Get-LocaleFailure finds an engine error inside a value, a foreign placeholder unless -EngineOnly, and nothing in a name or in no value'; Test = {
+            (Get-LocaleFailure 'Canary Unknown key: "item-name.x"') -ceq 'Unknown key:' -and
+                (Get-LocaleFailure 'a [Unknown control sequence: X] b' -EngineOnly) -ceq 'Unknown control sequence:' -and
+                (Get-LocaleFailure 'Something went wrong') -ceq 'Something went wrong' -and
+                $null -eq (Get-LocaleFailure 'Something went wrong' -EngineOnly) -and
+                $null -eq (Get-LocaleFailure 'unknown key: lower case is not the engine''s') -and
+                $null -eq (Get-LocaleFailure 'Iron plate') -and $null -eq (Get-LocaleFailure '') -and $null -eq (Get-LocaleFailure $null) } }
+        @{ Name = 'Invoke-FactorioStep returns the captured stdout of a run that exits 0, and throws naming the tag of one that does not'; Test = {
+            $h = New-LoadHarness -Mods $good
+            try {
+                $out = Invoke-FactorioStep -FactorioExe $h.FactorioExe -ModDirectory $h.ModDirectory -Arguments @('--version') -OutputDirectory $h.Temp -Tag 'step-ok'
+                $said = try { Invoke-FactorioStep -FactorioExe $h.FactorioExe -ModDirectory $h.ModDirectory -Arguments @('--no-such-option') -OutputDirectory $h.Temp -Tag 'step-bad' 6>$null | Out-Null; '' } catch { $_.Exception.Message }
+                Write-Host "    $said"
+                (Test-Path -LiteralPath $out) -and (Get-Content -LiteralPath $out -Raw) -match 'Version: \d' -and $said -match "Factorio exited \d+ during 'step-bad'" }
+            finally { Remove-LoadHarness -Harness $h } } }
         @{ Name = 'every mod source is still there after the junctions went'; Test = {
             $after = @(Get-ChildItem -LiteralPath (Join-Path $temp 'src'), $cache -Recurse -File -Force | ForEach-Object FullName)
             $sourceBefore.Count -gt 0 -and -not (Compare-Object $sourceBefore $after) } }
