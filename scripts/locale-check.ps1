@@ -1,8 +1,9 @@
 <#
 .SYNOPSIS
     Fails if a prototype of the mods' own would show a player something other than its name.
-    Exit 0 means every prototype whose name starts with -Prefix, of a type the game itself names,
-    has a locale entry that resolved, and that each description it carries resolved too.
+    Exit 0 means every prototype whose name starts with -Prefix, of a type whose other prototypes
+    are named, has a locale entry that resolved, and that each description it carries resolved
+    too.
 
 .DESCRIPTION
     A load does not do this: Factorio's data stage loads a prototype with no locale entry without
@@ -55,7 +56,7 @@
     A type with no other members at all is an error, not a skip. That is the case where this check
     would otherwise go quiet exactly when something new arrives. -Nameless is the answer to it: a
     type named there is declared to have no visible name, and is skipped and reported as declared.
-    `animation` is declared already.
+    `animation` and `custom-input` are declared already; why the second, below.
 
     Descriptions are reported but not required: the count of prototypes carrying one is printed,
     and any that fails to resolve fails the run. Factorio treats a description as optional, so an
@@ -67,20 +68,29 @@
     every item, named after it, and those carry the prefix too.
 
     WHAT IT CANNOT SEE. Anything that needs a map: it only dumps, so a pass says nothing about a
-    mod loading. A prototype outside the prefix. A type skipped because under half of the game's
-    own prototypes of it are named. An absent description. A placeholder another mod ships on
-    purpose. And any language but the one the isolated run dumps in.
+    mod loading. A prototype outside the prefix. A type skipped because under half of its other
+    prototypes, the game's and any other mod's in the set, are named. The name of a custom
+    input: see below. An absent description. A placeholder another mod ships on purpose. And any
+    language but the one the isolated run dumps in.
+
+    A CUSTOM INPUT IS NOT READ. Its name is a [controls] entry, and --dump-prototype-locale
+    writes no file for those. Left to the method above, the type was matched to the shortcuts'
+    file, because 86% of the game's custom inputs share a name with a shortcut, and every custom
+    input of the mods' own was reported missing whether or not it had its entry. Measured on
+    2.0.77 on 2026-10-11, in the review of grado-factorio-tools#102. So `custom-input` is
+    declared beside `animation`, and a custom input with no [controls] entry is not found here.
 
 .PARAMETER Mods
     The mods to load: mod directories, mod zips, or directories of them. Everything the mods
     depend on has to be among them, or bundled with the game.
 
 .PARAMETER Prefix
-    What the names of the mods' own prototypes start with, e.g. rf-. Matched exactly, in case.
+    What the names of the mods' own prototypes start with, e.g. my-. Matched exactly, in case.
 
 .PARAMETER Nameless
-    Prototype types of which the game defines none and which have no player-visible name, beyond
-    `animation`. Several are separated by commas.
+    Prototype types this check must not ask a name of, beyond the two it declares itself: a type
+    with no player-visible name of which the set holds none but the mods' own. Several are
+    separated by commas.
 
 .PARAMETER FactorioExe
     Path to Factorio.exe. Defaults to $env:FACTORIO_EXE, then the Steam install on the machine
@@ -139,7 +149,8 @@ $Nameless = @($Nameless | ForEach-Object { $_ -split ',' } | Where-Object { $_ }
 # defines none of leaves it nothing to look at. Rather than let it assume either way, it throws and
 # asks to be taught. -Nameless is where a caller's teaching goes; what is here is true of the game.
 $NAMELESS_TYPES = @{
-    'animation' = 'a named sprite sheet for rendering.draw_animation; nothing ever shows its name'
+    'animation'    = 'a named sprite sheet for rendering.draw_animation; nothing ever shows its name'
+    'custom-input' = 'named under [controls], which the locale dump does not write; see the header'
 }
 foreach ($type in $Nameless) { $NAMELESS_TYPES[$type] = 'declared with -Nameless' }
 
@@ -158,10 +169,16 @@ if ($SelfTest -and -not $Mods -and -not $Prefix) {
         Set-Content -Path (Join-Path $good 'locale/en/good.cfg') -Encoding utf8
     $Mods = @($good); $Prefix = 'lc-'
 }
-if (-not $Mods)   { throw 'Name the mods to check: mod directories, zips, or directories of them. Or -SelfTest.' }
+if (-not $Mods)   { throw 'Name the mods to check: mod directories, zips, or directories of them. Or -SelfTest with neither mods nor -Prefix.' }
 if (-not $Prefix) { throw 'Say what the names of the mods'' own prototypes start with: -Prefix. Without one this check cannot tell them from the game''s.' }
 
-$harness = New-LoadHarness -Mods $Mods -FactorioExe $FactorioExe -With $With
+# Inside a try of its own, so the fixture goes when the harness cannot be built: a -With that
+# names nothing, or no game at the path.
+try { $harness = New-LoadHarness -Mods $Mods -FactorioExe $FactorioExe -With $With }
+catch {
+    if ($fixture) { Remove-TempDirectory -Path $fixture -Label 'locale-check fixture' }
+    throw
+}
 $temp    = $harness.Temp
 $modDir  = $harness.ModDirectory
 $ourMods = @($harness.Mods.Name)

@@ -30,7 +30,8 @@ goes when the modpack's contraction ticket for it lands.
 
 **Two more have moved here from `realistic-fusion-refreshed`, which still holds its copies.**
 The tree viewer and `scripts/locale-check.ps1`, both below, came on 2026-10-11 with five helpers
-they share. Each copy goes when that repository's contraction ticket for it lands.
+they and its name check use between them. Each copy goes when that repository's contraction
+ticket for it lands.
 
 **Two tools written here from nothing:** `scripts/resolve-modpack.ps1`
 ([#14](https://github.com/trulsjo/grado-factorio-tools/issues/14)) and
@@ -134,8 +135,9 @@ place of its name, or a name or description with an engine error left in it:
 
 It takes the same mod paths as `load-harness.ps1`. `-Prefix` is how it tells the mods' own
 prototypes from the game's, so a mod whose prototype names share no prefix cannot use it. It
-takes two dumps and creates no map: a pass says nothing about the mod loading. `-SelfTest`
-plants three prototypes it must catch, and needs the game. `realistic-fusion-refreshed` still
+takes two dumps and creates no map: a pass says nothing about the mod loading, and it does not
+read the name of a custom input. `-SelfTest` plants prototypes it must catch, and needs the
+game. `realistic-fusion-refreshed` still
 holds its own copy, until
 [its #677](https://github.com/trulsjo/realistic-fusion-refreshed/issues/677) lands.
 
@@ -237,7 +239,7 @@ prototype name is that mod's business. If a script needs to know `rf-`, it stays
 ```
 scripts/     PowerShell entry points, one job each, and the libraries they
              dot-source: load-harness-lib.ps1, game-mods.ps1, mod-info.ps1,
-             which reads a mod's info.json for three of them, and
+             which reads a mod's info.json for four of them, and
              self-test-halves.ps1, the runner a -SelfTest hands its halves to
 .githooks/   this repo's own commit-msg and pre-push hooks, opted into once per
              clone

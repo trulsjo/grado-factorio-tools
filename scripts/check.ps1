@@ -29,8 +29,9 @@
     check is silent on length for a repository that hands it none.
 
     WHAT IT DOES NOT RUN. The self-tests in $NEEDS_GAME, because each starts Factorio, and a CI
-    runner has no game. After a change to the harness or to mod-info.ps1, which the harness reads
-    through, run the harness's by hand, and after a change to one of the others, its own:
+    runner has no game. Every script named there loads its mods through the harness, and the
+    harness reads through mod-info.ps1. So after a change to either of those run all of them by
+    hand, and after a change to one of the others, its own:
 
         pwsh -File scripts/load-harness.ps1 -SelfTest
 
@@ -132,5 +133,5 @@ if ($bad) {
 
 Write-Host ''
 if ($failed) { Write-Host "FAILED - check: $($failed -join '; ')."; exit 1 }
-Write-Host "OK - check passed. Not run: $($NEEDS_GAME -join ', ') -SelfTest, which needs the game."
+Write-Host "OK - check passed. Not run, because each needs the game: -SelfTest of $($NEEDS_GAME -join ', ')."
 exit 0

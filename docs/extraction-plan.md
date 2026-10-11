@@ -18,7 +18,7 @@ pack through this repository's. See *The packer, expanded and contracted* below.
 in the table below still lives in `realistic-fusion-refreshed`.
 
 **Two more are expanded and not contracted, since 2026-10-11.** The tree viewer and
-`locale-check.ps1` are here, with five helpers they share, and `realistic-fusion-refreshed` still
+`locale-check.ps1` are here, with five helpers, and `realistic-fusion-refreshed` still
 holds its copy of each. `name-check.ps1` was measured and has not moved. See *The last three
 earmarked* below.
 
@@ -40,7 +40,7 @@ through an assumed directory layout or an invariant without ever naming it.
 | ~~`scripts/fetch-mods.ps1`~~ | 1,049 | 3 | **Expanded 2026-09-24, contracted 2026-09-25.** See *Expanded and contracted* below. Fills a cache directory with third-party mods at pinned versions — git first, portal as fallback. This is half of the coexistence check and the more reusable half. |
 | ~~`scripts/pack-mods.ps1`~~ | 322 | 7 | **Moved 2026-09-28: expanded 2026-09-25, contracted 2026-09-28.** See *The packer, expanded and contracted* below. Builds one distributable zip per mod, named as the portal requires, and enforces the version bounds the portal enforces at upload. The natural home for the upload step that does not exist yet. |
 | `scripts/tree-viewer.ps1` + `tree-viewer.template.html` + `tree-layout-probe.js` | 533 + 2 files | 7 | **Expanded 2026-10-11**, see *The last three earmarked* below. ~~Move the set.~~ Renders a mod set's technology tree as a self-contained zoomable HTML viewer. Already takes a mod set rather than assuming one. |
-| `scripts/locale-check.ps1` | 391 | ~~—~~ 16 | **Expanded 2026-10-11**, see *The last three earmarked* below. ~~Probably move.~~ Fails if a prototype would show a player something other than its proper name. The rule is general; only the prototype list is local. |
+| `scripts/locale-check.ps1` | 391 | ~~—~~ 16 | **Expanded 2026-10-11**, see *The last three earmarked* below. ~~Probably move.~~ Fails if a prototype would show a player something other than its proper name. The rule is general; ~~only the prototype list is local~~ the mods and their prefix were local. |
 | `scripts/name-check.ps1` | ~~1,749~~ 1,847 | ~~—~~ 74 | **Measured 2026-10-11, not ruled**, see *The last three earmarked* below. **Probably move.** Fails if a repo defines a prototype name that is not its own, or one another mod already claims. General rule, large implementation. |
 | `scripts/factorio-lib.ps1` | 1,357 | **22** | **Split, do not move whole.** The shared PowerShell library, and the most entangled file in the list. Needs a real read to separate what is generic from what is RFR's. |
 | `scripts/load-check.ps1` | 2,294 | many | **Harness expanded 2026-09-24, contracted 2026-09-25**, as `load-harness.ps1` and `load-harness-lib.ps1`; see below. **Move the harness, not the file.** Most of it is thirteen RFR-specific invariants that belong to that mod. What is generic is the surrounding machinery: build an isolated mod directory, junction or zip the mods in, create a throwaway map, report which way it loaded. That harness is the other half of the coexistence check. |
@@ -497,7 +497,7 @@ over its scripts, hooks and workflow, read for callers, 2026-10-11).
 ### The shared helpers, the expand half
 
 **Five helpers of `scripts/factorio-lib.ps1`** (blob `b255eff`, last changed `9269eb9`), which
-the three scripts share, expanded 2026-10-11 by
+the three scripts use between them, expanded 2026-10-11 by
 [#100](https://github.com/trulsjo/grado-factorio-tools/issues/100). The contract half is
 [realistic-fusion-refreshed#675](https://github.com/trulsjo/realistic-fusion-refreshed/issues/675),
 open: until it lands that repository holds its own copy of each.
@@ -509,6 +509,11 @@ open: until it lands that repository holds its own copy of each.
 | `Get-LocaleFailure`, with its two lists of markers | `load-harness-lib.ps1` | code unchanged |
 | `Invoke-SelfTestHalves` | `self-test-halves.ps1` | code unchanged |
 | `Test-SelfTestRunner` | `self-test-halves.ps1` | its last case, and the name of its temporary file |
+
+Only `Get-ModLinks` is named by all three scripts there, `Invoke-FactorioStep` by the viewer
+alone, and `Test-SelfTestRunner` by none of them: it is the runner's canary, which that
+repository's `ship-check.ps1` runs. #100's table had it called by `Invoke-SelfTestHalves`, which
+it is not.
 
 All five were taken; none was replaced by a harness function. `New-LoadHarness` does for a caller
 with paths what `Get-ModLinks` and `New-ModJunctions` do together, and the two tools below use
@@ -544,7 +549,9 @@ What changed on the way in:
 | Its own mod directory and junctions | `New-LoadHarness` and `Remove-LoadHarness` |
 | `-FocusMod` defaulting to that repository's mods | no focus unless one is named; several separated by commas |
 | Output in `tree-viewer-out` under the repository root | `-OutDirectory`, by default `tree-viewer-out` under the current directory |
-| No self-test | `-SelfTest`, three halves, which needs the game |
+| No self-test | `-SelfTest`, which needs the game |
+| `-FocusMod` naming a mod the set does not hold: named on the page as the left side of every pair | dropped with a warning |
+| The page written with `Set-Content -Path` | `-LiteralPath`, since `-OutDirectory` may hold `[` |
 | `rf-treeview-history`, the exporter mod and its file | `treeview-history` |
 | Bare ticket numbers and `docs/research/` paths in comments | each named as that repository's |
 
@@ -559,7 +566,10 @@ Factorio 2.0.77. Both printed `338 techs (119 changed by another mod, 1 unresear
 overlap candidates (100 base-flagged), 4 mods named`. The two pages' datasets were compared key
 by key: `mods`, `packs`, `packLabels`, `techs` and `overlaps` are equal, and `meta` differs in
 the name handed in and in the order of its mod list, which the harness sorts by name. The page
-from here, loaded in headless Edge, drew 339 elements of class `card` and 626 of class `edge`.
+from here, loaded in headless Edge with `--dump-dom`, drew 338 `div` elements of class `card`
+and 626 `path` elements of class `edge` (`grep -o '<div class="card[ "]'` and
+`grep -o '<path class="edge'` over the dump; a first count of 339 took in the template's own
+`class="card${` in the page's script).
 
 ### The locale check, the expand half
 
@@ -577,12 +587,21 @@ What changed on the way in:
 | That repository's three mods, from `Get-RepoMods` | the mod paths `load-harness.ps1` takes, as trailing arguments |
 | `$PREFIX = 'rf-'` | `-Prefix`, required |
 | A prefix nothing carries passes, having checked 0 prototypes | it fails, and asks whether the prefix is right |
-| A type the game defines none of: add it to `$NAMELESS_TYPES` in the script | `-Nameless`, beside `animation`, which is built in |
+| A type the game defines none of: add it to `$NAMELESS_TYPES` in the script | `-Nameless`, beside `animation`, which is built in; the message of the throw says so |
+| `custom-input` matched to the shortcuts' file and every one reported missing | declared, with `animation`, and not read |
+| The self-test's first half, `repo-resolves` | `mods-resolve` |
 | Its own mod directory and junctions | `New-LoadHarness` and `Remove-LoadHarness` |
 | Each dump through `Invoke-Factorio` and its own exit check | `Invoke-FactorioStep` |
 | `-SelfTest` on that repository's mods, canary named `rf-localecheck-canary` | on the mods handed in, or on a mod it builds when handed none; the canary's prototypes take the prefix |
 
-`Test-Locale`, which makes the comparison, is the origin's code with `$PREFIX` renamed.
+`Test-Locale`, which makes the comparison, is the origin's code with `$PREFIX` renamed and the
+message of its one throw reworded.
+
+**The custom input, found in review on 2026-10-11.** A planted mod with one item and one
+`custom-input`, with and without a `[controls]` entry for it, was reported the same both times:
+`custom-input -> shortcut-locale.json (86 % of the game's own)` and the input missing. The
+method is the origin's and its mods define no custom input, so it never met this. The type is
+declared and the header says a custom input's name is not read.
 
 **How the mods' own prototypes are told apart: a prefix, and nothing else.** #102 left this to
 be settled. A prototype is the mods' own when its name starts with `-Prefix`. A mod whose

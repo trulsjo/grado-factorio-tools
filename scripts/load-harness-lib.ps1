@@ -21,10 +21,11 @@
     trimmed to what is true outside that repository; New-ModJunctions takes
     source paths rather than a repository root, and the harness functions are new.
 
-    FOUR MORE CAME LATER, from that repository's factorio-lib.ps1 at c48fadf
+    FIVE MORE CAME LATER, from that repository's factorio-lib.ps1 at c48fadf
     (grado-factorio-tools#100), for the scripts that take a dump and read it: Get-ModLinks,
     Invoke-FactorioStep and Get-LocaleFailure are here with their names and code, and
-    Invoke-SelfTestHalves is in self-test-halves.ps1, which this file dot-sources. A caller with
+    Invoke-SelfTestHalves and its canary, Test-SelfTestRunner, are in self-test-halves.ps1,
+    which this file dot-sources. A caller with
     paths to mods wants New-LoadHarness, which needs no Get-ModLinks; that one is for a caller
     that builds its own mod directory with New-ModJunctions.
 
@@ -372,7 +373,7 @@ function Remove-ModJunctions {
 #
 #   A FOREIGN PLACEHOLDER is a string another mod ships on purpose. "Something went wrong" is not
 #   an engine string at all: it is the literal value Angels' own locale gives [item-name]
-#   angels-void, and the 334 recipes carrying it in that set at 2.0.77 point their localised_name
+#   angels-void, and the 334 recipes carrying it in Angels' mods at 2.0.77 point their localised_name
 #   at that key deliberately, to mark a recipe a missing dependency stranded. A viewer is right to
 #   refuse it as a LABEL. A gate over a mod's own prototypes must not fail on it.
 #
