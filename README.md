@@ -104,6 +104,23 @@ The path is the last line it prints. The cache is `.dump-cache` under the curren
 mod's name, version and size, so the same mods in another directory are served the same dump. It
 reads sizes and not contents: what that misses is in its header. `-SelfTest` needs no game.
 
+## Seeing a set's technology tree
+
+`tree-viewer.ps1` renders the technology tree of a set of mods as one zoomable HTML page, each
+technology coloured by the mod that created it:
+
+    pwsh -File scripts/tree-viewer.ps1 .mod-cache/krastorio2 path/to/my-mod -FocusMod my-mod
+
+It takes the same mod paths as `load-harness.ps1`, loads them the same isolated way, and writes
+`tree-viewer-out/tech-tree.html` under the current directory; `-OutName` and `-OutDirectory`
+change that. `-FocusMod` names the mods whose items, fluids and entities are paired with
+like-named ones of the other mods. It is a probe: exit 0 means it ran and wrote the page, not
+that the tree is right. The page loads two libraries from a CDN, so it needs the network to
+render. `tree-layout-probe.js` is pasted into the browser console on a rendered page to measure
+layout alternatives. `-SelfTest` needs the game. `realistic-fusion-refreshed` still holds its own
+copy of all three files, until
+[its #676](https://github.com/trulsjo/realistic-fusion-refreshed/issues/676) lands.
+
 ## Keeping an agent session out of the mod cache
 
 An agent session's tooling writes state files into the directory its shell stands in, and a file

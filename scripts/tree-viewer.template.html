@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lane tech tree</title>
+<!--
+  Template for scripts/tree-viewer.ps1, which splices the dataset over the __DATASET__ placeholder
+  and writes the result to tree-viewer-out/. Do not open this file directly; it has no data.
+
+  The design is the one settled on the "Zoomable tree viewer prototype" ticket (realistic-fusion-refreshed#161) after four
+  reaction rounds: dagre-layered cards, top-down by default, full detail on the card up close and
+  mod-coloured heads with counter-scaled badges from afar, click for a side panel with links
+  highlighted in both directions. Attribution follows realistic-fusion-refreshed#164/#165: colour = PrototypeHistory.created,
+  the changed chain rides in the panel, and a tick marks "changed by a mod other than its creator".
+
+  The libraries come from a CDN by deliberate choice (realistic-fusion-refreshed#161): this is a dev-side instrument, and the
+  prototype's variant A proved an offline hand-rolled fallback is possible if that trade-off is ever
+  revisited. d3 is cdnjs, as realistic-fusion-refreshed#161 settled. dagre is NOT, and the split is the point:
+
+  cdnjs's dagre stops at 0.8.5 and always will -- the maintained package renamed itself to
+  @dagrejs/dagre, which cdnjs does not carry at any version -- so staying on cdnjs meant staying on
+  a 2020 release for the life of the tool. Moving is safe because it is not a change: 0.8.5, 2.0.4
+  and 3.1.1 were all run against the Angels lane and all three return 30127 x 8424, total edge
+  length 5486094, longest 35018. Identical to the pixel. Nothing about this graph's drawing is being
+  traded here; what is bought is a library that can still receive a fix.
+
+  Pin the exact version, and prefer a version whose dist/dagre.min.js is SELF-CONTAINED. 2.0.x is
+  not, and cannot be loaded this way at all: it externalises @dagrejs/graphlib and throws
+  `Dynamic require of "@dagrejs/graphlib" is not supported` before defining a global, so what a
+  reader sees is the "CDN did not load" fallback below and no clue why. 3.1.1 bundles graphlib again
+  and needs no other change -- the call shape below, dagre.graphlib.Graph / setNode / setEdge /
+  dagre.layout / g.node().x,y / g.edge().points, is unchanged across all three.
+-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@dagrejs/dagre@3.1.1/dist/dagre.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  /* The banner WRAPS -- it lists every mod in the set -- so its height is a function of the window
+     width and the lane, not a constant. It used to be fixed-positioned over a stage that started at
+     a hardcoded 34px, so on a narrow-enough window it covered the top of the canvas and, once the
+     detail panel's header was pinned, the technology name permanently (realistic-fusion-refreshed#170: 93px of banner over a
+     header at 46px). Column flex instead: the banner takes the height it needs and the stage takes
+     what is left, at any width. */
+  body { background: #1b1d1f; color: #d8dbde; font: 13px/1.4 "Segoe UI", system-ui, sans-serif;
+         display: flex; flex-direction: column; }
+
+  #banner { flex: 0 0 auto; z-index: 20; padding: 6px 12px;
+            background: #26292c; border-bottom: 1px solid #3a3e42; display: flex; gap: 14px;
+            align-items: baseline; flex-wrap: wrap; }
+  #banner b { color: #e8a33d; }
+  #banner .note { color: #9aa0a6; font-size: 12px; }
+  /* min-height:0 or the flex item refuses to shrink below its content and the canvas overflows */
+  #stage { position: relative; flex: 1 1 auto; min-height: 0; }
+
+  .chip { display: inline-block; padding: 1px 7px; border-radius: 3px; font-size: 11px;
+          color: #101214; font-weight: 600; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 2px;
+         vertical-align: -1px; border: 1px solid rgba(0,0,0,.4); }
+  .ovbadge { color: #e8a33d; font-weight: 700; }
+  .chbadge { color: #7fa8d9; font-weight: 700; }
+  .muted { color: #9aa0a6; }
+  .mono  { font-family: Consolas, monospace; font-size: 12px; }
+
+  /* No padding-top: .phead supplies it. With one, the body scrolls through the strip ABOVE a
+     header pinned below it -- overflow clips at the padding box, not at the content box. */
+  .panel { position: absolute; top: 0; right: 0; bottom: 0; width: 340px; overflow-y: auto;
+           background: #26292c; border-left: 1px solid #3a3e42; padding: 0 14px 12px; z-index: 10;
+           display: none; }
+  /* The name is the panel's title and has to read as one: at 15px against a 13px body it was the
+     least heading-like text in the panel, quieter than the uppercase letter-spaced h3s below it
+     (realistic-fusion-refreshed#170). */
+  .panel h2 { font-size: 17px; font-weight: 600; color: #f0f2f4; line-height: 1.25;
+              margin-bottom: 3px; }
+  .panel h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #9aa0a6;
+              margin: 12px 0 4px; }
+  /* The panel scrolls, and on a technology with a long unlock list -- the ones actually worth
+     studying -- the name used to scroll away exactly while the list was being read. The whole
+     identity block is pinned rather than the close button alone: name, badges, mod chip and
+     prototype id all say WHICH card was clicked. The negative side margins let its opaque
+     background span the panel's full width so the body passes behind it rather than beside it, and
+     it carries the panel's top padding itself so it starts exactly where it sticks. */
+  .panel .phead { position: sticky; top: 0; z-index: 2; background: #26292c;
+                  margin: 0 -14px 8px; padding: 12px 14px 8px;
+                  border-bottom: 1px solid #3a3e42; }
+  .panel ul { list-style: none; }
+  .panel li { padding: 2px 0; border-bottom: 1px solid #303336; }
+  .panel .pair { font-size: 12px; padding: 4px 0; }
+  /* Inside .phead now, so it needs no stickiness of its own. It stays floated, which keeps a long
+     name wrapping around it rather than under it. */
+  .panel .close { float: right; cursor: pointer; color: #9aa0a6;
+                  font-size: 18px; line-height: 1; padding: 0 2px; }
+  .panel .close:hover { color: #fff; }
+
+  #view { position: absolute; inset: 0; overflow: hidden; background: #17181a; }
+  #world { position: absolute; transform-origin: 0 0; }
+  #world svg { position: absolute; top: 0; left: 0; overflow: visible; }
+  .edge { fill: none; stroke: #45525e; stroke-opacity: .6; stroke-width: 1.5; }
+  .edge.hot-in  { stroke: #e05c5c; stroke-opacity: 1; stroke-width: 3; }
+  .edge.hot-out { stroke: #57ab5a; stroke-opacity: 1; stroke-width: 3; }
+  /* ~1.5px on screen at any far zoom — the thickness at the detail threshold, judged right on the
+     prototype */
+  .far .edge.hot-in,
+  .far .edge.hot-out { stroke-width: calc(1.5px * var(--inv, 1)); }
+
+  /* overflow stays visible on the card: the corner badges counter-scale far beyond the card's
+     bounds when zoomed out, and overflow:hidden clipped them away on the prototype */
+  .card { position: absolute; background: #26292c; border: 1px solid #3d4247; border-radius: 6px;
+          font-size: 11px; }
+  /* The title wraps to at most two lines rather than being cut at one (realistic-fusion-refreshed#171). The card is narrow
+     enough now that some of the Angels lane's names need the second line, and the height dagre was
+     given already counts it -- headExtra() below measures a real head, badges and all, to find
+     out. */
+  .card .head { padding: 4px 8px; font-weight: 600; font-size: 12px; color: #f0f2f4;
+                border-left: 4px solid transparent; background: #2e3236; overflow: hidden;
+                border-radius: 5px 5px 0 0; }
+  .card .body { padding: 4px 8px 6px; overflow: hidden; }
+  /* One line, like the unlock rows below it. A count formula can be long -- artillery-shell-speed-1
+     carries 1000+3^(L-1)*1000 -- and at 170px it wrapped to two, making the card 18px taller than
+     the height dagre was given and hanging its text below the border. The formula is never lost:
+     the detail panel prints it in full. (realistic-fusion-refreshed#171) */
+  .card .packs { margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .packs .n { font-size: 10px; color: #9aa0a6; margin-right: 5px; }
+  .card .u { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #b9bec3; }
+  .card .u.ov { color: #e8a33d; }
+  .card .bonus { color: #7fa8d9; }
+  .card.sel { box-shadow: 0 0 0 3px #0f6bd7; }
+  /* a technology no player can research (realistic-fusion-refreshed#168) — dashed and dimmed, with ⊘ in its head. Kept off
+     the canvas entirely until the tools toggle asks for it. Placed before .faded so mod emphasis
+     still wins over it. */
+  .card.dead { border-style: dashed; opacity: .5; }
+  .deadb  { color: #e5534b; font-weight: 700; }
+  .blockb { color: #d98a8a; font-weight: 700; }
+  .card.faded { opacity: .18; }
+  .card.boost { transform: scale(1.12); transform-origin: center; box-shadow: 0 0 0 2px #fff;
+                z-index: 5; }
+
+  /* corner badges, counter-scaled by --inv (set from the zoom level) so they stay readable at any
+     distance instead of shrinking away with the card. ⚠ top-right: overlap candidate.
+     ✎ top-left: changed by a mod other than its creator. */
+  .card .ovb, .card .chb { position: absolute; top: -3px; font-size: 14px; font-weight: 700;
+                           text-shadow: 0 0 3px #000, 0 0 3px #000; z-index: 2;
+                           pointer-events: none; }
+  .card .ovb { right: -3px; color: #e8a33d; transform-origin: top right; }
+  .card .chb { left: -3px; color: #7fa8d9; transform-origin: top left; }
+  .far .card .ovb, .far .card .chb { transform: scale(var(--inv, 1)); }
+
+  .far .card .body { display: none; }
+  .far .card { border-width: 2px; }
+  .far .card .head { font-size: 18px; padding: 8px 10px; background: var(--modc); color: #0d0f10;
+                     border-radius: 5px; }
+
+  #tools { position: absolute; top: 10px; left: 10px; z-index: 15; background: #26292cee;
+           border: 1px solid #3a3e42; border-radius: 6px; padding: 8px 12px; font-size: 12px;
+           max-width: 260px; max-height: calc(100% - 80px); overflow-y: auto; }
+  #tools h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #9aa0a6;
+              margin: 8px 0 3px; }
+  #tools button { background: #0f6bd7; color: #fff; border: 0; border-radius: 4px;
+                  padding: 4px 8px; cursor: pointer; }
+  #tools .modchip { display: block; cursor: pointer; padding: 3px 7px; border-radius: 4px;
+                    margin: 3px 0; color: #101214; font-weight: 600; opacity: .8;
+                    border: 2px solid transparent; }
+  #tools .modchip.on { opacity: 1; border-color: #fff; }
+  #tools .pk { padding: 1px 0; color: #c9ced3; }
+  /* An uncached layout is seconds long, and the controls are disabled and the cursor busy for it.
+     `progress` has to be forced onto the descendants: the button carries cursor:pointer above and
+     the two toggle labels carry it inline, so a rule on body alone shows nothing until the pointer
+     leaves the control that was just clicked -- which is the one place it is not. */
+  body.busy, body.busy * { cursor: progress !important; }
+  #tools button:disabled { opacity: .6; }
+
+  .fallback { padding: 80px 40px; max-width: 640px; margin: 0 auto; color: #c9ced3; }
+</style>
+</head>
+<body>
+<div id="banner"></div>
+<div id="stage"></div>
+
+<script>
+const DATA = "__DATASET__";
+
+/* ---------- attribution, packs, graph shape ---------- */
+const MODS = Object.fromEntries(DATA.mods.map(m => [m.name, m]));
+const modName  = m => (MODS[m] || {}).label || m;
+const modColor = m => (MODS[m] || {}).color || '#888';
+const PACK_PALETTE = ['#e5534b', '#57ab5a', '#539bf5', '#768390', '#c69026', '#e6edf3', '#986ee2',
+                      '#a3adb8', '#e8a33d', '#d94fd0', '#8250df', '#5cc9a7', '#c0562b'];
+const packColor = p => PACK_PALETTE[DATA.packs.indexOf(p) % PACK_PALETTE.length];
+
+const byId = new Map(DATA.techs.map(t => [t.id, t]));
+
+/* a technology no player can research: another mod switched it off. The dataset ships all three
+   flags rather than dropping the tech (realistic-fusion-refreshed#168) — a dead base tech left on the canvas is a finding
+   about how the lane interleaves, not noise. Off by default; the toggle brings them back dashed
+   and dimmed, and the layout is recomputed because the node set changed. Angels leaves 72 here,
+   sulfur-processing among them, with its prerequisites emptied too — an orphan with no edges. */
+const isDead = t => !t.enabled || t.hidden;
+const deadCount = DATA.techs.filter(isDead).length;
+let techs = [], edges = [], blocked = new Set(), deadShown = false;
+function setShowDead(on) {
+  deadShown = !!on;
+  techs = DATA.techs.filter(t => on || !isDead(t));
+  const shown = new Set(techs.map(t => t.id));
+  edges = techs.flatMap(t => (t.prereqs || []).filter(p => shown.has(p)).map(p => [p, t.id]));
+  /* a live tech gated behind a hidden one loses its in-edge with it, and dagre then draws it at
+     rank 0 -- reading as freely researchable when it is in fact unreachable. Marked, not bridged:
+     an invented prereq-to-dependent edge would misstate the tree the other way. Empty while the
+     toggle is on, because then the edge is on the canvas for a reader to follow. Angels has none
+     of these; a lane that disables a tech others still list will. */
+  blocked = new Set(techs.filter(t =>
+    (t.prereqs || []).some(p => byId.has(p) && !shown.has(p))).map(t => t.id));
+}
+setShowDead(false);
+
+/* the active overlap set is dynamic: base-game pairs ship flagged (o.base) and stay filtered out
+   until the "include base-game overlaps" toggle turns them on (realistic-fusion-refreshed#160) */
+const overlapFocus = DATA.meta.focusMods || [];
+let activeOv = [], overlapNames = new Set();
+function setBaseOverlaps(on) {
+  activeOv = DATA.overlaps.filter(o => on || !o.base);
+  overlapNames = new Set();
+  for (const o of activeOv) { overlapNames.add(o.a); overlapNames.add(o.b); }
+}
+setBaseOverlaps(false);
+const techResults = t => new Set(t.unlocks.flatMap(u => u.results || []));
+const isOverlap = t => { for (const r of techResults(t)) if (overlapNames.has(r)) return true; return false; };
+const overlapPairsFor = t => {
+  const rs = techResults(t);
+  return activeOv.filter(o => rs.has(o.a) || rs.has(o.b));
+};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function costHtml(t) {
+  if (t.formula) return `<span class="mono">${esc(t.formula)}</span> × ${t.time}s`;
+  if (t.count)   return `${t.count} × ${t.time}s`;
+  if (t.trigger) return `<span class="muted">trigger:</span> ${esc(t.trigger)}`;
+  return '<span class="muted">free</span>';
+}
+function packChips(t, withCounts = true) {
+  return t.packs.map(([p, n]) =>
+    `<span class="dot" style="background:${packColor(p)}" title="${esc(DATA.packLabels[p] || p)}"></span>` +
+    (withCounts && n > 1 ? `<span class="n">×${n}</span>` : '')).join(' ');
+}
+/* The head's exact content, used BOTH to render the card and to measure how tall it will be
+   (realistic-fusion-refreshed#171). One function because the two must not drift: the measurement missed the badges while
+   the render drew them, so a dead technology's name could wrap on a card sized for one line. */
+const headHtml = t =>
+  `${isDead(t) ? '<span class="deadb">⊘</span> ' : ''}` +
+  `${blocked.has(t.id) ? '<span class="blockb">⊝</span> ' : ''}` +
+  `${esc(t.label)}`;
+
+function detailHtml(t) {
+  const pairs = overlapPairsFor(t);
+  // Every flag the canvas can put on a card, as one compact run beside the name, so the pinned
+  // header says what kind of technology this is and not only which one. The lines that explain
+  // each of them stay in the body, where they can be as long as they need to be.
+  const badges = [
+    isOverlap(t)        ? '<span class="ovbadge" title="unlocks an overlap candidate">⚠</span>' : '',
+    t.changedBy.length  ? '<span class="chbadge" title="changed by another mod">✎</span>' : '',
+    isDead(t)           ? '<span class="deadb" title="not researchable in this set">⊘</span>' : '',
+    blocked.has(t.id)   ? '<span class="blockb" title="gated behind a hidden technology">⊝</span>' : '',
+  ].filter(Boolean).join(' ');
+  return `
+    <header class="phead">
+      <span class="close" title="close">×</span>
+      <h2>${esc(t.label)}${badges ? ' ' + badges : ''}</h2>
+      <div><span class="chip" style="background:${modColor(t.mod)}">${esc(modName(t.mod))}</span>
+           <span class="muted mono">${esc(t.id)}</span></div>
+    </header>
+    ${blocked.has(t.id) ? `<div style="margin-top:4px" class="muted"><span class="blockb">⊝</span> gated behind a
+      hidden technology: <span class="mono">${(t.prereqs || []).filter(p => byId.has(p) && isDead(byId.get(p))).map(esc).join(', ')}</span></div>` : ''}
+    ${isDead(t) ? `<div style="margin-top:4px" class="muted"><span class="deadb">⊘</span> not researchable:
+      <span class="mono">${[!t.enabled ? 'enabled = false' : '', t.hidden ? 'hidden = true' : '',
+        t.visibleWhenDisabled ? 'visible_when_disabled = true' : ''].filter(Boolean).join(', ')}</span></div>` : ''}
+    ${t.changedBy.length ? `<div style="margin-top:4px" class="muted">changed by:
+      ${t.changedBy.map(m => `<span class="chip" style="background:${modColor(m)}">${esc(modName(m))}</span>`).join(' ')}
+      <span class="muted">(in order)</span></div>` : ''}
+    <h3>Cost</h3>
+    <div>${costHtml(t)}</div>
+    <div style="margin-top:4px">${packChips(t)}</div>
+    <h3>Unlocks (${t.unlocks.length})</h3>
+    <ul>${t.unlocks.map(u => `<li class="${(u.results||[]).some(r => overlapNames.has(r)) ? 'ovbadge' : ''}">${esc(u.label)}</li>`).join('') || '<li class="muted">none</li>'}</ul>
+    ${t.bonuses.length ? `<h3>Bonuses</h3><ul>${t.bonuses.map(b => `<li>${esc(b)}</li>`).join('')}</ul>` : ''}
+    ${pairs.length ? `<h3>Overlap candidates touching this tech</h3>
+      <ul>${pairs.map(o => `<li class="pair">[${o.score}] ${esc(o.aLabel)} <span class="muted">(${o.aCat}, ${esc(modName(o.aMod))})</span>
+        ~ ${esc(o.bLabel)} <span class="muted">(${o.bCat}, ${esc(modName(o.bMod))})</span></li>`).join('')}</ul>` : ''}`;
+}
+
+/* ---------- the viewer ---------- */
+function init(stage) {
+  /* Names which one is missing, because the two come from different CDNs now and a reader who has
+     to fix this needs to know which host to look at. It is also not always the network: a dagre
+     build that externalises its dependency throws on load and leaves the global undefined, which
+     arrives here looking exactly like a failed fetch (realistic-fusion-refreshed#182). */
+  const missing = [!window.dagre && 'dagre (jsdelivr)', !window.d3 && 'd3 (cdnjs)'].filter(Boolean);
+  if (missing.length) {
+    stage.innerHTML = `<div class="fallback"><h2>A library did not load</h2>
+      <p>This viewer needs ${missing.join(' and ')} — loading them from a CDN is a deliberate
+      trade-off (realistic-fusion-refreshed#161). Connect to the network and reload; if that does not fix it, the browser
+      console will say what the script did instead of defining its global.</p></div>`;
+    return;
+  }
+  stage.innerHTML = `<div id="view"><div id="world"></div></div>
+    <div id="tools">
+      <button id="orient"></button>
+      <h4>Mods — click to emphasize</h4>
+      ${DATA.mods.map(m =>
+        `<span class="modchip" data-mod="${esc(m.name)}" style="background:${m.color}">${esc(m.label)}</span>`).join('')}
+      <h4>Science packs</h4>
+      ${DATA.packs.map(p => `<div class="pk"><span class="dot" style="background:${packColor(p)}"></span> ${esc(DATA.packLabels[p] || p)}</div>`).join('')}
+      <h4>Selected tech's links</h4>
+      <div class="pk"><span class="dot" style="background:#e05c5c"></span> needed to research it</div>
+      <div class="pk"><span class="dot" style="background:#57ab5a"></span> techs it helps unlock</div>
+      <h4>Badges</h4>
+      <div class="pk"><span class="ovbadge">⚠</span> unlocks an overlap candidate</div>
+      <div class="pk"><span class="chbadge">✎</span> changed by another mod</div>
+      <div class="pk"><span class="deadb">⊘</span> not researchable in this set</div>
+      <div class="pk"><span class="blockb">⊝</span> gated behind a hidden technology</div>
+      <h4>Unresearchable</h4>
+      ${deadCount
+        ? `<label class="pk" style="cursor:pointer"><input type="checkbox" id="show-dead">
+             show ${deadCount} unresearchable tech${deadCount > 1 ? 's' : ''}</label>
+           <div class="pk muted">another mod disabled them at game start, or hid them from the
+             tech screen — drawn dashed and dimmed</div>`
+        : `<div class="pk muted">none — every tech in this set is researchable</div>`}
+      <h4>Overlaps</h4>
+      ${overlapFocus.length
+        ? `<div class="pk muted">left side of every pair: ${(DATA.meta.focusLabels || overlapFocus).map(esc).join(', ')}</div>
+           <label class="pk" style="cursor:pointer"><input type="checkbox" id="base-ov"> include base-game overlaps</label>`
+        : `<div class="pk muted">no focus mod in this set — overlap analysis off</div>`}
+    </div>
+    <aside class="panel" id="panel"></aside>`;
+
+  const world = document.getElementById('world');
+  const viewEl = document.getElementById('view'), view = d3.select(viewEl);
+  const panel = document.getElementById('panel');
+  /* 230 -> 170 is the whole of realistic-fusion-refreshed#171. Measured in the rendered viewer over the Angels lane's 406
+     live technologies, the canvas goes from 42796x8265 to 33682x8424: 21% narrower for 1.9%
+     taller, with the median edge down 18% (5072 -> 4156) and the LONGEST edge down 18% too
+     (47152 -> 38501), which is the test the ticket set. Card width is the only lever that moves
+     width at all -- ranksep buys height without touching it, forcing `align` is worse in every
+     column, and weighting sole-prerequisite edges is worse still.
+     What it buys: no name is cut at normal zoom any more, where 8 were. What it costs: 8% of the
+     visible unlock lines ellipsis rather than 1%, and a worse far zoom, where the head renders at
+     18px -- 35 names need a third line there and 15 of those overflow their card by up to 25px.
+     They SPILL past its bottom border rather than clipping: .card .head sets overflow:hidden but
+     no height, and .card is deliberately overflow:visible, so nothing is there to clip against.
+     Measured in the rendered viewer, which is the only way this was ever going to be right --
+     the same canvas-metrics guess that mis-measured a title also produced a made-up count here. */
+  const CARDW = 170, SHOW = 4;
+
+  /* dagre is given every card's height before any card exists, so a wrapped title has to be
+     measured ahead of the render. It is measured with a REAL element carrying the real class, not
+     with canvas text metrics: canvas measureText disagrees with the browser's own line breaking on
+     any label landing near the boundary, and "Advanced nickel smelting 2" is one of them -- it
+     measured as one line, rendered as two, and left that card's text hanging 20px below its
+     border. The probe breaks where the head breaks because it IS a head. */
+  const headHeight = (() => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.cssText = `position:absolute; visibility:hidden; left:-9999px; top:0; width:${CARDW}px`;
+    const head = document.createElement('div');
+    head.className = 'head';
+    card.appendChild(head);
+    document.body.appendChild(card);
+    return html => { head.innerHTML = html; return head.offsetHeight; };
+  })();
+  const HEAD1 = headHeight('X');   // one line, whatever the stylesheet makes that
+  /* Whatever the head really needs beyond one line, uncapped. A cap would only mean allocating
+     less height than the card goes on to use: .card .head grows in normal flow, and .card is
+     deliberately overflow:visible for the counter-scaled corner badges, so a title too tall for
+     its allocation pushes the body out below the border rather than being clipped. */
+  const headExtra = t => Math.max(0, headHeight(headHtml(t)) - HEAD1);
+  let rankdir = 'TB', gw = 1, gh = 1;
+  const selMods = new Set();
+
+  const zoom = d3.zoom().scaleExtent([0.02, 2.5]).on('zoom', ev => {
+    world.style.transform = `translate(${ev.transform.x}px,${ev.transform.y}px) scale(${ev.transform.k})`;
+    world.classList.toggle('far', ev.transform.k < 0.5);
+    world.style.setProperty('--inv', Math.min(1 / ev.transform.k, 25));
+  });
+  view.call(zoom);
+
+  function applyEmphasis() {
+    for (const c of world.querySelectorAll('.card')) {
+      const on = selMods.size && selMods.has(c.dataset.mod);
+      c.classList.toggle('boost', !!on);
+      c.classList.toggle('faded', selMods.size > 0 && !on);
+    }
+  }
+  function fit() {
+    const vw = viewEl.clientWidth, vh = viewEl.clientHeight;
+    const k = Math.max(Math.min(vw / gw, vh / gh) * 0.95, 0.02);
+    view.call(zoom.transform, d3.zoomIdentity.translate((vw - gw * k) / 2, (vh - gh * k) / 2).scale(k));
+  }
+  /* dagre.layout() is the whole cost of a toggle and then some: 4459 ms over the 406 live techs
+     and 5766 ms over all 478, against 3 ms to rebuild the card HTML and 9 ms to put it in the DOM
+     (realistic-fusion-refreshed#175). Only FOUR layouts exist, though -- two node sets by two orientations -- and no other
+     control moves a node: a card's height reads t.unlocks and t.bonuses alone, so the overlap
+     toggle cannot change one. So each is laid out once and kept, and every later render of a
+     state already seen is the ~12 ms of rebuilding the cards. */
+  const layouts = new Map();
+  function layoutFor() {
+    const key = `${rankdir}|${deadShown}`;
+    const cached = layouts.get(key);
+    if (cached) return cached;
+    /* edgesep 6, against dagre's default of 20 (realistic-fusion-refreshed#182). dagre separates two DUMMY nodes by edgesep
+       and two cards by nodesep, and its dummies carry no width -- so this is the gutter the 2346
+       chains of dummy nodes reserve in every rank they cross, and it was left at the default while
+       the cards were tuned to 16. Measured on both lanes and both orientations, it is the only
+       lever in either research note that takes nothing back: it compresses the axis cards spread
+       along and leaves the other one to the pixel. Angels top-down 33682 -> 30127 wide with the
+       height at 8424 either way, total edge length -8.8%, longest -9.0%; left-right the height
+       falls 22308 -> 18431 with the width unchanged at 10390. Krastorio 2 gains less, 5% rather
+       than 11%, but gains in every column both ways round -- which the rank split realistic-fusion-refreshed#182 went looking
+       for could not manage on two lanes at once.
+       What it spends is lane spacing, and only at the crowded end: the median gap between adjacent
+       edge lanes moves 103px to 96px, while the 10th percentile IS this number, exactly. 6 leaves
+       four stroke widths of paper between neighbours where 4 leaves under three, for 1.6% more
+       width -- Truls's call, made by looking at the busiest rank gap rather than at the table. */
+    const g = new dagre.graphlib.Graph().setGraph({ rankdir, nodesep: 16, ranksep: 90, edgesep: 6, marginx: 40, marginy: 40 });
+    g.setDefaultEdgeLabel(() => ({}));
+    for (const t of techs) {
+      const lines = Math.min(t.unlocks.length, SHOW) + (t.unlocks.length > SHOW ? 1 : 0) + (t.bonuses.length ? 1 : 0);
+      g.setNode(t.id, { width: CARDW, height: 52 + lines * 15 + headExtra(t) });
+    }
+    for (const [a, b] of edges) g.setEdge(a, b);
+    dagre.layout(g);
+    layouts.set(key, g);
+    return g;
+  }
+
+  function setOrientLabel() {
+    document.getElementById('orient').textContent =
+      rankdir === 'TB' ? 'flow: top ↓ down (click for left → right)' : 'flow: left → right (click for top ↓ down)';
+  }
+  function render(keepView = false) {
+    const g = layoutFor();
+    gw = g.graph().width; gh = g.graph().height;
+    let html = [`<svg width="${gw}" height="${gh}">`];
+    for (const e of g.edges()) {
+      const pts = g.edge(e).points;
+      html.push(`<path class="edge" data-a="${e.v}" data-b="${e.w}" d="M${pts.map(p => `${p.x},${p.y}`).join(' L')}"/>`);
+    }
+    html.push('</svg>');
+    for (const t of techs) {
+      const n = g.node(t.id), color = modColor(t.mod);
+      const shown = t.unlocks.slice(0, SHOW);
+      html.push(`<div class="card${isDead(t) ? ' dead' : ''}" data-mod="${esc(t.mod)}" data-id="${t.id}" style="left:${n.x - n.width / 2}px;top:${n.y - n.height / 2}px;width:${n.width}px;height:${n.height}px;--modc:${color}">
+        ${isOverlap(t) ? '<div class="ovb">⚠</div>' : ''}
+        ${t.changedBy.length ? '<div class="chb">✎</div>' : ''}
+        <div class="head" style="border-left-color:${color}">${headHtml(t)}</div>
+        <div class="body">
+          <div class="packs">${packChips(t)} <span class="n">${t.formula ? esc(t.formula) : (t.count ? t.count + '×' : (t.trigger ? 'trigger' : ''))}</span></div>
+          ${shown.map(u => `<div class="u ${(u.results||[]).some(r => overlapNames.has(r)) ? 'ov' : ''}">▸ ${esc(u.label)}</div>`).join('')}
+          ${t.unlocks.length > SHOW ? `<div class="u muted">… ${t.unlocks.length - SHOW} more</div>` : ''}
+          ${t.bonuses.length ? `<div class="bonus">+ ${t.bonuses.length} bonus effect${t.bonuses.length > 1 ? 's' : ''}</div>` : ''}
+        </div></div>`);
+    }
+    world.innerHTML = html.join('');
+    setOrientLabel();
+    applyEmphasis();
+    if (!keepView) fit();
+  }
+  render();
+
+  /* a change handler runs to completion before the browser paints anything, so a control that
+     triggers an uncached layout does not even show its own new state for five seconds. Truls read
+     that as the checkboxes being broken (realistic-fusion-refreshed#175), which is the worse half of the bug -- a slow
+     control and a dead one look identical. Two frames put that state on screen before the work
+     starts, so the wait that remains is visibly a wait.
+     Disabling every control for the duration does the rest of the job. It is feedback, since a
+     greyed control is a visible "not now"; and it is the reason two of these can never overlap,
+     which they otherwise would -- the first to finish would clear the busy state while the second
+     layout still ran, and a second click on the orientation button would flip rankdir back under
+     a render already queued, landing on the orientation the reader started from. */
+  function afterPaint(work) {
+    document.body.classList.add('busy');
+    const controls = [...document.querySelectorAll('#tools input, #tools button')];
+    for (const c of controls) c.disabled = true;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      try { work(); }
+      finally {
+        document.body.classList.remove('busy');
+        for (const c of controls) c.disabled = false;
+      }
+    }));
+  }
+
+  document.getElementById('orient').addEventListener('click', () => {
+    rankdir = rankdir === 'TB' ? 'LR' : 'TB';
+    setOrientLabel();   // the button's label IS its state; render's copy comes too late to see
+    afterPaint(() => render());
+  });
+  const showDead = document.getElementById('show-dead');
+  if (showDead) showDead.addEventListener('change', e => {
+    const on = e.target.checked;
+    afterPaint(() => {
+      setShowDead(on);
+      panel.style.display = 'none';
+      render();   // a different node set, so a different layout — and a refit to it
+    });
+  });
+  const baseOv = document.getElementById('base-ov');
+  if (baseOv) baseOv.addEventListener('change', e => {
+    const on = e.target.checked;
+    afterPaint(() => {
+      setBaseOverlaps(on);
+      panel.style.display = 'none';
+      render(true);   // same layout, same zoom — only the badges and pair lists change
+    });
+  });
+  document.getElementById('tools').addEventListener('click', e => {
+    const chip = e.target.closest('.modchip');
+    if (!chip) return;
+    const m = chip.dataset.mod;
+    selMods.has(m) ? selMods.delete(m) : selMods.add(m);
+    chip.classList.toggle('on', selMods.has(m));
+    applyEmphasis();
+  });
+
+  function clearSelection() {
+    world.querySelectorAll('.card.sel').forEach(x => x.classList.remove('sel'));
+    world.querySelectorAll('.edge.hot-in,.edge.hot-out').forEach(x => x.classList.remove('hot-in', 'hot-out'));
+  }
+  world.addEventListener('click', e => {
+    const c = e.target.closest('.card');
+    if (!c) return;
+    clearSelection();
+    c.classList.add('sel');
+    const id = CSS.escape(c.dataset.id);
+    world.querySelectorAll(`.edge[data-b="${id}"]`).forEach(x => x.classList.add('hot-in'));   // prerequisites
+    world.querySelectorAll(`.edge[data-a="${id}"]`).forEach(x => x.classList.add('hot-out'));  // what it feeds
+    panel.innerHTML = detailHtml(byId.get(c.dataset.id));
+    panel.style.display = 'block';
+    panel.querySelector('.close').onclick = () => {
+      panel.style.display = 'none';
+      clearSelection();
+    };
+  });
+}
+
+document.getElementById('banner').innerHTML =
+  `<b>${esc(DATA.meta.name)}</b>
+   <span>${DATA.meta.techCount} techs${deadCount ? ` (${deadCount} unresearchable)` : ''} · ${DATA.overlaps.length} overlap candidates · Factorio ${esc(DATA.meta.factorio)}</span>
+   <span class="note">${esc(DATA.meta.modList.join(', '))}</span>
+   <span class="note">generated ${esc(DATA.meta.generated)} · attribution: engine PrototypeHistory</span>`;
+document.title = DATA.meta.name;
+init(document.getElementById('stage'));
+</script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 # Build and run output
 /dist/
 /out/
+/tree-viewer-out/
 *.zip
 
 # Python
