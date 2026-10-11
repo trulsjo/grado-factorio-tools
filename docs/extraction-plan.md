@@ -627,17 +627,18 @@ measurement and a recommendation.
 **Ruled by Truls on 2026-10-11: it stays in `realistic-fusion-refreshed` for now.** The reasons
 are that comment's:
 
-- **There is no second consumer.** What moved would have one caller, and its general form would
-  be designed against one example.
+- **There is no second consumer.** Whatever moved would have one caller, and the general form
+  of `Get-SetDerived`, one of the two classifiers below, would be designed against one example.
 - **The rule's line count overstates what is portable.** 427 of its 862 lines are two
   classifiers whose reasoning is that repository's own measurements. Moving them moves the place
   a finding gets excused out of the repository whose findings it excuses.
 - **A third of the file is a self-test that would be rewritten, not moved**, and it holds 42 of
-  the 76 project references.
+  the 76 project references by #103's pattern.
 
 What staying costs: a later mod with its own prefix gets no name check from here until the
-ruling changes. The comment names what could move then, five functions that take a prefix,
-allowed edits and reference rows as parameters; that is not ruled.
+ruling changes, and this page keeps one earmarked script that does not move. The comment says
+where the seam is clean if an engine ever moves: five functions that take a prefix, allowed
+edits and reference rows as parameters. Whether anything moves later is not ruled.
 
 The figures:
 
