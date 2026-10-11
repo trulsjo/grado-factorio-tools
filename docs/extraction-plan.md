@@ -41,7 +41,7 @@ through an assumed directory layout or an invariant without ever naming it.
 | ~~`scripts/pack-mods.ps1`~~ | 322 | 7 | **Moved 2026-09-28: expanded 2026-09-25, contracted 2026-09-28.** See *The packer, expanded and contracted* below. Builds one distributable zip per mod, named as the portal requires, and enforces the version bounds the portal enforces at upload. The natural home for the upload step that does not exist yet. |
 | `scripts/tree-viewer.ps1` + `tree-viewer.template.html` + `tree-layout-probe.js` | 533 + 2 files | 7 | **Expanded 2026-10-11**, see *The last three earmarked* below. ~~Move the set.~~ Renders a mod set's technology tree as a self-contained zoomable HTML viewer. Already takes a mod set rather than assuming one. |
 | `scripts/locale-check.ps1` | 391 | ~~—~~ 16 | **Expanded 2026-10-11**, see *The last three earmarked* below. ~~Probably move.~~ Fails if a prototype would show a player something other than its proper name. The rule is general; only the prototype list is local. |
-| `scripts/name-check.ps1` | 1,749 | — | **Probably move.** Fails if a repo defines a prototype name that is not its own, or one another mod already claims. General rule, large implementation. |
+| `scripts/name-check.ps1` | ~~1,749~~ 1,847 | ~~—~~ 74 | **Measured 2026-10-11, not ruled**, see *The last three earmarked* below. **Probably move.** Fails if a repo defines a prototype name that is not its own, or one another mod already claims. General rule, large implementation. |
 | `scripts/factorio-lib.ps1` | 1,357 | **22** | **Split, do not move whole.** The shared PowerShell library, and the most entangled file in the list. Needs a real read to separate what is generic from what is RFR's. |
 | `scripts/load-check.ps1` | 2,294 | many | **Harness expanded 2026-09-24, contracted 2026-09-25**, as `load-harness.ps1` and `load-harness-lib.ps1`; see below. **Move the harness, not the file.** Most of it is thirteen RFR-specific invariants that belong to that mod. What is generic is the surrounding machinery: build an isolated mod directory, junction or zip the mods in, create a throwaway map, report which way it loaded. That harness is the other half of the coexistence check. |
 
@@ -598,6 +598,22 @@ their first line only, which here also prints the prefix and lists the mods by n
 end `83 of 135 named prototypes also carry a description` and `OK - all 135 prototypes resolve
 to a name`, and with `-With space-age` both say 165. `-SelfTest` on those mods passes both
 halves, and `-Prefix zz-` fails.
+
+### The name check, measured and not moved
+
+**`scripts/name-check.ps1`** was read whole on 2026-10-11, at `c48fadf`, for
+[#103](https://github.com/trulsjo/grado-factorio-tools/issues/103), whose comment holds the
+measurement and a recommendation. Whether it moves is Truls's, and is not ruled.
+
+- **1,847 lines** (`git show origin/main:scripts/name-check.ps1 | wc -l`), where the table said
+  1,749 on 2026-09-20.
+- **74 project references** by this page's pattern (the same, through
+  `grep -ci 'realistic-fusion\|rf-'`), and 76 by the pattern #103 used
+  (`grep -c -i 'rf-\|realistic\|rfr'`). The table had no count.
+- **Placed line by line:** 862 lines of rule, 635 of self-test, 209 of header, 96 of machinery
+  the harness already has, and 45 of lists that are that mod's own. 427 of the rule's lines are
+  two classifiers whose code names nothing of the mod and whose reasoning is that repository's
+  measurements.
 
 ## What has to be written, not moved
 
