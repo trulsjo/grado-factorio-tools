@@ -482,6 +482,45 @@ command a `cd` into the cache exits 2 with the reason, and a read by path exits 
 `-SelfTest -Settings` given the modpack's file passes, its first hook being the command it has
 at `4cc5805`, though what that wiring reaches today is the modpack's own copy.
 
+## The last three earmarked, the expand halves
+
+Asked for by Truls on 2026-10-11: the tree viewer, `locale-check.ps1` and `name-check.ps1`, each
+measured against `realistic-fusion-refreshed`'s `origin/main` at `c48fadf`. No hook, workflow or
+gate runner there calls any of the three (`git grep -n -E "tree-viewer|locale-check|name-check"`
+over its scripts, hooks and workflow, read for callers, 2026-10-11).
+
+### The shared helpers, the expand half
+
+**Five helpers of `scripts/factorio-lib.ps1`** (blob `b255eff`, last changed `9269eb9`), which
+the three scripts share, expanded 2026-10-11 by
+[#100](https://github.com/trulsjo/grado-factorio-tools/issues/100). The contract half is
+[realistic-fusion-refreshed#675](https://github.com/trulsjo/realistic-fusion-refreshed/issues/675),
+open: until it lands that repository holds its own copy of each.
+
+| Helper | Where it is here | What differs from the origin |
+|---|---|---|
+| `Get-ModLinks` | `load-harness-lib.ps1` | code unchanged |
+| `Invoke-FactorioStep` | `load-harness-lib.ps1` | code unchanged |
+| `Get-LocaleFailure`, with its two lists of markers | `load-harness-lib.ps1` | code unchanged |
+| `Invoke-SelfTestHalves` | `self-test-halves.ps1` | code unchanged |
+| `Test-SelfTestRunner` | `self-test-halves.ps1` | its last case, and the name of its temporary file |
+
+All five were taken; none was replaced by a harness function. `New-LoadHarness` does for a caller
+with paths what `Get-ModLinks` and `New-ModJunctions` do together, and the two tools below use
+it, but the contract half deletes the origin's copies and its callers call these names.
+Comments were trimmed to what is true outside that repository.
+
+**The one difference in code.** The runner's canary breaks a copy of its own file and loads the
+copy in a child process. In the origin that file dot-sources the harness from the submodule, so
+the canary rewrote that path in the copy. Here the runner is a file that loads nothing, so the
+copy runs from anywhere and the rewrite is gone. `load-harness-lib.ps1` dot-sources it, so a
+caller of the library has the runner already. The temporary file was named `rf-runner-floor-`
+and is `runner-floor-`.
+
+**What runs them.** `self-test-halves.ps1 -SelfTest` runs the canary with no game, and
+`check.ps1` runs it. `load-harness.ps1 -SelfTest` has a case for each of the other three, and
+needs the game.
+
 ## What has to be written, not moved
 
 **Mod portal upload.** It does not exist in any repo. `pack-mods.ps1` is explicit in its own header:
