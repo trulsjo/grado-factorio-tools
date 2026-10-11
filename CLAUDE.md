@@ -30,8 +30,8 @@ submodule, [ADR 0001](docs/adr/0001-siblings-consume-this-repo-as-a-submodule.md
 
 ## Working here
 
-- **Tests are each script's `-SelfTest`.** `pwsh -File scripts/check.ps1` runs all but the load
-  harness's, which needs the game: `pwsh -File scripts/load-harness.ps1 -SelfTest`.
+- **Tests are each script's `-SelfTest`.** `pwsh -File scripts/check.ps1` runs all but those
+  that need the game, and names them: run each as `pwsh -File scripts/<script> -SelfTest`.
 - **Factorio is installed on the development machine**, and `load-harness.ps1` runs it headless and
   isolated from the player's game. So a ticket that needs a measurement of the game is
   `ready-for-agent`.
