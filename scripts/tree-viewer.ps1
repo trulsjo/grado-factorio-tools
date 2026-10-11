@@ -14,7 +14,7 @@
     WHERE IT CAME FROM. realistic-fusion-refreshed's scripts/tree-viewer.ps1, with
     tree-viewer.template.html and tree-layout-probe.js, at c48fadf (grado-factorio-tools#101).
     There it loaded that repository's own mods unless told not to, and took them as the focus.
-    Here the mods are arguments and there is no focus unless one is named. The tickets, ADRs and
+    Here the mods are arguments and there is no focus unless one is named. The tickets and
     research notes its comments cite are that repository's, and are named as such.
 
     THE MODS ARE WHAT load-harness.ps1 TAKES: mod directories, mod zips, or directories of them,
@@ -70,9 +70,8 @@
     WHAT IT CANNOT SEE. Whether the page renders: that takes a browser and the network, and
     nothing here opens one. Whether a label is right, beyond its not being one of the strings
     above. A mod handed over as a zip is named in the legend by its internal name, because only a
-    directory's info.json is read for a title. And -SelfTest proves that a planted technology
-    reaches the page's dataset attributed to the mod that made it, and that a focus mod's item is
-    paired with a like-named one of another mod; it draws nothing.
+    directory's info.json is read for a title. And -SelfTest reads the dataset in the page it
+    wrote; it draws nothing.
 
 .PARAMETER Mods
     The mods to load: mod directories, mod zips, or directories of them.
@@ -87,8 +86,9 @@
 .PARAMETER FocusMod
     The mod(s), by internal name, whose things form the LEFT side of every overlap pair. A list,
     not one name, because engine attribution splits a project into its real creators: a core mod
-    defines the fluids a main mod's technologies unlock. With none named, or none of them in the
-    set, overlap analysis is off and the viewer says so. Several are separated by commas.
+    defines the fluids a main mod's technologies unlock. A name that is no mod of the set is
+    dropped with a warning. With none named, or none left, overlap analysis is off and the viewer
+    says so. Several are separated by commas.
 
 .PARAMETER OutName
     Basename of the emitted HTML, and the title the viewer shows. Default: tech-tree.
@@ -176,7 +176,10 @@ data:extend({ $($item.Replace('NAME', 'vf-plasma-widget')),
                 if ((Get-Content -LiteralPath $page -Raw) -notmatch '"name":"viewer-focus","label":"Title of viewer-focus"') {
                     throw 'the legend does not name the focus mod by the title in its info.json.'
                 }
-                'a focus mod''s item is paired, on its localised name, with another mod''s item of that name, and the legend has the mod''s title' } }
+                if ((Get-Content -LiteralPath $page -Raw) -notmatch '"focusMods":\["viewer-focus"\]') {
+                    throw 'a focus mod that is not in the set was not dropped from the page.'
+                }
+                'a focus mod''s item is paired, on its localised name, with another mod''s item of that name; the legend has the mod''s title; a focus not in the set is dropped' } }
         )
     }
     catch { Write-Host "FAILED - self-test: $($_.Exception.Message)"; exit 1 }
@@ -242,6 +245,14 @@ end)
 
     Write-ModList -ModDirectory $modDir -Bundled $harness.Bundled -EnabledBundled $harness.EnabledBundled `
         -Mods (@($setMods) + $rigName)
+
+    # A focus the set does not hold pairs nothing, and the page would still name it as the left
+    # side of every pair. The engine attributes by exact name, so the comparison is exact too.
+    $inSet = @($setMods) + @($harness.EnabledBundled) + @('base', 'core')
+    foreach ($absent in @($FocusMod | Where-Object { $_ -cnotin $inSet })) {
+        Write-Warning "-FocusMod $absent is not a mod of this set, and is left out."
+    }
+    $FocusMod = @($FocusMod | Where-Object { $_ -cin $inSet })
 
     $bundledOn = if ($harness.EnabledBundled) { $harness.EnabledBundled -join ', ' } else { 'none (base 2.0 only)' }
     Write-Host "tree-viewer: $($setMods -join ', ')  |  bundled enabled: $bundledOn"
@@ -558,7 +569,7 @@ end)
     New-Item -ItemType Directory -Path $OutDirectory -Force | Out-Null
     $outPath = Join-Path (Resolve-Path -LiteralPath $OutDirectory).Path "$OutName.html"
     $template.Replace('"__DATASET__"', ($dataset | ConvertTo-Json -Depth 8 -Compress)) |
-        Set-Content -Path $outPath -Encoding utf8
+        Set-Content -LiteralPath $outPath -Encoding utf8
 
     # Surfaced, not silenced: the count is the mods' own localisation failing, which is
     # not this tool's to fix but every bit of it worth reporting.
