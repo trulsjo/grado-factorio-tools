@@ -521,6 +521,41 @@ and is `runner-floor-`.
 `check.ps1` runs it. `load-harness.ps1 -SelfTest` has a case for each of the other three, and
 needs the game.
 
+### The tree viewer, the expand half
+
+**`scripts/tree-viewer.ps1`** (blob `afe54fb`, last changed `f4cbb25`),
+**`scripts/tree-viewer.template.html`** (blob `f305aa2`, last changed `7da7fd8`) and
+**`scripts/tree-layout-probe.js`** (blob `237f90c`, last changed `6db38ae`), expanded 2026-10-11
+by [#101](https://github.com/trulsjo/grado-factorio-tools/issues/101). The contract half is
+[realistic-fusion-refreshed#676](https://github.com/trulsjo/realistic-fusion-refreshed/issues/676),
+open: until it lands that repository holds its own copy of all three.
+
+What changed on the way in:
+
+| Was, in the origin | Is, here |
+|---|---|
+| That repository's three mods, from `Get-RepoMods`, unless `-NoRepoMods` | no mods of its own |
+| `-AlsoModDirectory`, directories of unpacked mods | the mod paths `load-harness.ps1` takes, as trailing arguments |
+| Its own mod directory and junctions | `New-LoadHarness` and `Remove-LoadHarness` |
+| `-FocusMod` defaulting to that repository's mods | no focus unless one is named; several separated by commas |
+| Output in `tree-viewer-out` under the repository root | `-OutDirectory`, by default `tree-viewer-out` under the current directory |
+| No self-test | `-SelfTest`, three halves, which needs the game |
+| `rf-treeview-history`, the exporter mod and its file | `treeview-history` |
+| Bare ticket numbers and `docs/research/` paths in comments | each named as that repository's |
+
+The template and the probe changed in their comments, and in one ticket number in the message
+the page shows when a library does not load. Everything from the parsing of the
+dumps to the page is the origin's code, but for a list named `$mods`, which collided with the new
+`-Mods` parameter and is `$legend`.
+
+**The same set through both, 2026-10-11.** Krastorio 2 from that repository's
+`.mod-cache/krastorio2` with its three mods as the focus, its working tree at `c48fadf`, on
+Factorio 2.0.77. Both printed `338 techs (119 changed by another mod, 1 unresearchable), 209
+overlap candidates (100 base-flagged), 4 mods named`. The two pages' datasets were compared key
+by key: `mods`, `packs`, `packLabels`, `techs` and `overlaps` are equal, and `meta` differs in
+the name handed in and in the order of its mod list, which the harness sorts by name. The page
+from here, loaded in headless Edge, drew 339 elements of class `card` and 626 of class `edge`.
+
 ## What has to be written, not moved
 
 **Mod portal upload.** It does not exist in any repo. `pack-mods.ps1` is explicit in its own header:

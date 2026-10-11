@@ -28,9 +28,9 @@
     $MARKDOWN_LINE_LIMIT, so a prose line left unwrapped fails here (grado-factorio-tools#93); that
     check is silent on length for a repository that hands it none.
 
-    WHAT IT DOES NOT RUN. load-harness.ps1 -SelfTest, because it starts Factorio, and a CI runner
-    has no game. After a change to the harness or to mod-info.ps1, which the harness reads
-    through, run it by hand:
+    WHAT IT DOES NOT RUN. The self-tests in $NEEDS_GAME, because each starts Factorio, and a CI
+    runner has no game. After a change to the harness or to mod-info.ps1, which the harness reads
+    through, run the harness's by hand, and after a change to one of the others, its own:
 
         pwsh -File scripts/load-harness.ps1 -SelfTest
 
@@ -60,7 +60,7 @@ $ErrorActionPreference = 'Stop'
 $SELF_TESTS = @('commit-check.ps1', 'fetch-mods.ps1', 'get-dump.ps1', 'markdown-check.ps1', 'mod-info.ps1', 'pack-mods.ps1',
     'pr-body-check.ps1', 'refuse-cd-into-mod-cache.ps1', 'resolve-modpack.ps1', 'self-test-halves.ps1')
 # Has a self-test this does not run, and why: it needs Factorio installed.
-$NEEDS_GAME = @('load-harness.ps1')
+$NEEDS_GAME = @('load-harness.ps1', 'tree-viewer.ps1')
 # Bytes, with LF line endings; a page must be under its limit. Paths are from the repository root.
 $PAGE_LIMITS = [ordered]@{ 'CLAUDE.md' = 4000; 'docs/agents/code-review.md' = 3000 }
 # Characters a line of tracked Markdown prose may run to. What counts is in markdown-check.ps1's header.
