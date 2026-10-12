@@ -80,6 +80,80 @@ commit only, found a real defect. Not ruled: whether a review's agent runs
 `scripts/check.ps1` again when CI has passed on the same commit. Both lanes of that second review
 did.
 
+**A change that touches no script is reviewed by one agent.** Ruled by Truls on 2026-10-11,
+settling [#109](https://github.com/trulsjo/grado-factorio-tools/issues/109): such a change gets
+one agent running both lanes, on a first review too. Until then a first review had an agent for
+each lane whatever the change. Two pull requests of 2026-10-11 show the cost. The token counts
+and durations are that ticket's, as the session's harness reported them for each agent, with no
+command behind them; the files are `gh pr view <n> --json files`, run 2026-10-12.
+
+| pull request | files changed | bug scan | prose lane |
+|---|---|---|---|
+| [PR #105](https://github.com/trulsjo/grado-factorio-tools/pull/105) | `README.md` and `docs/extraction-plan.md` | 56,263 tokens, 713 s | 72,571 tokens, 703 s |
+| [PR #107](https://github.com/trulsjo/grado-factorio-tools/pull/107) | `README.md` and `scripts/markdown-check.ps1` | 57,438 tokens, 611 s | 64,834 tokens, 382 s |
+
+PR #105's review comment gives its bug scan as "No finding", and what that scan ran,
+`scripts/check.ps1`, the pre-push hook and CI run too. What touching a script means was ruled
+the same day, on the ticket: the diff changes a line of code in `scripts/`, `.githooks/` or
+`.github/workflows`, and help text and message strings alone do not. So the rule reads what
+changed and not only the paths. PR #107 is the case it was decided by: it changed comment-based
+help and one message string inside a script, and by the rule touches none. With the rule of #87
+above there is one sentence on the rules page for both, joined by "or", so a second review of a
+change that touches no script is one agent by either half and no case falls outside the two.
+
+**The body of the tip commit may be amended.** Ruled by Truls on 2026-10-11, settling
+[#108](https://github.com/trulsjo/grado-factorio-tools/issues/108). The review runs on the pull
+request, after the push, and nothing allowed a pushed commit to be rewritten, so a body the
+review found wrong stayed wrong on `main`. Read from the review comments on 2026-10-12:
+
+| pull request | finding | what the commit body said | outcome as posted |
+|---|---|---|---|
+| [PR #104](https://github.com/trulsjo/grado-factorio-tools/pull/104) | P7 | that all three scripts use the five functions that moved | "recorded, not rewritten" |
+| [PR #105](https://github.com/trulsjo/grado-factorio-tools/pull/105) | P5 | "half the rule is that repository's own reasoning", an overstatement | "Recorded. The plan and the body have it right; the commit is pushed and not rewritten." |
+| [PR #105](https://github.com/trulsjo/grado-factorio-tools/pull/105) | P7 | what the README had wrong, and not what it says now | "Recorded, as P5." |
+
+The allowance is one amend and one force-push, on the session's own branch, while its pull
+request is unmerged. A second ruling the same day, on the ticket, keeps it to the tip: a body
+below the tip is still only recorded, which is what PR #104's finding was, on the first of five
+commits. The review comment is posted once and a rebase-merge rewrites every SHA, so the outcome
+names the amended commit by its subject.
+
+**A statement about a sibling repository is opened before it is posted.** Settling
+[#111](https://github.com/trulsjo/grado-factorio-tools/issues/111). The review comment on
+[PR #107](https://github.com/trulsjo/grado-factorio-tools/pull/107) (2026-10-11) carries a note
+from outside the findings: that `grado-factorio-modpack`'s `docs/agents/code-review-why.md`
+"still shows this check with a two-dot range in a quoted block, by the prose agent's reading of
+that repository's `origin/main`". By #111's account the session had not opened the page. Read
+on 2026-10-12 with
+`git show 329ab3d:docs/agents/code-review-why.md` in the modpack's checkout: the line is one of
+two quotations under "the two ranges that had two dots until 2026-10-09, when #204 gave the
+Markdown check's and the glossary check's three", and the modpack's #204 says of that page "It
+is a trail and is left as it is." So the note was a false alarm, and a comment is not edited once
+posted. The rule this replaced on the rules page, that an undated measurement of a sibling
+repository is a finding because that checkout moves, is inside the new one.
+
+**What made room on the rules page, 2026-10-12.** It stood at 2,948 bytes of its 3,000 and the
+three rules above did not fit; it is 2,991 with them:
+
+    tr -d '\r' < docs/agents/code-review.md | wc -c
+
+The room came from words that gave a reason and bound nobody, each quoted here as it stood so
+that none is lost:
+
+- of the plugin, "which is not this repository's to edit": the last section of this page says so.
+- "Its history and earlier-pull-request-comments lanes are dropped" and "with no scoring
+  agents": the first section of this page says what was dropped. The rules page still says two
+  lanes and that the session scores.
+- of re-scoring, "an inflated score destroys the only signal the score carries".
+- "A wrong sentence here has no gate to fail, and most defects found here were prose that was
+  wrong about a correct artefact. These bind the reviewer, not only the author."
+- of a quantifier, "never by agreeing with the tone".
+- of a superseded figure, "A correction that misses one place makes the survivor read as
+  deliberate."
+- of the reference count, "which undercounts".
+- of a header that lists what the code lists, "Each went stale when the code changed;
+  `-SelfTest` prints the cases."
+
 ## Where the first two rules came from
 
 Both were decided by Truls in the sibling
