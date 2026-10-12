@@ -15,12 +15,25 @@
     consumer's own tracked settings. In .claude/settings.json, a PreToolUse hook on the two shell
     tools, matcher `Bash|PowerShell`, whose command is
 
-        i=$(cat); case $i in *mod-cache*) printf '%s' "$i" | pwsh -NoProfile -File "$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-cd-into-mod-cache.ps1" -Root "$CLAUDE_PROJECT_DIR";; esac
+        i=$(cat); case $i in *mod-cache*) h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-cd-into-mod-cache.ps1"; if [ -f "$h" ]; then printf '%s' "$i" | pwsh -NoProfile -File "$h" -Root "$CLAUDE_PROJECT_DIR"; else printf '%s' '{"systemMessage":"refuse-cd-into-mod-cache: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"refuse-cd-into-mod-cache: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it."}}'; fi;; esac
 
     The session hands the hook the tool call as JSON on stdin: this reads `tool_input.command`
     and `cwd`. The `case` starts this script only when that JSON holds the cache's name, because
     starting PowerShell took a second on the machine it was written on (2026-10-06) and the hook
     runs before every shell command.
+
+    WHERE THE SCRIPT IS NOT THERE (grado-factorio-tools#115), as in a clone whose submodule was
+    never fetched, the command above lets the shell command run and prints JSON that tells the
+    agent it was not checked. Without that branch pwsh exits 64 for the missing file and the
+    agent is told nothing: grado-factorio-modpack#228 measured that on 2026-10-12 with Claude
+    Code 2.1.296, by its account, which was not measured again here. -SelfTest holds a wiring
+    to it, the consumer's too when it is given -Settings: its last case runs the wired command
+    for a project that holds no hook script, and fails unless that exits 0 and prints JSON
+    whose hookSpecificOutput names the PreToolUse event and carries an additionalContext that
+    is not empty. So a quote or a percent sign that breaks the message fails here. The case
+    has no switch to leave it out. A consumer whose wiring refuses the command in that
+    branch, or says nothing, fails it, and is to tell the agent and let the command run, as
+    the command above does.
 
     WHAT IT REFUSES. A cd, chdir, pushd, sl, Set-Location or Push-Location, standing where a
     command can stand, whose target resolves to the cache or anything under it: relative or
@@ -61,17 +74,18 @@
     fetch-mods.ps1 puts one. A consumer with another name gives it here and in the wiring's `case`.
 
 .PARAMETER SelfTest
-    Prove it refuses what it should and lets the rest through, and that a wired command reaches
-    it. The last case needs sh: the one on the path, or the one Git for Windows ships. Off
+    Prove it refuses what it should and lets the rest through, that a wired command reaches
+    it, and that the wiring tells the agent where the script is not there. The last two cases
+    need sh: the one on the path, or the one Git for Windows ships. Off
     Windows the cases that are a Windows way of writing a path are not run, and each says so on
     its line: a backslash as separator, Git Bash's /c/... and WSL's /mnt/c/.... What each
     platform printed, and when, is in docs/measurements.md.
 
 .PARAMETER Settings
-    With -SelfTest: a consumer's .claude/settings.json. The last case then runs the command wired
-    there, its first PreToolUse hook, with that file's repository as the project, where it would
-    otherwise run the command above against this script. A consumer runs this to know its wiring
-    still reaches the hook.
+    With -SelfTest: a consumer's .claude/settings.json. The last two cases then run the command
+    wired there, its first PreToolUse hook, with that file's repository as the project, where
+    they would otherwise run the command above against this script. A consumer runs this to
+    know its wiring still reaches the hook, and still tells the agent when it cannot.
 #>
 
 #Requires -Version 7
@@ -170,7 +184,7 @@ if ($SelfTest) {
     $failures = 0
     $skipped = 0
     $n = 0
-    $total = $cases.Count + 3
+    $total = $cases.Count + 4
     foreach ($c in $cases) {
         $n++
         if ($c.Count -gt 3 -and -not $IsWindows) {
@@ -199,8 +213,8 @@ if ($SelfTest) {
     if (-not $ok) { $failures++ }
     # The wiring as the session runs it: a hook's command, through sh, with the tool call on
     # stdin. Exit 2 and the reason for one, exit 0 and silence for the others. The command is the
-    # consumer's when -Settings names its file, and otherwise the one the header shows, pointed
-    # at this script.
+    # consumer's when -Settings names its file, and otherwise the one the header shows, with
+    # this repository as the project so that it finds this script.
     $n++
     if ($Settings) {
         $Settings = (Resolve-Path -LiteralPath $Settings).Path
@@ -208,8 +222,8 @@ if ($SelfTest) {
         $project = Split-Path (Split-Path $Settings -Parent) -Parent
     }
     else {
-        $wired = 'i=$(cat); case $i in *mod-cache*) printf ''%s'' "$i" | pwsh -NoProfile -File "' + ($PSCommandPath -replace '\\', '/') + '" -Root "$CLAUDE_PROJECT_DIR";; esac'
-        $project = $fixture
+        $wired = 'i=$(cat); case $i in *mod-cache*) h="$CLAUDE_PROJECT_DIR/scripts/refuse-cd-into-mod-cache.ps1"; if [ -f "$h" ]; then printf ''%s'' "$i" | pwsh -NoProfile -File "$h" -Root "$CLAUDE_PROJECT_DIR"; else printf ''%s'' ''{"systemMessage":"refuse-cd-into-mod-cache: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"refuse-cd-into-mod-cache: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it."}}''; fi;; esac'
+        $project = Split-Path $PSScriptRoot -Parent
     }
     $env:CLAUDE_PROJECT_DIR = $project
     # Git for Windows keeps its sh, and the cat beside it, off the path PowerShell sees.
@@ -227,6 +241,17 @@ if ($SelfTest) {
         $read.Code -eq 0 -and -not $read.Text.Trim() -and $plain.Code -eq 0 -and -not $plain.Text.Trim()
     Write-Host ("self-test {0}/{1}: the wired hook refuses a cd into the cache with exit 2 and a reason, and passes a read by path and a plain command -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++; Write-Host "    refused: $($refused.Code) $($refused.Text)"; Write-Host "    read: $($read.Code) $($read.Text)"; Write-Host "    plain: $($plain.Code) $($plain.Text)" }
+    # The same command for a project with no hook script, as a clone without the submodule is:
+    # the command runs, and what is printed tells the agent it was not checked.
+    $n++
+    $env:CLAUDE_PROJECT_DIR = $project = Join-Path $fixture 'no-hook-script'
+    $absent = & $through 'cd .mod-cache/Grado_ABC && ls'
+    $ok = $absent.Code -eq 0 -and $(try {
+            $told = ($absent.Text | ConvertFrom-Json).hookSpecificOutput
+            $told.hookEventName -ceq 'PreToolUse' -and [bool] ([string] $told.additionalContext).Trim()
+        } catch { $false })
+    Write-Host ("self-test {0}/{1}: where the project holds no hook script, the wired command exits 0 and prints JSON telling the agent the command was not checked -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
+    if (-not $ok) { $failures++; Write-Host "    $($absent.Code) $($absent.Text)" }
     Write-Host ''
     if ($failures) { Write-Host "FAILED - self-test: $failures of $total case(s) did not hold."; exit 1 }
     if ($skipped) { Write-Host "OK - self-test passed: $($total - $skipped) of $total cases; $skipped skipped off Windows, each named above."; exit 0 }

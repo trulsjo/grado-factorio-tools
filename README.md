@@ -161,7 +161,7 @@ tracked settings. In the consumer's `.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "i=$(cat); case $i in *mod-cache*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-cd-into-mod-cache.ps1\" -Root \"$CLAUDE_PROJECT_DIR\";; esac"
+            "command": "i=$(cat); case $i in *mod-cache*) h=\"$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-cd-into-mod-cache.ps1\"; if [ -f \"$h\" ]; then printf '%s' \"$i\" | pwsh -NoProfile -File \"$h\" -Root \"$CLAUDE_PROJECT_DIR\"; else printf '%s' '{\"systemMessage\":\"refuse-cd-into-mod-cache: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.\",\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"refuse-cd-into-mod-cache: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.\"}}'; fi;; esac"
           }
         ]
       }
@@ -174,12 +174,21 @@ tracked settings. In the consumer's `.claude/settings.json`:
 `.mod-cache`; the `case` has to name it too. The `case` keeps PowerShell from starting before
 every shell command. Exit 2 refuses and says what to do instead. Any other failure exits
 non-zero and not 2, and says on stderr that the command was not checked: no `-Root`, or a tool
-call it cannot read. A submodule that is not initialised is the same posture from pwsh itself,
-which exits 64 for a script that is not there (measured 2026-10-08, PowerShell 7.6.6).
+call it cannot read.
 
-`-SelfTest` proves what is refused and what is not, and that the command above reaches the
-script. A consumer runs `-SelfTest -Settings .claude/settings.json` to prove its own wiring still
-does. What the hook cannot see is in its header.
+Where the script is not there, as in a clone whose submodule is not initialised, the command
+above lets the shell command run and prints JSON whose `additionalContext` tells the agent it
+was not checked. ~~A submodule that is not initialised is the same posture from pwsh itself,
+which exits 64 for a script that is not there (measured 2026-10-08, PowerShell 7.6.6).~~
+**Changed 2026-10-12** ([#115](https://github.com/trulsjo/grado-factorio-tools/issues/115)):
+that exit told the agent nothing, by the account of grado-factorio-modpack#228, which measured
+it that day with Claude Code 2.1.296.
+
+`-SelfTest` proves what is refused and what is not, that the command above reaches the script,
+and that it tells the agent where the script is not there. A consumer runs
+`-SelfTest -Settings .claude/settings.json` to prove the same of its own wiring: one that
+refuses the command in that branch, says nothing, or prints JSON a quote in its message has
+broken, fails. What the hook cannot see is in its header.
 
 ## Keeping an agent session from skipping the hooks
 

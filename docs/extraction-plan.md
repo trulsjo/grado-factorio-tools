@@ -492,6 +492,12 @@ fortieth case came, so 40 where the line above says 39, and off Windows four of 
 commands are named as skipped and not run.
 What each platform printed is in [measurements.md](measurements.md).
 
+**Changed again 2026-10-12** ([#115](https://github.com/trulsjo/grado-factorio-tools/issues/115)):
+a forty-first case, so 41 where the paragraph above says 40. It runs the wired command for a
+project that holds no hook script, and the command of this repository's own that the wiring
+half runs now has a branch for that. It also runs with this repository as its project, where
+it had the self-test's fixture.
+
 ## The last three earmarked, the expand halves
 
 Asked for by Truls on 2026-10-11: the tree viewer, `locale-check.ps1` and `name-check.ps1`, each
