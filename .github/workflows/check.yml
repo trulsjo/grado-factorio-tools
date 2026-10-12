@@ -1,6 +1,7 @@
 # What .githooks/pre-push runs, for a clone that never opted into the hooks, plus two things a
-# hook cannot see: the pull request's title and the commits its body cites. `edited` is listed so
-# a retitle or an edited body is checked again.
+# hook cannot see: the pull request's title, and its body, for the commits it cites and for a
+# closing keyword outside a `Closes #N` line. `edited` is listed so a retitle or an edited body
+# is checked again.
 #
 # Windows, because the scripts are: the harness junctions mods in, and fetch-mods.ps1 reads
 # %APPDATA%. No runner has Factorio, so load-harness.ps1 -SelfTest is not run here or anywhere
@@ -38,7 +39,7 @@ jobs:
         run: ./scripts/commit-check.ps1 -ScopeFile commit-scopes.txt -Title $env:PR_TITLE
 
       # `edited` runs this again too.
-      - name: Check the commits the pull request body cites
+      - name: Check the pull request body
         if: github.event_name == 'pull_request'
         env:
           PR_BODY: ${{ github.event.pull_request.body }}

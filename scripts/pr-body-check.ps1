@@ -1,8 +1,10 @@
 <#
 .SYNOPSIS
-    Checks that every commit a pull request body cites is on the main branch. Exit 0 means each
+    Checks a pull request body for two things a merge acts on: a commit it cites that is not on
+    the main branch, and a closing keyword that is not a `Closes #N` line. Exit 0 means each
     word in the body that names a commit of this repository names one that is an ancestor of
-    origin/main; exit 1 names each that is not.
+    origin/main, and no line holds a closing keyword before an issue reference unless the line
+    is `Closes #N` alone; exit 1 names each commit and each line that fails that.
 
 .DESCRIPTION
     WHY (grado-factorio-tools#96). Pull requests here are rebase-merged, which rewrites every
@@ -18,6 +20,19 @@
     an abbreviated SHA can be all digits; a count or a run id is passed over unless it happens
     to abbreviate a commit here.
 
+    A CLOSING KEYWORD THE AUTHOR DID NOT MEAN (grado-factorio-tools#112). GitHub closes an issue
+    when a pull request merges with a closing keyword before a reference to it anywhere in the
+    body. PR #105 (2026-10-11) said "No ticket is closed: #103" and GitHub listed #103 as an
+    issue the merge would close. docs/agents/issue-tracker.md asks for one `Closes #N` line per
+    ticket closed, so a keyword before a reference anywhere else is a mistake or a second way of
+    saying that line. Reported, with its line: close, closes, closed, fix, fixes, fixed,
+    resolve, resolves or resolved, in any case, then a colon or a space or both, then `#N` or
+    `OWNER/REPOSITORY#N`. A line that is `Closes #N` and nothing else is passed over. The
+    keywords and forms are those of
+    https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue
+    as read on 2026-10-12. This half is a second job in one script, because CI and a session
+    already hand this script every body; it reads the text alone and asks git nothing.
+
     A SHALLOW CLONE IS REFUSED, and nothing is checked: there an ancestor cannot be told from a
     commit whose history was cut off. CI therefore fetches the whole history for this. Whatever
     else git cannot answer fails the run too; nothing passes for not having been asked.
@@ -27,6 +42,10 @@
     fresh clone no longer holds. Run locally, origin/main is as this clone last fetched it, so
     a commit that reached main since is reported. A commit cited by fewer than 7 characters is
     not read. Whether a commit on main is the one the prose means. Anything else a body says.
+    Of closing keywords: one GitHub adds after that date, and an issue named by its address,
+    which that page does not list as a form and this does not read. Whether a `Closes #N` line
+    names the ticket the pull request is for. And a keyword in a code span or a fenced block is
+    reported like any other: the page does not say GitHub passes over one there.
     And a word is asked of git as a name, so a branch or a tag whose name is 7 to 40 hexadecimal
     characters answers for the commit it points at.
 
@@ -93,6 +112,20 @@ function Test-Body {
     $result
 }
 
+function Get-ClosingKeyword {
+    <#  Each place in $Text where a closing keyword stands before an issue reference, but on a
+        line that is `Closes #N` alone, as @{ Line; Found }: the line's number and the words.  #>
+    param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text)
+    $n = 0
+    foreach ($line in $Text -split '\r?\n') {
+        $n++
+        if ($line -cmatch '^Closes #\d+\s*$') { continue }
+        foreach ($m in [regex]::Matches($line, '(?<![\w-])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)(?:\s*:\s*|\s+)(?:[\w.-]+/[\w.-]+)?#\d+', 'IgnoreCase')) {
+            @{ Line = $n; Found = $m.Value }
+        }
+    }
+}
+
 function Invoke-SelfTest {
     $temp = Join-Path ([IO.Path]::GetTempPath()) "pr-body-check-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
     $repo = Join-Path $temp 'repo'
@@ -153,6 +186,27 @@ function Invoke-SelfTest {
             Write-Host ($passed.Text.TrimEnd() -replace '(?m)^', '    ')
             $refused.Code -eq 1 -and $refused.Text -match "(?m)^pr-body-check: $($onBranch.Substring(0, 7)) is a commit that is not on origin/main" -and
                 $refused.Text -match '1 named no commit here' -and $passed.Code -eq 0 -and $passed.Text -match '(?m)^OK - pr-body-check: 1 ' -and $empty.Code -eq 0 } }
+        @{ Name = 'a closing keyword before an issue reference is found with its line: each keyword, in capitals, after a colon, before another repository''s issue, and in a code span'; Test = {
+            $each = 'close', 'closes', 'closed', 'fix', 'fixes', 'fixed', 'resolve', 'resolves', 'resolved' | ForEach-Object { @(Get-ClosingKeyword "It $_ #7.").Count }
+            $forms = @(Get-ClosingKeyword "Summary`n`nCLOSES #7 and Fixed: #8, with resolves:#9.`r`nIt fixes octo-org/octo-repo#100, and ``closes #10`` too.")
+            -not ($each -ne 1) -and $each.Count -eq 9 -and $forms.Count -eq 5 -and -not ($forms[0..2].Line -ne 3) -and -not ($forms[3..4].Line -ne 4) -and
+                $forms[1].Found -eq 'Fixed: #8' -and $forms[3].Found -eq 'fixes octo-org/octo-repo#100' } }
+        @{ Name = 'a line that is Closes #N alone passes; so do a keyword with no reference after it, a reference with no keyword before it, and a keyword inside a longer word'; Test = {
+            $alone = @(Get-ClosingKeyword "Closes #7`nCloses #8  `r`n`nBody.")
+            $none = @(Get-ClosingKeyword "This closes nothing. See #7, which was fixed in PR #9. A prefix #3, an unresolved #4, and it closes the gap: #5 has more.")
+            $notAlone = @(Get-ClosingKeyword "Closes #7, closes #8`ncloses #9`n- Closes #10")
+            $alone.Count -eq 0 -and $none.Count -eq 0 -and $notAlone.Count -eq 4 } }
+        @{ Name = 'the opening of PR #105''s body as first posted is refused, naming line 4, and as reworded passes'; Test = {
+            $file = Join-Path $temp 'body.md'
+            $start = "## Summary`n`nTruls ruled on 2026-10-11 that ``name-check.ps1`` stays in ``realistic-fusion-refreshed`` for now.`n"
+            Set-Content -LiteralPath $file -Value ($start + 'No ticket is closed: #103, the measurement, closed with #104.')
+            $refused = & $run @($file)
+            Set-Content -LiteralPath $file -Value ($start + 'This pull request closes no ticket. The measurement''s ticket, #103, went with #104.')
+            $passed = & $run @($file)
+            Write-Host ($refused.Text.TrimEnd() -replace '(?m)^', '    ')
+            Write-Host ($passed.Text.TrimEnd() -replace '(?m)^', '    ')
+            $refused.Code -eq 1 -and $refused.Text -match '(?m)^pr-body-check: line 4 says "closed: #103"' -and $refused.Text -match '(?m)^FAILED - pr-body-check: .*1 closing keyword' -and
+                $passed.Code -eq 0 -and $passed.Text -match '(?m)^OK - pr-body-check: ' } }
     )
 
     $failures = 0
@@ -182,11 +236,15 @@ $read = Test-Body -Text "$Body" -Top $top -Main $Main
 foreach ($word in $read.Off) {
     Write-Host "pr-body-check: $word is a commit that is not on $Main. A rebase-merge rewrites it: cite the pull request, or the commit once it is on main."
 }
+$closing = @(Get-ClosingKeyword -Text "$Body")
+foreach ($c in $closing) {
+    Write-Host "pr-body-check: line $($c.Line) says `"$($c.Found)`", which GitHub reads as closing that issue when this merges. If it is meant, give it a line of its own, as Closes #N; if not, reword it."
+}
 $unchecked = if ($read.Unknown) { " $($read.Unknown) named no commit here and were NOT checked." } else { '' }
-if ($read.Off) {
+if ($read.Off -or $closing) {
     Write-Host ''
-    Write-Host "FAILED - pr-body-check: $($read.Off.Count) word(s) of the body name a commit that is not on $Main.$unchecked"
+    Write-Host "FAILED - pr-body-check: $($read.Off.Count) word(s) of the body name a commit that is not on $Main, and $($closing.Count) closing keyword(s) stand outside a Closes #N line.$unchecked"
     exit 1
 }
-Write-Host "OK - pr-body-check: $($read.On) word(s) of the body name a commit, each on $Main.$unchecked"
+Write-Host "OK - pr-body-check: $($read.On) word(s) of the body name a commit, each on $Main, and no closing keyword stands outside a Closes #N line.$unchecked"
 exit 0
