@@ -11,5 +11,6 @@ resolve-modpack
 markdown-check
 pr-body-check
 cd-hook
+hook-skip
 docs
 repo

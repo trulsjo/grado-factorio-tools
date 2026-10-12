@@ -61,7 +61,7 @@
 $ErrorActionPreference = 'Stop'
 
 $SELF_TESTS = @('commit-check.ps1', 'fetch-mods.ps1', 'get-dump.ps1', 'markdown-check.ps1', 'mod-info.ps1', 'pack-mods.ps1',
-    'pr-body-check.ps1', 'refuse-cd-into-mod-cache.ps1', 'resolve-modpack.ps1', 'self-test-halves.ps1')
+    'pr-body-check.ps1', 'refuse-cd-into-mod-cache.ps1', 'refuse-git-hook-skip.ps1', 'resolve-modpack.ps1', 'self-test-halves.ps1')
 # Has a self-test this does not run, and why: it needs Factorio installed.
 $NEEDS_GAME = @('load-harness.ps1', 'locale-check.ps1', 'tree-viewer.ps1')
 # Bytes, with LF line endings; a page must be under its limit. Paths are from the repository root.
