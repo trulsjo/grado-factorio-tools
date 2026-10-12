@@ -22,7 +22,13 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
   a review caught it.
 - **What a ticket states**: a statement about the repository or about a past pull request is read
   from the source when the ticket is written. One that was not read is marked as an account, as
-  #89 does with "by its #195's account and not re-read here".
+  #89 does with "by its #195's account and not re-read here". A statement about what a command
+  prints, lists or exits with is run when the ticket is written, and the ticket shows the command
+  and what it printed: the source says which command runs, not what it prints. Where it cannot be
+  run, the statement is marked as not run and the run is an acceptance criterion. On 2026-10-11
+  #106 said, "read from source, not run for this ticket", that with a two-dot range the files
+  `main` changed since are listed too. The first run, on PR #107, showed that false for a file
+  the base added.
 - **Read an issue**: `gh issue view <number> --comments`, filtering comments by `jq` and also
   fetching labels.
 - **List issues**:
