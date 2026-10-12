@@ -98,8 +98,9 @@ the same day, on the ticket: the diff changes a line of code in `scripts/`, `.gi
 `.github/workflows`, and help text and message strings alone do not. So the rule reads what
 changed and not only the paths. PR #107 is the case it was decided by: it changed comment-based
 help and one message string inside a script, and by the rule touches none. With the rule of #87
-above there is one sentence on the rules page for both, joined by "or", so a second review of a
-change that touches no script is one agent by either half and no case falls outside the two.
+above there is one sentence on the rules page for both, joined by "or": one agent when no script
+is touched, one agent when each commit since the last review answers a finding of it, and an
+agent for each lane otherwise. No case falls outside the three.
 
 **The body of the tip commit may be amended.** Ruled by Truls on 2026-10-11, settling
 [#108](https://github.com/trulsjo/grado-factorio-tools/issues/108). The review runs on the pull
@@ -116,7 +117,9 @@ The allowance is one amend and one force-push, on the session's own branch, whil
 request is unmerged. A second ruling the same day, on the ticket, keeps it to the tip: a body
 below the tip is still only recorded, which is what PR #104's finding was, on the first of five
 commits. The review comment is posted once and a rebase-merge rewrites every SHA, so the outcome
-names the amended commit by its subject.
+names the amended commit by its subject. A body below the tip that scores 80 or more meets two
+rules, that it must be fixed and that it is recorded. The ruling is the later and the narrower,
+and the rules page has no room to say which wins; that is not ruled.
 
 **A statement about a sibling repository is opened before it is posted.** Settling
 [#111](https://github.com/trulsjo/grado-factorio-tools/issues/111). The review comment on
@@ -129,16 +132,18 @@ on 2026-10-12 with
 two quotations under "the two ranges that had two dots until 2026-10-09, when #204 gave the
 Markdown check's and the glossary check's three", and the modpack's #204 says of that page "It
 is a trail and is left as it is." So the note was a false alarm, and a comment is not edited once
-posted. The rule this replaced on the rules page, that an undated measurement of a sibling
-repository is a finding because that checkout moves, is inside the new one.
+posted. The rule this replaced on the rules page bound the prose under review: "A measurement
+of a sibling repository is a measurement: that checkout moves, so an undated one is a finding."
+The new one names the diff beside the lane and the session, so that is still inside it.
 
 **What made room on the rules page, 2026-10-12.** It stood at 2,948 bytes of its 3,000 and the
-three rules above did not fit; it is 2,991 with them:
+three rules above did not fit; it is 2,998 with them:
 
     tr -d '\r' < docs/agents/code-review.md | wc -c
 
-The room came from words that gave a reason and bound nobody, each quoted here as it stood so
-that none is lost:
+Most of the room came from words that gave a reason and bound nobody, each quoted here as it
+stood so that none is lost. The rest came from saying the same in fewer words, which the last
+item lists:
 
 - of the plugin, "which is not this repository's to edit": the last section of this page says so.
 - "Its history and earlier-pull-request-comments lanes are dropped" and "with no scoring
@@ -153,6 +158,9 @@ that none is lost:
 - of the reference count, "which undercounts".
 - of a header that lists what the code lists, "Each went stale when the code changed;
   `-SelfTest` prints the cases."
+- shortened, with the meaning kept: "Conventions on top of" to "On top of"; "What was measured,
+  and the past findings behind each rule, are in" to "The evidence is in"; "any other skill" to
+  "any skill"; "open the pull request, then review it" to "open the pull request first".
 
 ## Where the first two rules came from
 

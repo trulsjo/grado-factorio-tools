@@ -39,7 +39,7 @@
     `git -C`, and a tool's own working-directory option. The cache spelt in another case than the
     wiring's `case` names it, which Windows opens and the wiring does not start this script for.
     Off Windows, a target written with a backslash, which pwsh takes as a separator there and
-    this does not (ruled on grado-factorio-tools#113); and /c/... or /mnt/c/... is read there as
+    this does not (ruled for grado-factorio-tools#113); and /c/... or /mnt/c/... is read there as
     the path it says, not as a drive. Anything under WSL, where it has not been run.
     It reads the command as text and does not parse the shell, so
     `cd .mod-cache` where a command could stand is refused inside a quoted string too: after a
