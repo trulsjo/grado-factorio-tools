@@ -239,3 +239,39 @@ The parser also gives up on some input: a bullet list nested 90 deep throws "Mar
 in the input are too deeply nested - depth limit exceeded", and PR #98's review reported the
 same for a table of 10 columns and 1,000 rows, with 10 by 500 parsing. The check says so for the
 page and takes none of its lines for code.
+
+## `refuse-cd-into-mod-cache.ps1`
+
+### The self-test on Windows and on Linux
+
+Measured 2026-10-12 (grado-factorio-tools#113), with pwsh 7.6.6 on both.
+
+| Where | Command | What it ended with |
+|---|---|---|
+| Windows, the development machine | `-SelfTest` | `OK - self-test passed: all 40 cases.` |
+| Windows, the development machine | `-SelfTest -Settings <modpack>/.claude/settings.json` | the same |
+| Linux, `ubuntu-latest` | `-SelfTest` | `OK - self-test passed: 36 of 40 cases; 4 skipped off Windows, each named above.` |
+| Linux, `ubuntu-latest` | `-SelfTest -Settings consumer/.claude/settings.json` | the same |
+
+The Linux rows are run 38212614538 of this repository, a workflow on a branch made for the
+measurement and deleted after it: `gh run view 38212614538 --log`. `consumer` there is a checkout
+of `grado-factorio-modpack` at `1b30cbe`, with this repository's `scripts/` put where its
+submodule stands, so its wired command reached the script being measured. On Windows the settings
+file was the modpack checkout's own, at the same commit, whose submodule holds the script as it
+was before this change; that row shows the wiring is reached, and the Linux one that the changed
+script answers through it.
+
+Before the change the same self-test failed 4 of 39 cases on `ubuntu-latest`, at this
+repository's `20ef896`: run 38165530088 of `grado-factorio-modpack`, 2026-10-11.
+
+The same Linux run put the drive rewrite back on every platform, by replacing `if ($IsWindows)`
+with `if ($true)` in a copy of the script. That copy's self-test ended
+`FAILED - self-test: 1 of 40 case(s) did not hold.`, and the one was the absolute path under
+`/t/`.
+
+Not measured: the hook under WSL, and any command through the hook on Linux but the three the
+last case sends.
+
+`scripts/check.ps1` was run on Linux in the same run, for information. It failed on one line,
+`fetch-mods.ps1 -SelfTest ran no case`, and every other step passed. Why that self-test ran no
+case there was not looked into.

@@ -24,9 +24,9 @@
 
     WHAT IT REFUSES. A cd, chdir, pushd, sl, Set-Location or Push-Location, standing where a
     command can stand, whose target resolves to the cache or anything under it: relative or
-    absolute, with either slash, as /c/... or C:\.... A relative target is resolved from where the
-    earlier ones in the command left the shell, and from where it started, since one in a subshell
-    does not last. A target it cannot resolve - one holding a variable, a substitution or a
+    absolute, and on Windows with either slash, as /c/... or C:\.... A relative target is resolved
+    from where the earlier ones in the command left the shell, and from where it started, since
+    one in a subshell does not last. A target it cannot resolve - one holding a variable, a substitution or a
     wildcard - is refused if it holds the cache's name. And any command at all while the shell
     already stands in the cache, unless it begins by changing directory out.
 
@@ -38,8 +38,10 @@
     the cache through a variable, a wildcard, a link or a junction whose text does not say so.
     `git -C`, and a tool's own working-directory option. The cache spelt in another case than the
     wiring's `case` names it, which Windows opens and the wiring does not start this script for.
-    Anything under WSL or Linux, read from the code and not run there: a /mnt/c/ path is turned
-    into a Windows one. It reads the command as text and does not parse the shell, so
+    Off Windows, a target written with a backslash, which pwsh takes as a separator there and
+    this does not (ruled on grado-factorio-tools#113); and /c/... or /mnt/c/... is read there as
+    the path it says, not as a drive. Anything under WSL, where it has not been run.
+    It reads the command as text and does not parse the shell, so
     `cd .mod-cache` where a command could stand is refused inside a quoted string too: after a
     `;`, `&`, `|`, `(` or `{`, or at the start of a line. And whether a consumer's settings still
     reach it, unless -SelfTest is given them.
@@ -60,7 +62,10 @@
 
 .PARAMETER SelfTest
     Prove it refuses what it should and lets the rest through, and that a wired command reaches
-    it. The last case needs sh: the one on the path, or the one Git for Windows ships.
+    it. The last case needs sh: the one on the path, or the one Git for Windows ships. Off
+    Windows the cases that are a Windows way of writing a path are not run, and each says so on
+    its line: a backslash as separator, Git Bash's /c/... and WSL's /mnt/c/.... What each
+    platform printed, and when, is in docs/measurements.md.
 
 .PARAMETER Settings
     With -SelfTest: a consumer's .claude/settings.json. The last case then runs the command wired
@@ -90,8 +95,13 @@ function Test-EntersCache {
         [string] $CacheName = '.mod-cache'
     )
 
-    # Git Bash's /c/..., WSL's /mnt/c/... and ~ become what .NET resolves.
-    $native = { param($p) $p -replace '^~(?=$|[\\/])', $HOME -replace '^/(?:mnt/)?([a-zA-Z])(?=$|/)', '$1:' }
+    # ~ becomes what .NET resolves, and on Windows so do Git Bash's /c/... and WSL's /mnt/c/....
+    # Off Windows /c/... is the directory it says, and c:/... would be read as a relative path.
+    $native = {
+        param($p)
+        $p = $p -replace '^~(?=$|[\\/])', $HOME
+        if ($IsWindows) { $p -replace '^/(?:mnt/)?([a-zA-Z])(?=$|/)', '$1:' } else { $p }
+    }
     $cache = [IO.Path]::GetFullPath((Join-Path $Root $CacheName))
     $inside = { param($p) $p -eq $cache -or $p.StartsWith($cache + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) }
 
@@ -113,9 +123,11 @@ function Test-EntersCache {
 
 if ($SelfTest) {
     $fixture = Join-Path ([IO.Path]::GetTempPath()) 'refuse-cd-selftest/repo'
-    $drive = $fixture.Substring(0, 1).ToLower()
-    $posix = "/$drive" + ($fixture.Substring(2) -replace '\\', '/')
-    # Each: the command, where the shell stands (relative to the root), and whether it is refused.
+    # The fixture as Git Bash writes it. Off Windows there is no drive to name, and the cases
+    # that use this are not run: /c stands in so that their lines still show the form.
+    $posix = if ($IsWindows) { "/$($fixture.Substring(0, 1).ToLower())" + ($fixture.Substring(2) -replace '\\', '/') } else { "/c$fixture" }
+    # Each: the command, where the shell stands (relative to the root), whether it is refused,
+    # and, on one that is a Windows way of writing a path, a mark that it is.
     $cases = @(
         @('cd .mod-cache', '.', $true),
         @('cd .mod-cache/Grado_ABC/flib/prototypes && ls', '.', $true),
@@ -123,12 +135,12 @@ if ($SelfTest) {
         @('if cd .mod-cache; then ls; fi', '.', $true),
         @('cd -P .mod-cache', '.', $true),
         @('(cd docs && ls); cd .mod-cache', '.', $true),
-        @("cd `"$fixture\.mod-cache\Grado_ABC`"", '.', $true),
-        @("cd '$posix/.mod-cache' && pwd", '.', $true),
-        @("cd /mnt$posix/.mod-cache", '.', $true),
+        @("cd `"$fixture\.mod-cache\Grado_ABC`"", '.', $true, 'windows'),
+        @("cd '$posix/.mod-cache' && pwd", '.', $true, 'windows'),
+        @("cd /mnt$posix/.mod-cache", '.', $true, 'windows'),
         @('git status; cd .mod-cache', '.', $true),
         @('ls && (cd .mod-cache/Grado_ABC; ls)', '.', $true),
-        @('Set-Location -LiteralPath .mod-cache\Grado_ABC', '.', $true),
+        @('Set-Location -LiteralPath .mod-cache\Grado_ABC', '.', $true, 'windows'),
         @('Push-Location .mod-cache; Get-ChildItem; Pop-Location', '.', $true),
         @('pushd .mod-cache', '.', $true),
         @('cd ../.mod-cache/Grado_ABC', 'docs', $true),
@@ -156,15 +168,30 @@ if ($SelfTest) {
         @('', '.', $false)
     )
     $failures = 0
+    $skipped = 0
     $n = 0
-    $total = $cases.Count + 2
+    $total = $cases.Count + 3
     foreach ($c in $cases) {
         $n++
+        if ($c.Count -gt 3 -and -not $IsWindows) {
+            $skipped++
+            Write-Host ("self-test {0}/{1}: refused from {2}: `{3}` -- skipped: a Windows way of writing a path, not run off Windows" -f $n, $total, $c[1], $c[0])
+            continue
+        }
         $got = Test-EntersCache -Command $c[0] -Cwd (Join-Path $fixture $c[1]) -Root $fixture
         $ok = $got -eq $c[2]
         Write-Host ("self-test {0}/{1}: {2} from {3}: `{4}` -- {5}" -f $n, $total, $(if ($c[2]) { 'refused' } else { 'allowed' }), $c[1], $c[0], $(if ($ok) { 'ok' } else { 'FAILED' }))
         if (-not $ok) { $failures++ }
     }
+    # An absolute path whose first directory is one letter, which is what Git Bash's drive form
+    # looks like: off Windows it is that directory, and must not be read as a drive.
+    $n++
+    $letter = if ($IsWindows) { $fixture -replace '\\', '/' } else { '/t/refuse-cd-selftest/repo' }
+    $ok = (Test-EntersCache -Command "cd `"$letter/.mod-cache`"" -Cwd $letter -Root $letter) -and
+        (Test-EntersCache -Command 'ls' -Cwd "$letter/.mod-cache/Grado_ABC" -Root $letter) -and
+        -not (Test-EntersCache -Command "cd `"$letter/docs`"" -Cwd $letter -Root $letter)
+    Write-Host ("self-test {0}/{1}: refused from {2}: cd {2}/.mod-cache, and ls from inside it; allowed: cd {2}/docs -- {3}" -f $n, $total, $letter, $(if ($ok) { 'ok' } else { 'FAILED' }))
+    if (-not $ok) { $failures++ }
     $n++
     $named = { param($c) Test-EntersCache -Command $c -Cwd $fixture -Root $fixture -CacheName 'kept-mods' }
     $ok = (& $named 'cd kept-mods/a-set') -and (& $named 'cd "$HERE/kept-mods"') -and -not (& $named 'cd .mod-cache')
@@ -202,6 +229,7 @@ if ($SelfTest) {
     if (-not $ok) { $failures++; Write-Host "    refused: $($refused.Code) $($refused.Text)"; Write-Host "    read: $($read.Code) $($read.Text)"; Write-Host "    plain: $($plain.Code) $($plain.Text)" }
     Write-Host ''
     if ($failures) { Write-Host "FAILED - self-test: $failures of $total case(s) did not hold."; exit 1 }
+    if ($skipped) { Write-Host "OK - self-test passed: $($total - $skipped) of $total cases; $skipped skipped off Windows, each named above."; exit 0 }
     Write-Host "OK - self-test passed: all $total cases."
     exit 0
 }

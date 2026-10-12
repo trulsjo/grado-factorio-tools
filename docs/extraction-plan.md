@@ -487,6 +487,10 @@ command a `cd` into the cache exits 2 with the reason, and a read by path exits 
 `-SelfTest -Settings` given the modpack's file passes, its first hook being the command it has
 at `4cc5805`, though what that wiring reaches today is the modpack's own copy.
 
+**Changed 2026-10-12** ([#113](https://github.com/trulsjo/grado-factorio-tools/issues/113)): a
+fortieth case came, and off Windows four of the 37 commands are named as skipped and not run.
+What each platform printed is in [measurements.md](measurements.md).
+
 ## The last three earmarked, the expand halves
 
 Asked for by Truls on 2026-10-11: the tree viewer, `locale-check.ps1` and `name-check.ps1`, each
