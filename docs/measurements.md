@@ -375,6 +375,100 @@ each is a finding that is made, sorted and printed, and has its code spans maske
 has none of them. What PowerShell takes to start. A cache between runs, reading fewer files,
 and pages in parallel, which grado-factorio-tools#125 leaves to Truls.
 
+### Where a bare address ends, by the spec and by GitHub's renderer
+
+Read and asked 2026-10-12 (grado-factorio-tools#124).
+
+**The spec**, GitHub Flavored Markdown 0.29-gfm (2019-04-06), <https://github.github.com/gfm/>,
+section 6.9, *Autolinks (extension)*. Of an address with a scheme it says it is "followed by a
+valid domain, then zero or more non-space non-`<` characters according to extended autolink
+path validation", and of that validation:
+
+> Trailing punctuation (specifically, `?`, `!`, `.`, `,`, `:`, `*`, `_`, and `~`) will not be
+> considered part of the autolink, though they may be included in the interior of the link
+
+> When an autolink ends in `)`, we scan the entire autolink for the total number of
+> parentheses. If there is a greater number of closing parentheses than opening ones, we don’t
+> consider the unmatched trailing parentheses part of the autolink
+
+> If an autolink ends in a semicolon (`;`), we check to see if it appears to resemble an entity
+> reference; if the preceding text is `&` followed by one or more alphanumeric characters. If
+> so, it is excluded from the autolink
+
+> `<` immediately ends an autolink.
+
+**The renderer**, asked with `gh api markdown -f mode=gfm -F text=@<file>`, each line a paragraph
+of its own. What follows `see https://u.nu/` and stands before ` end`, and how much of it the
+renderer put inside the link:
+
+| Written | In the link | | Written | In the link |
+|---|---|---|---|---|
+| `x".` | `x` | | `x)` | `x` |
+| `x."` | `x` | | `x))` | `x` |
+| `x"'"` | `x` | | `a(b)` | `a(b)` |
+| `x;` | `x` | | `a(b))` | `a(b)` |
+| `x;;` | `x` | | `a(b` | `a(b` |
+| `x:` | `x` | | `a)b` | `a)b` |
+| `x~` | `x` | | `x]` | `x` |
+| `x*_~` | `x` | | `x].` | `x` |
+| `x?q=1.` | `x?q=1` | | `x[1]` | `x[1]` |
+| `x.)` | `x` | | `a]b` | `a]b` |
+| `x).` | `x` | | `a[b]c` | `a[b]c` |
+| `x!)` | `x` | | `x&amp;` | `x` |
+| `x,)` | `x` | | `x&amp` | `x&amp` |
+| `a"b` | `a"b` | | `x>.` | `x>` |
+| `a'b` | `a'b` | | `x>y` | `x>y` |
+| `a"b"c` | `a"b"c` | | `x<b`, in emphasis | `x` |
+| `a*b*` | `a*b` | | `a_b_` | `a_b` |
+
+Each of `x}`, `x=`, `x-`, `x/`, `x#`, `x%`, `x+`, `x&`, `x@`, `x$`, `x^`, `x\` and `x|`
+was in the link whole.
+
+So the renderer gives back more than the spec names: a `"` or a `'` that stands last, a `;`
+that ends no entity, and a `]` that nothing in the address opened. The check follows the
+renderer in all of these. In one it does not: it ends an address at a `>`, which the renderer
+takes in, because in `<a href="https://u.nu/x">*open</a>` the renderer makes no link at all
+and reads `*open` as prose, and the check has to see that `*`.
+
+**Emphasis round an address**, the same day and the same way. The renderer closed the
+emphasis in each of these:
+
+```
+*"colors from https://u.nu/factoriogfx"*
+*see https://u.nu/factoriogfx*
+_see https://u.nu/a_b_
+**see https://u.nu/x**
+*see https://u.nu/x.* and *more*
+*see https://u.nu/a*b c*
+~~see https://u.nu/x~~
+*see <https://u.nu/x>*
+(*see https://u.nu/x*) and *(see https://u.nu/x)*
+*see https://u.nu/a_(b)* end
+*'https://u.nu/x'* end
+*see https://u.nu/x?!.,:* end
+*see https://u.nu/x&amp;* end
+```
+
+and in a table, in both cells of `| *"from https://u.nu/x"* | *see https://u.nu/y* |`. It left
+`*see https://u.nu/x and never closed` open. In the sixth the link is `https://u.nu/a*b`, and
+in the third `https://u.nu/a_b`.
+
+It also linked `HTTPS://U.NU/x`, `www.u.nu/x` and `a.b@u.nu`, and made no link of
+`ftp://u.nu/x`, of `xhttps://u.nu/x`, or of an address inside square brackets, as in
+`[*see https://u.nu/x*]`, where it still closed the emphasis.
+
+**The check, before and after**, on the development machine, pwsh 7.6.6. Before, at `41b5488`,
+run with no arguments on a staged file holding the first five lines above, the open one, the
+sixth and the seventh, it reported the first five and the open one. After, it reported the open
+one alone. With `-MaxLineLength 40`, a line of 35 characters of words followed by
+`(*"https://example.com/` and sixty more characters and then `"*).` was not reported for its
+length before, and after is reported as 42 characters.
+
+Over `realistic-fusion-refreshed` at `9a8ab36`, the corpus of the section above, the whole
+output of `-All` was the same before and after the change, with no limit and with
+`-MaxLineLength 100`: `diff` printed nothing. That repository had put its one such address in
+angle brackets.
+
 ## `refuse-cd-into-mod-cache.ps1`
 
 ### The self-test on Windows and on Linux

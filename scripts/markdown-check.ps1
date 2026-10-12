@@ -26,12 +26,22 @@
     paragraph of its own. A link is `[text](target)` or a `[label]: target` line; a target with a
     scheme (`https:`, `mailto:`) or that is only a `#fragment` is not checked, and the rest must
     name a file or directory git tracks, in exact case, as GitHub serves it.
+    A BARE ADDRESS, `https://...` with no brackets, is not read for emphasis, and ends where
+    GitHub's renderer ends one, asked 2026-10-12 (grado-factorio-tools#124; the answers are in
+    docs/measurements.md, with what the GitHub Flavored Markdown spec says, read the same day).
+    It runs to the next whitespace or `<` and then gives back what stands last: any of
+    ?!.,:;*_~'" and an entity such as `&amp;`, and a `)` or `]` that nothing in the address
+    opened. So emphasis that closes straight after an address is closed, as in
+    `*see https://example.com*`, and a `*` or `_` inside one is part of it. The spec names
+    fewer: not the two quotes, a `;` that ends no entity, or the `]`. The check follows the
+    renderer.
 
     LINE LENGTH, ONLY WHEN HANDED A LIMIT (grado-factorio-tools#93). With no -MaxLineLength the
     check is silent on length, so a repository that never asked is not held to one. With it, a
     line longer than the limit is reported with its length, counted as written less the target
     of each `[text](target)` link and each address, `https://...` bare or `<scheme:...>` in
-    angle brackets, none of which can be wrapped. A `<placeholder>` is counted. Not held to it: a
+    angle brackets, none of which can be wrapped. What stands straight after a bare address,
+    where it ends as said above, is counted. A `<placeholder>` is counted. Not held to it: a
     table row, a line in a fence, a `# heading`, a `[label]: target` line, a line of an indented
     code block, and a line with no space to break at within the limit. A space inside a code span
     is no such place, so a command in one is never wrapped. Trailing spaces are not counted. A
@@ -49,6 +59,11 @@
     table, is said to be unread by it, and then no line of the page is taken for code.
     What this cannot see: a heading underlined with `===` is held to the limit as prose, and an
     address with no scheme is counted.
+    OF A BARE ADDRESS, what neither rule sees: one with no scheme, as `www.example.com`, and an
+    e-mail address, both of which GitHub links, are prose here. An address ends at a `>`, which
+    the renderer takes in: an address in a raw tag's attribute would otherwise hide the text
+    after the tag. Whether GitHub makes a link of it at all is not asked: it makes none of
+    `xhttps://...`, nor of an address inside `[square brackets]`, and both are hidden here.
 
     WHAT IT CANNOT SEE. Prose: numbers, dates and quantifiers stay the reviewer's. Whether a
     `#fragment` names a heading. A code block made by indenting, which all but the length rule
@@ -97,6 +112,31 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 
+function Get-BareAddress {
+    <#  Each bare address in $Text, as @{ Index; Length }, ended where GitHub's renderer ends one
+        (asked 2026-10-12, grado-factorio-tools#124; in docs/measurements.md). It runs to the
+        next whitespace or `<`, and then gives back what stands last: any of ?!.,:;*_~'" and
+        an entity such as &amp;, and a ) or ] with no ( or [ before it in the address to match.
+        So the mark that closes emphasis straight after an address is not part of it. It ends
+        at a `>` too, which the renderer takes in: an address in a raw tag's attribute would
+        otherwise run on into the text after the tag.  #>
+    param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text)
+
+    foreach ($m in [regex]::Matches($Text, '(?i)https?://[^\s<>]+')) {
+        $end = $m.Length
+        while ($end -gt 0) {
+            $kept = $m.Value.Substring(0, $end)
+            $last = [string] $kept[$end - 1]
+            if ($kept -match '&[a-zA-Z0-9]+;$') { $end -= $Matches[0].Length }
+            elseif ('?!.,:;*_~''"'.Contains($last)) { $end-- }
+            elseif ($last -eq ')' -and $kept.Split(')').Count -gt $kept.Split('(').Count) { $end-- }
+            elseif ($last -eq ']' -and $kept.Split(']').Count -gt $kept.Split('[').Count) { $end-- }
+            else { break }
+        }
+        @{ Index = $m.Index; Length = $end }
+    }
+}
+
 function Test-Inline {
     <#  The openers left open in one paragraph: a backtick run with no partner, and `*` or `_`
         emphasis never closed. Each as @{ Offset; Message }, the offset into $Text.  #>
@@ -136,9 +176,15 @@ function Test-Inline {
     # No script block is made or called from here on, as an evaluator, a predicate or a helper:
     # this runs for every paragraph and table cell, and those were most of its time
     # (grado-factorio-tools#125, in docs/measurements.md).
-    foreach ($pattern in '(?<=\])\([^)\s]*(\s+"[^"]*")?\)', '<[a-zA-Z][^>\s]*>|https?://[^\s)>]+') {
+    foreach ($pattern in '(?<=\])\([^)\s]*(\s+"[^"]*")?\)', '<[a-zA-Z][^>\s]*>', '://') {
         $hidden = [Text.StringBuilder]::new($masked)
-        foreach ($m in [regex]::Matches($masked, $pattern)) { $null = $hidden.Remove($m.Index, $m.Length).Insert($m.Index, '.', $m.Length) }
+        # The last is no pattern: a bare address, looked for only where the text holds a scheme.
+        # Its first and last characters stay, where a target and an address in angle brackets
+        # are hidden whole: a mark straight after it is flanked by what the address ends with,
+        # which is seldom punctuation, and the brackets of the other two are.
+        $found = if ($pattern -ne '://') { [regex]::Matches($masked, $pattern) }
+        elseif ($masked.Contains('://')) { Get-BareAddress -Text $masked | ForEach-Object { @{ Index = $_.Index + 1; Length = $_.Length - 2 } } }
+        foreach ($m in $found) { $null = $hidden.Remove($m.Index, $m.Length).Insert($m.Index, '.', $m.Length) }
         $masked = $hidden.ToString()
     }
 
@@ -270,7 +316,11 @@ function Test-Markdown {
         # a code span is no place to break: a command wrapped there is no longer the command.
         # A line of an indented code block is quoted output, which cannot be wrapped.
         if ($MaxLineLength -gt 0) {
-            $counted = [regex]::Replace($Lines[$i].TrimEnd(), '(?<=\])\([^)\s]*(\s+"[^"]*")?\)|<[a-zA-Z][a-zA-Z0-9+.-]*:[^>\s]*>|https?://[^\s)>]+', '')
+            $counted = [regex]::Replace($Lines[$i].TrimEnd(), '(?<=\])\([^)\s]*(\s+"[^"]*")?\)|<[a-zA-Z][a-zA-Z0-9+.-]*:[^>\s]*>', '')
+            if ($counted.Contains('://')) {
+                $addresses = @(Get-BareAddress -Text $counted)
+                for ($a = $addresses.Count - 1; $a -ge 0; $a--) { $counted = $counted.Remove($addresses[$a].Index, $addresses[$a].Length) }
+            }
             if ($counted.Length -gt $MaxLineLength -and -not $codeLines.Contains($i) -and $line -notmatch '^\s{0,3}#{1,6}\s' -and $prose -notmatch '^\s{0,3}\[[^\]^][^\]]*\]:') {
                 $lead = [regex]::Match($counted, '^(\s*>)*\s*(([-*+]|\d+[.)])\s+)?').Length
                 $solid = [regex]::Replace($counted, '(`+)(?:(?!\1).)+?\1', { param($m) 'x' * $m.Length })
@@ -404,6 +454,30 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
             @(& $find 'a **strong start')[0] -match '^1: emphasis opened with \*\*' -and @(& $find 'an _underscore start')[0] -match '^1: emphasis opened with _' } }
         @{ Name = 'emphasis whose closer has a space before it is left open'; Test = {
             @(& $find '*Later: see* Decisions *for more. *').Count -eq 1 } }
+        @{ Name = 'emphasis that closes straight after a bare address is closed, in a paragraph and in a table cell'; Test = {
+            $lines = '*"colors from https://u.nu/factoriogfx"*', '*see https://u.nu/factoriogfx*', '_see https://u.nu/a_b_', '**see https://u.nu/x**', '*see https://u.nu/x.* and *more*'
+            $alone = @(& $find ($lines -join "`n`n"))
+            $cells = @(& $find ("| a |`n|---|`n" + (($lines | ForEach-Object { "| $_ |" }) -join "`n")))
+            ($alone + $cells) | ForEach-Object { Write-Host "    $_" }
+            $alone.Count -eq 0 -and $cells.Count -eq 0 } }
+        @{ Name = 'emphasis never closed after a bare address still fails, in a cell and after a raw tag too; a mark inside an address is part of it'; Test = {
+            $open = @(& $find '*see https://u.nu/x and never closed')
+            $cell = @(& $find "| a |`n|---|`n| *open https://u.nu/x |")
+            $tag = @(& $find 'see <a href="https://u.nu/x">*open</a> end')
+            $inside = @(& $find "*see https://u.nu/a*b c*`n`n~~see https://u.nu/x~~`n`n*see <https://u.nu/x>*`n`n_see https://u.nu/a_(b)_")
+            $open.Count -eq 1 -and $open[0] -match '^1: emphasis opened with \*' -and $cell.Count -eq 1 -and $tag.Count -eq 1 -and $inside.Count -eq 0 } }
+        @{ Name = 'a bare address ends where GitHub ends one: before trailing punctuation, an entity and a bracket nothing opened, and at a < or a >'; Test = {
+            # Each: what follows https://u.nu/ up to the next space, and how much of that is the address.
+            $ends = [ordered]@{ 'x".' = 'x'; 'x."' = 'x'; 'x?!.,:;*_~' = 'x'; "x'" = 'x'; 'x?q=1.' = 'x?q=1'; 'a"b' = 'a"b'; 'a*b' = 'a*b'; 'a_b_' = 'a_b'
+                'x)' = 'x'; 'x))' = 'x'; 'a(b)' = 'a(b)'; 'a(b))' = 'a(b)'; 'a(b' = 'a(b'; 'a)b' = 'a)b'; 'x]' = 'x'; 'x[1]' = 'x[1]'; 'a]b' = 'a]b'
+                'x&amp;' = 'x'; 'x&amp' = 'x&amp'; 'x}' = 'x}'; 'x/' = 'x/'; 'x<b' = 'x'; 'x>y' = 'x' }
+            $wrong = @(foreach ($e in $ends.GetEnumerator()) {
+                    $text = "see https://u.nu/$($e.Key) end"
+                    $got = @(Get-BareAddress -Text $text | ForEach-Object { $text.Substring($_.Index, $_.Length) }) -join ' and '
+                    if ($got -cne "https://u.nu/$($e.Value)") { "$($e.Key) gave $got" } })
+            $wrong | ForEach-Object { Write-Host "    $_" }
+            $upper = 'HTTPS://U.NU/x. and ftp://u.nu/y'
+            $wrong.Count -eq 0 -and @(Get-BareAddress -Text $upper).Count -eq 1 -and @(Get-BareAddress -Text $upper)[0].Length -eq 14 -and @(Get-BareAddress -Text 'no address').Count -eq 0 } }
         @{ Name = 'a code span left open fails'; Test = {
             $f = @(& $find "a ``code span`nthat runs on`n`nnext")
             $f.Count -eq 1 -and $f[0] -match '^1: a code span opened with ` is not closed' } }
@@ -506,6 +580,11 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
             $passes = @(& $long "see [this]($target) and https://example.com/$('b' * 60) too`n`n[label]: $target" 40)
             $fails = @(& $long "$('word ' * 8)[this]($target)" 40)
             $passes.Count -eq 0 -and $fails.Count -eq 1 -and $fails[0] -match '^1: the line is 46 characters' } }
+        @{ Name = 'what stands straight after a bare address is counted, and the address is not'; Test = {
+            # 35 characters, then three before the address and four after it.
+            $after = @(& $long "$('word ' * 7)(*`"https://example.com/$('b' * 60)`"*)." 40)
+            $alone = @(& $long "$('word ' * 7)https://example.com/$('b' * 60) end" 40)
+            $after.Count -eq 1 -and $after[0] -match '^1: the line is 42 characters' -and $alone.Count -eq 0 } }
         @{ Name = 'handed no limit, a long line is not reported, by the function or by a run'; Test = {
             Set-Content -LiteralPath (Join-Path $temp 'long.md') -Value ('word ' * 30)
             git -C $temp add long.md
