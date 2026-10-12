@@ -60,7 +60,10 @@
     It reads the command as text and does not parse the shell, so
     `cd .mod-cache` where a command could stand is refused inside a quoted string too: after a
     `;`, `&`, `|`, `(` or `{`, or at the start of a line. And whether a consumer's settings still
-    reach it, unless -SelfTest is given them.
+    reach it, unless -SelfTest is given them. That reads the wired command and the matcher of
+    its entry, and nothing else of the settings: not a handler's `if`, which narrows further,
+    and not whether a session reads a matcher as hook-matcher.ps1 does. A wiring with an entry
+    for each shell tool fails it, since one entry is read.
 
     TO CHECK IT, from a repository root. The first is refused with exit 2, the second passes with
     exit 0:
@@ -78,7 +81,8 @@
 
 .PARAMETER SelfTest
     Prove it refuses what it should and lets the rest through, that a wired command reaches
-    it, and that the wiring tells the agent where the script is not there. The cases that run
+    it, and that the wiring tells the agent where the script is not there. With -Settings, also
+    that the matcher beside that command starts the hook for both shell tools. The cases that run
     the wiring need sh: the one on the path, or the one Git for Windows ships. Off
     Windows the cases that are a Windows way of writing a path are not run, and each says so on
     its line: a backslash as separator, Git Bash's /c/... and WSL's /mnt/c/.... What each
@@ -89,6 +93,11 @@
     the command wired there, its first PreToolUse hook, with that file's repository as the
     project, where they would otherwise run the command above against this script. A consumer runs this to
     know its wiring still reaches the hook, and still tells the agent when it cannot.
+    A last case, run only with -Settings, reads the matcher of that first PreToolUse entry
+    (grado-factorio-tools#120) and fails, naming the tool and the file, unless a session would
+    start the hook for the Bash tool and for the PowerShell tool. An entry with no matcher
+    passes: it is started for every tool. How a matcher is read is in hook-matcher.ps1. The
+    command above comes from no file and has no matcher, so without -Settings none is read.
 #>
 
 #Requires -Version 7
@@ -187,7 +196,8 @@ if ($SelfTest) {
     $failures = 0
     $skipped = 0
     $n = 0
-    $total = $cases.Count + 4
+    # The last case reads a settings file, and without -Settings there is none.
+    $total = $cases.Count + 4 + [bool] $Settings
     foreach ($c in $cases) {
         $n++
         if ($c.Count -gt 3 -and -not $IsWindows) {
@@ -221,7 +231,8 @@ if ($SelfTest) {
     $n++
     if ($Settings) {
         $Settings = (Resolve-Path -LiteralPath $Settings).Path
-        $wired = (Get-Content -LiteralPath $Settings -Raw | ConvertFrom-Json).hooks.PreToolUse[0].hooks[0].command
+        $entry = (Get-Content -LiteralPath $Settings -Raw | ConvertFrom-Json).hooks.PreToolUse[0]
+        $wired = $entry.hooks[0].command
         $project = Split-Path (Split-Path $Settings -Parent) -Parent
     }
     else {
@@ -258,6 +269,16 @@ if ($SelfTest) {
         } catch { $false })
     Write-Host ("self-test {0}/{1}: where the project holds no hook script, the wired command exits 0 and prints JSON telling the agent the command was not checked -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++; Write-Host "    $($absent.Code) $($absent.Text)" }
+    # Which tools the session starts that command for: the matcher of the entry it was read
+    # from. The command the header shows comes from no file, and has no matcher to read.
+    if ($Settings) {
+        $n++
+        . "$PSScriptRoot/hook-matcher.ps1"
+        $unstarted = @(Get-UnstartedShellTool -Entry $entry)
+        foreach ($tool in $unstarted) { Write-Host "    $Settings`: the matcher ``$($entry.matcher)`` does not start the hook for the $tool tool" }
+        Write-Host ("self-test {0}/{1}: the matcher of the entry that wires the hook starts it for the Bash tool and for the PowerShell tool -- {2}" -f $n, $total, $(if ($unstarted) { 'FAILED' } else { 'ok' }))
+        if ($unstarted) { $failures++ }
+    }
     Write-Host ''
     if ($failures) { Write-Host "FAILED - self-test: $failures of $total case(s) did not hold."; exit 1 }
     if ($skipped) { Write-Host "OK - self-test passed: $($total - $skipped) of $total cases; $skipped skipped off Windows, each named above."; exit 0 }

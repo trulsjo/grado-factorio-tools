@@ -325,3 +325,48 @@ where the submodule stands, so the wired command reached the script being measur
 case was the forty-first: the command exited 0 and printed JSON that does not parse. On Linux
 the case ran in CI with no settings file, in the run under `check.ps1` above; with a consumer's
 file it was not run there.
+
+## `hook-matcher.ps1`
+
+### A narrowed matcher fails both hooks' self-tests
+
+Measured 2026-10-12 (grado-factorio-tools#120) on the development machine, pwsh 7.6.6. Each
+settings file stood in a scratch directory of its own, with this repository's `scripts/` where
+its wired command looks for the hook, and differed from the first of its group in its `matcher`
+and nothing else.
+
+`refuse-git-hook-skip.ps1 -SelfTest -Settings <file>`, the first file being this repository's
+own:
+
+| `matcher` | What it ended with | The failing case said |
+|---|---|---|
+| `Bash\|PowerShell`, unchanged | `OK - self-test passed: all 55 cases.` | |
+| `Bash` | `FAILED - self-test: 1 of 55 case(s) did not hold.` | ``the matcher `Bash` does not start the hook for the PowerShell tool`` |
+| `PowerShell` | the same failure | ``the matcher `PowerShell` does not start the hook for the Bash tool`` |
+| `BashOutput\|PowerShell` | the same failure | ``the matcher `BashOutput\|PowerShell` does not start the hook for the Bash tool`` |
+| none: the line removed | `OK - self-test passed: all 55 cases.` | |
+
+Without `-Settings` it ended `OK - self-test passed: all 55 cases.`
+
+`refuse-cd-into-mod-cache.ps1 -SelfTest -Settings <file>`, the first file being
+`grado-factorio-modpack`'s at `2d84189`, which is after `43c30f3`:
+
+| `matcher` | What it ended with | The failing case said |
+|---|---|---|
+| `Bash\|PowerShell`, unchanged | `OK - self-test passed: all 42 cases.` | |
+| `Bash` | `FAILED - self-test: 1 of 42 case(s) did not hold.` | ``the matcher `Bash` does not start the hook for the PowerShell tool`` |
+| `PowerShell` | the same failure | ``the matcher `PowerShell` does not start the hook for the Bash tool`` |
+| `BashOutput\|PowerShell` | the same failure | ``the matcher `BashOutput\|PowerShell` does not start the hook for the Bash tool`` |
+
+Without `-Settings` it ended `OK - self-test passed: all 41 cases.`: the forty-second case
+reads a settings file. Each failing line begins with the settings file's path.
+
+Before the change, at `ee1aa9f`, both passed with the matcher changed to `Bash`: all 41 cases
+and all 54, by the account of grado-factorio-tools#120's brief, measured the same day and not
+run again here.
+
+The rule the check follows was read 2026-10-12 from *Matcher patterns* in Claude Code's hooks
+reference, <https://code.claude.com/docs/en/hooks>, and is quoted in the script's header. The
+client on the machine that day was Claude Code 2.1.296 (`claude --version`).
+
+Not measured: a session with a narrowed matcher running a command from the tool left out.

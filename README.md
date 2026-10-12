@@ -212,7 +212,10 @@ returned to the agent held nothing of it.
 and that it tells the agent where the script is not there. A consumer runs
 `-SelfTest -Settings .claude/settings.json` to prove the same of its own wiring: one that
 refuses the command in that branch, says nothing on stdout, or prints JSON a quote in its
-message has broken, fails. What the hook cannot see is in its header.
+message has broken, fails. So does one whose `matcher` would not start the hook for the `Bash`
+tool and for the `PowerShell` tool: the failing line names the tool and the file. How a matcher
+is read is in `scripts/hook-matcher.ps1`, from the client's hooks reference. What the hook cannot
+see is in its header.
 
 ## Keeping an agent session from skipping the hooks
 
@@ -235,7 +238,8 @@ adds it to its own, beside the mod-cache hook where it has that one:
 The `case` keeps PowerShell from starting before every shell command. Exit 2 refuses; a tool
 call it cannot read exits 1 and says on stderr that the command was not checked. `-SelfTest`
 proves what is refused and what is not, and runs the command this repository's settings wire;
-`-SelfTest -Settings .claude/settings.json` runs a consumer's. What the hook cannot see is in
+`-SelfTest -Settings .claude/settings.json` runs a consumer's. Either way it fails a wiring
+whose `matcher` would not start the hook for both shell tools. What the hook cannot see is in
 its header: a script or an alias that passes the switch itself and a hook manager turned off
 through the environment are two of them.
 
@@ -304,8 +308,9 @@ prototype name is that mod's business. If a script needs to know `rf-`, it stays
 ```
 scripts/     PowerShell entry points, one job each, and the libraries they
              dot-source: load-harness-lib.ps1, dump-lib.ps1, game-mods.ps1, mod-info.ps1,
-             which reads a mod's info.json for four of them, and
-             self-test-halves.ps1, the runner a -SelfTest hands its halves to
+             which reads a mod's info.json for four of them,
+             self-test-halves.ps1, the runner a -SelfTest hands its halves to,
+             and hook-matcher.ps1, which reads a session hook's matcher
 .githooks/   this repo's own commit-msg and pre-push hooks, opted into once per
              clone
 .claude/     settings.json, which wires the session hook that refuses a commit
