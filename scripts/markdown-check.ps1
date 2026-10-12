@@ -133,24 +133,31 @@ function Test-Inline {
     }
     $masked = [string]::new($chars)
     # A link's target and a bare address are not prose: a_b_c in one is no emphasis.
-    $hide = { param($m) '.' * $m.Length }
-    $masked = [regex]::Replace($masked, '(?<=\])\([^)\s]*(\s+"[^"]*")?\)', $hide)
-    $masked = [regex]::Replace($masked, '<[a-zA-Z][^>\s]*>|https?://[^\s)>]+', $hide)
+    # No script block is made or called from here on, as an evaluator, a predicate or a helper:
+    # this runs for every paragraph and table cell, and those were most of its time
+    # (grado-factorio-tools#125, in docs/measurements.md).
+    foreach ($pattern in '(?<=\])\([^)\s]*(\s+"[^"]*")?\)', '<[a-zA-Z][^>\s]*>|https?://[^\s)>]+') {
+        $hidden = [Text.StringBuilder]::new($masked)
+        foreach ($m in [regex]::Matches($masked, $pattern)) { $null = $hidden.Remove($m.Index, $m.Length).Insert($m.Index, '.', $m.Length) }
+        $masked = $hidden.ToString()
+    }
 
-    $isSpace = { param($c) $null -eq $c -or [char]::IsWhiteSpace($c) }
-    $isPunct = { param($c) $null -ne $c -and ([char]::IsPunctuation($c) -or [char]::IsSymbol($c)) }
     $open = [System.Collections.Generic.List[hashtable]]::new()
     foreach ($run in [regex]::Matches($masked, '\*+|_+')) {
         $prev = if ($run.Index -gt 0) { $masked[$run.Index - 1] } else { $null }
         $next = if ($run.Index + $run.Length -lt $masked.Length) { $masked[$run.Index + $run.Length] } else { $null }
-        $left  = -not (& $isSpace $next) -and (-not (& $isPunct $next) -or (& $isSpace $prev) -or (& $isPunct $prev))
-        $right = -not (& $isSpace $prev) -and (-not (& $isPunct $prev) -or (& $isSpace $next) -or (& $isPunct $next))
+        $prevSpace = $null -eq $prev -or [char]::IsWhiteSpace($prev)
+        $nextSpace = $null -eq $next -or [char]::IsWhiteSpace($next)
+        $prevPunct = $null -ne $prev -and ([char]::IsPunctuation($prev) -or [char]::IsSymbol($prev))
+        $nextPunct = $null -ne $next -and ([char]::IsPunctuation($next) -or [char]::IsSymbol($next))
+        $left  = -not $nextSpace -and (-not $nextPunct -or $prevSpace -or $prevPunct)
+        $right = -not $prevSpace -and (-not $prevPunct -or $nextSpace -or $nextPunct)
         $char = $run.Value[0]
-        $canOpen  = if ($char -eq '_') { $left -and (-not $right -or (& $isPunct $prev)) } else { $left }
-        $canClose = if ($char -eq '_') { $right -and (-not $left -or (& $isPunct $next)) } else { $right }
+        $canOpen  = if ($char -eq '_') { $left -and (-not $right -or $prevPunct) } else { $left }
+        $canClose = if ($char -eq '_') { $right -and (-not $left -or $nextPunct) } else { $right }
         $length = $run.Length
         while ($canClose -and $length -gt 0) {
-            $at = $open.FindLastIndex([Predicate[hashtable]] { param($o) $o.Char -eq $char })
+            for ($at = $open.Count - 1; $at -ge 0 -and $open[$at].Char -ne $char; $at--) { }
             if ($at -lt 0) { break }
             # An opener of the other kind above it can no longer close around this one: a literal.
             if ($at + 1 -lt $open.Count) { $open.RemoveRange($at + 1, $open.Count - $at - 1) }
@@ -224,7 +231,7 @@ function Test-Markdown {
 
         # Links, on every line outside a fence. Code spans are blanked first: a path in one is no link.
         $prose = [regex]::Replace($line, '(`+)(?:(?!\1).)+?\1', '')
-        $targets = @([regex]::Matches($prose, '\]\(\s*(?:<([^>]*)>|([^)\s]+))') | ForEach-Object { $_.Groups[1].Value + $_.Groups[2].Value })
+        $targets = @(foreach ($m in [regex]::Matches($prose, '\]\(\s*(?:<([^>]*)>|([^)\s]+))')) { $m.Groups[1].Value + $m.Groups[2].Value })
         if ($prose -match '^\s{0,3}\[[^\]^][^\]]*\]:\s*<?([^\s>]+)') { $targets += $Matches[1] }
         foreach ($t in $targets) {
             if ($t -match '^([a-zA-Z][a-zA-Z0-9+.-]*:|#|//)') { continue }
@@ -313,15 +320,39 @@ function Invoke-Check {
         Test-Path -LiteralPath (Join-Path $Top $p)
     }.GetNewClosure()
 
+    # One git for every file, asked for each in turn and answering with its size and then its
+    # bytes. A `git show` for each file was a process for each, which on Windows took as long
+    # as reading the files did once Test-Inline was quick (grado-factorio-tools#125).
+    $start = [Diagnostics.ProcessStartInfo]::new('git')
+    foreach ($a in '-C', $Top, 'cat-file', '--batch') { $start.ArgumentList.Add($a) }
+    $start.RedirectStandardInput = $start.RedirectStandardOutput = $true
+    $start.StandardInputEncoding = [Text.UTF8Encoding]::new($false)
+    $git = [Diagnostics.Process]::Start($start)
+    $out = $git.StandardOutput.BaseStream
     $count = 0
-    foreach ($f in $Files | Where-Object { $_ -match '\.md$' }) {
-        $lines = @(git -C $Top show "${Revision}:$f")
-        if ($LASTEXITCODE -ne 0) { throw "git could not read ${Revision}:$f." }
-        foreach ($finding in Test-Markdown -Lines $lines -Path $f -Exists $exists -MaxLineLength $MaxLineLength | Sort-Object { $_.Line }) {
-            Write-Host "${f}:$($finding.Line): $($finding.Message)"
-            $count++
+    try {
+        foreach ($f in $Files | Where-Object { $_ -match '\.md$' }) {
+            $git.StandardInput.Write("${Revision}:$f`n")
+            $git.StandardInput.Flush()
+            $header = [System.Collections.Generic.List[byte]]::new()
+            while (($b = $out.ReadByte()) -notin 10, -1) { $header.Add($b) }
+            if ([Text.Encoding]::UTF8.GetString($header.ToArray()) -notmatch ' blob (\d+)$') { throw "git could not read ${Revision}:$f." }
+            $bytes = [byte[]]::new([int] $Matches[1])
+            for ($read = 0; $read -lt $bytes.Length; $read += $got) {
+                if (($got = $out.Read($bytes, $read, $bytes.Length - $read)) -le 0) { throw "git could not read ${Revision}:$f." }
+            }
+            $null = $out.ReadByte()
+            # Lines as PowerShell takes them from a program's output: ended by a line feed, a
+            # carriage return or both, and no empty one after the last.
+            $reader = [IO.StringReader]::new([Text.Encoding]::UTF8.GetString($bytes))
+            $lines = @(while ($null -ne ($l = $reader.ReadLine())) { $l })
+            foreach ($finding in Test-Markdown -Lines $lines -Path $f -Exists $exists -MaxLineLength $MaxLineLength | Sort-Object { $_.Line }) {
+                Write-Host "${f}:$($finding.Line): $($finding.Message)"
+                $count++
+            }
         }
     }
+    finally { $git.StandardInput.Close(); $git.WaitForExit(); $git.Dispose() }
     $count
 }
 
@@ -483,6 +514,14 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
             Write-Host ($held.Text.TrimEnd() -replace '(?m)^', '    ')
             @(& $find ('word ' * 30)).Count -eq 0 -and $silent.Code -eq 0 -and $silent.Text -notmatch 'characters' -and
                 $held.Code -eq 1 -and $held.Text -match '(?m)^long\.md:1: the line is 149 characters, over the limit of 100' } }
+        @{ Name = 'a file is read as git holds it: a name outside ASCII, a byte-order mark, CRLF line ends and no last one, and beside it an empty file'; Test = {
+            $name = "sm$([char] 0xF8)r br$([char] 0xF8)d.md"
+            [IO.File]::WriteAllBytes((Join-Path $temp $name), [byte[]] (0xEF, 0xBB, 0xBF) + [Text.Encoding]::UTF8.GetBytes("one`r`n`r`nand *open"))
+            [IO.File]::WriteAllBytes((Join-Path $temp 'empty.md'), [byte[]] @())
+            git -C $temp add -- $name empty.md
+            $read = & $run $temp @()
+            Write-Host ($read.Text.TrimEnd() -replace '(?m)^', '    ')
+            $read.Code -eq 1 -and $read.Text -match "(?m)^$([regex]::Escape($name)):3: emphasis opened" -and $read.Text -match '1 finding\(s\) in' } }
     )
 
     $failures = 0
