@@ -4,11 +4,10 @@
     comparing two prototypes, and printing a Markdown table. Dot-sourced; it runs nothing.
 
 .DESCRIPTION
-    A DUMP IS NOT READ WHOLE (grado-factorio-modpack#139). The dump of an overhaul pack is about
-    160 MB, most of it graphics, and ConvertFrom-Json took 40 seconds and 2 GB to read one
-    (measured 2026-10-12, Grado_ABCS on 2.0.77, pwsh 7.6.6). Open-Dump indexes the file with
-    System.Text.Json, and Get-DumpTable converts one prototype type to hashtables when a script
-    asks for it.
+    A DUMP IS NOT CONVERTED WHOLE (grado-factorio-modpack#139). ConvertFrom-Json took 40 seconds
+    on the 164.4 MB dump of an overhaul pack (one run, 2026-10-12, Grado_ABCS on 2.0.77, pwsh
+    7.6.6; its output was not kept). Open-Dump parses the file with System.Text.Json, and
+    Get-DumpTable converts one prototype type to hashtables when a script asks for it.
 
     WHAT IT CANNOT SEE. Anything the dump does not hold: which mod made a prototype, and
     anything a mod does at run time. A dump is data.raw after the last data stage.
@@ -31,7 +30,8 @@ function Get-DumpTable {
         does not have gives nothing. Two types sharing a name keep the first: ask for one type at
         a time where that matters.  #>
     param([Parameter(Mandatory)] [System.Text.Json.JsonDocument] $Dump, [Parameter(Mandatory)] [string[]] $Type)
-    $table = @{}
+    # Ordinal, as the game tells Ab from ab and a plain hashtable does not.
+    $table = [hashtable]::new([StringComparer]::Ordinal)
     foreach ($t in $Type) {
         $element = [System.Text.Json.JsonElement]::new()
         if (-not $Dump.RootElement.TryGetProperty($t, [ref] $element)) { continue }
@@ -70,6 +70,13 @@ function ConvertFrom-DumpElement {
     <#  One indexed prototype as a hashtable.  #>
     param([Parameter(Mandatory)] [System.Text.Json.JsonElement] $Element)
     $Element.GetRawText() | ConvertFrom-Json -AsHashtable -Depth 200
+}
+
+function Get-List {
+    <#  A list read from a dump, one element at a time. An empty Lua table is dumped as {}, so
+        an empty list arrives as an empty dictionary, and gives nothing here.  #>
+    param($Value)
+    if ($null -ne $Value -and -not ($Value -is [Collections.IDictionary] -and -not $Value.Count)) { $Value }
 }
 
 function Find-DumpPrototype {
@@ -119,7 +126,7 @@ function Compare-DumpElement {
     foreach ($p in $Left.EnumerateObject()) {
         if (-not $Right.TryGetProperty($p.Name, [ref] $other)) { [void] $fields.Add($p.Name); continue }
         $mine = $p.Value.GetRawText(); $theirs = $other.GetRawText()
-        if ($mine -cne $theirs -and (ConvertTo-CanonicalText ($mine | ConvertFrom-Json -AsHashtable -Depth 200)) -cne (ConvertTo-CanonicalText ($theirs | ConvertFrom-Json -AsHashtable -Depth 200))) { [void] $fields.Add($p.Name) }
+        if ($mine -cne $theirs -and (ConvertTo-CanonicalText ($mine | ConvertFrom-Json -AsHashtable -Depth 200 -NoEnumerate)) -cne (ConvertTo-CanonicalText ($theirs | ConvertFrom-Json -AsHashtable -Depth 200 -NoEnumerate))) { [void] $fields.Add($p.Name) }
     }
     foreach ($p in $Right.EnumerateObject()) { if (-not $Left.TryGetProperty($p.Name, [ref] $other)) { [void] $fields.Add($p.Name) } }
     $fields

@@ -6,8 +6,8 @@
     its own materials in both. Exit 0 means the tables were printed, not that anything is playable.
 
 .DESCRIPTION
-    WHAT IT READS. One dump, or two: get-dump.ps1 gives a path. Nothing else, and it writes
-    nothing.
+    WHAT IT READS. One dump, or two: get-dump.ps1 gives a path. Nothing else. A walk writes
+    nothing; the self-test may make a dump, as below.
 
     THE WALK (grado-factorio-modpack#132, where the rules were first written down, in
     docs/catalogue/Grado_ABCS.md under "How the walk was made"). Three rules, repeated until
@@ -23,15 +23,15 @@
 
     WHERE IT IS LOOSER THAN THE GAME, so that "can be made" is an upper bound:
 
-      - It does not know where anything is. An item made on one planet counts on every other,
-        and so does what a nest drops. No surface condition is read in the walk.
+      - It does not know where anything is. An item made on one planet counts on every other.
+        What a nest drops, what a plant gives and a pump's own fluid count with no planet, seed
+        or water asked for. No surface condition is read in the walk.
       - A trigger that asks for mining an entity or capturing a nest, and any trigger type it
-        does not know, is taken as met. Triggers asking for an item, a fluid, a built entity, a
-        platform or an item sent to orbit are checked.
+        does not know, is taken as met.
       - A resource counts without asking what can mine it, or which fluid mining it takes.
-      - A machine counts as buildable when an item that places it can be made. The character
-        always counts. A machine a captured nest turns into counts once `capture-robot-rocket`
-        can be made, when the dump has that item.
+      - A machine counts as buildable when an item that places it can be made. A machine a
+        captured nest turns into counts once `capture-robot-rocket` can be made, when the dump
+        has that item.
       - A fluid's temperature is not read, and neither is an amount or a probability.
       - An item and a fluid of one name are one thing here.
 
@@ -40,10 +40,10 @@
     technology as researched; a recipe counts when it is not hidden or is a recycling recipe,
     every ingredient can be had, and its surface conditions hold on that surface. An entity is on
     a planet when the planet's settings list it; a tree, a plant or a nest also when its
-    autoplace control is one of the planet's. A pump's own fluid is given to a planet whose tiles give water, which is a guess at
-    where such a pump can stand. The
-    count is of the items and fluids some counted recipe gives, so what is only mined is not in
-    it. -BroughtIn adds names to every surface's supply in the first dump.
+    autoplace control is one of the planet's. A pump's own fluid is given to a planet whose
+    tiles give water, which is a guess at where such a pump can stand. The count is of the items
+    and fluids some counted recipe gives, so what is only mined is not in it. -BroughtIn adds
+    names to every surface's supply in the first dump.
 
     WHAT IT CANNOT SEE. Play: nothing is crafted, researched or shipped. Amounts and rates. What
     a control script places or removes at run time, so a resource a mod places from its script
@@ -51,9 +51,12 @@
     still is. Whether a technology the walk does not reach is unreachable in the game or only
     here: a source rule may be missing.
 
-    THE SELF-TEST runs the walk on a dump of Space Age alone, where the answer is known: all 275
-    technologies, all six science packs Space Age adds, and 330 of the 340 recipes that are not
-    hidden. Then it removes each source rule in turn and fails unless the answer changes. A rule
+    THE WALK KNOWS THREE NAMES OF SPACE AGE: the surface `space-platform`, where the chunks are; the
+    item `capture-robot-rocket`; and the category `recycling`. A dump without them is walked
+    without them.
+
+    THE SELF-TEST runs the walk on a dump of Space Age alone, where the answer is known. Then it
+    removes each source rule in turn and fails unless the answer changes. A rule
     the Space Age dump cannot show is named in the self-test's output, and is not proven. It
     needs the game, unless -Dump names a dump of Space Age alone.
 
@@ -90,7 +93,7 @@ $ErrorActionPreference = 'Stop'
 
 # What a surface supplies, by rule. The self-test removes each in turn.
 $SOURCE_RULES = [ordered]@{
-    mined  = 'what an entity on the planet gives when mined: resources, rocks, trees, fish, ruins, icebergs'
+    mined  = 'what an entity on the planet gives when mined'
     tiles  = "the fluid of a tile in the planet's settings"
     plants = 'what a plant gives when harvested'
     chunks = 'the asteroid chunks, on a platform'
@@ -101,9 +104,6 @@ $SOURCE_RULES = [ordered]@{
 }
 # The rules a dump of Space Age alone does not show: the self-test says so and does not fail.
 $NOT_SHOWN_BY_SPACE_AGE = 'pumps', 'steam'
-
-# An empty Lua table is dumped as {}, so a list read from a dump may be an empty dictionary.
-function Get-List { param($Value) if ($null -ne $Value -and -not ($Value -is [Collections.IDictionary] -and -not $Value.Count)) { $Value } }
 
 function Get-MinedNames {
     param($Prototype)
@@ -178,8 +178,8 @@ function Read-WalkData {
         foreach ($planet in (Get-DumpTable $doc 'planet').Values | Sort-Object { $_['order'] }, { $_['name'] }) {
             $settings = $planet['map_gen_settings']
             if (-not $settings) { continue }
-            $controls = @($settings['autoplace_controls']?.Keys)
-            $listed = { param($kind) @($settings['autoplace_settings']?[$kind]?['settings']?.Keys) }
+            $controls = @($settings['autoplace_controls']?.Keys | Where-Object { $_ })
+            $listed = { param($kind) @($settings['autoplace_settings']?[$kind]?['settings']?.Keys | Where-Object { $_ }) }
             $supply = @{}
             foreach ($rule in $SOURCE_RULES.Keys) { $supply[$rule] = [Collections.Generic.HashSet[string]]::new() }
             foreach ($name in & $listed 'entity') {
@@ -201,7 +201,7 @@ function Read-WalkData {
             $surfaces[$planet['name']] = @{ Properties = $planet['surface_properties'] ?? @{}; Supply = $supply }
         }
 
-        # What is on no planet's list: a plant grown from a seed, a nest, and the chunks.
+        # What the walk supplies with no planet asked for. The chunks are the platform's.
         $everywhere = @{}
         foreach ($rule in $SOURCE_RULES.Keys) { $everywhere[$rule] = [Collections.Generic.HashSet[string]]::new() }
         foreach ($prototype in $byControl.plants) { foreach ($n in Get-MinedNames $prototype) { [void] $everywhere.plants.Add($n) } }
@@ -242,7 +242,7 @@ function Invoke-Walk {
     <#  The walk from $Supply. With -Surface it is the walk of own materials on that surface.
         Gives what can be had, the recipes that count and the technologies that can be
         researched.  #>
-    param([Parameter(Mandatory)] $Data, [Parameter(Mandatory)] [Collections.Generic.HashSet[string]] $Supply, [string] $Surface, [string[]] $Without = @())
+    param([Parameter(Mandatory)] $Data, [Parameter(Mandatory)] [AllowEmptyCollection()] [Collections.Generic.HashSet[string]] $Supply, [string] $Surface, [string[]] $Without = @())
     $have = [Collections.Generic.HashSet[string]]::new($Supply)
     $used = [Collections.Generic.HashSet[string]]::new()
     $made = [Collections.Generic.HashSet[string]]::new()
@@ -252,6 +252,8 @@ function Invoke-Walk {
     $categories = [Collections.Generic.HashSet[string]]::new()
     $any = { param([string[]] $names) foreach ($n in $names) { if ($have.Contains($n)) { return $true } } $false }
     $all = { param([string[]] $names) foreach ($n in $names) { if (-not $have.Contains($n)) { return $false } } $true }
+    # A trigger names its item or entity as a string, or as a table with a name and a quality.
+    $named = { param($id) if ($id -is [Collections.IDictionary]) { [string] $id['name'] } else { [string] $id } }
 
     if ($Surface) {
         $properties = $Data.Surfaces[$Surface].Properties
@@ -281,10 +283,10 @@ function Invoke-Walk {
             if (-not $researched.IsSupersetOf($t.Prerequisites)) { continue }
             $met = if ($t.Trigger) {
                 switch ($t.Trigger['type']) {
-                    'craft-item' { $have.Contains($t.Trigger['item']) }
-                    'craft-fluid' { $have.Contains($t.Trigger['fluid']) }
-                    'send-item-to-orbit' { $have.Contains($t.Trigger['item']) }
-                    'build-entity' { & $any @($Data.Placers[$t.Trigger['entity']]) }
+                    'craft-item' { $have.Contains((& $named $t.Trigger['item'])) }
+                    'craft-fluid' { $have.Contains((& $named $t.Trigger['fluid'])) }
+                    'send-item-to-orbit' { $have.Contains((& $named $t.Trigger['item'])) }
+                    'build-entity' { & $any @($Data.Placers[(& $named $t.Trigger['entity'])]) }
                     'create-space-platform' { & $any $Data.StarterPacks }
                     default { $true }
                 }
@@ -401,12 +403,12 @@ function Write-WalkAgainst {
         foreach ($s in $Base.Own.Keys) {
             $mine = $Pack.Own[$s]?.Made
             $lost = @($Base.Own[$s].Made | Where-Object { -not $mine -or -not $mine.Contains($_) })
-            , (@($s, "$($Base.Own[$s].Made.Count) items and fluids", $lost.Count) + @(if ($BroughtIn) { @($lost | Where-Object { -not $Pack.With[$s]?.Made.Contains($_) }).Count }))
+            , (@($s, "$($Base.Own[$s].Made.Count) items and fluids", $lost.Count) + @(if ($BroughtIn) { @($lost | Where-Object { -not $Pack.With[$s]?.Made?.Contains($_) }).Count }))
         })
     ''
     Format-MarkdownTable 'Surface', "Science packs made from its own materials, $BaseLabel", "In $PackLabel" @(
         foreach ($s in $Base.Own.Keys) {
-            , @($s, (Format-Names @($Base.Packs | Where-Object { $Base.Own[$s].Made.Contains($_) })), (Format-Names @($Base.Packs | Where-Object { $Pack.Own[$s]?.Made.Contains($_) })))
+            , @($s, (Format-Names @($Base.Packs | Where-Object { $Base.Own[$s].Made.Contains($_) })), (Format-Names @($Base.Packs | Where-Object { $Pack.Own[$s]?.Made?.Contains($_) })))
         })
     foreach ($s in $Base.Own.Keys) {
         $mine = if ($BroughtIn) { $Pack.With[$s]?.Made } else { $Pack.Own[$s]?.Made }

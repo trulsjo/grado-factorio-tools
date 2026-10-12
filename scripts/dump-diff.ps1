@@ -99,15 +99,16 @@ function Invoke-SelfTest {
     New-Item -ItemType Directory -Path $temp | Out-Null
     try {
         $with = Join-Path $temp 'with.json'; $without = Join-Path $temp 'without.json'
-        Set-Content -LiteralPath $with -Value '{"recipe":{"a":{"name":"a","order":"x","ingredients":[{"name":"i","amount":1}]},"b":{"name":"b","k":{"p":1,"q":2}},"new":{"name":"new"}},"item":{"only":{"name":"only"}}}'
-        Set-Content -LiteralPath $without -Value '{"recipe":{"a":{"name":"a","order":"y","ingredients":[{"name":"i","amount":2}]},"b":{"k":{"q":2,"p":1},"name":"b"},"old":{"name":"old"}}}'
+        Set-Content -LiteralPath $with -Value '{"recipe":{"a":{"name":"a","order":"x","ingredients":[{"name":"i","amount":1}]},"b":{"name":"b","k":{"p":1,"q":2}},"new":{"name":"new"}},"item":{"only":{"name":"only"}},"fluid":{"f":{"flags":["x"],"e":[],"n":[[1,2]]}}}'
+        Set-Content -LiteralPath $without -Value '{"recipe":{"a":{"name":"a","order":"y","ingredients":[{"name":"i","amount":2}]},"b":{"k":{"q":2,"p":1},"name":"b"},"old":{"name":"old"}},"fluid":{"f":{"flags":"x","e":null,"n":[1,2]}}}'
         $out = (Write-DumpDifference $with $without) -join "`n"
         $cases = [ordered]@{
-            'the totals count each side'                               = $out -match '\| Prototypes \| 4 \| 3 \|'
-            'added, removed and changed are counted'                   = $out -match '\*\*2 prototypes are in the first dump alone, 1 in the second alone, and 1 are in both and differ\.\*\*'
+            'the totals count each side'                               = $out -match '\| Prototypes \| 5 \| 4 \|'
+            'added, removed and changed are counted'                   = $out -match '\*\*2 prototypes are in the first dump alone, 1 in the second alone, and 2 are in both and differ\.\*\*'
             'a type one side lacks is listed'                          = $out -match '\| `item` \| 1 \| `only` \|'
             'a change is listed by the fields that differ'             = $out -match '\| `recipe` \| ingredients, order \| 1 \| `a` \|'
             'key order inside a table is not a difference'             = $out -notmatch '`b`'
+            'a list of one is not its element, nor an empty list nothing' = $out -match '\| `fluid` \| e, flags, n \| 1 \| `f` \|'
             'a row over -MaxNames counts and does not list'            = ((Write-DumpDifference $with $without -MaxNames 0) -join "`n") -match '\| `recipe` \| ingredients, order \| 1 \|  \|'
         }
         $failures = 0; $n = 0

@@ -12,12 +12,13 @@
       -Both    the two together
 
     A SHARED NAME is a type and name that -First has and -Second has and -Base has not. When two
-    mods define one name the game keeps one prototype and logs nothing, so this is the only
-    place the collision shows (grado-factorio-modpack#134).
+    mods define one name the game keeps one prototype and logs nothing, so it shows in a
+    comparison of dumps (grado-factorio-modpack#134).
 
     WHAT -Both HOLDS, per name: the first's when its prototype is the same as in -First, field
     for field; the second's when it is the same as in -Second; both when the two are the same;
-    and mixed when it is neither, with the top-level fields in which it differs from each.
+    mixed when it is neither, with the top-level fields in which it differs from each; and not
+    there when -Both lacks it.
 
     WHAT IT CANNOT SEE. Which mod wrote the definition, and why: that is read from the mods'
     source. A name both sets change that -Base already has. And a name one set defines only

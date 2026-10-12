@@ -207,7 +207,8 @@ moved=X
             'the counts add up'                                                          = $out -match '\*\*3 of the 4 inputs with a default key' -and $out -match 'The other 1 share with no engine control: `free`'
             'a linked input gets its control''s default, or is told it has none'         = $out -match '\| `link` \| `rotate` \| `R` \|' -and $out -match '\| `lost` \| `gone` \| not among the engine controls \|'
             'an input with neither is named'                                             = $out -match '1 have no key and no link: `bare`\.'
-            'the member is the mod whose Lua quotes the name'                            = $out -match '\| `alpha` \| `same` \|' -and $out -match '\| not found \| `pad` \|'
+            'two inputs whose names differ only in case are both read'                   = (& { $p = Join-Path $temp 'case.json'; Set-Content -LiteralPath $p -Value '{"custom-input":{"Ab":{},"ab":{}}}'; $d = Open-Dump $p; try { (Get-DumpTable $d 'custom-input').Count -eq 2 } finally { $d.Dispose() } })
+            'the member is the mod whose Lua quotes the name'                        = $out -match '\| `alpha` \| `same` \|' -and $out -match '\| not found \| `pad` \|'
         }
         $failures = 0; $n = 0
         foreach ($name in $cases.Keys) {
