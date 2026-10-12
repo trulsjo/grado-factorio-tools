@@ -213,9 +213,9 @@ and that it tells the agent where the script is not there. A consumer runs
 `-SelfTest -Settings .claude/settings.json` to prove the same of its own wiring: one that
 refuses the command in that branch, says nothing on stdout, or prints JSON a quote in its
 message has broken, fails. So does one whose `matcher` would not start the hook for the `Bash`
-tool and for the `PowerShell` tool: the failing line names the tool and the file. How a matcher
-is read is in `scripts/hook-matcher.ps1`, from the client's hooks reference. What the hook cannot
-see is in its header.
+tool and for the `PowerShell` tool: a line above the failing case names the tool and the file.
+How a matcher is read is in `scripts/hook-matcher.ps1`, from the client's hooks reference. What
+the hook cannot see is in its header.
 
 ## Keeping an agent session from skipping the hooks
 
