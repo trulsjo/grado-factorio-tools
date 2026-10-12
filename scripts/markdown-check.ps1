@@ -30,11 +30,11 @@
     GitHub's renderer ends one, asked 2026-10-12 (grado-factorio-tools#124; the answers are in
     docs/measurements.md, with what the GitHub Flavored Markdown spec says, read the same day).
     It runs to the next whitespace or `<` and then gives back what stands last: any of
-    ?!.,:;*_~'" and an entity such as `&amp;`, and a `)` or `]` that nothing in the address
-    opened. So emphasis that closes straight after an address is closed, as in
+    ?!.,:;*_~'" and an entity such as `&amp;`, and a `)` that no `(` in the address opened.
+    Inside square brackets it ends at the `]` that closes them, where GitHub makes no link.
+    So emphasis that closes straight after an address is closed, as in
     `*see https://example.com*`, and a `*` or `_` inside one is part of it. The spec names
-    fewer: not the two quotes, a `;` that ends no entity, or the `]`. The check follows the
-    renderer.
+    fewer: not the two quotes, nor a `;` that ends no entity. The check follows the renderer.
 
     LINE LENGTH, ONLY WHEN HANDED A LIMIT (grado-factorio-tools#93). With no -MaxLineLength the
     check is silent on length, so a repository that never asked is not held to one. With it, a
@@ -63,7 +63,8 @@
     e-mail address, both of which GitHub links, are prose here. An address ends at a `>`, which
     the renderer takes in: an address in a raw tag's attribute would otherwise hide the text
     after the tag. Whether GitHub makes a link of it at all is not asked: it makes none of
-    `xhttps://...`, nor of an address inside `[square brackets]`, and both are hidden here.
+    `xhttps://...`, nor of an address inside `[square brackets]`, and both are hidden here,
+    so a `_` or `*` inside such an address is not read as the emphasis it may be to GitHub.
 
     WHAT IT CANNOT SEE. Prose: numbers, dates and quantifiers stay the reviewer's. Whether a
     `#fragment` names a heading. A code block made by indenting, which all but the length rule
@@ -116,21 +117,32 @@ function Get-BareAddress {
     <#  Each bare address in $Text, as @{ Index; Length }, ended where GitHub's renderer ends one
         (asked 2026-10-12, grado-factorio-tools#124; in docs/measurements.md). It runs to the
         next whitespace or `<`, and then gives back what stands last: any of ?!.,:;*_~'" and
-        an entity such as &amp;, and a ) or ] with no ( or [ before it in the address to match.
+        an entity such as &amp;, and a ) with no ( before it in the address to match. Where a
+        [ stands open before it in $Text, it ends at the ] that closes that one: GitHub makes
+        no link of an address inside square brackets, and reads the mark before the ] as one.
         So the mark that closes emphasis straight after an address is not part of it. It ends
         at a `>` too, which the renderer takes in: an address in a raw tag's attribute would
         otherwise run on into the text after the tag.  #>
     param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text)
 
     foreach ($m in [regex]::Matches($Text, '(?i)https?://[^\s<>]+')) {
-        $end = $m.Length
+        $run = $m.Value
+        $before = $Text.Substring(0, $m.Index)
+        if ($before.Split('[').Count -gt $before.Split(']').Count) {
+            $depth = 0
+            for ($k = 0; $k -lt $run.Length; $k++) {
+                if ($run[$k] -eq '[') { $depth++ }
+                elseif ($run[$k] -eq ']') { if ($depth -eq 0) { $run = $run.Substring(0, $k); break }; $depth-- }
+            }
+        }
+        $end = $run.Length
         while ($end -gt 0) {
-            $kept = $m.Value.Substring(0, $end)
+            $kept = $run.Substring(0, $end)
             $last = [string] $kept[$end - 1]
-            if ($kept -match '&[a-zA-Z0-9]+;$') { $end -= $Matches[0].Length }
+            # Letters only: the renderer gives back &amp; whole and of &frac12; the `;` alone.
+            if ($kept -match '&[a-zA-Z]+;$') { $end -= $Matches[0].Length }
             elseif ('?!.,:;*_~''"'.Contains($last)) { $end-- }
             elseif ($last -eq ')' -and $kept.Split(')').Count -gt $kept.Split('(').Count) { $end-- }
-            elseif ($last -eq ']' -and $kept.Split(']').Count -gt $kept.Split('[').Count) { $end-- }
             else { break }
         }
         @{ Index = $m.Index; Length = $end }
@@ -176,15 +188,15 @@ function Test-Inline {
     # No script block is made or called from here on, as an evaluator, a predicate or a helper:
     # this runs for every paragraph and table cell, and those were most of its time
     # (grado-factorio-tools#125, in docs/measurements.md).
-    foreach ($pattern in '(?<=\])\([^)\s]*(\s+"[^"]*")?\)', '<[a-zA-Z][^>\s]*>', '://') {
+    foreach ($pattern in '(?<=\])\([^)\s]*(\s+"[^"]*")?\)', '://', '<[a-zA-Z][^>\s]*>') {
         $hidden = [Text.StringBuilder]::new($masked)
-        # The last is no pattern: a bare address, looked for only where the text holds a scheme.
-        # Its first and last characters stay, where a target and an address in angle brackets
-        # are hidden whole: a mark straight after it is flanked by what the address ends with,
-        # which is seldom punctuation, and the brackets of the other two are.
-        $found = if ($pattern -ne '://') { [regex]::Matches($masked, $pattern) }
-        elseif ($masked.Contains('://')) { Get-BareAddress -Text $masked | ForEach-Object { @{ Index = $_.Index + 1; Length = $_.Length - 2 } } }
-        foreach ($m in $found) { $null = $hidden.Remove($m.Index, $m.Length).Insert($m.Index, '.', $m.Length) }
+        # The second is no pattern: a bare address, looked for only where the text holds a
+        # scheme, and before anything in angle brackets is hidden, so that it ends at a
+        # <placeholder>. Its first and last characters stay, where a target and what is in
+        # angle brackets are hidden whole: a mark straight after it is flanked by what the
+        # address ends with, which is seldom punctuation, and the brackets of the other two are.
+        if ($pattern -ne '://') { foreach ($m in [regex]::Matches($masked, $pattern)) { $null = $hidden.Remove($m.Index, $m.Length).Insert($m.Index, '.', $m.Length) } }
+        elseif ($masked.Contains('://')) { foreach ($a in Get-BareAddress -Text $masked) { $null = $hidden.Remove($a.Index + 1, $a.Length - 2).Insert($a.Index + 1, '.', $a.Length - 2) } }
         $masked = $hidden.ToString()
     }
 
@@ -464,13 +476,17 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
             $open = @(& $find '*see https://u.nu/x and never closed')
             $cell = @(& $find "| a |`n|---|`n| *open https://u.nu/x |")
             $tag = @(& $find 'see <a href="https://u.nu/x">*open</a> end')
-            $inside = @(& $find "*see https://u.nu/a*b c*`n`n~~see https://u.nu/x~~`n`n*see <https://u.nu/x>*`n`n_see https://u.nu/a_(b)_")
-            $open.Count -eq 1 -and $open[0] -match '^1: emphasis opened with \*' -and $cell.Count -eq 1 -and $tag.Count -eq 1 -and $inside.Count -eq 0 } }
-        @{ Name = 'a bare address ends where GitHub ends one: before trailing punctuation, an entity and a bracket nothing opened, and at a < or a >'; Test = {
+            $inside = @(& $find "*see https://u.nu/a*b c*`n`n~~see https://u.nu/x~~`n`n*see <https://u.nu/x>*`n`n_see https://u.nu/a_(b)_`n`n*see https://u.nu/<id>/a*b")
+            # A ] is part of the address to GitHub, so the mark before it closes nothing.
+            $bracket = @(& $find "_see https://u.nu/a_]`n`n*see https://u.nu/x*]`n`n[a] *see https://u.nu/y*]")
+            # Inside square brackets GitHub makes no link, and the mark before the ] closes.
+            $inside += @(& $find "[*see https://u.nu/x*]`n`n[ and *see https://u.nu/x*]`n`n[*see https://u.nu/x* more]`n`n*[see https://u.nu/x]*`n`n[*see https://u.nu/x*](there.md)")
+            $open.Count -eq 1 -and $open[0] -match '^1: emphasis opened with \*' -and $cell.Count -eq 1 -and $tag.Count -eq 1 -and $inside.Count -eq 0 -and $bracket.Count -eq 3 } }
+        @{ Name = 'a bare address ends where GitHub ends one: before trailing punctuation, an entity and a ) nothing opened, and at a <; and at a >, where GitHub does not'; Test = {
             # Each: what follows https://u.nu/ up to the next space, and how much of that is the address.
             $ends = [ordered]@{ 'x".' = 'x'; 'x."' = 'x'; 'x?!.,:;*_~' = 'x'; "x'" = 'x'; 'x?q=1.' = 'x?q=1'; 'a"b' = 'a"b'; 'a*b' = 'a*b'; 'a_b_' = 'a_b'
-                'x)' = 'x'; 'x))' = 'x'; 'a(b)' = 'a(b)'; 'a(b))' = 'a(b)'; 'a(b' = 'a(b'; 'a)b' = 'a)b'; 'x]' = 'x'; 'x[1]' = 'x[1]'; 'a]b' = 'a]b'
-                'x&amp;' = 'x'; 'x&amp' = 'x&amp'; 'x}' = 'x}'; 'x/' = 'x/'; 'x<b' = 'x'; 'x>y' = 'x' }
+                'x)' = 'x'; 'x))' = 'x'; 'a(b)' = 'a(b)'; 'a(b))' = 'a(b)'; 'a(b' = 'a(b'; 'a)b' = 'a)b'; 'x]' = 'x]'; 'x].' = 'x]'; 'x[1]' = 'x[1]'; 'a]b' = 'a]b'
+                'x&amp;' = 'x'; 'x&amp' = 'x&amp'; 'x&frac12;' = 'x&frac12'; 'x}' = 'x}'; 'x/' = 'x/'; 'x<b' = 'x'; 'x>y' = 'x' }
             $wrong = @(foreach ($e in $ends.GetEnumerator()) {
                     $text = "see https://u.nu/$($e.Key) end"
                     $got = @(Get-BareAddress -Text $text | ForEach-Object { $text.Substring($_.Index, $_.Length) }) -join ' and '
