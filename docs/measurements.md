@@ -273,6 +273,108 @@ in the input are too deeply nested - depth limit exceeded", and PR #98's review 
 same for a table of 10 columns and 1,000 rows, with 10 by 500 parsing. The check says so for the
 page and takes none of its lines for code.
 
+### Where `-All` spends its time over a large repository
+
+Measured 2026-10-12 (grado-factorio-tools#125) on the development machine, pwsh 7.6.6 and
+git 2.37.3.windows.1. The corpus is `realistic-fusion-refreshed` at `9a8ab36`, cloned to a
+scratch directory with nothing staged and its submodule not initialised: 114 tracked Markdown
+files, 36,787 lines (`git ls-files '*.md' | xargs cat | wc -l`), of which 3,616 begin with a `|`.
+"Before" is the script at `41b5488`. Other sessions were running on the machine throughout, and
+how loaded it was, was not measured: the third round below shows it.
+
+**The whole run**, `pwsh -NoProfile -File <script> -All`, in seconds, three rounds, before and
+after taking turns:
+
+| Round | Before | After | Before, `-MaxLineLength 100` | After, `-MaxLineLength 100` |
+|---|---|---|---|---|
+| 1 | 153.4 | 37.3 | 177.8 | 90.7 |
+| 2 | 137.9 | 28.5 | 142.7 | 52.2 |
+| 3 | 429.8 | 37.2 | 501.7 | 159.0 |
+
+With no limit each run exited 0, and with one each exited 1: the corpus is not wrapped, and has
+3,033 lines over 100.
+
+**By part, before.** A probe loaded the script's functions, put a stopwatch round `Test-Inline`
+and round `ConvertFrom-Markdown`, and read every file as `Invoke-Check` did, one run each:
+
+| Part | No limit | `-MaxLineLength 100` |
+|---|---|---|
+| a `git show` for each file, 114 processes | 16.2 s | 45.4 s |
+| `Test-Markdown`, all of it | 114.9 s | 155.8 s |
+| of that, `Test-Inline`, in 21,464 calls | 95.3 s | 109.0 s |
+| of that, `ConvertFrom-Markdown` | 0 s | 1.5 s |
+| of that, the rest | 19.6 s | 45.3 s |
+
+The two top rows add up to 131 s where the whole run took 138 to 153; the difference is
+PowerShell starting and git listing the files, and was not measured apart. The same 114
+`git show` calls took between 21 and 47 s in six more runs of the probe that day, and 21 and
+74 s in a PowerShell loop of their own.
+
+**What it grows with: table cells.** `Test-Inline` is called once for every paragraph and once
+for every cell of a table, and its time went with the calls and not with the characters. The
+five slowest pages before, all under `docs/research/`, are the five with the most table lines
+among the slowest eight:
+
+| Page | Lines | Lines beginning `\|` | `Test-Markdown` | of it `Test-Inline` |
+|---|---|---|---|---|
+| `exchanger-coverage.md` | 1,473 | 356 | 8.5 s | 7.5 s |
+| `quality.md` | 1,733 | 292 | 6.7 s | 5.7 s |
+| `reactor-runtime-cost.md` | 2,294 | 214 | 6.3 s | 5.3 s |
+| `plasma-input-box.md` | 994 | 224 | 6.0 s | 5.1 s |
+| `further-reactions.md` | 1,367 | 165 | 5.7 s | 5.0 s |
+
+**Inside one call.** `Test-Inline` on one table cell holding a code span and one emphasis, 1,000
+calls, took 9.1 ms a call: 0.6 ms to enter, 0.3 ms masking code spans, 3.3 ms in the two
+`[regex]::Replace` calls that hide link targets and addresses, and 4.9 ms reading emphasis. On a
+cell of plain words the two `Replace` calls were 2.7 of 3.2 ms, with nothing for them to match.
+Each was handed a script block as its evaluator, made anew on every call; reading emphasis
+called two script blocks as helpers and made a third as a predicate. The same `Replace` with a
+script block made once took 0.1 ms.
+
+**What was changed.** `Test-Inline` makes and calls no script block. `Invoke-Check` reads every
+file through one `git cat-file --batch`. One per-line pipeline in `Test-Markdown` became a loop.
+
+**By part, after**, the probe again, which still reads with `git show`:
+
+| Part | No limit | `-MaxLineLength 100` |
+|---|---|---|
+| `Test-Markdown`, all of it | 34.1 s | 60.6 s |
+| of that, `Test-Inline`, in 21,464 calls | 17.3 s | 17.8 s |
+| of that, `ConvertFrom-Markdown` | 0 s | 1.6 s |
+| of that, the rest | 16.8 s | 41.3 s |
+
+One `git cat-file --batch` gave all 114 files in 1.0 s, from Git Bash.
+
+**The output is unchanged.** The whole output of `-All`, with no limit and with
+`-MaxLineLength 100`, was saved from the script before and after and compared with `diff -q`,
+which printed nothing for any of the six pairs:
+
+| Repository | No limit | `-MaxLineLength 100` |
+|---|---|---|
+| the corpus | 2 lines | 3,034 lines |
+| this repository | 1 line | 1 line |
+| a scratch repository of seven edge files | 6 lines | 6 lines |
+
+The seven: a byte-order mark, CRLF line ends with no last one, a lone carriage return, bytes
+that are not UTF-8, an empty file, three blank lines, and a name outside ASCII. For every
+Markdown file of the three repositories, 135 in all, the lines read through `cat-file --batch`
+were compared one by one with those `git show` gave, and none differed.
+
+**This repository's own 14 files** with `-All -MaxLineLength 100`, before and after taking
+turns: 20.4 and 19.7 s before, 22.8 and 9.6 s after. The machine's load moved more than the
+change did, and no figure is claimed here.
+
+**Tried and dropped.** Having .NET find the next backslash or backtick, in place of the loop
+over every character that masks code spans: `Test-Inline` took 100.6 s where it had taken 95.3,
+so the loop was not the cost.
+
+**Not tried.** The regular expressions `Test-Markdown` runs on every line, which are the 17 s
+of "the rest". Why the rest grows to 41 s with a limit: the corpus has 3,033 lines over it, and
+each is a finding that is made, sorted and printed, and has its code spans masked by a
+`Replace` with a script block; which of those costs was not measured, and a wrapped repository
+has none of them. What PowerShell takes to start. A cache between runs, reading fewer files,
+and pages in parallel, which grado-factorio-tools#125 leaves to Truls.
+
 ## `refuse-cd-into-mod-cache.ps1`
 
 ### The self-test on Windows and on Linux
