@@ -78,9 +78,39 @@ has what was on the branch when that review ran.
 The second review's four findings scored 50, 25, 25 and 25, and the 50 was a sentence in the pull
 request body, "ran once", that the second review itself made false. One agent is kept, and not
 none, because of PR #78's row in the table before this one: there a second review, of the fix
-commit only, found a real defect. Not ruled: whether a review's agent runs
-`scripts/check.ps1` again when CI has passed on the same commit. Both lanes of that second review
-did.
+commit only, found a real defect. ~~Not ruled: whether a review's agent runs
+`scripts/check.ps1` again when CI has passed on the same commit.~~ **Settled 2026-10-12** (#119):
+it does not, as the next paragraph says. Both lanes of that second review did.
+
+**The bug scan does not run the check again when CI has passed on the commit.** Asked for by
+Truls on 2026-10-12, settling
+[#119](https://github.com/trulsjo/grado-factorio-tools/issues/119). On
+[PR #114](https://github.com/trulsjo/grado-factorio-tools/pull/114) that day CI had passed on
+the reviewed commit before either lane reported, and the bug scan ran the check again.
+
+| | Time | Tokens |
+|---|---|---|
+| CI's `check` job on the reviewed commit | 50 s | |
+| Bug scan agent | 956 s | 103,224 |
+| Prose lane agent | 579 s | 128,209 |
+
+The table is that ticket's. The agents' figures are what the harness reported to the session,
+956,075 ms and 579,082 ms, with no command behind them. CI's 50 seconds is run 38214800677,
+whose one job ran from 06:53:44Z to 06:54:34Z
+(`gh run view 38214800677 --json jobs`, run again 2026-10-12). By the ticket's account of the
+review comment there, none of the bug scan's five findings came from `scripts/check.ps1`, which
+passed: they came from inputs of its own and from mutants of the two scripts, which CI does not
+run. So the rule takes from the lane only what CI has already done on that commit. It still
+runs the check where CI's run failed or has not finished, and it still runs each self-test the
+change calls for that CI does not, the ones that need the game among them. The rule had been
+half of the sentence on the two lanes and is a bullet of its own on the rules page, which the
+split of #116 made room for. How the session knows, run 2026-10-12 for `main`'s tip:
+
+    gh run list --workflow check.yml --commit $(git rev-parse main) --json databaseId,headSha,status,conclusion
+
+It printed one run, 38217674510, `completed` and `success`, with a `headSha` beginning
+`e4e255f`. Given the short SHA, `--commit e4e255f`, the same command printed `[]`, so the rule
+asks for the full one. With the rule the rules page is 2,544 bytes of its 3,000.
 
 **A change that touches no script is reviewed by one agent.** Ruled by Truls on 2026-10-11,
 settling [#109](https://github.com/trulsjo/grado-factorio-tools/issues/109): such a change gets
