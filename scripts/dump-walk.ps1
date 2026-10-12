@@ -41,9 +41,16 @@
     every ingredient can be had, and its surface conditions hold on that surface. An entity is on
     a planet when the planet's settings list it; a tree, a plant or a nest also when its
     autoplace control is one of the planet's. A pump's own fluid is given to a planet whose
-    tiles give water, which is a guess at where such a pump can stand. The count is of the items
-    and fluids some counted recipe gives, so what is only mined is not in it. -BroughtIn adds
-    names to every surface's supply in the first dump.
+    tiles give water, which is a guess at where such a pump can stand.
+
+    WHAT IS COUNTED THERE (ruled on #126) is every item and fluid the surface can then have, less
+    what it supplies. A thing the surface supplies is not counted as made, whichever recipe gives
+    it back: an ore a recycling recipe returns is not, and neither is coal where coal is mined
+    and a recipe makes it too. Steam where there is water is counted, and so is what a supplied
+    item spoils or burns into, though no recipe gives either. With -Against, a thing counted in
+    the other dump is "not in" this one when this dump's surface cannot have it at all, supplied
+    or made, so what an overhaul turns from made to mined is not missing. -BroughtIn adds names
+    to every surface's supply in the first dump, and a name brought in is never itself missing.
 
     WHAT IT CANNOT SEE. Play: nothing is crafted, researched or shipped. Amounts and rates. What
     a control script places or removes at run time, so a resource a mod places from its script
@@ -57,7 +64,9 @@
 
     THE SELF-TEST runs the walk on a dump of Space Age alone, where the answer is known. Then it
     removes each source rule in turn and fails unless the answer changes. A rule
-    the Space Age dump cannot show is named in the self-test's output, and is not proven. It
+    the Space Age dump cannot show is named in the self-test's output, and is not proven. Of the
+    count of own materials it holds one case, on Nauvis: `copper-ore`, which the surface
+    supplies and a recycling recipe gives back, is not counted, and `steam` is. It
     needs the game, unless -Dump names a dump of Space Age alone.
 
 .PARAMETER Dump
@@ -245,7 +254,6 @@ function Invoke-Walk {
     param([Parameter(Mandatory)] $Data, [Parameter(Mandatory)] [AllowEmptyCollection()] [Collections.Generic.HashSet[string]] $Supply, [string] $Surface, [string[]] $Without = @())
     $have = [Collections.Generic.HashSet[string]]::new($Supply)
     $used = [Collections.Generic.HashSet[string]]::new()
-    $made = [Collections.Generic.HashSet[string]]::new()
     $by = @{}
     $researched = [Collections.Generic.HashSet[string]]::new()
     $unlocked = [Collections.Generic.HashSet[string]]::new()
@@ -307,10 +315,22 @@ function Invoke-Walk {
             if (-not $Surface -and -not (($r.Enabled -or $unlocked.Contains($r.Name)) -and $categories.Contains($r.Category))) { continue }
             if (-not (& $all $r.Ingredients)) { continue }
             [void] $used.Add($r.Name); [void] $pending.Remove($r); $changed = $true
-            foreach ($n in $r.Results) { if ($have.Add($n)) { $by[$n] = $r.Name }; [void] $made.Add($n) }
+            foreach ($n in $r.Results) { if ($have.Add($n)) { $by[$n] = $r.Name } }
         }
     } while ($changed)
-    @{ Have = $have; Made = $made; By = $by; Used = $used; Researched = $researched }
+    @{ Have = $have; By = $by; Used = $used; Researched = $researched }
+}
+
+function Get-OwnWalk {
+    <#  The walk of own materials on one surface, and what is counted there: what the surface
+        can have, less what it supplies. $BroughtIn is supplied too.  #>
+    param([Parameter(Mandatory)] $Data, [Parameter(Mandatory)] [string] $Surface, [string[]] $BroughtIn = @())
+    $supply = Get-Supply $Data -Surface $Surface
+    $supply.UnionWith($BroughtIn)
+    $walk = Invoke-Walk $Data $supply -Surface $Surface
+    $walk.Counted = [Collections.Generic.HashSet[string]]::new($walk.Have)
+    $walk.Counted.ExceptWith($supply)
+    $walk
 }
 
 function Get-WalkResult {
@@ -320,9 +340,8 @@ function Get-WalkResult {
     $result = @{ Data = $data; Walk = Invoke-Walk $data (Get-Supply $data -Without $Without) -Without $Without; Own = [ordered]@{}; With = [ordered]@{} }
     if (-not $NoSurfaces) {
         foreach ($surface in $data.Surfaces.Keys) {
-            $supply = Get-Supply $data -Surface $surface
-            $result.Own[$surface] = Invoke-Walk $data $supply -Surface $surface
-            if ($BroughtIn) { $supply.UnionWith($BroughtIn); $result.With[$surface] = Invoke-Walk $data $supply -Surface $surface }
+            $result.Own[$surface] = Get-OwnWalk $data $surface
+            if ($BroughtIn) { $result.With[$surface] = Get-OwnWalk $data $surface $BroughtIn }
         }
     }
     $result.Open = @($data.Recipes | Where-Object { -not $_.Hidden })
@@ -348,7 +367,7 @@ function Write-WalkOfOne {
     if ($Result.Own.Count) {
         ''
         Format-MarkdownTable 'Surface', 'Made from its own materials', 'Science packs among them' @(
-            foreach ($s in $Result.Own.Keys) { , @($s, "$($Result.Own[$s].Made.Count) items and fluids", (Format-Names @($Result.Packs | Where-Object { $Result.Own[$s].Made.Contains($_) }))) })
+            foreach ($s in $Result.Own.Keys) { , @($s, "$($Result.Own[$s].Counted.Count) items and fluids", (Format-Names @($Result.Packs | Where-Object { $Result.Own[$s].Counted.Contains($_) }))) })
     }
 }
 
@@ -401,20 +420,20 @@ function Write-WalkAgainst {
     $header = @('Surface', "Made from its own materials, $BaseLabel", "Of those, not in $PackLabel") + @(if ($BroughtIn) { "With $(Format-Names $BroughtIn) brought in" })
     Format-MarkdownTable $header @(
         foreach ($s in $Base.Own.Keys) {
-            $mine = $Pack.Own[$s]?.Made
-            $lost = @($Base.Own[$s].Made | Where-Object { -not $mine -or -not $mine.Contains($_) })
-            , (@($s, "$($Base.Own[$s].Made.Count) items and fluids", $lost.Count) + @(if ($BroughtIn) { @($lost | Where-Object { -not $Pack.With[$s]?.Made?.Contains($_) }).Count }))
+            $mine = $Pack.Own[$s]?.Have
+            $lost = @($Base.Own[$s].Counted | Where-Object { -not $mine -or -not $mine.Contains($_) })
+            , (@($s, "$($Base.Own[$s].Counted.Count) items and fluids", $lost.Count) + @(if ($BroughtIn) { @($lost | Where-Object { -not $Pack.With[$s]?.Have?.Contains($_) }).Count }))
         })
     ''
     Format-MarkdownTable 'Surface', "Science packs made from its own materials, $BaseLabel", "In $PackLabel" @(
         foreach ($s in $Base.Own.Keys) {
-            , @($s, (Format-Names @($Base.Packs | Where-Object { $Base.Own[$s].Made.Contains($_) })), (Format-Names @($Base.Packs | Where-Object { $Pack.Own[$s]?.Made?.Contains($_) })))
+            , @($s, (Format-Names @($Base.Packs | Where-Object { $Base.Own[$s].Counted.Contains($_) })), (Format-Names @($Base.Packs | Where-Object { $Pack.Own[$s]?.Have?.Contains($_) })))
         })
     foreach ($s in $Base.Own.Keys) {
-        $mine = if ($BroughtIn) { $Pack.With[$s]?.Made } else { $Pack.Own[$s]?.Made }
-        $lost = @($Base.Own[$s].Made | Where-Object { -not $mine -or -not $mine.Contains($_) })
+        $mine = if ($BroughtIn) { $Pack.With[$s]?.Have } else { $Pack.Own[$s]?.Have }
+        $lost = @($Base.Own[$s].Counted | Where-Object { -not $mine -or -not $mine.Contains($_) })
         ''
-        "Not made on $s in $PackLabel$(if ($BroughtIn) { ", with $(Format-Names $BroughtIn) brought in" }), $($lost.Count): $(Format-Names $lost)."
+        "Not to be had on $s in $PackLabel$(if ($BroughtIn) { ", with $(Format-Names $BroughtIn) brought in" }), $($lost.Count): $(Format-Names $lost)."
     }
 }
 
@@ -449,10 +468,16 @@ function Invoke-SelfTest {
         if ($without -ceq $known) { $unproven += $rule; Write-Host "self-test: without the rule '$rule' the answer is the same -- NOT PROVEN on this dump" }
         else { Write-Host "self-test: without the rule '$rule': $without -- ok, the answer changed" }
     }
+    # The count of own materials, on Nauvis: an ore a recycling recipe gives back is had and not
+    # counted, and steam, which no recipe gives there, is.
+    $own = Get-OwnWalk (Read-WalkData $Path) 'nauvis'
+    $counted = $own.Have.Contains('copper-ore') -and -not $own.Counted.Contains('copper-ore') -and $own.Counted.Contains('steam')
+    Write-Host "self-test: of its own materials Nauvis has copper-ore and steam, and counts $(@('copper-ore', 'steam' | Where-Object { $own.Counted.Contains($_) }) -join ' and ') -- $($counted ? 'ok' : 'FAILED, steam alone is to be counted')"
     Write-Host ''
     # The rules a dump of Space Age alone was seen not to show. Another rule joining them fails.
     $surprise = @($unproven | Where-Object { $_ -notin $NOT_SHOWN_BY_SPACE_AGE })
     if (-not $ok) { Write-Host 'FAILED - self-test: the walk of Space Age alone does not give the known answer.'; exit 1 }
+    if (-not $counted) { Write-Host 'FAILED - self-test: the count of own materials takes in what the surface supplies, or leaves steam out.'; exit 1 }
     if ($surprise) { Write-Host "FAILED - self-test: removing $($surprise -join ', ') does not change the answer."; exit 1 }
     Write-Host "OK - self-test passed: the known answer, and $($SOURCE_RULES.Count - $unproven.Count) of the $($SOURCE_RULES.Count) source rules shown to carry it.$(if ($unproven) { " Not proven here: $($unproven -join ', ')." })"
     exit 0
