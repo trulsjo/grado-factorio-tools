@@ -11,15 +11,16 @@
 
     A RESOURCE is an entity in a planet's list whose prototype type is `resource`.
 
-    NAMES THAT DO NOT EXIST. Every control, entity, tile, decorative, cliff and territory unit
-    the settings name is looked up in the dump, and so is the name inside a property
-    expression's key, as in `entity:coal:probability`. Every item or fluid a listed entity gives
-    when mined is looked up too.
+    NAMES THAT DO NOT EXIST. Every name in those lists is looked up in the dump, and so is the
+    name inside a property expression's key, as in `entity:coal:probability`. Every item or
+    fluid a listed entity gives when mined is looked up too. An entity, a territory unit and
+    what is mined are looked up under any prototype type, so another prototype of the same name
+    passes for one.
 
     WHAT IT CANNOT SEE. A map: nothing is generated. What a mod places from its control script.
     A mod that zeroes a resource's autoplace and places it itself shows here as the count of
-    resources whose probability is 0, and no further. Amounts: richness and frequency are not
-    compared. What a property expression's value names, since a value may be an expression and
+    resources whose probability is 0, and no further. Amounts: the richness and frequency of an
+    autoplace control are not compared. What a property expression's value names, since a value may be an expression and
     not a name. Asteroids and routes.
 
 .PARAMETER Dump
@@ -60,15 +61,15 @@ function Read-Planets {
     foreach ($planet in (Get-DumpTable $Doc 'planet').Values | Sort-Object { $_['order'] }, { $_['name'] }) {
         $settings = $planet['map_gen_settings']
         if (-not $settings) { continue }
-        $listed = { param($kind) $settings['autoplace_settings']?[$kind]?['settings']?.Keys }
+        $listed = { param($kind) $settings['autoplace_settings']?[$kind]?['settings']?.Keys | Where-Object { $_ } }
         $entities = [string[]] @(& $listed 'entity')
         $planets[$planet['name']] = @{
-            'autoplace controls' = [string[]] @($settings['autoplace_controls']?.Keys)
+            'autoplace controls' = [string[]] @($settings['autoplace_controls']?.Keys | Where-Object { $_ })
             'entities'           = $entities
             'tiles'              = [string[]] @(& $listed 'tile')
             'decoratives'        = [string[]] @(& $listed 'decorative')
             'cliff'              = [string[]] @($settings['cliff_settings']?['name'] | Where-Object { $_ })
-            'territory units'    = [string[]] @($settings['territory_settings']?['units'] | Where-Object { $_ })
+            'territory units'    = [string[]] @(Get-List $settings['territory_settings']?['units'])
             Resources            = [string[]] @($entities | Where-Object { $index.ContainsKey('resource') -and $index['resource'].ContainsKey($_) })
             Expressions          = $settings['property_expression_names'] ?? @{}
             Settings             = $settings
@@ -142,7 +143,7 @@ function Write-Planets {
                 foreach ($prototype in Find-DumpPrototype $docs[0] $name) {
                     $minable = $prototype['minable']
                     if (-not $minable) { continue }
-                    $gives = @($minable['result']) + @(if ($minable['results'] -and -not ($minable['results'] -is [Collections.IDictionary])) { $minable['results'] | ForEach-Object { $_['name'] } }) | Where-Object { $_ }
+                    $gives = @($minable['result']) + @(Get-List $minable['results'] | ForEach-Object { $_['name'] }) | Where-Object { $_ }
                     foreach ($g in $gives) { if (-not (Test-DumpName $pack.Index '*' $g)) { "$p, what ``$name`` gives when mined: ``$g``" } }
                 }
             }

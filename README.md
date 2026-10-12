@@ -115,8 +115,9 @@ reads sizes and not contents: what that misses is in its header. `-SelfTest` nee
 Five scripts each take dumps from `get-dump.ps1` and print Markdown, so a figure in a page is
 pasted and not retyped. They were written for
 [grado-factorio-modpack#139](https://github.com/trulsjo/grado-factorio-modpack/issues/139), from
-the measurements that repository's catalogue records, and they know no mod by name. Each
-header says what the script reads and what it does not see.
+the measurements that repository's catalogue and load records hold. Four name no mod;
+`dump-walk.ps1` knows three names of Space Age's, which its header lists. Each header says what
+the script reads and what it does not see.
 
 | Script | Dumps | Prints |
 |---|---|---|
