@@ -8,7 +8,10 @@
     THE ONE COMMAND BEFORE A PUSH (grado-factorio-tools#60). The only gate here was commit-msg,
     which reads a message and no script. Each -SelfTest was run by hand, session by session, and
     review lanes reported more than once that no lane had run them. .githooks/pre-push runs this,
-    and so does the workflow in .github/workflows/ on every pull request and on main.
+    and so does the workflow in .github/workflows/ on every pull request and on main, on Windows
+    and on Linux (grado-factorio-tools#117). Nothing here is left out on either: a self-test
+    that cannot pass on one of them fails this check there. What a self-test itself skips off
+    Windows, it names.
 
     WHAT IT RUNS. A parse of each script beside it, which finds a syntax error on a line no
     self-test reaches, and in the libraries that have no self-test. Then -SelfTest of each script
