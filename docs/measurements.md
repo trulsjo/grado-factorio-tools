@@ -177,6 +177,38 @@ What it does not show is why the machine is slower when quiet. It runs Microsoft
 Endpoint with real-time and behaviour monitoring on, which scans each process as it starts; that
 was not turned off to see, so it is a likely cause and not a measured one.
 
+### The whole check on Linux
+
+Measured 2026-10-12 (grado-factorio-tools#117). The first row is the run taken for #113, a
+workflow of its own on a branch made for it. Each of the other four is a run of the `check`
+workflow started with `gh workflow run check.yml --ref <branch>`, on `ubuntu-latest` (image
+`ubuntu-24.04`) beside `windows-latest`: three on a scratch branch, deleted since, and the last
+on the branch of the pull request that added the Linux job. `gh run view <id> --log` shows
+each.
+
+| Run | What the branch held | The Linux job |
+|---|---|---|
+| 38212614538, for #113 | `main`'s scripts of that day | `fetch-mods.ps1 -SelfTest ran no case`: `Cannot bind argument to parameter 'Path' because it is null.` |
+| 38220690042 | the default for `-PlayerDataPath` built only where `%APPDATA%` is set | `fetch-mods.ps1 -SelfTest exited 1`: five of its six checks passed, and the last said `the token never reached the download request` |
+| 38223060549 | the same commit, started again by mistake | the same |
+| 38223847158 | also a wait in the fake portal until its port answers; and a mutant of the mod-cache hook | `fetch-mods.ps1 -SelfTest -- ok`; `refuse-cd-into-mod-cache.ps1 -SelfTest exited 1` |
+| 38224508987 | the pull request's branch, without the mutant | `OK - check passed.` |
+
+So two things kept `fetch-mods.ps1 -SelfTest` from passing on Linux. `Join-Path` was handed
+`$env:APPDATA`, which is not set there, before any check ran. And the last check calls the fake
+portal from the self-test's own process, where the five before it start a pwsh first: the
+portal listens on a thread job, and the call reached the port before the listener did. With
+the wait it passed in both runs that had it. Why Windows never showed the same was not looked
+into.
+
+The mutant removed the `$IsWindows` guard in `Test-EntersCache`, so that `/c/...` was rewritten
+to a drive on every platform. The Linux job failed on it, `1 of 41 case(s) did not hold`, the
+one being the absolute path under `/t/`; the Windows job of the same run passed.
+
+In the last run the Linux job took 39 seconds and the Windows job 51, each from its
+`startedAt` to its `completedAt` (`gh run view 38224508987 --json jobs`). Every self-test the
+check runs, it ran on both, and none was left out on Linux.
+
 ## `markdown-check.ps1`
 
 ### Which indented lines PowerShell's parser and GitHub's renderer call code
@@ -273,5 +305,22 @@ Not measured: the hook under WSL, and any command through the hook on Linux but 
 last case sends.
 
 `scripts/check.ps1` was run on Linux in the same run, for information. It failed on one line,
-`fetch-mods.ps1 -SelfTest ran no case`, and every other step passed. Why that self-test ran no
-case there was not looked into.
+`fetch-mods.ps1 -SelfTest ran no case`, and every other step passed. ~~Why that self-test ran no
+case there was not looked into.~~ **Looked into 2026-10-12** (grado-factorio-tools#117): see
+*The whole check on Linux* under `check.ps1` above.
+
+**Since 2026-10-12** (grado-factorio-tools#115) the self-test has 41 cases: the last runs the
+wired command for a project that holds no hook script. Measured that day on the development
+machine, pwsh 7.6.6:
+
+| Settings file | What it ended with |
+|---|---|
+| none | `OK - self-test passed: all 41 cases.` |
+| `grado-factorio-modpack`'s at `43c30f3` | the same |
+| the same file with `"not found"` in quotes in its message | `FAILED - self-test: 1 of 41 case(s) did not hold.` |
+
+The two files were each put in a scratch directory of their own with this repository's script
+where the submodule stands, so the wired command reached the script being measured. The failing
+case was the forty-first: the command exited 0 and printed JSON that does not parse. On Linux
+the case ran in CI with no settings file, in the run under `check.ps1` above; with a consumer's
+file it was not run there.
