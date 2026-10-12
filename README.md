@@ -110,6 +110,27 @@ The path is the last line it prints. The cache is `.dump-cache` under the curren
 mod's name, version and size, so the same mods in another directory are served the same dump. It
 reads sizes and not contents: what that misses is in its header. `-SelfTest` needs no game.
 
+## Reading a dump
+
+Five scripts each take dumps from `get-dump.ps1` and print Markdown, so a figure in a page is
+pasted and not retyped. They were written for
+[grado-factorio-modpack#139](https://github.com/trulsjo/grado-factorio-modpack/issues/139), from
+the measurements that repository's catalogue records, and they know no mod by name. Each
+header says what the script reads and what it does not see.
+
+| Script | Dumps | Prints |
+|---|---|---|
+| `dump-walk.ps1` | one, or two with `-Against` | what can be researched and made from what the surfaces supply, and what each surface makes from its own materials |
+| `dump-planets.ps1` | one, or two with `-Against` | each planet's resources and settings, and whether they name anything the dump lacks |
+| `dump-shared-names.ps1` | four: `-Base`, `-First`, `-Second`, `-Both` | the names two mod sets each define, and which definition the two together hold |
+| `dump-keys.ps1` | one, or two with `-Below`, and a `config.ini` | the custom inputs that share a default key with an engine control or are linked to one |
+| `dump-diff.ps1` | two | the prototypes one has and the other has not, and those that differ, by field |
+
+    pwsh -File scripts/dump-walk.ps1 <pack dump> -Against <Space Age dump> -BroughtIn wood
+
+All five take `-SelfTest`. The walk's runs on a dump of Space Age alone, which it makes through
+`get-dump.ps1` and so needs the game, unless `-Dump` names one; the other four read fixtures.
+
 ## Seeing a set's technology tree
 
 `tree-viewer.ps1` renders the technology tree of a set of mods as one zoomable HTML page, each
@@ -281,7 +302,7 @@ prototype name is that mod's business. If a script needs to know `rf-`, it stays
 
 ```
 scripts/     PowerShell entry points, one job each, and the libraries they
-             dot-source: load-harness-lib.ps1, game-mods.ps1, mod-info.ps1,
+             dot-source: load-harness-lib.ps1, dump-lib.ps1, game-mods.ps1, mod-info.ps1,
              which reads a mod's info.json for four of them, and
              self-test-halves.ps1, the runner a -SelfTest hands its halves to
 .githooks/   this repo's own commit-msg and pre-push hooks, opted into once per
