@@ -113,7 +113,8 @@
     Re-fetch even when the cache already holds the pinned version.
 
 .PARAMETER PlayerDataPath
-    Where to read the mod-portal credentials. Defaults to %APPDATA%\Factorio\player-data.json. A
+    Where to read the mod-portal credentials. Defaults to %APPDATA%\Factorio\player-data.json,
+    and has no default where there is no %APPDATA%, as off Windows: a fetch there is given it. A
     parameter rather than a constant so -SelfTest can point it at a file it controls.
 
 .PARAMETER PortalBaseUrl
@@ -152,7 +153,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-if (-not $PlayerDataPath) { $PlayerDataPath = Join-Path $env:APPDATA 'Factorio\player-data.json' }
+# Off Windows there is no %APPDATA%, and Join-Path fails on it before -SelfTest can start
+# (grado-factorio-tools#117). The path is then the caller's to give.
+if (-not $PlayerDataPath -and $env:APPDATA) { $PlayerDataPath = Join-Path $env:APPDATA 'Factorio\player-data.json' }
 
 # ---------------------------------------------------------------------------------------------
 # The pins, read from -PinFile.
@@ -533,7 +536,7 @@ function Start-FakePortal {
         [switch] $FailDownload
     )
 
-    Start-ThreadJob -ScriptBlock {
+    $job = Start-ThreadJob -ScriptBlock {
         param($port, $log, $name, $version, $sha1, $zip, $fail)
         $h = [System.Net.HttpListener]::new()
         $h.Prefixes.Add("http://localhost:$port/")
@@ -577,6 +580,15 @@ function Start-FakePortal {
         }
         finally { $h.Stop(); $h.Close() }
     } -ArgumentList $Port, $RequestLog, $Name, $Version, $ClaimedSha1, $ZipPath, ([bool]$FailDownload)
+    # The listener starts on the job's thread, and a caller in this process can reach the port
+    # before it does. On ubuntu-latest the self-test's last check, which calls from this process,
+    # failed for want of this wait (grado-factorio-tools#117, in docs/measurements.md). So wait
+    # here until the port answers, five seconds at most.
+    foreach ($try in 1..50) {
+        try { [System.Net.Sockets.TcpClient]::new('localhost', $Port).Dispose(); break }
+        catch { Start-Sleep -Milliseconds 100 }
+    }
+    $job
 }
 
 function Invoke-SelfTest {
@@ -917,6 +929,7 @@ if ($PreferPortal) { Write-Host '            -PreferPortal: taking the portal ro
 # @() BECAUSE POWERSHELL UNROLLS A ONE-ELEMENT ARRAY ON RETURN. Without it a single-mod set --
 # a one-mod set -- comes back as the bare hashtable, and $results.Count then counts its three KEYS
 # rather than one mod, so the summary claimed "3 mods" for a set of one.
+if (-not $PlayerDataPath) { throw 'fetch-mods: there is no %APPDATA% to find player-data.json under, so give -PlayerDataPath.' }
 $results = @(Invoke-Fetch -Mods $mods -CacheDirectory $CacheDirectory -PlayerDataPath $PlayerDataPath `
     -BaseUrl $PortalBaseUrl -PreferPortal:$PreferPortal -Force:$Force)
 

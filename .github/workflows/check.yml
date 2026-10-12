@@ -3,9 +3,16 @@
 # closing keyword outside a `Closes #N` line. `edited` is listed so a retitle or an edited body
 # is checked again.
 #
-# Windows, because the scripts are: the harness junctions mods in, and fetch-mods.ps1 reads
-# %APPDATA%. No runner has Factorio, so load-harness.ps1 -SelfTest is not run here or anywhere
-# but by hand; scripts/check.ps1's header says so.
+# On windows-latest and on ubuntu-latest, a job each (grado-factorio-tools#117): the scripts
+# were written on Windows, a consumer's check runs on Linux, and a self-test can pass on one and
+# fail on the other. Every self-test scripts/check.ps1 runs, it runs on both. No runner has
+# Factorio, so load-harness.ps1 -SelfTest is not run here or anywhere but by hand;
+# scripts/check.ps1's header says so.
+#
+# workflow_dispatch starts both jobs by hand on a branch, with no pull request and so without
+# the title and body steps:
+#
+#     gh workflow run check.yml --ref <branch>
 name: check
 
 on:
@@ -13,13 +20,18 @@ on:
     types: [opened, edited, synchronize, reopened]
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   check:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       # The whole history, for the body check below: it asks whether a commit is on main, and a
       # shallow clone cannot say. pr-body-check.ps1 refuses to run in one.
