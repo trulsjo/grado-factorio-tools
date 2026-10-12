@@ -583,7 +583,8 @@ function Start-FakePortal {
     # The listener starts on the job's thread, and a caller in this process can reach the port
     # before it does. On ubuntu-latest the self-test's last check, which calls from this process,
     # failed for want of this wait (grado-factorio-tools#117, in docs/measurements.md). So wait
-    # here until the port answers, five seconds at most.
+    # here until the port answers, and after fifty tries go on without an answer: the check
+    # that needed one then fails by itself.
     foreach ($try in 1..50) {
         try { [System.Net.Sockets.TcpClient]::new('localhost', $Port).Dispose(); break }
         catch { Start-Sleep -Milliseconds 100 }

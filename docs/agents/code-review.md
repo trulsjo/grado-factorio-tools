@@ -11,7 +11,7 @@ On top of the `/code-review` plugin. The evidence is in
   command does, prints, refuses or exits with.
 - **Two lanes.** A bug scan; and a prose lane applying the rules in
   [code-review-prose.md](code-review-prose.md), which that lane loads and the bug scan does
-  not. It takes in the plugin's `CLAUDE.md` and code-comment lanes.
+  not. The prose lane takes in the plugin's `CLAUDE.md` and code-comment lanes.
 - **The bug scan runs `scripts/check.ps1` unless CI's check has passed on the commit the
   review reads.** Then it names that run and does not run the check again; where the run has
   failed or not finished, it runs it. The session looks before the lane starts, with

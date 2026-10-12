@@ -23,12 +23,16 @@
     WHAT IT REFUSES. A command in which the word `git`, alone or at the end of a path, is
     followed by `commit` or `push` as its subcommand, and by --no-verify, or an abbreviation
     of it that git takes; `git commit` with -n, alone or among other short switches, as -an; and
-    either subcommand after a -c or --config-env that names core.hooksPath.
+    either subcommand after a -c or --config-env that names core.hooksPath. A command inside
+    $( ) or backticks is read as one, where it does not stand inside a quoted string.
 
     WHAT IT LETS THROUGH. Everything else, and so `git push -n`, which is a dry run and skips
     nothing, and a switch that is only named inside a quoted message.
 
-    WHAT IT CANNOT SEE. A script, an alias or a program that passes the switch itself. A hook
+    WHAT IT CANNOT SEE. A script, an alias or a program that passes the switch itself. A command
+    written inside a quoted string for something else to run: sh -c, pwsh -Command, eval,
+    Start-Process, or a substitution inside double quotes. A switch written with a backslash in
+    it, and a hooks path that comes from a file named with -c include.path. A hook
     manager turned off through the environment, as HUSKY=0 is, and a hooks path set there, with
     GIT_CONFIG_COUNT and its kind. A hooks path set by an earlier `git config`, and a hook file
     that was edited or removed. A clone that never set core.hooksPath, where git runs no hook of
@@ -38,7 +42,10 @@
     still reach it, unless -SelfTest is run.
     It reads the command as text and does not parse the shell, so it errs towards refusing: a
     `git commit --no-verify` that is only echoed, or stands on a line of a here-document that
-    is not inside quotes, is refused too. Write such a text to a file with another tool.
+    is not inside quotes, is refused too. So is a `git commit` whose message is cut short
+    where this reads it: by an apostrophe written as '\'', or by an abbreviation of --message,
+    with -n as the next word; and one with -n in a comment after it. Write such a text to a
+    file with another tool, and give a message with -F.
 
     TO CHECK IT. The first is refused with exit 2, the second passes with exit 0:
 
@@ -70,9 +77,10 @@ function Test-SkipsHooks {
     param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Command)
 
     # Words and the marks that end a command. A quoted stretch stays inside its word, so a
-    # message is one word however much it holds; a line continuation is no end of line.
+    # message is one word however much it holds; a line continuation is no end of line. A
+    # backtick outside quotes ends a command too: sh starts one there.
     $tokens = [regex]::Matches(($Command -replace '[\\`]\r?\n', ' '),
-        '(?<word>(?:"(?:[\\`].|[^"\\`])*"|''[^'']*''|[^\s;&|(){}"''])+)|(?<end>[;&|(){}\n])')
+        '(?<word>(?:"(?:[\\`].|[^"\\`])*"|''[^'']*''|[^\s;&|(){}`"''])+)|(?<end>[;&|(){}`\n])')
     $commands = @(, [System.Collections.Generic.List[string]]::new())
     foreach ($t in $tokens) {
         if ($t.Groups['end'].Success) { $commands += , [System.Collections.Generic.List[string]]::new() }
@@ -82,10 +90,10 @@ function Test-SkipsHooks {
     foreach ($words in $commands) {
         $i = 0
         while ($i -lt $words.Count -and $words[$i] -notmatch '^(?:.*[\\/])?git(?:\.exe)?$') { $i++ }
-        # git's own options, up to the subcommand. These five take the next word as their value.
+        # git's own options, up to the subcommand. Those listed take the next word as their value.
         $hooksPath = $false
         for ($i++; $i -lt $words.Count -and $words[$i].StartsWith('-'); $i++) {
-            if ($words[$i] -cin '-c', '-C', '--git-dir', '--work-tree', '--namespace') { $i++ }
+            if ($words[$i] -cin '-c', '-C', '--git-dir', '--work-tree', '--namespace', '--config-env') { $i++ }
             if ($i -lt $words.Count -and $words[$i] -match 'core\.hookspath') { $hooksPath = $true }
         }
         if ($i -ge $words.Count -or $words[$i] -notin 'commit', 'push') { continue }
@@ -127,6 +135,12 @@ if ($SelfTest) {
         @('(cd docs && git commit -n -m x)', $true),
         @('"C:/Program Files/Git/cmd/git.exe" push --no-verify', $true),
         @('/usr/bin/git commit -n', $true),
+        @('o=`git push --no-verify 2>&1`', $true),
+        @('o=$(git commit -n -m x)', $true),
+        @('git --config-env core.hooksPath=NONE commit -m x', $true),
+        @('git --git-dir .git --work-tree . --namespace x commit -n', $true),
+        @('git commit -uno -m x', $false),
+        @('git commit --message "-n" --file msg.txt', $false),
         @('git push -n', $false),
         @('git push -n origin main', $false),
         @('git push --dry-run', $false),

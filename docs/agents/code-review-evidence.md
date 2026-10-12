@@ -4,7 +4,7 @@ The rules are in [code-review.md](code-review.md), which is what a review loads,
 2026-10-12 the prose rules are in [code-review-prose.md](code-review-prose.md), which its prose
 lane loads. This page holds what was measured and what was found, so those pages can stay short
 and nothing measured is lost.
-Moved here from that page on 2026-10-06
+Moved here from the rules page on 2026-10-06
 ([#65](https://github.com/trulsjo/grado-factorio-tools/issues/65)). The tables are as they stood
 there. The prose around them was edited to stand without the rules it sat beside, and the first
 section is new.
@@ -110,7 +110,7 @@ split of #116 made room for. How the session knows, run 2026-10-12 for `main`'s 
 
 It printed one run, 38217674510, `completed` and `success`, with a `headSha` beginning
 `e4e255f`. Given the short SHA, `--commit e4e255f`, the same command printed `[]`, so the rule
-asks for the full one. With the rule the rules page is 2,544 bytes of its 3,000.
+asks for the full one. With the rule the rules page is 2,556 bytes of its 3,000.
 
 **A change that touches no script is reviewed by one agent.** Ruled by Truls on 2026-10-11,
 settling [#109](https://github.com/trulsjo/grado-factorio-tools/issues/109): such a change gets
@@ -205,11 +205,13 @@ the code", 1,066 bytes of the 2,998 the page stood at:
     git show e4e255f:docs/agents/code-review.md | awk '/^## Review the prose/{f=1} f' | wc -c
 
 It is now [code-review-prose.md](code-review-prose.md), which the prose lane loads and the bug
-scan does not. No rule was reworded but one: a superseded figure was looked for in "these two
+scan does not. Two rules were reworded. A superseded figure was looked for in "these two
 pages", which meant the rules page and this one, and the rule now names those two and the new
-page. `scripts/check.ps1` holds each page to a limit of its own, 3,000 bytes for the rules page
-as before and 2,000 for the prose page. As the split left them the rules page was 2,021 bytes
-and the prose page 1,366, each from `tr -d '\r' < <page> | wc -c`.
+page. And the rule on the two lanes had the prose lane "applying the rules below"; it now
+links the new page and says which lane loads it. `scripts/check.ps1` holds each page to a
+limit of its own, 3,000 bytes for the rules page as before and 2,000 for the prose page. As
+the split left them the rules page was 2,021 bytes and the prose page 1,366, each
+from `tr -d '\r' < <page> | wc -c`.
 
 ## Where the first two rules came from
 

@@ -196,8 +196,9 @@ each.
 
 So two things kept `fetch-mods.ps1 -SelfTest` from passing on Linux. `Join-Path` was handed
 `$env:APPDATA`, which is not set there, before any check ran. And the last check calls the fake
-portal from the self-test's own process, where the five before it start a pwsh first: the
-portal listens on a thread job, and the call reached the port before the listener did. With
+portal from the self-test's own process, where the three before it that use the portal start
+a pwsh first: the portal listens on a thread job, and the call reached the port before the
+listener did. With
 the wait it passed in both runs that had it. Why Windows never showed the same was not looked
 into.
 
