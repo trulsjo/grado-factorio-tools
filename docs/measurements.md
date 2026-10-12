@@ -278,7 +278,8 @@ page and takes none of its lines for code.
 Measured 2026-10-12 (grado-factorio-tools#125) on the development machine, pwsh 7.6.6 and
 git 2.37.3.windows.1. The corpus is `realistic-fusion-refreshed` at `9a8ab36`, cloned to a
 scratch directory with nothing staged and its submodule not initialised: 114 tracked Markdown
-files, 36,787 lines (`git ls-files '*.md' | xargs cat | wc -l`), of which 3,616 begin with a `|`.
+files, 36,783 lines (`git ls-files '*.md' | xargs cat | wc -l`), of which 3,616 begin with a `|`
+after any indentation or `>`. The ticket's 36,787 was counted in that repository's working tree.
 "Before" is the script at `41b5488`. Other sessions were running on the machine throughout, and
 how loaded it was, was not measured: the third round below shows it.
 
@@ -292,7 +293,7 @@ after taking turns:
 | 3 | 429.8 | 37.2 | 501.7 | 159.0 |
 
 With no limit each run exited 0, and with one each exited 1: the corpus is not wrapped, and has
-3,033 lines over 100.
+3,031 lines over 100.
 
 **By part, before.** A probe loaded the script's functions, put a stopwatch round `Test-Inline`
 and round `ConvertFrom-Markdown`, and read every file as `Invoke-Check` did, one run each:
@@ -305,7 +306,8 @@ and round `ConvertFrom-Markdown`, and read every file as `Invoke-Check` did, one
 | of that, `ConvertFrom-Markdown` | 0 s | 1.5 s |
 | of that, the rest | 19.6 s | 45.3 s |
 
-The two top rows add up to 131 s where the whole run took 138 to 153; the difference is
+The two top rows add up to 131 s where the whole run took 138 and 153 in the first two rounds
+above; the difference is
 PowerShell starting and git listing the files, and was not measured apart. The same 114
 `git show` calls took between 21 and 47 s in six more runs of the probe that day, and 21 and
 74 s in a PowerShell loop of their own.
@@ -315,7 +317,7 @@ for every cell of a table, and its time went with the calls and not with the cha
 five slowest pages before, all under `docs/research/`, are the five with the most table lines
 among the slowest eight:
 
-| Page | Lines | Lines beginning `\|` | `Test-Markdown` | of it `Test-Inline` |
+| Page | Lines | Lines beginning `\|`, as above | `Test-Markdown` | of it `Test-Inline` |
 |---|---|---|---|---|
 | `exchanger-coverage.md` | 1,473 | 356 | 8.5 s | 7.5 s |
 | `quality.md` | 1,733 | 292 | 6.7 s | 5.7 s |
@@ -331,8 +333,9 @@ Each was handed a script block as its evaluator, made anew on every call; readin
 called two script blocks as helpers and made a third as a predicate. The same `Replace` with a
 script block made once took 0.1 ms.
 
-**What was changed.** `Test-Inline` makes and calls no script block. `Invoke-Check` reads every
-file through one `git cat-file --batch`. One per-line pipeline in `Test-Markdown` became a loop.
+**What was changed.** `Test-Inline` makes and calls no script block of its own. `Invoke-Check`
+reads every file through one `git cat-file --batch`. One per-line pipeline in `Test-Markdown`
+became a loop.
 
 **By part, after**, the probe again, which still reads with `git show`:
 
@@ -369,7 +372,7 @@ over every character that masks code spans: `Test-Inline` took 100.6 s where it 
 so the loop was not the cost.
 
 **Not tried.** The regular expressions `Test-Markdown` runs on every line, which are the 17 s
-of "the rest". Why the rest grows to 41 s with a limit: the corpus has 3,033 lines over it, and
+of "the rest". Why the rest grows to 41 s with a limit: the corpus has 3,031 lines over it, and
 each is a finding that is made, sorted and printed, and has its code spans masked by a
 `Replace` with a script block; which of those costs was not measured, and a wrapped repository
 has none of them. What PowerShell takes to start. A cache between runs, reading fewer files,
@@ -389,7 +392,7 @@ path validation", and of that validation:
 
 > When an autolink ends in `)`, we scan the entire autolink for the total number of
 > parentheses. If there is a greater number of closing parentheses than opening ones, we don’t
-> consider the unmatched trailing parentheses part of the autolink
+> consider the unmatched trailing parentheses part of the autolink [...]
 
 > If an autolink ends in a semicolon (`;`), we check to see if it appears to resemble an entity
 > reference; if the preceding text is `&` followed by one or more alphanumeric characters. If
@@ -409,13 +412,14 @@ renderer put inside the link:
 | `x;` | `x` | | `a(b))` | `a(b)` |
 | `x;;` | `x` | | `a(b` | `a(b` |
 | `x:` | `x` | | `a)b` | `a)b` |
-| `x~` | `x` | | `x]` | `x` |
-| `x*_~` | `x` | | `x].` | `x` |
+| `x~` | `x` | | `x]` | `x]` |
+| `x*_~` | `x` | | `x].` | `x]` |
 | `x?q=1.` | `x?q=1` | | `x[1]` | `x[1]` |
 | `x.)` | `x` | | `a]b` | `a]b` |
 | `x).` | `x` | | `a[b]c` | `a[b]c` |
 | `x!)` | `x` | | `x&amp;` | `x` |
 | `x,)` | `x` | | `x&amp` | `x&amp` |
+| `x&frac12;` | `x&frac12` | | `x&a1;` | `x&a1` |
 | `a"b` | `a"b` | | `x>.` | `x>` |
 | `a'b` | `a'b` | | `x>y` | `x>y` |
 | `a"b"c` | `a"b"c` | | `x<b`, in emphasis | `x` |
@@ -424,11 +428,29 @@ renderer put inside the link:
 Each of `x}`, `x=`, `x-`, `x/`, `x#`, `x%`, `x+`, `x&`, `x@`, `x$`, `x^`, `x\` and `x|`
 was in the link whole.
 
-So the renderer gives back more than the spec names: a `"` or a `'` that stands last, a `;`
-that ends no entity, and a `]` that nothing in the address opened. The check follows the
-renderer in all of these. In one it does not: it ends an address at a `>`, which the renderer
-takes in, because in `<a href="https://u.nu/x">*open</a>` the renderer makes no link at all
-and reads `*open` as prose, and the check has to see that `*`.
+So the renderer gives back more than the spec names: a `"` or a `'` that stands last, and a
+`;` that ends no entity. Of an entity it gives back the whole only where the name is letters,
+where the spec says alphanumeric. A `]` it keeps, opened or not. The check follows the renderer
+in all of these. In one it does not: it ends an address at a `>`, which the renderer takes in,
+because in `<a href="https://u.nu/x">*open</a>` the renderer makes no link of the address and
+reads `*open` as prose, and the check has to see that `*`.
+
+The first commit of grado-factorio-tools#124's pull request had the check give back a `]`
+that nothing opened, from a misreading of these answers that its review found. With that,
+`_see https://u.nu/a_]` and `*see https://u.nu/x*]` passed, which the renderer leaves open;
+both are reported.
+
+An address followed by a `<placeholder>` ends at the `<`: in `*see https://u.nu/<id>/a*b` the
+renderer's link is `https://u.nu/` and the emphasis closes before the `b`. The same commit
+reported that line as left open, and it passes.
+
+**Inside square brackets the renderer makes no link of an address**, asked the same day. It
+closed the emphasis in `[*see https://u.nu/x*]`, `[ and *see https://u.nu/x*]`,
+`[*see https://u.nu/x* more]`, `*[see https://u.nu/x]*` and `[*see https://u.nu/x*](there.md)`,
+with no link of the address in any. In `[a] *see https://u.nu/x*]`, where the brackets before
+the address are a pair, the link is `https://u.nu/x*]` and the emphasis is left open. So the
+check ends an address at the `]` that closes a `[` standing open before it, and at no other.
+What it hides is still hidden, though to the renderer it is prose there.
 
 **Emphasis round an address**, the same day and the same way. The renderer closed the
 emphasis in each of these:
