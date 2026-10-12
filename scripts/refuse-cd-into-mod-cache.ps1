@@ -24,16 +24,19 @@
 
     WHERE THE SCRIPT IS NOT THERE (grado-factorio-tools#115), as in a clone whose submodule was
     never fetched, the command above lets the shell command run and prints JSON that tells the
-    agent it was not checked. Without that branch pwsh exits 64 for the missing file and the
-    agent is told nothing: grado-factorio-modpack#228 measured that on 2026-10-12 with Claude
-    Code 2.1.296, by its account, which was not measured again here. -SelfTest holds a wiring
-    to it, the consumer's too when it is given -Settings: its last case runs the wired command
-    for a project that holds no hook script, and fails unless that exits 0 and prints JSON
-    whose hookSpecificOutput names the PreToolUse event and carries an additionalContext that
-    is not empty. So a quote or a percent sign that breaks the message fails here. The case
-    has no switch to leave it out. A consumer whose wiring refuses the command in that
-    branch, or says nothing, fails it, and is to tell the agent and let the command run, as
-    the command above does.
+    agent it was not checked. Without that branch pwsh exits 64 for the missing file
+    (measured 2026-10-08, PowerShell 7.6.6). What reaches the agent from that exit was not
+    measured. By the account of grado-factorio-modpack#228, read 2026-10-12, a wiring of that
+    repository's that said so on stderr and exited 1 was measured on 2026-10-11 with Claude
+    Code 2.1.296, and what the tool call returned to the agent held nothing of it. -SelfTest
+    holds a wiring to telling the agent, the consumer's too when it is given -Settings: a
+    case runs the wired command for a project that holds no hook script, and fails unless
+    that exits 0 and prints, on stdout, JSON whose hookSpecificOutput names the PreToolUse
+    event and carries an additionalContext that is not empty. So a quote that breaks the JSON
+    fails here; a percent sign that only mangles the message does not. The case has no
+    switch to leave it out. A consumer whose wiring refuses the command in that branch, or
+    says nothing, fails it, and is to tell the agent and let the command run, as the command
+    above does.
 
     WHAT IT REFUSES. A cd, chdir, pushd, sl, Set-Location or Push-Location, standing where a
     command can stand, whose target resolves to the cache or anything under it: relative or
@@ -75,16 +78,16 @@
 
 .PARAMETER SelfTest
     Prove it refuses what it should and lets the rest through, that a wired command reaches
-    it, and that the wiring tells the agent where the script is not there. The last two cases
-    need sh: the one on the path, or the one Git for Windows ships. Off
+    it, and that the wiring tells the agent where the script is not there. The cases that run
+    the wiring need sh: the one on the path, or the one Git for Windows ships. Off
     Windows the cases that are a Windows way of writing a path are not run, and each says so on
     its line: a backslash as separator, Git Bash's /c/... and WSL's /mnt/c/.... What each
     platform printed, and when, is in docs/measurements.md.
 
 .PARAMETER Settings
-    With -SelfTest: a consumer's .claude/settings.json. The last two cases then run the command
-    wired there, its first PreToolUse hook, with that file's repository as the project, where
-    they would otherwise run the command above against this script. A consumer runs this to
+    With -SelfTest: a consumer's .claude/settings.json. The cases that run the wiring then run
+    the command wired there, its first PreToolUse hook, with that file's repository as the
+    project, where they would otherwise run the command above against this script. A consumer runs this to
     know its wiring still reaches the hook, and still tells the agent when it cannot.
 #>
 
@@ -245,7 +248,10 @@ if ($SelfTest) {
     # the command runs, and what is printed tells the agent it was not checked.
     $n++
     $env:CLAUDE_PROJECT_DIR = $project = Join-Path $fixture 'no-hook-script'
-    $absent = & $through 'cd .mod-cache/Grado_ABC && ls'
+    # Stdout alone, where the cases before take stderr too: what a hook prints for the session
+    # to read is its stdout.
+    $absent = @{ Text = (@{ cwd = $project; tool_input = @{ command = 'cd .mod-cache/Grado_ABC && ls' } } | ConvertTo-Json -Compress) | & $sh -c $wired 2>$null | Out-String }
+    $absent.Code = $LASTEXITCODE
     $ok = $absent.Code -eq 0 -and $(try {
             $told = ($absent.Text | ConvertFrom-Json).hookSpecificOutput
             $told.hookEventName -ceq 'PreToolUse' -and [bool] ([string] $told.additionalContext).Trim()

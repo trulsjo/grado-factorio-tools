@@ -4,7 +4,8 @@
 # is checked again.
 #
 # On windows-latest and on ubuntu-latest, a job each (grado-factorio-tools#117): the scripts
-# were written on Windows, a consumer's check runs on Linux, and a self-test can pass on one and
+# were written on Windows, grado-factorio-modpack's check runs on ubuntu-latest (its
+# .github/workflows/check.yml at 43c30f3, read 2026-10-12), and a self-test can pass on one and
 # fail on the other. Every self-test scripts/check.ps1 runs, it runs on both. No runner has
 # Factorio, so load-harness.ps1 -SelfTest is not run here or anywhere but by hand;
 # scripts/check.ps1's header says so.

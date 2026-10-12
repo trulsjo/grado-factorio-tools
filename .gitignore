@@ -10,6 +10,7 @@ __pycache__/
 
 # Personal, never committed
 *.local.md
+/.claude/settings.local.json
 
 # Agent runtime state. Ignore the contents rather than the directory, so that
 # .omc/skills/ stays committable: project-scoped skills are meant to be shared,

@@ -180,15 +180,17 @@ Where the script is not there, as in a clone whose submodule is not initialised,
 above lets the shell command run and prints JSON whose `additionalContext` tells the agent it
 was not checked. ~~A submodule that is not initialised is the same posture from pwsh itself,
 which exits 64 for a script that is not there (measured 2026-10-08, PowerShell 7.6.6).~~
-**Changed 2026-10-12** ([#115](https://github.com/trulsjo/grado-factorio-tools/issues/115)):
-that exit told the agent nothing, by the account of grado-factorio-modpack#228, which measured
-it that day with Claude Code 2.1.296.
+**Changed 2026-10-12** ([#115](https://github.com/trulsjo/grado-factorio-tools/issues/115)).
+What reaches the agent from that exit was not measured. By the account of
+grado-factorio-modpack#228, read 2026-10-12, a wiring of that repository's that said so on
+stderr and exited 1 was measured on 2026-10-11 with Claude Code 2.1.296, and what the tool call
+returned to the agent held nothing of it.
 
 `-SelfTest` proves what is refused and what is not, that the command above reaches the script,
 and that it tells the agent where the script is not there. A consumer runs
 `-SelfTest -Settings .claude/settings.json` to prove the same of its own wiring: one that
-refuses the command in that branch, says nothing, or prints JSON a quote in its message has
-broken, fails. What the hook cannot see is in its header.
+refuses the command in that branch, says nothing on stdout, or prints JSON a quote in its
+message has broken, fails. What the hook cannot see is in its header.
 
 ## Keeping an agent session from skipping the hooks
 
