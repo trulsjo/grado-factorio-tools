@@ -46,11 +46,13 @@
     WHAT IS COUNTED THERE (ruled on #126) is every item and fluid the surface can then have, less
     what it supplies. A thing the surface supplies is not counted as made, whichever recipe gives
     it back: an ore a recycling recipe returns is not, and neither is coal where coal is mined
-    and a recipe makes it too. Steam where there is water is counted, and so is what a supplied
-    item spoils or burns into, though no recipe gives either. With -Against, a thing counted in
-    the other dump is "not in" this one when this dump's surface cannot have it at all, supplied
-    or made, so what an overhaul turns from made to mined is not missing. -BroughtIn adds names
-    to every surface's supply in the first dump, and a name brought in is never itself missing.
+    and a recipe makes it too. Steam where there is water is counted, and so is what an item
+    had there spoils into, burns into or gives when launched, whether or not a recipe gives it.
+    With -Against, a thing counted in the other dump is "not in" this one when this dump's
+    surface cannot have it at all, supplied or made, so what an overhaul turns from made to
+    mined is not missing. On a surface this dump does not have, everything counted is missing.
+    -BroughtIn adds names to every surface's supply in the first dump, so a name brought in is
+    not itself missing on a surface that dump has.
 
     WHAT IT CANNOT SEE. Play: nothing is crafted, researched or shipped. Amounts and rates. What
     a control script places or removes at run time, so a resource a mod places from its script
@@ -64,9 +66,7 @@
 
     THE SELF-TEST runs the walk on a dump of Space Age alone, where the answer is known. Then it
     removes each source rule in turn and fails unless the answer changes. A rule
-    the Space Age dump cannot show is named in the self-test's output, and is not proven. Of the
-    count of own materials it holds one case, on Nauvis: `copper-ore`, which the surface
-    supplies and a recycling recipe gives back, is not counted, and `steam` is. It
+    the Space Age dump cannot show is named in the self-test's output, and is not proven. It
     needs the game, unless -Dump names a dump of Space Age alone.
 
 .PARAMETER Dump
@@ -472,12 +472,13 @@ function Invoke-SelfTest {
     # counted, and steam, which no recipe gives there, is.
     $own = Get-OwnWalk (Read-WalkData $Path) 'nauvis'
     $counted = $own.Have.Contains('copper-ore') -and -not $own.Counted.Contains('copper-ore') -and $own.Counted.Contains('steam')
-    Write-Host "self-test: of its own materials Nauvis has copper-ore and steam, and counts $(@('copper-ore', 'steam' | Where-Object { $own.Counted.Contains($_) }) -join ' and ') -- $($counted ? 'ok' : 'FAILED, steam alone is to be counted')"
+    $of = { param($set) "[$(@('copper-ore', 'steam' | Where-Object { $set.Contains($_) }) -join ', ')]" }
+    Write-Host "self-test: of copper-ore and steam, Nauvis has $(& $of $own.Have) from its own materials and counts $(& $of $own.Counted) -- $($counted ? 'ok' : 'FAILED, it is to have both and count steam alone')"
     Write-Host ''
     # The rules a dump of Space Age alone was seen not to show. Another rule joining them fails.
     $surprise = @($unproven | Where-Object { $_ -notin $NOT_SHOWN_BY_SPACE_AGE })
     if (-not $ok) { Write-Host 'FAILED - self-test: the walk of Space Age alone does not give the known answer.'; exit 1 }
-    if (-not $counted) { Write-Host 'FAILED - self-test: the count of own materials takes in what the surface supplies, or leaves steam out.'; exit 1 }
+    if (-not $counted) { Write-Host 'FAILED - self-test: the count of own materials on Nauvis is not what it is known to be.'; exit 1 }
     if ($surprise) { Write-Host "FAILED - self-test: removing $($surprise -join ', ') does not change the answer."; exit 1 }
     Write-Host "OK - self-test passed: the known answer, and $($SOURCE_RULES.Count - $unproven.Count) of the $($SOURCE_RULES.Count) source rules shown to carry it.$(if ($unproven) { " Not proven here: $($unproven -join ', ')." })"
     exit 0
