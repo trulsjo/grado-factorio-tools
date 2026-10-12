@@ -39,7 +39,10 @@
     this repository's and there is nothing to skip. A command whose switch or subcommand comes
     from a variable or a substitution. Any other subcommand that takes --no-verify, as merge, am
     and rebase do. A person's own terminal: this is a session's hook. And whether the settings
-    still reach it, unless -SelfTest is run.
+    still reach it, unless -SelfTest is run. That reads the wired command and the matcher of
+    its entry, and nothing else of the settings: not a handler's `if`, which narrows further,
+    and not whether a session reads a matcher as hook-matcher.ps1 does. A wiring with an entry
+    for each shell tool fails it, since one entry is read.
     It reads the command as text and does not parse the shell, so it errs towards refusing: a
     `git commit --no-verify` that is only echoed, or stands on a line of a here-document that
     is not inside quotes, is refused too. So is a `git commit` whose message is cut short
@@ -53,13 +56,19 @@
         '{"tool_input":{"command":"git push -n"}}' | pwsh -NoProfile -File scripts/refuse-git-hook-skip.ps1; $LASTEXITCODE
 
 .PARAMETER SelfTest
-    Prove it refuses what it should and lets the rest through, and that the wired command
-    reaches it. The last case needs sh: the one on the path, or the one Git for Windows ships.
+    Prove it refuses what it should and lets the rest through, that the wired command
+    reaches it, and that the matcher beside that command starts the hook for the Bash tool and
+    for the PowerShell tool. The case that runs the command needs sh: the one on the path, or
+    the one Git for Windows ships.
 
 .PARAMETER Settings
-    With -SelfTest: the .claude/settings.json whose wiring the last case runs, with that file's
-    repository as the project. Defaults to this repository's own. A consumer gives its own file
-    to know its wiring still reaches the hook.
+    With -SelfTest: the .claude/settings.json whose wiring the last two cases read, with that
+    file's repository as the project. Defaults to this repository's own. They take the first
+    command, of any PreToolUse entry, that names this script: one runs it, and the other reads
+    that entry's matcher (grado-factorio-tools#120) and fails, naming the tool and the file,
+    unless a session would start the hook for Bash and for PowerShell. An entry with no matcher
+    passes: it is started for every tool. How a matcher is read is in hook-matcher.ps1. A
+    consumer gives its own file to know its wiring still reaches the hook, from both tools.
 #>
 
 #Requires -Version 7
@@ -170,7 +179,7 @@ if ($SelfTest) {
     )
     $failures = 0
     $n = 0
-    $total = $cases.Count + 1
+    $total = $cases.Count + 2
     foreach ($c in $cases) {
         $n++
         $ok = (Test-SkipsHooks -Command $c[0]) -eq $c[1]
@@ -182,8 +191,10 @@ if ($SelfTest) {
     # silence for the others.
     $n++
     $Settings = (Resolve-Path -LiteralPath ($Settings ? $Settings : (Join-Path $PSScriptRoot '../.claude/settings.json'))).Path
-    $wired = @((Get-Content -LiteralPath $Settings -Raw | ConvertFrom-Json).hooks.PreToolUse.hooks.command) -match
-        [regex]::Escape((Split-Path $PSCommandPath -Leaf)) | Select-Object -First 1
+    $names = [regex]::Escape((Split-Path $PSCommandPath -Leaf))
+    $entry = @((Get-Content -LiteralPath $Settings -Raw | ConvertFrom-Json).hooks.PreToolUse) |
+        Where-Object { @($_.hooks.command) -match $names } | Select-Object -First 1
+    $wired = if ($entry) { @($entry.hooks.command) -match $names | Select-Object -First 1 }
     $env:CLAUDE_PROJECT_DIR = Split-Path (Split-Path $Settings -Parent) -Parent
     # Git for Windows keeps its sh, and the cat beside it, off the path PowerShell sees.
     $sh = (Get-Command sh -ErrorAction SilentlyContinue)?.Source ?? (Join-Path (git --exec-path) "../../../usr/bin/sh.exe")
@@ -204,6 +215,15 @@ if ($SelfTest) {
         if (-not $ok) { foreach ($r in $refused, $short, $dry, $plain) { Write-Host "    $($r.Code) $($r.Text)" } }
     }
     Write-Host ("self-test {0}/{1}: the wired hook refuses a push and a commit that skip the hooks with exit 2 and a reason, and passes a dry run and a plain command -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
+    if (-not $ok) { $failures++ }
+    # Which tools the session starts that command for: the matcher of the entry it was read from.
+    $n++
+    . "$PSScriptRoot/hook-matcher.ps1"
+    $unstarted = @(if ($entry) { Get-UnstartedShellTool -Entry $entry })
+    if (-not $entry) { Write-Host "    $Settings wires no command that names this script" }
+    foreach ($tool in $unstarted) { Write-Host "    $Settings`: the matcher ``$($entry.matcher)`` does not start the hook for the $tool tool" }
+    $ok = $entry -and -not $unstarted
+    Write-Host ("self-test {0}/{1}: the matcher of the entry that wires the hook starts it for the Bash tool and for the PowerShell tool -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++ }
     Write-Host ''
     if ($failures) { Write-Host "FAILED - self-test: $failures of $total case(s) did not hold."; exit 1 }
