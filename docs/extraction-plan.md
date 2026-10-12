@@ -481,14 +481,15 @@ stdin. Given `-Settings`, it runs the command a consumer wired, so the modpack k
 had: one that fails when its settings stop reaching the hook.
 
 The 37 commands of the self-test's table moved as they were and give the answers they gave. Two
-cases are new, which makes 39 against the origin's 38: a cache given another name is the one
+cases are new, which makes ~~39~~ against the origin's 38: a cache given another name is the one
 guarded, and the wiring case above. Measured 2026-10-08, PowerShell 7.6.6: through the README's
 command a `cd` into the cache exits 2 with the reason, and a read by path exits 0 in silence;
 `-SelfTest -Settings` given the modpack's file passes, its first hook being the command it has
 at `4cc5805`, though what that wiring reaches today is the modpack's own copy.
 
 **Changed 2026-10-12** ([#113](https://github.com/trulsjo/grado-factorio-tools/issues/113)): a
-fortieth case came, and off Windows four of the 37 commands are named as skipped and not run.
+fortieth case came, so 40 where the line above says 39, and off Windows four of the 37
+commands are named as skipped and not run.
 What each platform printed is in [measurements.md](measurements.md).
 
 ## The last three earmarked, the expand halves

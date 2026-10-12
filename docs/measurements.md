@@ -265,7 +265,7 @@ Before the change the same self-test failed 4 of 39 cases on `ubuntu-latest`, at
 repository's `20ef896`: run 38165530088 of `grado-factorio-modpack`, 2026-10-11.
 
 The same Linux run put the drive rewrite back on every platform, by replacing `if ($IsWindows)`
-with `if ($true)` in a copy of the script. That copy's self-test ended
+with `if ($true)` in a scratch file made from the script. That file's self-test ended
 `FAILED - self-test: 1 of 40 case(s) did not hold.`, and the one was the absolute path under
 `/t/`.
 

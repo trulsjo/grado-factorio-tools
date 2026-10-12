@@ -25,13 +25,17 @@
     body. PR #105 (2026-10-11) said "No ticket is closed: #103" and GitHub listed #103 as an
     issue the merge would close. docs/agents/issue-tracker.md asks for one `Closes #N` line per
     ticket closed, so a keyword before a reference anywhere else is a mistake or a second way of
-    saying that line. Reported, with its line: close, closes, closed, fix, fixes, fixed,
-    resolve, resolves or resolved, in any case, then a colon or a space or both, then `#N` or
-    `OWNER/REPOSITORY#N`. A line that is `Closes #N` and nothing else is passed over. The
-    keywords and forms are those of
+    saying that line. Reported, with its line: a closing keyword in any case, then a colon or a
+    space or both, then `#N`, `OWNER/REPOSITORY#N` or the address of an issue on github.com. A
+    line that is `Closes #N` and nothing else is passed over. The keywords, the colon and the
+    first two forms are those of
     https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue
-    as read on 2026-10-12. This half is a second job in one script, because CI and a session
-    already hand this script every body; it reads the text alone and asks git nothing.
+    as read on 2026-10-12. This reads wider than that page shows: a space before the colon, and
+    none after it. The address is not on the page and GitHub closes on it: the merged
+    zen-browser/desktop#15894 has four such lines and lists those four issues as closed by it
+    (`closingIssuesReferences`, read 2026-10-12). This half is a second job in one script,
+    because CI and a session already hand this script every body; it reads the text alone and
+    asks git nothing.
 
     A SHALLOW CLONE IS REFUSED, and nothing is checked: there an ancestor cannot be told from a
     commit whose history was cut off. CI therefore fetches the whole history for this. Whatever
@@ -42,10 +46,12 @@
     fresh clone no longer holds. Run locally, origin/main is as this clone last fetched it, so
     a commit that reached main since is reported. A commit cited by fewer than 7 characters is
     not read. Whether a commit on main is the one the prose means. Anything else a body says.
-    Of closing keywords: one GitHub adds after that date, and an issue named by its address,
-    which that page does not list as a form and this does not read. Whether a `Closes #N` line
-    names the ticket the pull request is for. And a keyword in a code span or a fenced block is
-    reported like any other: the page does not say GitHub passes over one there.
+    Of closing keywords: one GitHub adds after that date. One in a commit message, which that
+    page says GitHub reads too. A keyword with its reference on the next line, or with markup
+    or a link's bracket between the two; whether GitHub closes on those was not measured.
+    Whether a `Closes #N` line names the ticket the pull request is for. And a keyword in a code
+    span or a fenced block is reported like any other: the page does not say GitHub passes over
+    one there.
     And a word is asked of git as a name, so a branch or a tag whose name is 7 to 40 hexadecimal
     characters answers for the commit it points at.
 
@@ -120,7 +126,7 @@ function Get-ClosingKeyword {
     foreach ($line in $Text -split '\r?\n') {
         $n++
         if ($line -cmatch '^Closes #\d+\s*$') { continue }
-        foreach ($m in [regex]::Matches($line, '(?<![\w-])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)(?:\s*:\s*|\s+)(?:[\w.-]+/[\w.-]+)?#\d+', 'IgnoreCase')) {
+        foreach ($m in [regex]::Matches($line, '(?<![0-9A-Za-z-])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)(?:\s*:\s*|\s+)(?:(?:[\w.-]+/[\w.-]+)?#\d+|https://github\.com/[\w.-]+/[\w.-]+/issues/\d+)', 'IgnoreCase')) {
             @{ Line = $n; Found = $m.Value }
         }
     }
@@ -186,14 +192,16 @@ function Invoke-SelfTest {
             Write-Host ($passed.Text.TrimEnd() -replace '(?m)^', '    ')
             $refused.Code -eq 1 -and $refused.Text -match "(?m)^pr-body-check: $($onBranch.Substring(0, 7)) is a commit that is not on origin/main" -and
                 $refused.Text -match '1 named no commit here' -and $passed.Code -eq 0 -and $passed.Text -match '(?m)^OK - pr-body-check: 1 ' -and $empty.Code -eq 0 } }
-        @{ Name = 'a closing keyword before an issue reference is found with its line: each keyword, in capitals, after a colon, before another repository''s issue, and in a code span'; Test = {
+        @{ Name = 'a closing keyword before an issue reference is found with its line: each keyword, in capitals, around a colon, in underscores, before another repository''s issue or an issue''s address, and in a code span'; Test = {
             $each = 'close', 'closes', 'closed', 'fix', 'fixes', 'fixed', 'resolve', 'resolves', 'resolved' | ForEach-Object { @(Get-ClosingKeyword "It $_ #7.").Count }
             $forms = @(Get-ClosingKeyword "Summary`n`nCLOSES #7 and Fixed: #8, with resolves:#9.`r`nIt fixes octo-org/octo-repo#100, and ``closes #10`` too.")
+            $more = @(Get-ClosingKeyword "It fixes : #3, and _closes #4_, and resolves https://github.com/octo-org/octo-repo/issues/5.")
             -not ($each -ne 1) -and $each.Count -eq 9 -and $forms.Count -eq 5 -and -not ($forms[0..2].Line -ne 3) -and -not ($forms[3..4].Line -ne 4) -and
-                $forms[1].Found -eq 'Fixed: #8' -and $forms[3].Found -eq 'fixes octo-org/octo-repo#100' } }
-        @{ Name = 'a line that is Closes #N alone passes; so do a keyword with no reference after it, a reference with no keyword before it, and a keyword inside a longer word'; Test = {
+                $forms[1].Found -eq 'Fixed: #8' -and $forms[3].Found -eq 'fixes octo-org/octo-repo#100' -and
+                $more.Count -eq 3 -and $more[0].Found -eq 'fixes : #3' -and $more[2].Found -eq 'resolves https://github.com/octo-org/octo-repo/issues/5' } }
+        @{ Name = 'a line that is Closes #N alone passes; so do a keyword with no reference after it, a reference with no keyword before it, and a keyword that ends a longer or a hyphenated word'; Test = {
             $alone = @(Get-ClosingKeyword "Closes #7`nCloses #8  `r`n`nBody.")
-            $none = @(Get-ClosingKeyword "This closes nothing. See #7, which was fixed in PR #9. A prefix #3, an unresolved #4, and it closes the gap: #5 has more.")
+            $none = @(Get-ClosingKeyword "This closes nothing. See #7, which was fixed in PR #9. A prefix #3, an unresolved #4, an auto-fix #6, and it closes the gap: #5 has more. Fixed at https://github.com/octo-org/octo-repo/pull/5.")
             $notAlone = @(Get-ClosingKeyword "Closes #7, closes #8`ncloses #9`n- Closes #10")
             $alone.Count -eq 0 -and $none.Count -eq 0 -and $notAlone.Count -eq 4 } }
         @{ Name = 'the opening of PR #105''s body as first posted is refused, naming line 4, and as reworded passes'; Test = {
