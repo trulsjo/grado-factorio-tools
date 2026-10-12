@@ -498,6 +498,10 @@ project that holds no hook script, and the command of this repository's own that
 half runs now has a branch for that. It also runs with this repository as its project, where
 it had the self-test's fixture.
 
+**Changed again 2026-10-12** ([#120](https://github.com/trulsjo/grado-factorio-tools/issues/120)):
+given `-Settings`, a forty-second case reads the matcher of the entry the command came from, and
+fails unless it starts the hook for both shell tools. Without `-Settings` the count stays 41.
+
 ## The last three earmarked, the expand halves
 
 Asked for by Truls on 2026-10-11: the tree viewer, `locale-check.ps1` and `name-check.ps1`, each

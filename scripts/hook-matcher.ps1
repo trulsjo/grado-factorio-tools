@@ -27,15 +27,18 @@
     Windows has both, and a hook wired for one is gone round with the other.
 
     WHAT -SelfTest MEANS HERE. Run as a script with -SelfTest, it holds Test-HookMatcher to a
-    table of matchers. Exit 0 means the function reads those as the reference's words above say.
+    table of matchers and Get-UnstartedShellTool to six entries. Exit 0 means both read those
+    as the reference's words above say and, where it says nothing, as chosen here: names are
+    compared in exact case, a matcher of spaces alone starts nothing, and neither does one that
+    is no string or a pattern .NET cannot compile.
 
     WHAT IT CANNOT SEE. Whether the client does what its reference says: no session was run with
-    a narrowed matcher. Case: the reference says "exact" and no more, and this compares in exact
-    case. Where JavaScript's regular expressions and .NET's differ: the pattern is given to .NET
-    with its ECMAScript option, and one .NET cannot compile counts as starting nothing. Any
-    other key of the entry, and so a handler's `if`, which narrows further. A hook wired by one
-    entry for each tool: only the entry it is handed is read. Settings in another file than the
-    one it is handed, and a session whose hooks are turned off.
+    a narrowed matcher. Where JavaScript's regular expressions and .NET's differ: the pattern is
+    given to .NET with its ECMAScript option, and one that .NET compiles and JavaScript refuses,
+    as `(?i)bash|powershell` is (grado-factorio-tools#120's review, 2026-10-12), is read here as
+    .NET reads it. Any other key of the entry, and so a handler's `if`, which narrows further. A
+    hook wired by one entry for each tool: only the entry it is handed is read. Settings in
+    another file than the one the entry came from, and a session whose hooks are turned off.
 #>
 
 function Test-HookMatcher {
@@ -43,8 +46,11 @@ function Test-HookMatcher {
         entry with no matcher.  #>
     param([AllowNull()] $Matcher, [Parameter(Mandatory)] [string] $Tool)
 
-    if ($null -eq $Matcher -or [string] $Matcher -in '', '*') { return $true }
-    if ($Matcher -cmatch '^[A-Za-z0-9_\- ,|]+$') { return $Tool -cin ($Matcher -split '[|,]').Trim() }
+    if ($null -eq $Matcher) { return $true }
+    if ($Matcher -isnot [string]) { return $false }
+    if ($Matcher -in '', '*') { return $true }
+    # \z and not $, which .NET also matches before a last newline: that matcher is a pattern.
+    if ($Matcher -cmatch '\A[A-Za-z0-9_\- ,|]+\z') { return $Tool -cin ($Matcher -split '[|,]').Trim() }
     try { [regex]::IsMatch($Tool, $Matcher, 'ECMAScript') } catch { $false }
 }
 
@@ -94,7 +100,9 @@ if ($MyInvocation.InvocationName -ne '.' -and $args -contains '-SelfTest') {
         @('^Notebook', 'NotebookEdit', $true),
         @('mcp__memory', 'mcp__memory__create_entities', $false),
         @('mcp__memory__.*', 'mcp__memory__create_entities', $true),
-        @('(Bash', 'Bash', $false)
+        @('(Bash', 'Bash', $false),
+        @("Bash|PowerShell`n", 'Bash', $true),
+        @("Bash|PowerShell`n", 'PowerShell', $false)
     )
     $failures = 0
     $n = 0
@@ -103,7 +111,7 @@ if ($MyInvocation.InvocationName -ne '.' -and $args -contains '-SelfTest') {
         $n++
         $ok = (Test-HookMatcher -Matcher $c[0] -Tool $c[1]) -eq $c[2]
         Write-Host ("self-test {0}/{1}: {2} {3} for {4} -- {5}" -f $n, $total,
-            $(if ($null -eq $c[0]) { 'no matcher' } else { "matcher ``$($c[0])``" }),
+            $(if ($null -eq $c[0]) { 'no matcher' } else { "matcher ``$($c[0] -replace '\n', '\n')``" }),
             $(if ($c[2]) { 'starts the hook' } else { 'does not start the hook' }), $c[1], $(if ($ok) { 'ok' } else { 'FAILED' }))
         if (-not $ok) { $failures++ }
     }
@@ -111,8 +119,9 @@ if ($MyInvocation.InvocationName -ne '.' -and $args -contains '-SelfTest') {
     $gaps = { param($json) @(Get-UnstartedShellTool -Entry ($json | ConvertFrom-Json)) -join ',' }
     $ok = (& $gaps '{"matcher":"Bash|PowerShell","hooks":[]}') -eq '' -and (& $gaps '{"hooks":[]}') -eq '' -and
         (& $gaps '{"matcher":"Bash","hooks":[]}') -eq 'PowerShell' -and (& $gaps '{"matcher":"PowerShell","hooks":[]}') -eq 'Bash' -and
-        (& $gaps '{"matcher":"Edit|Write","hooks":[]}') -eq 'Bash,PowerShell'
-    Write-Host ("self-test {0}/{1}: an entry names the shell tools its matcher leaves out, and none where it has no matcher -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
+        (& $gaps '{"matcher":"Edit|Write","hooks":[]}') -eq 'Bash,PowerShell' -and
+        (& $gaps '{"matcher":["Bash","PowerShell"],"hooks":[]}') -eq 'Bash,PowerShell'
+    Write-Host ("self-test {0}/{1}: an entry names the shell tools its matcher leaves out, both where the matcher is no string, and none where it has no matcher -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++ }
     Write-Host ''
     if ($failures) { Write-Host "FAILED - self-test: $failures of $total case(s) did not hold."; exit 1 }

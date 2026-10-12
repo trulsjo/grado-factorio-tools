@@ -220,7 +220,6 @@ if ($SelfTest) {
     $n++
     . "$PSScriptRoot/hook-matcher.ps1"
     $unstarted = @(if ($entry) { Get-UnstartedShellTool -Entry $entry })
-    if (-not $entry) { Write-Host "    $Settings wires no command that names this script" }
     foreach ($tool in $unstarted) { Write-Host "    $Settings`: the matcher ``$($entry.matcher)`` does not start the hook for the $tool tool" }
     $ok = $entry -and -not $unstarted
     Write-Host ("self-test {0}/{1}: the matcher of the entry that wires the hook starts it for the Bash tool and for the PowerShell tool -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))

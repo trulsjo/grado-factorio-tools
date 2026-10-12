@@ -359,7 +359,8 @@ Without `-Settings` it ended `OK - self-test passed: all 55 cases.`
 | `BashOutput\|PowerShell` | the same failure | ``the matcher `BashOutput\|PowerShell` does not start the hook for the Bash tool`` |
 
 Without `-Settings` it ended `OK - self-test passed: all 41 cases.`: the forty-second case
-reads a settings file. Each failing line begins with the settings file's path.
+reads a settings file. What each failing case said stood on a line above it, after the
+settings file's path.
 
 Before the change, at `ee1aa9f`, both passed with the matcher changed to `Bash`: all 41 cases
 and all 54, by the account of grado-factorio-tools#120's brief, measured the same day and not
