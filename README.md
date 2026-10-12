@@ -181,6 +181,31 @@ which exits 64 for a script that is not there (measured 2026-10-08, PowerShell 7
 script. A consumer runs `-SelfTest -Settings .claude/settings.json` to prove its own wiring still
 does. What the hook cannot see is in its header.
 
+## Keeping an agent session from skipping the hooks
+
+A session that finds a hook slow is tempted to go round it. `scripts/refuse-git-hook-skip.ps1`
+is a hook that refuses a shell command running `git commit` or `git push` with `--no-verify`,
+`git commit -n`, or either with a `-c core.hooksPath=` of its own, and says to run it without
+the switch. `git push -n`, which is a dry run, passes, and so does a switch that is only named in
+a quoted message.
+
+This repository wires it for its own sessions in its tracked `.claude/settings.json`. A consumer
+adds it to its own, beside the mod-cache hook where it has that one:
+
+```json
+{
+  "type": "command",
+  "command": "i=$(cat); case $i in *commit*|*push*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-git-hook-skip.ps1\";; esac"
+}
+```
+
+The `case` keeps PowerShell from starting before every shell command. Exit 2 refuses; a tool
+call it cannot read exits 1 and says on stderr that the command was not checked. `-SelfTest`
+proves what is refused and what is not, and runs the command this repository's settings wire;
+`-SelfTest -Settings .claude/settings.json` runs a consumer's. What the hook cannot see is in
+its header: a script or an alias that passes the switch itself and a hook manager turned off
+through the environment are two of them.
+
 ## Packing mods
 
 `scripts/pack-mods.ps1` builds one zip per mod directory, named `<name>_<version>.zip` from the
@@ -250,6 +275,8 @@ scripts/     PowerShell entry points, one job each, and the libraries they
              self-test-halves.ps1, the runner a -SelfTest hands its halves to
 .githooks/   this repo's own commit-msg and pre-push hooks, opted into once per
              clone
+.claude/     settings.json, which wires the session hook that refuses a commit
+             or push skipping those
 .github/     the workflow that runs scripts/check.ps1 on pull requests and main
 docs/        the commit convention, the ADRs, the notes agents read, the
              extraction record — what moved, from where, and why — and
