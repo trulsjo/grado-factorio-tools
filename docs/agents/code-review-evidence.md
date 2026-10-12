@@ -1,7 +1,9 @@
 # Code review — the evidence behind the rules
 
-The rules are in [code-review.md](code-review.md), which is what a review loads. This page holds
-what was measured and what was found, so that page can stay short and nothing measured is lost.
+The rules are in [code-review.md](code-review.md), which is what a review loads, and since
+2026-10-12 the prose rules are in [code-review-prose.md](code-review-prose.md), which its prose
+lane loads. This page holds what was measured and what was found, so those pages can stay short
+and nothing measured is lost.
 Moved here from that page on 2026-10-06
 ([#65](https://github.com/trulsjo/grado-factorio-tools/issues/65)). The tables are as they stood
 there. The prose around them was edited to stand without the rules it sat beside, and the first
@@ -161,6 +163,23 @@ item lists:
 - shortened, with the meaning kept: "Conventions on top of" to "On top of"; "What was measured,
   and the past findings behind each rule, are in" to "The evidence is in"; "any other skill" to
   "any skill"; "open the pull request, then review it" to "open the pull request first".
+
+**The prose rules moved to a page of their own on 2026-10-12**, asked for by Truls and settling
+[#116](https://github.com/trulsjo/grado-factorio-tools/issues/116). The rules page is held under
+3,000 bytes, and room had been made on it three times: for #86, where "The room came from three
+sentences"; for #97, where "The room came from one sentence"; and for the three rules of #108,
+#109 and #111, in the paragraph above this one. Each time a rule was ready and the page could
+not take it until something else left. The section that moved is "Review the prose, not only
+the code", 1,066 bytes of the 2,998 the page stood at:
+
+    git show e4e255f:docs/agents/code-review.md | awk '/^## Review the prose/{f=1} f' | wc -c
+
+It is now [code-review-prose.md](code-review-prose.md), which the prose lane loads and the bug
+scan does not. No rule was reworded but one: a superseded figure was looked for in "these two
+pages", which meant the rules page and this one, and the rule now names those two and the new
+page. `scripts/check.ps1` holds each page to a limit of its own, 3,000 bytes for the rules page
+as before and 2,000 for the prose page. As the split left them the rules page was 2,021 bytes
+and the prose page 1,366, each from `tr -d '\r' < <page> | wc -c`.
 
 ## Where the first two rules came from
 

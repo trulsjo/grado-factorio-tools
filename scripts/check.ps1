@@ -17,7 +17,9 @@
 
     THE PAGES AN AGENT ALWAYS LOADS HAVE A SIZE LIMIT (grado-factorio-tools#69). CLAUDE.md loads on
     every turn and the code-review rules before every review; grado-factorio-tools#65 cut both, and
-    the next edit took CLAUDE.md back over its limit before anyone looked. The limits are in
+    the next edit took CLAUDE.md back over its limit before anyone looked. The prose rules are a
+    page of their own, which a review's prose lane loads, with a limit of its own
+    (grado-factorio-tools#116). The limits are in
     $PAGE_LIMITS and nowhere else. A page is measured with LF line endings, which is how the
     repository stores it, so a checkout with CRLF gets the same answer.
 
@@ -63,7 +65,7 @@ $SELF_TESTS = @('commit-check.ps1', 'fetch-mods.ps1', 'get-dump.ps1', 'markdown-
 # Has a self-test this does not run, and why: it needs Factorio installed.
 $NEEDS_GAME = @('load-harness.ps1', 'locale-check.ps1', 'tree-viewer.ps1')
 # Bytes, with LF line endings; a page must be under its limit. Paths are from the repository root.
-$PAGE_LIMITS = [ordered]@{ 'CLAUDE.md' = 4000; 'docs/agents/code-review.md' = 3000 }
+$PAGE_LIMITS = [ordered]@{ 'CLAUDE.md' = 4000; 'docs/agents/code-review.md' = 3000; 'docs/agents/code-review-prose.md' = 2000 }
 # Characters a line of tracked Markdown prose may run to. What counts is in markdown-check.ps1's header.
 $MARKDOWN_LINE_LIMIT = 100
 
