@@ -228,6 +228,10 @@ the merge deletes.
 
     pwsh -File scripts/pr-body-check.ps1 ../scratch/body.md
 
+It also fails on a closing keyword before an issue reference, such as `fixed` and then a colon
+and an issue's number, on any line that is not `Closes #N` alone: GitHub closes that issue when
+the pull request merges, whether or not the sentence meant it.
+
 CI runs it on the body of every pull request here, and again when the body is edited. A word that
 names no commit in the clone, such as a commit of a sibling, is said to be unchecked and passes.
 What else it cannot see is in its header. `-SelfTest` proves it can fail.
