@@ -36,12 +36,22 @@
       - An item and a fluid of one name are one thing here.
 
     FROM ITS OWN MATERIALS asks the opposite question: what one surface makes from what that
-    surface supplies, with nothing brought in. There every machine is taken as there and every
-    technology as researched; a recipe counts when it is not hidden or is a recycling recipe,
-    every ingredient can be had, and its surface conditions hold on that surface. An entity is on
-    a planet when the planet's settings list it; a tree, a plant or a nest also when its
-    autoplace control is one of the planet's. A pump's own fluid is given to a planet whose
-    tiles give water, which is a guess at where such a pump can stand.
+    surface supplies, with nothing brought in. There every technology is taken as researched; a
+    recipe counts when it is not hidden or is a recycling recipe, every ingredient can be had,
+    its surface conditions hold on that surface, and so do those of some machine of its category
+    (ruled on #132). A machine is any prototype with crafting categories. An entity is on a
+    planet when the planet's settings list it; a tree, a plant or a nest also when its autoplace
+    control is one of the planet's. A pump's own fluid is given to a planet whose tiles give
+    water, which is a guess at where such a pump can stand.
+
+    WHERE THAT IS LOOSER THAN THE GAME. What a surface makes is meant as an upper bound too:
+    where the dump does not settle a thing, it counts.
+
+      - Whether a machine can be built from the surface's materials is not asked, only whether
+        it may stand there. So a machine that is hidden, or that no item places, speaks for its
+        category like any other.
+      - A recipe whose category no prototype crafts counts.
+      - A character has no surface conditions, so a recipe crafted by hand counts on a platform.
 
     WHAT IS COUNTED THERE (ruled on #126) is every item and fluid the surface can then have, less
     what it supplies. A thing the surface supplies is not counted as made, whichever recipe gives
@@ -174,6 +184,7 @@ function Read-WalkData {
                 Name       = [string] $m['name']
                 Categories = [string[]] @(Get-List $m['crafting_categories'])
                 Always     = $m['type'] -in 'character', 'god-controller'
+                Conditions = @(Get-List $m['surface_conditions'])
                 Placers    = [string[]] @(@($placers[$m['name']]) + $(if ($m['name'] -in $captured -and $items.ContainsKey('capture-robot-rocket')) { 'capture-robot-rocket' }) | Where-Object { $_ })
             }
         }
@@ -271,13 +282,22 @@ function Invoke-Walk {
 
     if ($Surface) {
         $properties = $Data.Surfaces[$Surface].Properties
+        $hold = {
+            param($conditions)
+            foreach ($c in $conditions) {
+                $value = $properties[$c['property']] ?? $Data.Defaults[$c['property']]
+                if (($null -ne $c['min'] -and $value -lt $c['min']) -or ($null -ne $c['max'] -and $value -gt $c['max'])) { return $false }
+            }
+            $true
+        }
+        # A category is barred where machines craft it and none of them may stand here. One
+        # that nothing crafts is not barred: the dump forbids nothing there.
+        $barred = [Collections.Generic.HashSet[string]]::new()
+        $stands = [Collections.Generic.HashSet[string]]::new()
+        foreach ($m in $Data.Machines) { if (& $hold $m.Conditions) { $stands.UnionWith($m.Categories) } else { $barred.UnionWith($m.Categories) } }
+        $barred.ExceptWith($stands)
         $pending = [Collections.Generic.List[object]] @($Data.Recipes | Where-Object {
-                if ($_.Hidden -and $_.Category -ne 'recycling') { return $false }
-                foreach ($c in $_.Conditions) {
-                    $value = $properties[$c['property']] ?? $Data.Defaults[$c['property']]
-                    if (($null -ne $c['min'] -and $value -lt $c['min']) -or ($null -ne $c['max'] -and $value -gt $c['max'])) { return $false }
-                }
-                $true
+                ($_.Category -eq 'recycling' -or -not $_.Hidden) -and -not $barred.Contains($_.Category) -and (& $hold $_.Conditions)
             })
     }
     else { $pending = [Collections.Generic.List[object]] @($Data.Recipes | Where-Object { -not $_.Hidden }) }
@@ -478,15 +498,22 @@ function Invoke-SelfTest {
     }
     # The count of own materials, on Nauvis: an ore a recycling recipe gives back is had and not
     # counted, and steam, which no recipe gives there, is.
-    $own = Get-OwnWalk (Read-WalkData $Path) 'nauvis'
+    $data = Read-WalkData $Path
+    $own = Get-OwnWalk $data 'nauvis'
     $counted = $own.Have.Contains('copper-ore') -and -not $own.Counted.Contains('copper-ore') -and $own.Counted.Contains('steam')
     $of = { param($set) "[$(@('copper-ore', 'steam' | Where-Object { $set.Contains($_) }) -join ', ')]" }
     Write-Host "self-test: of copper-ore and steam, Nauvis has $(& $of $own.Have) from its own materials and counts $(& $of $own.Counted) -- $($counted ? 'ok' : 'FAILED, it is to have both and count steam alone')"
+    # A machine's surface conditions: biter-egg takes no ingredient and has no condition of its
+    # own, and the one machine of its category stands on Nauvis alone.
+    $egg = @($data.Surfaces.Keys | Where-Object { (Get-OwnWalk $data $_).Counted.Contains('biter-egg') })
+    $stands = "$egg" -ceq 'nauvis'
+    Write-Host "self-test: biter-egg is counted from its own materials on [$($egg -join ', ')] -- $($stands ? 'ok' : 'FAILED, it is to be counted on nauvis alone')"
     Write-Host ''
     # The rules a dump of Space Age alone was seen not to show. Another rule joining them fails.
     $surprise = @($unproven | Where-Object { $_ -notin $NOT_SHOWN_BY_SPACE_AGE })
     if (-not $ok) { Write-Host 'FAILED - self-test: the walk of Space Age alone does not give the known answer.'; exit 1 }
     if (-not $counted) { Write-Host 'FAILED - self-test: the count of own materials on Nauvis is not what it is known to be.'; exit 1 }
+    if (-not $stands) { Write-Host "FAILED - self-test: a machine's surface conditions are not read in the walk of own materials."; exit 1 }
     if ($surprise) { Write-Host "FAILED - self-test: removing $($surprise -join ', ') does not change the answer."; exit 1 }
     Write-Host "OK - self-test passed: the known answer, and $($SOURCE_RULES.Count - $unproven.Count) of the $($SOURCE_RULES.Count) source rules shown to carry it.$(if ($unproven) { " Not proven here: $($unproven -join ', ')." })"
     exit 0
