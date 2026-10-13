@@ -81,8 +81,9 @@
     The dump to compare with, e.g. Space Age alone when -Dump is a pack beside Space Age.
 
 .PARAMETER BroughtIn
-    Items or fluids, comma-separated, that every surface is also given in the first dump, for a
-    last column of the table of own materials.
+    Items or fluids, comma-separated, that every surface is also given in the first dump. With
+    -Against they give the table of own materials and the table of science packs a last column
+    each, and the lines of names under the tables are of the surface with them brought in.
 
 .PARAMETER SelfTest
     See above. With -Dump, reads that dump; without, makes or reuses one through get-dump.ps1.
