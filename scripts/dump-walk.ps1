@@ -54,6 +54,11 @@
     -BroughtIn adds names to every surface's supply in the first dump, so a name brought in is
     not itself missing on a surface that dump has.
 
+    THE TABLE OF SCIENCE PACKS, with -Against, lists for this dump every pack the other dump's
+    labs take that the surface can have, so it can list a pack the other dump's column does not.
+    With -BroughtIn it has a second column for this dump, which asks the same of the surface
+    with the names brought in (ruled on #130).
+
     WHAT IT CANNOT SEE. Play: nothing is crafted, researched or shipped. Amounts and rates. What
     a control script places or removes at run time, so a resource a mod places from its script
     and not from the planet's settings is not supplied, and one whose autoplace a mod zeroed
@@ -425,9 +430,11 @@ function Write-WalkAgainst {
             , (@($s, "$($Base.Own[$s].Counted.Count) items and fluids", $lost.Count) + @(if ($BroughtIn) { @($lost | Where-Object { -not $Pack.With[$s]?.Have?.Contains($_) }).Count }))
         })
     ''
-    Format-MarkdownTable 'Surface', "Science packs made from its own materials, $BaseLabel", "In $PackLabel" @(
+    $had = { param($walk) Format-Names @($Base.Packs | Where-Object { ${walk}?.Have?.Contains($_) }) }
+    $header = @('Surface', "Science packs made from its own materials, $BaseLabel", "In $PackLabel") + @(if ($BroughtIn) { "With $(Format-Names $BroughtIn) brought in" })
+    Format-MarkdownTable $header @(
         foreach ($s in $Base.Own.Keys) {
-            , @($s, (Format-Names @($Base.Packs | Where-Object { $Base.Own[$s].Counted.Contains($_) })), (Format-Names @($Base.Packs | Where-Object { $Pack.Own[$s]?.Have?.Contains($_) })))
+            , (@($s, (Format-Names @($Base.Packs | Where-Object { $Base.Own[$s].Counted.Contains($_) })), (& $had $Pack.Own[$s])) + @(if ($BroughtIn) { & $had $Pack.With[$s] }))
         })
     foreach ($s in $Base.Own.Keys) {
         $mine = if ($BroughtIn) { $Pack.With[$s]?.Have } else { $Pack.Own[$s]?.Have }
