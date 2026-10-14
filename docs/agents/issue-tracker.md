@@ -56,13 +56,15 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
   Truls's. On 2026-10-14 `/implement #135` was run on a ticket with no state label, and a branch was
   made before Truls stopped it (by #137's account).
 - **A session does what each acceptance criterion asks, or asks Truls first.** Where it means to
-  do otherwise, it stops before building the other form. It runs the asked form, and asks Truls
-  with the criterion, the command and what it printed. A reason with no run is not grounds to
-  ask. Truls's answer is a comment on the ticket, and the pull request cites it where it does
-  other than the criterion says. PR #151's brief first had the bug scan revert in the working
-  tree where #150 asked for a copy, on the reason that a reverted copy of a library is never
-  loaded. In a copy with `game-mods.ps1` changed, `resolve-modpack.ps1 -SelfTest` failed 4 of 19
-  cases (the review comment on PR #151, finding 2, 2026-10-14): the copy's library was loaded.
+  do otherwise, it stops before building the other form. Where the asked form can be run, it
+  runs it and asks Truls with the criterion, the command and what it printed; a reason with no
+  run is not grounds to ask. Where it cannot, as for "the page cites PR #151", it asks with the
+  criterion and what it read, naming each place. Truls's answer is a comment on the ticket, and
+  the pull request cites it where it does other than the criterion says. PR #151's brief first
+  had the bug scan revert in the working tree where #150 asked for a copy, on the reason that a
+  reverted copy of a library is never loaded. In a copy with `game-mods.ps1` changed,
+  `resolve-modpack.ps1 -SelfTest` failed 4 of 19 cases (the review comment on PR #151, finding 2,
+  2026-10-14): the copy's library was loaded.
 - **Work happens on a branch named `<issue>-<slug>`, never on `main`.** Pull requests are
   rebase-merged, which rewrites every SHA on the branch: cite the pull request, not a branch commit.
   A SHA may be cited once it is on `main`. `scripts/pr-body-check.ps1` holds a body to this: CI
