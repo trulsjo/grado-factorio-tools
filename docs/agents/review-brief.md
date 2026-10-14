@@ -2,7 +2,9 @@
 
 The words a review's session hands each lane, written once so that every lane is briefed alike
 (#140). How a review is run is in [code-review.md](code-review.md), and the prose rules in
-[code-review-prose.md](code-review-prose.md); this page restates neither. The session fills the
+[code-review-prose.md](code-review-prose.md). This page carries two of `code-review.md`'s rules to
+the lane, what the bug scan does not load and when the check is not run again, and adds none of
+its own: a rule is changed there. The session fills the
 blanks, written `<like this>`, with what is particular to the change, and sends the rest as it
 stands. A lane that runs both reviews is sent both *Reads first* lines.
 

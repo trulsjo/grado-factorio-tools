@@ -346,7 +346,7 @@ and `load-check.ps1 -FromZips` there, and `stage-pack`'s self-test in the modpac
 moved yet.~~ **All three are expanded, 2026-10-08, ~~and none is contracted:~~ ~~two copies of
 each stand until its contraction ticket lands~~ and all three contracted, 2026-10-11:** no copy
 is left in the modpack (*The contractions of 2026-10-11 to 2026-10-14*, below).
-`grado-factorio-modpack` wrote the three in its PR #170,
+`grado-factorio-modpack` wrote the three in grado-factorio-modpack#170,
 merged 2026-10-06, because their tickets were there. Each move is an expand-contract pair, a ticket
 here and one in the modpack, so no copy is left behind. ~~The order of the three is not ruled.~~
 Ruled the same day: #74, #75, #76.
@@ -466,7 +466,7 @@ carries, was then asked for the same set against that cache and was served the d
 made: the two write the same key. The run is in [measurements.md](measurements.md). `-SelfTest`
 passes the 11 cases it passed there.
 
-One thing the modpack's contraction has to know: its own `.dump-cache` held one dump of
+One thing the modpack's contraction ~~has~~ had to know: its own `.dump-cache` held one dump of
 `Grado_NonChanging`, made 2026-10-07, and it was not served, because the pack's zip had been
 staged again since at another size, 2,892 bytes against 677. That is the key working, not the
 move.
@@ -496,7 +496,10 @@ cases are new, which makes ~~39~~ against the origin's 38: a cache given another
 guarded, and the wiring case above. Measured 2026-10-08, PowerShell 7.6.6: through the README's
 command a `cd` into the cache exits 2 with the reason, and a read by path exits 0 in silence;
 `-SelfTest -Settings` given the modpack's file passes, its first hook being the command it has
-at `4cc5805`, though what that wiring reaches today is the modpack's own copy.
+at `4cc5805`, though what that wiring ~~reaches today is the modpack's own copy~~ reached then
+was the modpack's own copy. Since grado-factorio-modpack#221 (`598d8f2`, 2026-10-11) it reaches
+this script through `vendor/grado-factorio-tools` (the modpack's `.claude/settings.json` at its
+`f055cfa`, read 2026-10-14).
 
 **Changed 2026-10-12** ([#113](https://github.com/trulsjo/grado-factorio-tools/issues/113)): a
 fortieth case came, so 40 where the line above says 39, and off Windows four of the 37
@@ -685,9 +688,10 @@ The figures:
 
 Each sibling deleted its copies in tickets of its own, through a pull request that was
 rebase-merged. Read on 2026-10-14 with `gh issue view` and `gh pr view` in each sibling, the tip
-being the `mergeCommit` that names; the deleting commits are from
-`git log --diff-filter=D origin/main -- <path>` there, the same day. The measurements are the
-pull requests' own, and none was re-run here.
+being the `mergeCommit` that names; the commits that deleted a file are from
+`git log --diff-filter=D origin/main -- <path>` there, the same day, and `b7eaf94`, which took
+the helpers out of `factorio-lib.ps1` and deleted no file, from `git show --stat b7eaf94`. The
+measurements are the pull requests' own, and none was re-run here.
 
 | Script | Sibling | Tickets | Pull request | Merged | Tip | Deleted in |
 |---|---|---|---|---|---|---|
