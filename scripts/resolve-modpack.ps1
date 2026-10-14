@@ -10,6 +10,11 @@
     release with a higher `base` floor, the pack's declared minimum silently stops being true.
     Ruled on grado-factorio-modpack#16, 2026-09-24.
 
+    A BUILD OFF ITS LINE IS REFUSED, before the portal is asked: -Build must begin with -Line and a
+    dot, so 2.0.77 is on 2.0 and 2.1.20 is not (grado-factorio-tools#143). The rule is
+    grado-factorio-modpack's stage-pack.ps1's, "A 2.1 game does not load a mod declaring 2.0"
+    (read at its 7a0bec5, 2026-10-14), and was not measured here.
+
     THE METHOD is grado-factorio-modpack's docs/porting-notes.md, "Resolves on stable 2.0.77":
 
       pick     For each mod, its newest release whose factorio_version equals -Line and whose
@@ -76,7 +81,8 @@
     this.
 
 .PARAMETER Build
-    The game build the pack must install on, e.g. `2.0.77`.
+    The game build the pack must install on, e.g. `2.0.77`. It must be on -Line: `2.1.20` with
+    -Line 2.0 is refused.
 
 .PARAMETER PinFile
     Where to write the pinned list: a .psd1 of one set per pack, named after the pack --
@@ -485,6 +491,19 @@ function Invoke-SelfTest {
                 $set.Count -eq 3 -and ($set | Where-Object { $_.Name -eq 'mod with spaces' }).Version -eq '0.1.0'
             }
             finally { Remove-Item -LiteralPath $file -ErrorAction SilentlyContinue } } }
+        @{ Name = 'a build off the line is refused before the portal is asked, naming both, and no pin file is written'; Test = {
+            $info = & $write (& $pack 'P' @('lib'))
+            $pins = Join-Path $dir 'off-line.psd1'
+            $ok = $true
+            foreach ($pair in @('2.0', '2.1.20'), @('2.1', '2.10.1')) {
+                # An address nothing answers, so a run that asked the portal fails some other way.
+                $said = & pwsh -NoProfile -File $PSCommandPath -Line $pair[0] -Build $pair[1] -PinFile $pins -PortalBaseUrl 'http://127.0.0.1:9' $info 2>&1 | Out-String
+                $code = $LASTEXITCODE
+                if ($said -notmatch 'is not on line') { Write-Host ($said.TrimEnd() -replace '(?m)^', '    ') }
+                $ok = $ok -and $code -ne 0 -and $said -match "build $([regex]::Escape($pair[1])) is not on line $([regex]::Escape($pair[0]))\b" -and
+                    $said -notmatch 'could not read the mod portal' -and -not (Test-Path -LiteralPath $pins)
+            }
+            $ok } }
     )
 
     $failures = 0
@@ -507,6 +526,8 @@ function Invoke-SelfTest {
 if ($SelfTest) { Invoke-SelfTest }
 
 if (-not $InfoJson -or -not $Line -or -not $Build) { throw 'Give -InfoJson, -Line and -Build, or -SelfTest.' }
+# A 2.1 game does not load a mod declaring 2.0, so a set resolved across lines could never load.
+if (-not $Build.StartsWith("$Line.")) { throw "Build $Build is not on line $Line, so no release it picked would load on it. Give a $Line.<n> build, or the -Line of build $Build." }
 
 $packs = Read-Packs -Path $InfoJson
 

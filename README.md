@@ -83,7 +83,8 @@ still true. It reads only the public portal API, which needs no login.
 
 Pass the pack and every pack it depends on; a pack named by another is read from those files
 rather than the portal. It prints, per pack, the effective floor and every violation or
-unresolvable member, and exits non-zero on either. `-PinFile` writes the picks as one set per pack.
+unresolvable member, and exits non-zero on either. A `-Build` off its `-Line`, as `2.1.20` with
+`2.0`, is refused before the portal is asked. `-PinFile` writes the picks as one set per pack.
 `-SelfTest` proves it can fail, with no network. What it cannot see is in its header.
 
 The game's own mods (`base`, `space-age`, `quality`, `elevated-rails`) and the exact-case rule they
