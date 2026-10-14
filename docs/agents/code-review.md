@@ -22,6 +22,8 @@ On top of the `/code-review` plugin. The evidence is in
   since the last review answers one of its findings; anything else gets an agent per lane.
   It touches one when its diff changes a line of code in `scripts/`, `.githooks/` or
   `.github/workflows`; help text and message strings alone do not.
+- **The session hands each lane [review-brief.md](review-brief.md)**, filled in with the change's
+  particulars.
 - **The reviewing session scores each finding itself**, on the plugin's rubric.
 
 ## What is reported
