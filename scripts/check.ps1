@@ -47,7 +47,8 @@
     parses. No linter runs. It reads the working tree, so through the pre-push hook it checks
     what is on disk, which is not the commits being pushed when the tree has uncommitted edits.
     The Markdown is the exception: it is read as staged, so an edit not yet staged is not seen,
-    and a link to a file not yet added is reported.
+    and a link to a file not yet added is reported. A file with such an edit is named, as
+    markdown-check.ps1 names it, and the check still passes.
     And fetch-mods.ps1's self-test listens on a loopback port, so it fails where that is refused.
 
     HOW LONG IT TAKES ON THE DEVELOPMENT MACHINE DEPENDS ON WHAT ELSE IS RUNNING THERE
@@ -136,6 +137,8 @@ if ($bad) {
     $said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
     $failed.Add("markdown-check.ps1 -All -MaxLineLength $MARKDOWN_LINE_LIMIT found something, or read no file")
 }
+# Shown on a pass too: a pass says nothing of an edit that was not read.
+elseif ($said -match '(?ms)^markdown-check: \d+ file\(s\) have unstaged edits.*?(?=^OK - )') { $Matches[0].TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" } }
 
 Write-Host ''
 if ($failed) { Write-Host "FAILED - check: $($failed -join '; ')."; exit 1 }
