@@ -31,8 +31,9 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
   the base added.
 - **Read an issue**:
   `gh issue view <number> --json title,body,labels,comments --jq '{title, body, labels: [.labels[].name], comments: [.comments[].body]}'`.
-  Not `gh issue view <number> --comments`: on 2026-10-14, with gh 2.102.0, it printed nothing
-  for #145 and exited 0 (#148). All five review lanes of that day's session met the same, by
+  Not `gh issue view <number> --comments`: on 2026-10-14, with gh 2.102.0 and outside a
+  terminal, it printed a ticket's comments and never its body, so nothing at all for #145, which
+  has none, and exited 0 (#148). All five review lanes of that day's session met the same, by
   their own accounts, and fell back to `--json`.
 - **List issues**:
   `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'`
@@ -82,7 +83,10 @@ requests; `/triage` reads this flag.)_
 When set to `yes`, PRs run through the same labels and states as issues, using the `gh pr`
 equivalents:
 
-- **Read a PR**: `gh pr view <number> --comments` and `gh pr diff <number>` for the diff.
+- **Read a PR**:
+  `gh pr view <number> --json title,body,comments --jq '{title, body, comments: [.comments[].body]}'`,
+  not `--comments`, which leaves the body out as on an issue, and `gh pr diff <number>` for the
+  diff.
 - **List external PRs for triage**:
   `gh pr list --state open --json number,title,body,labels,author,authorAssociation,comments` then
   keep only `authorAssociation` of `CONTRIBUTOR`, `FIRST_TIME_CONTRIBUTOR`, or `NONE` (drop
