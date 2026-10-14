@@ -18,20 +18,27 @@ holding a copy. No copy of it remains anywhere.
 **Three more are extracted and finished.** `scripts/fetch-mods.ps1` and the load harness are here
 and nowhere else: `realistic-fusion-refreshed` deleted its copies and takes both from the
 submodule. So is `scripts/pack-mods.ps1`, below: `realistic-fusion-refreshed` deleted its copy,
-the modpack deleted its own zipper, and both pack through this one. Everything else earmarked
-still lives in `realistic-fusion-refreshed`, working and gated. See
+the modpack deleted its own zipper, and both pack through this one. ~~Everything else earmarked
+still lives in `realistic-fusion-refreshed`, working and gated.~~ What is earmarked and has not
+moved, `scripts/name-check.ps1` and the rest of `scripts/factorio-lib.ps1`, still lives in
+`realistic-fusion-refreshed`, working and gated. See
 [docs/extraction-plan.md](docs/extraction-plan.md) for what is earmarked, how entangled each piece
 is, what has moved, and what has to be written from nothing.
 
-**Three scripts have moved here from `grado-factorio-modpack`, and that repository still holds
-its copies.** `scripts/markdown-check.ps1`, `scripts/get-dump.ps1` and
-`scripts/refuse-cd-into-mod-cache.ps1`, all below, were ruled to move on 2026-10-08. Each copy
-goes when the modpack's contraction ticket for it lands.
+**Three scripts have moved here from `grado-factorio-modpack`, ~~and that repository still holds
+its copies~~ and that repository deleted its copies on 2026-10-11.** `scripts/markdown-check.ps1`,
+`scripts/get-dump.ps1` and `scripts/refuse-cd-into-mod-cache.ps1`, all below, were ruled to move
+on 2026-10-08. ~~Each copy goes when the modpack's contraction ticket for it lands.~~
+grado-factorio-modpack#221 deleted all three.
 
-**Two more have moved here from `realistic-fusion-refreshed`, which still holds its copies.**
-The tree viewer and `scripts/locale-check.ps1`, both below, came on 2026-10-11 with five helpers
-they and its name check use between them. Each copy goes when that repository's contraction
-ticket for it lands.
+**Two more have moved here from `realistic-fusion-refreshed`, ~~which still holds its copies~~
+which deleted its copies by 2026-10-14.** The tree viewer and `scripts/locale-check.ps1`, both
+below, came on 2026-10-11 with five helpers they and its name check use between them. ~~Each copy
+goes when that repository's contraction ticket for it lands.~~ realistic-fusion-refreshed#686
+deleted the five helpers on 2026-10-12, and realistic-fusion-refreshed#690 the tree viewer and
+the locale check on 2026-10-14. Each contraction, with its tickets and commits, is in
+[docs/extraction-plan.md](docs/extraction-plan.md), *The contractions of 2026-10-11 to
+2026-10-14*.
 
 **Two tools written here from nothing:** `scripts/resolve-modpack.ps1`
 ([#14](https://github.com/trulsjo/grado-factorio-tools/issues/14)) and
@@ -145,9 +152,11 @@ change that. `-FocusMod` names the mods whose items, fluids and entities are pai
 like-named ones of the other mods. It is a probe: exit 0 means it ran and wrote the page, not
 that the tree is right. The page loads two libraries from a CDN, so it needs the network to
 render. `tree-layout-probe.js` is pasted into the browser console on a rendered page to measure
-layout alternatives. `-SelfTest` needs the game. `realistic-fusion-refreshed` still holds its own
-copy of all three files, until
-[its #676](https://github.com/trulsjo/realistic-fusion-refreshed/issues/676) lands.
+layout alternatives. `-SelfTest` needs the game. ~~`realistic-fusion-refreshed` still holds its
+own copy of all three files, until
+[its #676](https://github.com/trulsjo/realistic-fusion-refreshed/issues/676) lands.~~
+`realistic-fusion-refreshed` deleted its copy of all three files on 2026-10-14, for
+[realistic-fusion-refreshed#676](https://github.com/trulsjo/realistic-fusion-refreshed/issues/676).
 
 ## Checking that a mod's prototypes have names
 
@@ -160,9 +169,11 @@ It takes the same mod paths as `load-harness.ps1`. `-Prefix` is how it tells the
 prototypes from the game's, so a mod whose prototype names share no prefix cannot use it. It
 takes two dumps and creates no map: a pass says nothing about the mod loading, and it does not
 read the name of a custom input. `-SelfTest` plants prototypes it must catch, and needs the
-game. `realistic-fusion-refreshed` still
+game. ~~`realistic-fusion-refreshed` still
 holds its own copy, until
-[its #677](https://github.com/trulsjo/realistic-fusion-refreshed/issues/677) lands.
+[its #677](https://github.com/trulsjo/realistic-fusion-refreshed/issues/677) lands.~~
+`realistic-fusion-refreshed` deleted its copy on 2026-10-14, for
+[realistic-fusion-refreshed#677](https://github.com/trulsjo/realistic-fusion-refreshed/issues/677).
 
 ## Keeping an agent session out of the mod cache
 
