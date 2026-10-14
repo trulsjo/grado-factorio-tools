@@ -11,9 +11,11 @@
     Ruled on grado-factorio-modpack#16, 2026-09-24.
 
     A BUILD OFF ITS LINE IS REFUSED, before the portal is asked: -Build must begin with -Line and a
-    dot, so 2.0.77 is on 2.0 and 2.1.20 is not (grado-factorio-tools#143). The rule is
-    grado-factorio-modpack's stage-pack.ps1's, "A 2.1 game does not load a mod declaring 2.0"
-    (read at its 7a0bec5, 2026-10-14), and was not measured here.
+    dot, so 2.0.77 is on 2.0 and 2.1.20 is not (grado-factorio-tools#143). The test is
+    grado-factorio-modpack's stage-pack.ps1's, and so is its reason, "A 2.1 game does not load a
+    mod declaring 2.0" (read at its 7a0bec5, 2026-10-14). The reason covers a newer build on an
+    older line; the test refuses every pair off the line, an older build on a newer line too.
+    Neither direction was measured here.
 
     THE METHOD is grado-factorio-modpack's docs/porting-notes.md, "Resolves on stable 2.0.77":
 
@@ -526,8 +528,10 @@ function Invoke-SelfTest {
 if ($SelfTest) { Invoke-SelfTest }
 
 if (-not $InfoJson -or -not $Line -or -not $Build) { throw 'Give -InfoJson, -Line and -Build, or -SelfTest.' }
-# A 2.1 game does not load a mod declaring 2.0, so a set resolved across lines could never load.
-if (-not $Build.StartsWith("$Line.")) { throw "Build $Build is not on line $Line, so no release it picked would load on it. Give a $Line.<n> build, or the -Line of build $Build." }
+# A 2.1 game does not load a mod declaring 2.0; the test is the modpack's stage-pack.ps1's.
+if (-not $Build.StartsWith("$Line.", [StringComparison]::Ordinal)) {
+    throw "Build $Build is not on line ${Line}: a build is on a line when it begins with the line and a dot, and a 2.1 game does not load a mod declaring 2.0. Give a $Line.<n> build, or -Line $(($Build -split '\.')[0..1] -join '.')."
+}
 
 $packs = Read-Packs -Path $InfoJson
 
