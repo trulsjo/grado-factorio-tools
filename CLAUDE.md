@@ -65,8 +65,9 @@ submodule, [ADR 0001](docs/adr/0001-siblings-consume-this-repo-as-a-submodule.md
 
 ## Agent skills
 
-- **Before the first commit**, read `docs/agents/issue-tracker.md`: work goes on a branch, never
-  `main`. Tracker, pull request and follow-up-ticket conventions are there.
+- **Before starting a ticket**, read `docs/agents/issue-tracker.md`: work starts on a
+  `ready-for-agent` one, on a branch, never `main`. Tracker, pull request and follow-up-ticket
+  conventions are there.
 - **Triage labels**: `docs/agents/triage-labels.md`.
 - **Code review**: **load `docs/agents/code-review.md` before running a review.** One review, on
   the pull request; the prose is reviewed as carefully as the code.
