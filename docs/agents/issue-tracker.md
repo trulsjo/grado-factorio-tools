@@ -42,6 +42,10 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
 
 ## Branches, pull requests and follow-up tickets
 
+- **Work starts on a ticket labelled `ready-for-agent`.** On one without it, the session names
+  what in the ticket is still open and waits for Truls, before it creates a branch: triage is
+  Truls's. On 2026-10-14 `/implement #135` was run on a ticket with no state label, and a branch was
+  made before Truls stopped it (by #137's account).
 - **Work happens on a branch named `<issue>-<slug>`, never on `main`.** Pull requests are
   rebase-merged, which rewrites every SHA on the branch: cite the pull request, not a branch commit.
   A SHA may be cited once it is on `main`. `scripts/pr-body-check.ps1` holds a body to this: CI
