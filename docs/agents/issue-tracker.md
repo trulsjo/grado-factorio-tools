@@ -29,6 +29,11 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
   #106 said, "read from source, not run for this ticket", that with a two-dot range the files
   `main` changed since are listed too. The first run, on PR #107, showed that false for a file
   the base added.
+- **A command that printed nothing** has said what it prints for that input only, in a ticket, on
+  a page or in a pull request body. Before what the command does is recorded, it is run again on
+  an input that should print something, and the record shows both runs. #148 ran
+  `gh issue view <number> --comments` on #145, which has no comments, and recorded "printed
+  nothing". Run on #143, which has one, it printed the comment and no line of the body.
 - **Read an issue**:
   `gh issue view <number> --json title,body,labels,comments --jq '{title, body, labels: [.labels[].name], comments: [.comments[].body]}'`.
   Not `gh issue view <number> --comments`: on 2026-10-14, with gh 2.102.0 and outside a
