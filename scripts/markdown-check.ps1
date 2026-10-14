@@ -10,9 +10,9 @@
     A PRE-COMMIT CHECK (grado-factorio-modpack#149, where it was written). Run with no arguments,
     as a pre-commit hook does, it reads the staged Markdown files as they are staged, not as they
     are on disk. A review there on 2026-10-05 found emphasis that could not close, so the rest of
-    a note rendered wrongly, and a reviewer had to find it. Run so, or with -All, it then names
-    each file it read whose working tree differs from what is staged, as not read: a note, which
-    does not change the exit code (grado-factorio-tools#138). It reads the repository it is run in,
+    a note rendered wrongly, and a reviewer had to find it. Run with no arguments or with -All, it
+    then names each file it read whose working tree differs from the index: those edits were not
+    read. That is a note, which does not change the exit code (grado-factorio-tools#138). It reads the repository it is run in,
     which need not be the one that holds it, and from any directory inside that repository it
     reads the same files and says the same. In grado-factorio-tools, which holds it,
     scripts/check.ps1 runs it with -All and a line limit.
@@ -85,7 +85,7 @@
     is a list of commits, which two dots give.
 
 .PARAMETER All
-    Check every tracked Markdown file, as staged, naming those with unstaged edits as not read.
+    Check every tracked Markdown file, as staged, naming those whose unstaged edits were not read.
 
 .PARAMETER MaxLineLength
     Also report a prose line longer than this many characters, 1 or more. Without it, length is
@@ -681,7 +681,9 @@ $files = @($files | Where-Object { $_ -match '\.md$' })
 $found = Invoke-Check -Files $files -Revision $revision -Top $top -MaxLineLength $MaxLineLength
 # What was read is the index; a file whose working tree differs passed or failed on what is staged.
 if (-not $Range) {
-    $unread = @(git -C $top -c core.quotepath=off diff --name-only | Where-Object { $_ -cin $files })
+    # safecrlf off: under autocrlf git would otherwise warn of each LF file it compares.
+    $unread = @(git -C $top -c core.quotepath=off -c core.safecrlf=false diff --name-only -- '*.md' | Where-Object { $_ -cin $files })
+    if ($LASTEXITCODE -ne 0) { throw 'git could not list the files with unstaged edits.' }
     if ($unread) {
         Write-Host "markdown-check: $($unread.Count) file(s) have unstaged edits that were not read; what was read is what is staged:"
         $unread | ForEach-Object { Write-Host "    $_" }
