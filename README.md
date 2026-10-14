@@ -20,7 +20,8 @@ and nowhere else: `realistic-fusion-refreshed` deleted its copies and takes both
 submodule. So is `scripts/pack-mods.ps1`, below: `realistic-fusion-refreshed` deleted its copy,
 the modpack deleted its own zipper, and both pack through this one. ~~Everything else earmarked
 still lives in `realistic-fusion-refreshed`, working and gated.~~ What is earmarked and has not
-moved, `scripts/name-check.ps1` and the rest of `scripts/factorio-lib.ps1`, still lives in
+moved, `scripts/name-check.ps1`, the rest of `scripts/factorio-lib.ps1` and
+`scripts/load-check.ps1`, whose harness alone moved, still lives in
 `realistic-fusion-refreshed`, working and gated. See
 [docs/extraction-plan.md](docs/extraction-plan.md) for what is earmarked, how entangled each piece
 is, what has moved, and what has to be written from nothing.
