@@ -10,7 +10,9 @@
     A PRE-COMMIT CHECK (grado-factorio-modpack#149, where it was written). Run with no arguments,
     as a pre-commit hook does, it reads the staged Markdown files as they are staged, not as they
     are on disk. A review there on 2026-10-05 found emphasis that could not close, so the rest of
-    a note rendered wrongly, and a reviewer had to find it. It reads the repository it is run in,
+    a note rendered wrongly, and a reviewer had to find it. Run so, or with -All, it then names
+    each file it read whose working tree differs from what is staged, as not read: a note, which
+    does not change the exit code (grado-factorio-tools#138). It reads the repository it is run in,
     which need not be the one that holds it, and from any directory inside that repository it
     reads the same files and says the same. In grado-factorio-tools, which holds it,
     scripts/check.ps1 runs it with -All and a line limit.
@@ -83,7 +85,7 @@
     is a list of commits, which two dots give.
 
 .PARAMETER All
-    Check every tracked Markdown file, as staged.
+    Check every tracked Markdown file, as staged, naming those with unstaged edits as not read.
 
 .PARAMETER MaxLineLength
     Also report a prose line longer than this many characters, 1 or more. Without it, length is
@@ -617,6 +619,25 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
             $read = & $run $temp @()
             Write-Host ($read.Text.TrimEnd() -replace '(?m)^', '    ')
             $read.Code -eq 1 -and $read.Text -match "(?m)^$([regex]::Escape($name)):3: emphasis opened" -and $read.Text -match '1 finding\(s\) in' } }
+        @{ Name = 'a line over the limit left unstaged is named as not read, by -All and with no argument, and the exit code does not change'; Test = {
+            # A repository of its own, so that the run before the edit passes and an exit code
+            # the note changed would show.
+            $own = Join-Path $temp 'own'
+            New-Item -ItemType Directory -Path $own | Out-Null
+            git -C $own init --quiet
+            Set-Content -LiteralPath (Join-Path $own 'unread.md') -Value 'short'
+            git -C $own add unread.md
+            $ok = $true
+            foreach ($mode in @(), @('-All')) {
+                Set-Content -LiteralPath (Join-Path $own 'unread.md') -Value 'short'
+                $before = & $run $own ($mode + '-MaxLineLength', '100')
+                Set-Content -LiteralPath (Join-Path $own 'unread.md') -Value ('x' * 150)
+                $after = & $run $own ($mode + '-MaxLineLength', '100')
+                Write-Host ($after.Text.TrimEnd() -replace '(?m)^', '    ')
+                $ok = $ok -and $before.Code -eq 0 -and $before.Text -notmatch 'unstaged' -and $after.Code -eq 0 -and
+                    $after.Text -match '1 file\(s\) have unstaged edits that were not read' -and $after.Text -match '(?m)^ +unread\.md\r?$'
+            }
+            $ok } }
     )
 
     $failures = 0
@@ -658,6 +679,14 @@ if ($LASTEXITCODE -ne 0) { throw 'git could not list the files to check.' }
 $files = @($files | Where-Object { $_ -match '\.md$' })
 
 $found = Invoke-Check -Files $files -Revision $revision -Top $top -MaxLineLength $MaxLineLength
+# What was read is the index; a file whose working tree differs passed or failed on what is staged.
+if (-not $Range) {
+    $unread = @(git -C $top -c core.quotepath=off diff --name-only | Where-Object { $_ -cin $files })
+    if ($unread) {
+        Write-Host "markdown-check: $($unread.Count) file(s) have unstaged edits that were not read; what was read is what is staged:"
+        $unread | ForEach-Object { Write-Host "    $_" }
+    }
+}
 if ($found) {
     Write-Host ''
     Write-Host "FAILED - markdown-check: $found finding(s) in $($files.Count) Markdown file(s). What it reads as what: the header of markdown-check.ps1."
