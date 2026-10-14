@@ -108,26 +108,29 @@ Used by `/wayfinder`. The **map** is a single issue with **child** issues as tic
 - **Blocking**: GitHub's **native issue dependencies**, the canonical, UI-visible representation.
   Add an edge with
   `gh api --method POST repos/trulsjo/grado-factorio-tools/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`,
-  or the same with `grado-factorio-modpack` for a child there, where `<blocker-db-id>` is the
-  blocker's numeric **database id**
-  (`gh api repos/trulsjo/<repo>/issues/<n> --jq .id`, _not_ the `#number` or `node_id`).
+  or the same with `grado-factorio-modpack` for a child there. `<blocker-db-id>` is the
+  blocker's numeric **database id**, _not_ its `#number` or `node_id`, read from the blocker's
+  own repository, which may be the other one: `gh api repos/trulsjo/<repo>/issues/<n> --jq .id`.
+  GitHub reports `issue_dependencies_summary.blocked_by` (open blockers only, the live gate).
+  Where dependencies aren't available, fall back to a `Blocked by: #<n>, #<n>` line at the top
+  of the child body. A ticket is unblocked when every blocker is closed.
+
   **Run the POST with the Bash tool: a `Bash(...)` rule in the tracked `.claude/settings.json`
-  allows it there, and the file has no `PowerShell(...)` rule** (#135), in this spelling, for a
-  ticket of this repository or of `grado-factorio-modpack`. `-X POST` for `--method POST`, and
-  the DELETE that removes an edge, are not covered. Not measured: that the client honours the
-  rule. trulsjo/grado-factorio-modpack#233 and trulsjo/grado-factorio-modpack#267 left it so:
-  the refusal of the write on 2026-10-12 was one event, so a run on a commit without the rule
-  might be allowed as well, and a run with the rule would then show nothing (by the modpack's
-  tracker page at `96ea62f`, read 2026-10-14). One tool keeps one unmeasured rule set, and a
-  `PowerShell(...)` pair would need an edit to the settings file, which the auto-mode check
-  refused in a `grado-factorio-modpack` session on 2026-10-13 until Truls allowed it in that
-  session (trulsjo/grado-factorio-modpack#269, ruled 2026-10-14; the refusal is recorded in
-  trulsjo/grado-factorio-modpack#266's body, *Seen and said*). If the POST in this spelling, run
-  with the Bash tool as a command of its own, is refused, the rule is not honoured: file a ticket
-  with the transcript's lines and the client's version. GitHub reports
-  `issue_dependencies_summary.blocked_by` (open blockers only, the live gate). Where dependencies
-  aren't available, fall back to a `Blocked by: #<n>, #<n>` line at the top of the child body.
-  A ticket is unblocked when every blocker is closed.
+  allows it there, in this spelling, for a ticket of this repository or of
+  `grado-factorio-modpack`, and the file has no `PowerShell(...)` rule** (#135, after
+  trulsjo/grado-factorio-modpack#267). `-X POST` for `--method POST`, and the DELETE that
+  removes an edge, are not covered. Not measured: that the client honours the rule.
+  trulsjo/grado-factorio-modpack#233's run on a branch with the rule was not made, by Truls's
+  decision (#135's first comment), and trulsjo/grado-factorio-modpack#267 left the rule
+  unmeasured because the refusal of the write on 2026-10-12 was one event, so a run on a commit
+  without the rule might be allowed as well, and a run with the rule would then show nothing
+  (both read 2026-10-14). One tool keeps one unmeasured rule set, and a `PowerShell(...)` pair
+  would need an edit to the settings file, which the auto-mode check refused in a
+  `grado-factorio-modpack` session on 2026-10-13 until Truls allowed it in that session: ruled on
+  trulsjo/grado-factorio-modpack#269, which gives the date, and the refusal is recorded in
+  trulsjo/grado-factorio-modpack#266's body, *Seen and said* (both read 2026-10-14). If the POST
+  in this spelling, run with the Bash tool as a command of its own, is refused, the rule is not
+  honoured: file a ticket with the transcript's lines and the client's version.
 - **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the
   map's sub-issues / task list), drop any with an open blocker
   (`issue_dependencies_summary.blocked_by > 0`, or an open issue in the `Blocked by` line) or an
