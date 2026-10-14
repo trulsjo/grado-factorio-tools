@@ -29,11 +29,11 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
   #106 said, "read from source, not run for this ticket", that with a two-dot range the files
   `main` changed since are listed too. The first run, on PR #107, showed that false for a file
   the base added.
-- **A command that printed nothing** has said what it prints for that input only, in a ticket, on
-  a page or in a pull request body. Before what the command does is recorded, it is run again on
-  an input that should print something, and the record shows both runs. #148 ran
+- **A command that printed nothing** has shown what it prints for that input only. Before a
+  ticket, a page or a pull request body records what the command does, it is run again on an
+  input that should print something, and the record shows both runs. #148 ran
   `gh issue view <number> --comments` on #145, which has no comments, and recorded "printed
-  nothing". Run on #143, which has one, it printed the comment and no line of the body.
+  nothing"; what the command does is under *Read an issue*.
 - **Read an issue**:
   `gh issue view <number> --json title,body,labels,comments --jq '{title, body, labels: [.labels[].name], comments: [.comments[].body]}'`.
   Not `gh issue view <number> --comments`: on 2026-10-14, with gh 2.102.0 and outside a
@@ -59,9 +59,10 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
   do otherwise, it stops before building the other form. It runs the asked form, and asks Truls
   with the criterion, the command and what it printed. A reason with no run is not grounds to
   ask. Truls's answer is a comment on the ticket, and the pull request cites it where it does
-  other than the criterion says. PR #151 first reverted in the working tree where #150 asked for
-  a copy, on the reason that a copy's library is never loaded. The review ran a copy with a
-  library reverted, and its self-test failed 4 of 19 cases: the copy's library was loaded.
+  other than the criterion says. PR #151's brief first had the bug scan revert in the working
+  tree where #150 asked for a copy, on the reason that a reverted copy of a library is never
+  loaded. In a copy with `game-mods.ps1` changed, `resolve-modpack.ps1 -SelfTest` failed 4 of 19
+  cases (the review comment on PR #151, finding 2, 2026-10-14): the copy's library was loaded.
 - **Work happens on a branch named `<issue>-<slug>`, never on `main`.** Pull requests are
   rebase-merged, which rewrites every SHA on the branch: cite the pull request, not a branch commit.
   A SHA may be cited once it is on `main`. `scripts/pr-body-check.ps1` holds a body to this: CI
