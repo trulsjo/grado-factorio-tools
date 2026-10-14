@@ -24,6 +24,8 @@ On top of the `/code-review` plugin. The evidence is in
   `.github/workflows`; help text and message strings alone do not.
 - **The session hands each lane [review-brief.md](review-brief.md)**, filled in with the change's
   particulars.
+- **The working tree stays on the branch the lanes read until every lane has reported**: a
+  check run across a switch reads two branches' files.
 - **The reviewing session scores each finding itself**, on the plugin's rubric.
 
 ## What is reported
@@ -36,6 +38,6 @@ On top of the `/code-review` plugin. The evidence is in
 - **A finding at 80 or more must be fixed; the rest are recorded.**
 - **A pushed commit is not rewritten, with one exception**: a finding about the tip commit's
   body may be fixed by one amend and one force-push, on the session's own branch, its pull
-  request unmerged. The outcome names the commit by subject as amended. A body below
-  the tip is recorded.
+  request unmerged, before any fix commit makes it no longer the tip. The outcome names the
+  commit by subject as amended. A body below the tip is recorded.
 - **Do not re-score to make a finding binding.** Say it matters and let a human decide.
