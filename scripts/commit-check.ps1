@@ -63,8 +63,9 @@
     The file holding the message to check. This is what git passes a `commit-msg` hook. Comment
     lines and everything below a scissors line are stripped first, the same as git does, with the
     comment character git is configured with where the check runs: core.commentChar or
-    core.commentString, and `#` when neither is set or the value is `auto`. -Range strips with
-    it too. Git keeps comment lines when it does not strip them, as `git commit -F` with no editor
+    core.commentString, and `#` when neither is set. With `auto` the character is read off git's
+    own instruction or scissors line, and is `#` where the message has neither. -Range strips
+    with it too. Reading the configuration needs git; without it, `#`. Git keeps comment lines when it does not strip them, as `git commit -F` with no editor
     does, and the check does not know which it did.
 
 .PARAMETER Range
@@ -86,7 +87,7 @@
     Prove this check can FAIL. A gate that only ever passes is a gate that has stopped reading, so
     this runs a table of messages that must each be rejected for a named reason, and a table that
     must be accepted, printing each and whether it held. One check runs this script as a hook, in
-    a throwaway repository that sets core.commentChar, so it needs git and starts one pwsh.
+    a throwaway repository that sets core.commentChar, so it needs git and starts pwsh twice.
 
 .EXAMPLE
     pwsh -File scripts/commit-check.ps1 .git/COMMIT_EDITMSG
@@ -140,7 +141,7 @@ $TYPES = [ordered]@{
 $SITUATIONAL = @('🎉', '🚚', '🔥', '🌐', '💄', '🚧', '🔀')
 
 # The consuming repository's scopes, when it names a file of them. Read here and nowhere else:
-# given no file, the check still reads nothing but the message it is handed.
+# given no file, the check reads nothing but the message it is handed and git's comment character.
 $SCOPES = @()
 if ($ScopeFile) {
     if (-not (Test-Path -LiteralPath $ScopeFile)) { throw "no such scope file: $ScopeFile" }
@@ -177,6 +178,12 @@ function Width([string] $s) {
 # are written with $comment, the repository's comment character, so a line starting with any
 # other is the author's.
 function Get-MessageLines([string[]] $raw, [string] $comment = '#') {
+    # `auto`: git picks the first of these no line of the message starts with, and records it
+    # nowhere but on the lines it writes. Its instruction line or its scissors line says which.
+    if ($comment -eq 'auto') {
+        $own = $raw | Where-Object { $_ -match '^([#;@!$%^&|:]) (Please enter the commit message|-+ >8 -+)' } | Select-Object -First 1
+        $comment = if ($own) { $own.Substring(0, 1) } else { '#' }
+    }
     $kept = [System.Collections.Generic.List[string]]::new()
     foreach ($line in $raw) {
         if ($line -match ('^' + [regex]::Escape($comment) + '\s*-+\s*>8\s*-+')) { break }
@@ -188,13 +195,14 @@ function Get-MessageLines([string[]] $raw, [string] $comment = '#') {
 }
 
 # The comment character git strips with in the repository this runs in: core.commentChar, or
-# core.commentString, which git 2.45 added as its other spelling; the last one set wins, as in
-# git. `#` when neither is set, and for `auto`, whose character git chooses per message and does
-# not record.
+# core.commentString, its other spelling in newer git; the last one set wins, as in git. `#` when
+# neither is set or git is not there. `auto` is passed on, for Get-MessageLines to read off the
+# message.
 function Get-CommentChar {
+    if (-not (Get-Command git -ErrorAction Ignore)) { return '#' }
     $set = @(git config --get-regexp '^core\.comment(char|string)$' 2>$null)
     $value = if ($set) { ($set[-1] -split ' ', 2)[1] }
-    if (-not $value -or $value -eq 'auto') { '#' } else { $value }
+    if (-not $value) { '#' } else { $value }
 }
 
 # Is `line` part of the trailing block of `Key: value` footers? Exempt from the wrap rule.
@@ -373,7 +381,7 @@ if ($SelfTest) {
         @{ msg = @('Merge branch ''main'' into topic') }
         @{ msg = @('🐛 fix(repo): comments and scissors are stripped', '',
                    'Body.', '# a comment', '# ------------------------ >8 ------------------------',
-                   "diff --git $long") }
+                   ('diff ' * 20).Trim()) }
         @{ msg = @('🐛 fix(load-harness): with no vocabulary any scope passes') }
         @{ scopes = 'repo', 'pack'; msg = @('🐛 fix(pack): a scope the vocabulary lists') }
         @{ scopes = 'repo', 'pack'; msg = @('🐛 fix: a commit may still leave the scope out') }
@@ -381,7 +389,12 @@ if ($SelfTest) {
         # COMMENT CHARACTER ;: git's instructions and its scissors are written with it, and dropped.
         @{ comment = ';'; msg = @('🐛 fix(repo): with ; the ; lines are dropped', '', '#626 is kept.',
                                   ('; ' + ('instruction ' * 7).Trim()),
-                                  '; ------------------------ >8 ------------------------', "diff --git $long") }
+                                  '; ------------------------ >8 ------------------------', ('diff ' * 20).Trim()) }
+        # COMMENT CHARACTER auto: git chose ; because a line starts with #, and wrote it on its lines.
+        @{ comment = 'auto'; msg = @('🐛 fix(repo): with auto the character is read', '', '#626 is kept.',
+                                     '; Please enter the commit message for your changes. Lines starting',
+                                     ('; ' + ('instruction ' * 7).Trim()),
+                                     '; ------------------------ >8 ------------------------', ('diff ' * 20).Trim()) }
     )
 
     $checks = 0
@@ -419,11 +432,15 @@ if ($SelfTest) {
         $file = Join-Path $repo 'MSG'
         Set-Content -LiteralPath $file -Encoding utf8 -Value @('🐛 fix(repo): run as a hook', '', '#626 is kept.',
             ('; ' + ('instruction ' * 7).Trim()))
-        $hook = { Push-Location $repo; try { $null = & pwsh -NoProfile -File $PSCommandPath $file 2>&1; $LASTEXITCODE } finally { Pop-Location } }
-        $unset = & $hook
+        $hook = { Push-Location $repo; try { $out = & pwsh -NoProfile -File $PSCommandPath $file 2>&1 | Out-String; @{ Code = $LASTEXITCODE; Out = $out } } finally { Pop-Location } }
+        # `#` set in the repository, not left unset, so a user-wide `;` cannot reach this half.
+        git -C $repo config core.commentChar '#'
+        $hash = & $hook
         git -C $repo config core.commentChar ';'
         $set = & $hook
-        $wrong = if ($set -ne 0 -or $unset -ne 1) { "as a hook, core.commentChar ';' exited $set (want 0) and unset exited $unset (want 1)" }
+        $wrong = if ($set.Code -ne 0 -or $hash.Code -ne 1 -or $hash.Out -notmatch 'body line 3 is 85 characters') {
+            "as a hook, core.commentChar ';' exited $($set.Code) (want 0), and '#' exited $($hash.Code) (want 1, for body line 3): $($hash.Out.Trim())"
+        }
     }
     catch { $wrong = "as a hook, the fixture threw: $($_.Exception.Message)" }
     finally { Remove-Item -LiteralPath $repo -Recurse -Force -ErrorAction SilentlyContinue }
@@ -433,7 +450,7 @@ if ($SelfTest) {
     # The floor, for the same reason ship-check carries one: this passes by finding nothing, so a
     # table that stopped being read would print green while checking nothing at all.
     $checks++
-    if ($mustFail.Count -lt 18 -or $mustPass.Count -lt 19) {
+    if ($mustFail.Count -lt 18 -or $mustPass.Count -lt 20) {
         $failures.Add('the self-test tables shrank, so this proves much less than it claims')
     }
 
@@ -492,7 +509,8 @@ if ($problems.Count) {
     # DERIVED, NOT VERIFIED. Both calls are string arithmetic with no Test-Path, so a layout that
     # moved this script out of scripts/ would print a path to nothing rather than say so. That is
     # the trade: the property that made this the cheapest thing to extract is that it reads only
-    # the message it is handed, and a filesystem probe to check its own paperwork would spend it.
+    # the message it is handed, and git's comment character, and a filesystem probe to check its
+    # own paperwork would spend it.
     $convention = Join-Path (Split-Path $PSScriptRoot -Parent) 'docs/commit-convention.md'
 
     Write-Host ''
