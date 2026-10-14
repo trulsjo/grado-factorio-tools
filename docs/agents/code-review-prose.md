@@ -18,6 +18,10 @@ what it reports are in [code-review.md](code-review.md); the evidence is in
   with the passage around it and carries the commit and the date; one without is a finding.
   The session opens the place itself before the statement goes into the comment; unopened, it
   is left out and told to Truls in the report.
+- **A sibling's ticket or pull request is written with its repository**, as
+  `trulsjo/grado-factorio-modpack#267` or `grado-factorio-modpack#267`, in a commit message, a
+  pull request body, a ticket and a page: a bare `#267` here is this repository's. One bare is a
+  finding.
 - **Check a claim about entanglement against the file, not the reference count.**
 - **Flag a header or comment that lists what the code lists**: self-test cases, fixtures, a count
   of them, a list of refusals.
