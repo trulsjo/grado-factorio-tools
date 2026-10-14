@@ -14,13 +14,20 @@ its own, and takes every harness function from this repository's `load-harness-l
 
 **So is a fourth.** `pack-mods.ps1` is here and nowhere else: `realistic-fusion-refreshed`
 deleted its copy and `grado-factorio-modpack` deleted `Publish-PackZip`, its own zipper, and both
-pack through this repository's. See *The packer, expanded and contracted* below. Everything else
-in the table below still lives in `realistic-fusion-refreshed`.
+pack through this repository's. See *The packer, expanded and contracted* below. ~~Everything else
+in the table below still lives in `realistic-fusion-refreshed`.~~ What else in the table below
+has not moved, `name-check.ps1`, the rest of `factorio-lib.ps1` and `load-check.ps1`, still lives
+in `realistic-fusion-refreshed`.
 
-**Two more are expanded and not contracted, since 2026-10-11.** The tree viewer and
-`locale-check.ps1` are here, with five helpers, and `realistic-fusion-refreshed` still
-holds its copy of each. `name-check.ps1` was measured and ruled to stay where it is for now. See
+**~~Two more are expanded and not contracted, since 2026-10-11.~~ Two more are extracted and
+finished, 2026-10-14.** The tree viewer and `locale-check.ps1` are here, with five helpers, and
+~~`realistic-fusion-refreshed` still holds its copy of each~~ `realistic-fusion-refreshed` has
+deleted its copies. `name-check.ps1` was measured and ruled to stay where it is for now. See
 *The last three earmarked* below.
+
+**The three from `grado-factorio-modpack` are extracted and finished, 2026-10-11:** it deleted
+its copies. See *From the modpack*. Each contraction is under *The contractions of 2026-10-11 to
+2026-10-14*.
 
 This file is an inventory, and — for whatever has moved — the record of where it came from.
 
@@ -39,10 +46,10 @@ through an assumed directory layout or an invariant without ever naming it.
 | ~~`scripts/commit-check.ps1`~~ | 393 | **0** | **Moved 2026-09-21.** See *Extracted* below. |
 | ~~`scripts/fetch-mods.ps1`~~ | 1,049 | 3 | **Expanded 2026-09-24, contracted 2026-09-25.** See *Expanded and contracted* below. Fills a cache directory with third-party mods at pinned versions — git first, portal as fallback. This is half of the coexistence check and the more reusable half. |
 | ~~`scripts/pack-mods.ps1`~~ | 322 | 7 | **Moved 2026-09-28: expanded 2026-09-25, contracted 2026-09-28.** See *The packer, expanded and contracted* below. Builds one distributable zip per mod, named as the portal requires, and enforces the version bounds the portal enforces at upload. The natural home for the upload step that does not exist yet. |
-| `scripts/tree-viewer.ps1` + `tree-viewer.template.html` + `tree-layout-probe.js` | 533 + 2 files | 7 | **Expanded 2026-10-11**, see *The last three earmarked* below. ~~Move the set.~~ Renders a mod set's technology tree as a self-contained zoomable HTML viewer. Already takes a mod set rather than assuming one. |
-| `scripts/locale-check.ps1` | 391 | ~~—~~ 16 | **Expanded 2026-10-11**, see *The last three earmarked* below. ~~Probably move.~~ Fails if a prototype would show a player something other than its proper name. The rule is general; ~~only the prototype list is local~~ the mods and their prefix were local. |
+| ~~`scripts/tree-viewer.ps1` + `tree-viewer.template.html` + `tree-layout-probe.js`~~ | 533 + 2 files | 7 | ~~**Expanded 2026-10-11**~~ **Moved 2026-10-14: expanded 2026-10-11, contracted 2026-10-14**, see *The last three earmarked* below. ~~Move the set.~~ Renders a mod set's technology tree as a self-contained zoomable HTML viewer. Already takes a mod set rather than assuming one. |
+| ~~`scripts/locale-check.ps1`~~ | 391 | ~~—~~ 16 | ~~**Expanded 2026-10-11**~~ **Moved 2026-10-14: expanded 2026-10-11, contracted 2026-10-14**, see *The last three earmarked* below. ~~Probably move.~~ Fails if a prototype would show a player something other than its proper name. The rule is general; ~~only the prototype list is local~~ the mods and their prefix were local. |
 | `scripts/name-check.ps1` | ~~1,749~~ 1,847 | ~~—~~ 74 | **Stays in `realistic-fusion-refreshed` for now**, ruled 2026-10-11, see *The last three earmarked* below. ~~Probably move.~~ Fails if a repo defines a prototype name that is not its own, or one another mod already claims. General rule, large implementation. |
-| `scripts/factorio-lib.ps1` | 1,357 | **22** | **Split, do not move whole.** The shared PowerShell library, and the most entangled file in the list. Needs a real read to separate what is generic from what is RFR's. |
+| `scripts/factorio-lib.ps1` | 1,357 | **22** | **Split, do not move whole.** Five helpers moved: expanded 2026-10-11, contracted 2026-10-12, see *The shared helpers*; the rest stays. The shared PowerShell library, and the most entangled file in the list. Needs a real read to separate what is generic from what is RFR's. |
 | `scripts/load-check.ps1` | 2,294 | many | **Harness expanded 2026-09-24, contracted 2026-09-25**, as `load-harness.ps1` and `load-harness-lib.ps1`; see below. **Move the harness, not the file.** Most of it is thirteen RFR-specific invariants that belong to that mod. What is generic is the surrounding machinery: build an isolated mod directory, junction or zip the mods in, create a throwaway map, report which way it loaded. That harness is the other half of the coexistence check. |
 
 ## Extracted
@@ -336,8 +343,10 @@ and `load-check.ps1 -FromZips` there, and `stage-pack`'s self-test in the modpac
 
 **Ruled by Truls on 2026-10-08, on
 [#73](https://github.com/trulsjo/grado-factorio-tools/issues/73): all three move.** ~~Nothing has
-moved yet.~~ **All three are expanded, 2026-10-08, and none is contracted:** two copies of each
-stand until its contraction ticket lands. `grado-factorio-modpack` wrote the three in its PR #170,
+moved yet.~~ **All three are expanded, 2026-10-08, ~~and none is contracted:~~ ~~two copies of
+each stand until its contraction ticket lands~~ and all three contracted, 2026-10-11:** no copy
+is left in the modpack (*The contractions of 2026-10-11 to 2026-10-14*, below).
+`grado-factorio-modpack` wrote the three in its PR #170,
 merged 2026-10-06, because their tickets were there. Each move is an expand-contract pair, a ticket
 here and one in the modpack, so no copy is left behind. ~~The order of the three is not ruled.~~
 Ruled the same day: #74, #75, #76.
@@ -377,8 +386,8 @@ lost its opening sentence, which the README's first line says, to make the room.
 **`scripts/markdown-check.ps1`** — from `grado-factorio-modpack` at
 `4cc5805e35f42223ff3550a03fd67943b26b6349` (the file last changed in `fa61c15`; blob `a2d8ff8`), on
 2026-10-08, [#74](https://github.com/trulsjo/grado-factorio-tools/issues/74). The modpack's copy and
-its `pre-commit` hook are untouched; grado-factorio-modpack#182 deletes the one and rewires the
-other.
+its `pre-commit` hook were untouched by the move; grado-factorio-modpack#182 ~~deletes the one and
+rewires the other~~ deleted the one and rewired the other, 2026-10-11.
 
 No line of code changed but the closing message, which named the script by the path it had there.
 The header and one comment named two of the modpack's pages and its hook file, and now name none
@@ -392,27 +401,28 @@ root, the copy that moved misreported links that resolve, and with `-All` threw 
 `git ls-files` and `git ls-tree` answer for the current directory, and `git show` reads from the
 root. Every git call that lists or reads a file now runs from the root, which one `git rev-parse`
 finds, so each mode says below the root what it says at it, and `-SelfTest` has a fourteenth
-case for it. The modpack's copy is as it was, and stays so until grado-factorio-modpack#182
-deletes it: its `pre-commit` hook runs at the root, where the two copies say the same. The
+case for it. The modpack's copy ~~is as it was, and stays so until grado-factorio-modpack#182
+deletes it~~ stayed as it was until grado-factorio-modpack#182 deleted it: its `pre-commit` hook
+ran at the root, where the two copies said the same. The
 header no longer says the script has to be run at the root.
 
 **Changed again 2026-10-09: an opt-in length limit**
 ([#93](https://github.com/trulsjo/grado-factorio-tools/issues/93)). Handed `-MaxLineLength`, the
 check here also reports a prose line longer than that; handed none, it reports what it did
 before, so the modpack's `pre-commit` hook, which hands it none, would see no difference from
-this change. `check.ps1` here hands it 100. The modpack's copy has no such parameter, and the two
-copies now differ by this as well until grado-factorio-modpack#182.
+this change. `check.ps1` here hands it 100. The modpack's copy ~~has~~ had no such parameter, and
+the two copies ~~now differ~~ differed by this as well until grado-factorio-modpack#182.
 
 **Changed 2026-10-10: the length rule asks PowerShell's parser what is code**
 ([#95](https://github.com/trulsjo/grado-factorio-tools/issues/95)). Which lines are an indented
 code block, and so not held to the limit, is now read from `ConvertFrom-Markdown` and no longer
 worked out by the script from lists, blank lines and rules. The parser is asked only when a limit
 is handed in, so the modpack's hook, which hands it none, would see no difference from this
-change either. The modpack's copy has no length rule, and so nothing that asks which lines are
-code (read 2026-10-10 at its `f17fd53`): the length rule the two copies differ by until
-grado-factorio-modpack#182 is now a rule that leans on the parser. The header names the shapes
-found where the parser and GitHub's renderer disagree about code, and `docs/measurements.md` has
-the run.
+change either. The modpack's copy ~~has~~ had no length rule, and so nothing that asks which lines
+are code (read 2026-10-10 at its `f17fd53`): the length rule the two copies ~~differ~~ differed by
+until grado-factorio-modpack#182 ~~is now~~ was then a rule that leans on the parser. The header
+names the shapes found where the parser and GitHub's renderer disagree about code, and
+`docs/measurements.md` has the run.
 
 **`check.ps1`'s own relative-link check is replaced by it, not kept beside it.** `check.ps1` now
 runs the Markdown check with `-All`. What that changes for this repository's Markdown:
@@ -433,7 +443,8 @@ dead link and an open `*` turned `check.ps1` red with both named.
 **`scripts/get-dump.ps1`** — from `grado-factorio-modpack` at
 `4cc5805e35f42223ff3550a03fd67943b26b6349` (the file last changed in `d6157a9`; blob `bf96c8c`),
 on 2026-10-08, [#75](https://github.com/trulsjo/grado-factorio-tools/issues/75). The modpack's
-copy is untouched; grado-factorio-modpack#183 deletes its caching.
+copy was untouched by the move; grado-factorio-modpack#183 ~~deletes its caching~~ deleted it,
+2026-10-11.
 
 | Was | Is now |
 |---|---|
@@ -465,8 +476,8 @@ move.
 **`scripts/refuse-cd-into-mod-cache.ps1`** — from `grado-factorio-modpack` at
 `4cc5805e35f42223ff3550a03fd67943b26b6349` (the file last changed in `d6157a9`; blob `7e5d07a`),
 on 2026-10-08, [#76](https://github.com/trulsjo/grado-factorio-tools/issues/76). The modpack's
-copy and its `.claude/settings.json` are untouched; grado-factorio-modpack#184 deletes the one
-and rewires the other.
+copy and its `.claude/settings.json` were untouched by the move; grado-factorio-modpack#184
+~~deletes the one and rewires the other~~ deleted the one and rewired the other, 2026-10-11.
 
 | Was | Is now |
 |---|---|
@@ -515,7 +526,8 @@ over its scripts, hooks and workflow, read for callers, 2026-10-11).
 the three scripts use between them, expanded 2026-10-11 by
 [#100](https://github.com/trulsjo/grado-factorio-tools/issues/100). The contract half is
 [realistic-fusion-refreshed#675](https://github.com/trulsjo/realistic-fusion-refreshed/issues/675),
-open: until it lands that repository holds its own copy of each.
+~~open: until it lands that repository holds its own copy of each~~ closed 2026-10-12: that
+repository deleted its copies.
 
 | Helper | Where it is here | What differs from the origin |
 |---|---|---|
@@ -553,7 +565,8 @@ needs the game.
 **`scripts/tree-layout-probe.js`** (blob `237f90c`, last changed `6db38ae`), expanded 2026-10-11
 by [#101](https://github.com/trulsjo/grado-factorio-tools/issues/101). The contract half is
 [realistic-fusion-refreshed#676](https://github.com/trulsjo/realistic-fusion-refreshed/issues/676),
-open: until it lands that repository holds its own copy of all three.
+~~open: until it lands that repository holds its own copy of all three~~ closed 2026-10-14: that
+repository deleted all three.
 
 What changed on the way in:
 
@@ -591,7 +604,8 @@ and 626 `path` elements of class `edge` (`grep -o '<div class="card[ "]'` and
 **`scripts/locale-check.ps1`** (blob `8d7c273`, last changed `f4cbb25`), expanded 2026-10-11 by
 [#102](https://github.com/trulsjo/grado-factorio-tools/issues/102). The contract half is
 [realistic-fusion-refreshed#677](https://github.com/trulsjo/realistic-fusion-refreshed/issues/677),
-open: until it lands that repository holds its own copy. It had 16 lines matching
+~~open: until it lands that repository holds its own copy~~ closed 2026-10-14: that repository
+deleted its copy. It had 16 lines matching
 `rf-|realistic|rfr` (`git show origin/main:scripts/locale-check.ps1 | grep -c -i`, 2026-10-11,
 at `c48fadf`); the table above had no count for it.
 
@@ -666,6 +680,32 @@ The figures:
   the harness already has, and 45 of lists that are that mod's own. 427 of the rule's lines are
   two classifiers whose code names nothing of the mod and whose reasoning is that repository's
   measurements.
+
+## The contractions of 2026-10-11 to 2026-10-14
+
+Each sibling deleted its copies in tickets of its own, through a pull request that was
+rebase-merged. Read on 2026-10-14 with `gh issue view` and `gh pr view` in each sibling, the tip
+being the `mergeCommit` that names; the deleting commits are from
+`git log --diff-filter=D origin/main -- <path>` there, the same day. The measurements are the
+pull requests' own, and none was re-run here.
+
+| Script | Sibling | Tickets | Pull request | Merged | Tip | Deleted in |
+|---|---|---|---|---|---|---|
+| `markdown-check.ps1`, `get-dump.ps1`, `refuse-cd-into-mod-cache.ps1` | `grado-factorio-modpack` | grado-factorio-modpack#182, grado-factorio-modpack#183, grado-factorio-modpack#184 | [grado-factorio-modpack#221](https://github.com/trulsjo/grado-factorio-modpack/pull/221) | 2026-10-11 | `59a6096` | `3985d00`, `0653339`, `598d8f2` |
+| the five shared helpers of `factorio-lib.ps1` | `realistic-fusion-refreshed` | realistic-fusion-refreshed#675 | [realistic-fusion-refreshed#686](https://github.com/trulsjo/realistic-fusion-refreshed/pull/686) | 2026-10-12 | `3ba6d3d` | `b7eaf94` |
+| the tree viewer set, `locale-check.ps1` | `realistic-fusion-refreshed` | realistic-fusion-refreshed#676, realistic-fusion-refreshed#677 | [realistic-fusion-refreshed#690](https://github.com/trulsjo/realistic-fusion-refreshed/pull/690) | 2026-10-14 | `88f45f2` | `0c4bef0`, `4f6bab3` |
+
+**`get-dump.ps1` was deleted, not renamed.** grado-factorio-modpack#183's title says it deletes
+"the caching in get-dump.ps1", but grado-factorio-modpack#221's diff shows the file with
+`deleted file mode`, and no path holding `dump` is in
+`git ls-tree -r --name-only origin/main` there.
+
+**Nothing is left duplicated.** Checked here on 2026-10-14 by `git cat-file -e origin/main:<path>`
+and `git grep` for each helper's `function` line, against `realistic-fusion-refreshed` at
+`c79c0fe` and `grado-factorio-modpack` at `f055cfa`. The modpack has none of its three scripts.
+`realistic-fusion-refreshed` has none of the three viewer files nor `scripts/locale-check.ps1`,
+and defines none of the five helpers under `scripts/` or `tools/`. It still has
+`scripts/name-check.ps1` and `scripts/factorio-lib.ps1`, which stay, as ruled above.
 
 ## What has to be written, not moved
 
