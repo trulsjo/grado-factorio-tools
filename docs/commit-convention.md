@@ -112,6 +112,13 @@ A gate that overstates its coverage is worse than no gate, so:
   flagging it would only teach people to ignore the gate. A bare long URL is the real case.
 - **`fixup!`, `squash!`, `amend!`, `Merge …` and `Revert "…"` subjects skip every rule**, because
   git writes or rewrites them rather than a person.
+- **Comment lines are skipped, with the repository's comment character.** That is
+  `core.commentChar`, or `core.commentString`, read where the check runs, and `#` when neither is
+  set or the value is `auto`, whose character git does not record. With `;` a `#` line is the
+  author's and is measured. Lines from a scissors line written with that character down are
+  skipped too. Git keeps comment lines when it does not strip them, as in `git commit -F` with no
+  editor, so there a comment line is stored that the check did not read
+  (grado-factorio-tools#145).
 - **This page.** The type table and the situational list are literals in `scripts/commit-check.ps1`,
   and the script's header restates several of these rules in prose — so this convention has three
   homes, not two, and none is compared against another. Deliberate, and reasoned in
