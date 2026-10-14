@@ -114,7 +114,8 @@ A gate that overstates its coverage is worse than no gate, so:
   git writes or rewrites them rather than a person.
 - **Comment lines are skipped, with the repository's comment character.** That is
   `core.commentChar`, or `core.commentString`, read where the check runs, and `#` when neither is
-  set or the value is `auto`, whose character git does not record. With `;` a `#` line is the
+  set. With `auto` it is read off git's own instruction or scissors line, and is `#` where the
+  message has neither, as in a stored one. With `;` a `#` line is the
   author's and is measured. Lines from a scissors line written with that character down are
   skipped too. Git keeps comment lines when it does not strip them, as in `git commit -F` with no
   editor, so there a comment line is stored that the check did not read
