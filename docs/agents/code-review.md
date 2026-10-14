@@ -17,7 +17,8 @@ On top of the `/code-review` plugin. The evidence is in
   failed or not finished, it runs it. The session looks before the lane starts, with
   `gh run list --workflow check.yml --commit <full SHA> --json databaseId,headSha,status,conclusion`.
   Either way the bug scan runs each self-test that script's header says the change calls for
-  and CI does not run, those that need the game among them.
+  and CI does not run, those that need the game among them. It reverts each claim of a script
+  on a copy, as the brief says; a revert that fails nothing is a finding.
 - **One fresh agent runs both lanes** when the change touches no script, or when each commit
   since the last review answers one of its findings; anything else gets an agent per lane.
   It touches one when its diff changes a line of code in `scripts/`, `.githooks/` or

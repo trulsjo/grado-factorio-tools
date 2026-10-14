@@ -30,15 +30,15 @@ CI has not passed on this commit: run pwsh -File scripts/check.ps1 and report wh
 Run each and report its last line.
 
 **The reverts.** `<each claim the change makes of a script, with the self-test that covers it |
-"none: the change has no self-test">`. The bug scan takes the claims one at a time, after the
-check: it reverts that piece in the working tree's copy of the file, shows with
-`git diff --stat -- <file>` that the copy differs from the commit, runs the self-test, reports how
-many checks failed, and restores the file with `git restore`. In the tree, not in a copy beside
-it: a caller dot-sources a library by path, so a reverted copy of one is never loaded. A revert
-that fails nothing is a finding. With "none", it reverts nothing.
+"none: the change touches no script">`. A claim of a library with no self-test of its own names
+its caller's. For each claim the bug scan copies the commit outside the repository, with
+`git archive <full SHA> | tar -x -C <empty scratch folder>`, and reverts that piece in the copy.
+It shows the copy differs, with `git diff --no-index --stat <file> <copy>/<file>`, runs the
+copy's self-test and reports how many checks failed. A revert that fails nothing is a finding.
+With "none", it reverts nothing.
 
-**Read-only.** Edit no file but by those reverts, and leave `git status` clean. Commit nothing,
-push nothing, and post nothing to GitHub: the session acts on the findings and posts the review.
+**Read-only.** Edit no file in the repository, commit nothing, push nothing, and post nothing to
+GitHub: the session acts on the findings and posts the review.
 
 **Each finding** is reported as:
 
