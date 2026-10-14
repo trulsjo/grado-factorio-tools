@@ -29,8 +29,16 @@ CI has not passed on this commit: run pwsh -File scripts/check.ps1 and report wh
 **The self-tests CI does not run.** `<each, as pwsh -File scripts/<script> -SelfTest, or "none">`.
 Run each and report its last line.
 
-**Read-only.** Edit no file, commit nothing, push nothing, and post nothing to GitHub: the
-session acts on the findings and posts the review.
+**The reverts.** `<each claim the change makes of a script, with the self-test that covers it |
+"none: the change has no self-test">`. The bug scan takes the claims one at a time, after the
+check: it reverts that piece in the working tree's copy of the file, shows with
+`git diff --stat -- <file>` that the copy differs from the commit, runs the self-test, reports how
+many checks failed, and restores the file with `git restore`. In the tree, not in a copy beside
+it: a caller dot-sources a library by path, so a reverted copy of one is never loaded. A revert
+that fails nothing is a finding. With "none", it reverts nothing.
+
+**Read-only.** Edit no file but by those reverts, and leave `git status` clean. Commit nothing,
+push nothing, and post nothing to GitHub: the session acts on the findings and posts the review.
 
 **Each finding** is reported as:
 
