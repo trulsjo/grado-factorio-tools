@@ -61,7 +61,11 @@
 
 .PARAMETER Path
     The file holding the message to check. This is what git passes a `commit-msg` hook. Comment
-    lines and everything below a scissors line are stripped first, the same as git does.
+    lines and everything below a scissors line are stripped first, the same as git does, with the
+    comment character git is configured with where the check runs: core.commentChar or
+    core.commentString, and `#` when neither is set or the value is `auto`. -Range strips with
+    it too. Git keeps comment lines when it does not strip them, as `git commit -F` with no editor
+    does, and the check does not know which it did.
 
 .PARAMETER Range
     Check the messages of every commit in a revision range instead of a file, e.g. `-Range
@@ -81,8 +85,8 @@
 .PARAMETER SelfTest
     Prove this check can FAIL. A gate that only ever passes is a gate that has stopped reading, so
     this runs a table of messages that must each be rejected for a named reason, and a table that
-    must be accepted, printing each and whether it held. It starts nothing and takes about a
-    second.
+    must be accepted, printing each and whether it held. One check runs this script as a hook, in
+    a throwaway repository that sets core.commentChar, so it needs git and starts one pwsh.
 
 .EXAMPLE
     pwsh -File scripts/commit-check.ps1 .git/COMMIT_EDITMSG
@@ -169,16 +173,28 @@ function Width([string] $s) {
 }
 
 # The message with the parts git itself discards: comment lines, and everything below a scissors
-# line. Without this the hook measures the instructions git wrote, not what the author typed.
-function Get-MessageLines([string[]] $raw) {
+# line. Without this the hook measures the instructions git wrote, not what the author typed. Both
+# are written with $comment, the repository's comment character, so a line starting with any
+# other is the author's.
+function Get-MessageLines([string[]] $raw, [string] $comment = '#') {
     $kept = [System.Collections.Generic.List[string]]::new()
     foreach ($line in $raw) {
-        if ($line -match '^#\s*-+\s*>8\s*-+') { break }
-        if ($line.StartsWith('#')) { continue }
+        if ($line -match ('^' + [regex]::Escape($comment) + '\s*-+\s*>8\s*-+')) { break }
+        if ($line.StartsWith($comment, [StringComparison]::Ordinal)) { continue }
         $kept.Add($line.TrimEnd())
     }
     while ($kept.Count -and $kept[$kept.Count - 1] -eq '') { $kept.RemoveAt($kept.Count - 1) }
     return , $kept.ToArray()
+}
+
+# The comment character git strips with in the repository this runs in: core.commentChar, or
+# core.commentString, which git 2.45 added as its other spelling; the last one set wins, as in
+# git. `#` when neither is set, and for `auto`, whose character git chooses per message and does
+# not record.
+function Get-CommentChar {
+    $set = @(git config --get-regexp '^core\.comment(char|string)$' 2>$null)
+    $value = if ($set) { ($set[-1] -split ' ', 2)[1] }
+    if (-not $value -or $value -eq 'auto') { '#' } else { $value }
 }
 
 # Is `line` part of the trailing block of `Key: value` footers? Exempt from the wrap rule.
@@ -214,9 +230,9 @@ function Test-Wrappable([string] $line) {
     $scopes is the vocabulary to hold the scope to, or nothing; $isTitle reads $raw as a pull
     request title.
 #>
-function Test-CommitMessage([string[]] $raw, [string[]] $scopes = $SCOPES, [bool] $isTitle = $false) {
+function Test-CommitMessage([string[]] $raw, [string[]] $scopes = $SCOPES, [bool] $isTitle = $false, [string] $comment = '#') {
     $bad   = [System.Collections.Generic.List[string]]::new()
-    $lines = Get-MessageLines $raw
+    $lines = Get-MessageLines $raw $comment
 
     if (-not $lines.Count) {
         $bad.Add('the message is empty')
@@ -336,6 +352,9 @@ if ($SelfTest) {
         @{ why = 'a pull request title needs a scope'; title = $true; msg = @('🐛 fix: no scope') }
         @{ why = "'load-harness' is not a scope"; title = $true; scopes = 'repo', 'pack'
            msg = @('🐛 fix(load-harness): a title is held to the vocabulary too') }
+        # COMMENT CHARACTER ;: a `#` line is the author's, so it is measured.
+        @{ why = 'body line 3'; comment = ';'
+           msg = @('🐛 fix(repo): with ; a # line is body', '', ('#626 ' + ('wrappable ' * 8).Trim())) }
     )
 
     $mustPass = @(
@@ -359,6 +378,10 @@ if ($SelfTest) {
         @{ scopes = 'repo', 'pack'; msg = @('🐛 fix(pack): a scope the vocabulary lists') }
         @{ scopes = 'repo', 'pack'; msg = @('🐛 fix: a commit may still leave the scope out') }
         @{ title = $true; msg = @('✨ feat(pack)!: a breaking title has no body for a footer') }
+        # COMMENT CHARACTER ;: git's instructions and its scissors are written with it, and dropped.
+        @{ comment = ';'; msg = @('🐛 fix(repo): with ; the ; lines are dropped', '', '#626 is kept.',
+                                  ('; ' + ('instruction ' * 7).Trim()),
+                                  '; ------------------------ >8 ------------------------', "diff --git $long") }
     )
 
     $checks = 0
@@ -366,7 +389,7 @@ if ($SelfTest) {
 
     foreach ($case in $mustFail) {
         $checks++
-        $got = Test-CommitMessage $case.msg $case.scopes ([bool] $case.title)
+        $got = Test-CommitMessage $case.msg $case.scopes ([bool] $case.title) ($case.comment ?? '#')
         $wrong = if (-not $got.Count) {
             "expected a failure mentioning '$($case.why)' and it passed: $($case.msg[0])"
         } elseif (-not ($got | Where-Object { $_ -like "*$($case.why)*" })) {
@@ -378,17 +401,39 @@ if ($SelfTest) {
 
     foreach ($case in $mustPass) {
         $checks++
-        $got = Test-CommitMessage $case.msg $case.scopes ([bool] $case.title)
+        $got = Test-CommitMessage $case.msg $case.scopes ([bool] $case.title) ($case.comment ?? '#')
         Write-Host "self-test: accepted: $($case.msg[0]) -- $($got.Count ? 'FAILED' : 'ok')"
         if ($got.Count) {
             $failures.Add("expected a pass and got: $($got -join '; ') -- for: $($case.msg[0])")
         }
     }
 
+    # COMMENT CHARACTER ;, AS A HOOK: the character comes from the configuration of the repository
+    # the hook runs in. The same message passes with `core.commentChar` set to `;`, and fails with
+    # it unset, where its `;` lines are the author's and over the limit.
+    $checks++
+    $repo = Join-Path ([IO.Path]::GetTempPath()) "commit-check-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+    try {
+        $null = New-Item -ItemType Directory -Path $repo
+        git -C $repo init --quiet
+        $file = Join-Path $repo 'MSG'
+        Set-Content -LiteralPath $file -Encoding utf8 -Value @('🐛 fix(repo): run as a hook', '', '#626 is kept.',
+            ('; ' + ('instruction ' * 7).Trim()))
+        $hook = { Push-Location $repo; try { $null = & pwsh -NoProfile -File $PSCommandPath $file 2>&1; $LASTEXITCODE } finally { Pop-Location } }
+        $unset = & $hook
+        git -C $repo config core.commentChar ';'
+        $set = & $hook
+        $wrong = if ($set -ne 0 -or $unset -ne 1) { "as a hook, core.commentChar ';' exited $set (want 0) and unset exited $unset (want 1)" }
+    }
+    catch { $wrong = "as a hook, the fixture threw: $($_.Exception.Message)" }
+    finally { Remove-Item -LiteralPath $repo -Recurse -Force -ErrorAction SilentlyContinue }
+    Write-Host "self-test: comment character ;, run as a hook in a repository that sets it -- $($wrong ? 'FAILED' : 'ok')"
+    if ($wrong) { $failures.Add($wrong) }
+
     # The floor, for the same reason ship-check carries one: this passes by finding nothing, so a
     # table that stopped being read would print green while checking nothing at all.
     $checks++
-    if ($mustFail.Count -lt 17 -or $mustPass.Count -lt 18) {
+    if ($mustFail.Count -lt 18 -or $mustPass.Count -lt 19) {
         $failures.Add('the self-test tables shrank, so this proves much less than it claims')
     }
 
@@ -410,11 +455,12 @@ if ($PSCmdlet.ParameterSetName -eq 'Range') {
     $shas = @(& git rev-list @revArgs 2>$null)
     if ($LASTEXITCODE -ne 0) { throw "not a revision range: $Range" }
     if (-not $shas.Count) { Write-Host "commit-check: no commits in $Range."; exit 0 }
+    $comment = Get-CommentChar
 
     $bad = 0
     foreach ($sha in $shas) {
         $raw = @(& git log -1 --format=%B $sha) -join "`n" -split "`n"
-        $problems = Test-CommitMessage $raw
+        $problems = Test-CommitMessage $raw $SCOPES $false $comment
         if ($problems.Count) {
             $bad++
             $subject = (& git log -1 --format=%s $sha)
@@ -434,7 +480,7 @@ if ($isTitle) {
 } else {
     if (-not $Path) { throw 'give a message file to check, or -Range, -Title or -SelfTest.' }
     if (-not (Test-Path -LiteralPath $Path)) { throw "no such message file: $Path" }
-    $problems = Test-CommitMessage @(Get-Content -LiteralPath $Path -Encoding utf8)
+    $problems = Test-CommitMessage @(Get-Content -LiteralPath $Path -Encoding utf8) $SCOPES $false (Get-CommentChar)
 }
 if ($problems.Count) {
     # WHERE THE RULES ARE WRITTEN, derived from this script's own location rather than printed as
