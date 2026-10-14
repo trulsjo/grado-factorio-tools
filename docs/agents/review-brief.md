@@ -15,7 +15,8 @@ You are the `<bug scan | prose lane | both>` of the review of pull request `#<nu
 `<what it does, and the tickets it closes>`.
 
 **Reads first.** `CLAUDE.md`, `docs/agents/code-review.md`, and the tickets the change closes,
-with `gh issue view <number> --comments`.
+each with
+`gh issue view <number> --json title,body,labels,comments --jq '{title, body, labels: [.labels[].name], comments: [.comments[].body]}'`.
 
 - The bug scan: the diff, `git diff origin/main...<full SHA>`, and each file it touches, whole.
   It does not load `docs/agents/code-review-prose.md`.

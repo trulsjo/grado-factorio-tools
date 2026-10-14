@@ -29,8 +29,11 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
   #106 said, "read from source, not run for this ticket", that with a two-dot range the files
   `main` changed since are listed too. The first run, on PR #107, showed that false for a file
   the base added.
-- **Read an issue**: `gh issue view <number> --comments`, filtering comments by `jq` and also
-  fetching labels.
+- **Read an issue**:
+  `gh issue view <number> --json title,body,labels,comments --jq '{title, body, labels: [.labels[].name], comments: [.comments[].body]}'`.
+  Not `gh issue view <number> --comments`: on 2026-10-14, with gh 2.102.0, it printed nothing
+  for #145 and exited 0 (#148). All five review lanes of that day's session met the same, by
+  their own accounts, and fell back to `--json`.
 - **List issues**:
   `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'`
   with appropriate `--label` and `--state` filters.
@@ -96,7 +99,7 @@ Create a GitHub issue.
 
 ## When a skill says "fetch the relevant ticket"
 
-Run `gh issue view <number> --comments`.
+Read it as *Read an issue* says, above.
 
 ## Wayfinding operations
 
