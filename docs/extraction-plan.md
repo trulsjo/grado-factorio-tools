@@ -711,17 +711,20 @@ and `git grep` for each helper's `function` line, against `realistic-fusion-refr
 and defines none of the five helpers under `scripts/` or `tools/`. It still has
 `scripts/name-check.ps1` and `scripts/factorio-lib.ps1`, which stay, as ruled above.
 
-## The heading anchors, ported and not moved
+## The heading anchors, ported and the copy removed
 
 `Get-HeadingAnchor` in `scripts/markdown-check.ps1` is ported from `realistic-fusion-refreshed`'s
-`scripts/ship-check.ps1`, `Get-HeadingAnchors`, at `f3238c5` (read 2026-10-15, #155). It is
-not a move: `ship-check.ps1` keeps its own, which its section 10 uses, so the two are copies
-until realistic-fusion-refreshed#710 is settled. That ticket bumps the pin past #155 and asks
-Truls whether section 10's anchor code is then redundant. The two already differ wherever a
-heading renders other than it is written. That one makes the anchor from the text as written,
-less each link's target, so it keeps the underscores of `_` emphasis, a closing `##`, an
-image's alt text and an entity's name, and reads no setext heading, no quoted one and no
-indented one. The port follows GitHub in each.
+`scripts/ship-check.ps1`, `Get-HeadingAnchors`, at `f3238c5` (read 2026-10-15, #155). For a
+while the two were copies, since `ship-check.ps1`'s section 10 used its own. Truls decided on
+2026-10-15 that section 10's anchor code goes, which settled realistic-fusion-refreshed#710.
+realistic-fusion-refreshed#712 removed it, merged as `3ad277c` the same day, where
+`ship-check.ps1` names no `Get-HeadingAnchors` (read 2026-10-15). This is now the only copy.
+
+The two differed wherever a heading renders other than it is written, the reason section 10's
+comment at `3ad277c` gives for the removal. That one made the anchor from the text as written,
+less each link's target, so it kept the underscores of `_` emphasis, a closing `##`, an image's
+alt text and an entity's name, and read no setext heading, no quoted one and no indented one.
+The port follows GitHub in each.
 
 ## What has to be written, not moved
 
