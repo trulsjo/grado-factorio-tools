@@ -170,8 +170,9 @@ function Get-HeadingAnchor {
         such as `_`, hyphens and spaces dropped, and each space made a hyphen. A heading whose
         anchor is taken gets the first of -1, -2 and on that is not, counted per anchor.
         Ported from realistic-fusion-refreshed's ship-check.ps1, Get-HeadingAnchors, at
-        f3238c5 (read 2026-10-15). That one makes the anchor from the text as written, less
-        each link's target, so it differs wherever rendering does.  #>
+        f3238c5 (read 2026-10-15). That one made the anchor from the text as written, less
+        each link's target, so it differed wherever rendering does; realistic-fusion-refreshed#712
+        removed it on 2026-10-15, and this is the only copy.  #>
     param([Parameter(Mandatory)] [AllowEmptyCollection()] [AllowEmptyString()] [string[]] $Lines)
 
     $anchors = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
