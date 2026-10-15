@@ -714,11 +714,14 @@ and defines none of the five helpers under `scripts/` or `tools/`. It still has
 ## The heading anchors, ported and not moved
 
 `Get-HeadingAnchor` in `scripts/markdown-check.ps1` is ported from `realistic-fusion-refreshed`'s
-`scripts/ship-check.ps1`, `Get-HeadingAnchors`, at `f3238c5` (#155). It is not a move:
-`ship-check.ps1` keeps its own, which its section 10 uses, so the two are copies until
-realistic-fusion-refreshed#710 is settled. That ticket bumps the pin past #155 and asks Truls
-whether section 10's anchor code is then redundant. The two already differ: the port drops the
-underscores of `_` emphasis, as GitHub does, and that one keeps them.
+`scripts/ship-check.ps1`, `Get-HeadingAnchors`, at `f3238c5` (read 2026-10-15, #155). It is
+not a move: `ship-check.ps1` keeps its own, which its section 10 uses, so the two are copies
+until realistic-fusion-refreshed#710 is settled. That ticket bumps the pin past #155 and asks
+Truls whether section 10's anchor code is then redundant. The two already differ wherever a
+heading renders other than it is written. That one makes the anchor from the text as written,
+less each link's target, so it keeps the underscores of `_` emphasis, a closing `##`, an
+image's alt text and an entity's name, and reads no setext heading, no quoted one and no
+indented one. The port follows GitHub in each.
 
 ## What has to be written, not moved
 

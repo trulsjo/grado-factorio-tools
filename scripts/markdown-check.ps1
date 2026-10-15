@@ -31,8 +31,8 @@
     A FRAGMENT, `#name` alone or after a `.md` file, must be the anchor of a heading in that
     file, read as the file is read, in exact case (grado-factorio-tools#155). The anchor is
     the one GitHub gives, asked of it 2026-10-15 and in docs/measurements.md: the heading's
-    text as it renders, lower-cased, with all but letters, marks, digits, `_`, `-` and spaces
-    dropped and each space made a hyphen; a repeat takes -1, -2 and on. A heading is a `#`
+    text as it renders, lower-cased, with all but letters, marks, decimal digits, connector
+    punctuation such as `_`, `-` and spaces dropped and each space made a hyphen; a repeat takes -1, -2 and on. A heading is a `#`
     line or a line alone after a blank one and underlined with `=` or `-`.
     A BARE ADDRESS, `https://...` with no brackets, is not read for emphasis, and ends where
     GitHub's renderer ends one, asked 2026-10-12 (grado-factorio-tools#124; the answers are in
@@ -79,10 +79,10 @@
     setext heading of more than one line, so a link to any of them fails; a heading holding a
     reference link, `[text][label]`, read as written; whether GitHub follows a fragment that
     differs from an anchor only in case, which is reported and was not asked; and a fragment
-    into a submodule, a directory or a file that is not `.md`, which is not checked. A code
-    block made by indenting, which all but the length rule read as text. Emphasis that closes
-    in the wrong place, or that a bullet nested in a numbered item leaves open and the next
-    numbered item closes. Markdown outside `.md` files. A link whose target file or heading a
+    into a submodule, a directory or a file that is not `.md`, or after a `?query`, which is
+    not checked. A code block made by indenting, which all but the length rule read as text.
+    Emphasis that closes in the wrong place, or that a bullet nested in a numbered item leaves
+    open and the next numbered item closes. Markdown outside `.md` files. A link whose target file or heading a
     commit deletes or renames, unless the linking file is staged too: -All sees it. A link into
     a submodule is asked of the working tree, so neither its case nor whether git tracks it is
     checked; into one not initialised it is said to be unchecked, and passes.
@@ -170,14 +170,16 @@ function Get-HeadingAnchor {
         such as `_`, hyphens and spaces dropped, and each space made a hyphen. A heading whose
         anchor is taken gets the first of -1, -2 and on that is not, counted per anchor.
         Ported from realistic-fusion-refreshed's ship-check.ps1, Get-HeadingAnchors, at
-        f3238c5, which kept the underscores of emphasis.  #>
+        f3238c5 (read 2026-10-15). That one makes the anchor from the text as written, less
+        each link's target, so it differs wherever rendering does.  #>
     param([Parameter(Mandatory)] [AllowEmptyCollection()] [AllowEmptyString()] [string[]] $Lines)
 
     $anchors = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     $seen = @{}
-    # Front matter is no paragraph, so its closing --- underlines nothing.
+    # Front matter is no paragraph, so its closing --- underlines nothing and a `# comment` in it
+    # is no heading. A --- with a blank line after it is a rule, not front matter.
     $i = 0
-    if ($Lines.Count -and $Lines[0] -match '^---\s*$') { for ($i = 1; $i -lt $Lines.Count -and $Lines[$i] -notmatch '^---\s*$'; $i++) { }; $i++ }
+    if ($Lines.Count -gt 1 -and $Lines[0] -match '^---\s*$' -and $Lines[1] -match '\S') { for ($i = 1; $i -lt $Lines.Count -and $Lines[$i] -notmatch '^---\s*$'; $i++) { }; $i++ }
     $fence = $null
     $blank = $true
     for (; $i -lt $Lines.Count; $i++) {
@@ -196,7 +198,9 @@ function Get-HeadingAnchor {
         # Code spans become one private character each, so nothing below reads inside them.
         $codes = [System.Collections.Generic.List[string]]::new()
         $shown = [regex]::Replace($text, '(`+)(.+?)\1', { param($m) $codes.Add($m.Groups[2].Value); [string] [char] (0xE000 + $codes.Count - 1) })
-        $shown = $shown -replace '!\[[^\]]*\]\([^)]*\)' -replace '\[([^\]]*)\]\([^)]*\)', '$1' -replace '<[^>]+>'
+        $shown = $shown -replace '!\[[^\]]*\]\([^)]*\)' -replace '\[([^\]]*)\]\([^)]*\)', '$1'
+        # An autolink keeps its address and a tag drops, its text staying; any other < is text.
+        $shown = $shown -replace '<([a-zA-Z][a-zA-Z0-9+.-]*:[^<>\s]*)>', '$1' -replace '</?[a-zA-Z][a-zA-Z0-9-]*(?:\s[^<>]*)?/?>'
         # `_` emphasis that closes, innermost first; an unclosed or escaped `_` stays.
         do {
             $was = $shown
@@ -345,7 +349,8 @@ function Test-Markdown {
             $found = if ($outside) { $false } else { & $Exists ($parts -join '/') }
             if ($null -eq $found) { Write-Host "markdown-check: ${Path}:$($linkAt + 1): $t is in a submodule that is not initialised, so it was NOT checked." }
             elseif (-not $found) { @{ Line = $linkAt + 1; Message = "the link to $t names no tracked file or directory (case matters)" } }
-            elseif ($fragment -and $file -match '\.md$') {
+            # A query, as GitHub's ?plain=1#L3, asks for the source, whose fragments are lines.
+            elseif ($fragment -and $file -match '\.md$' -and -not $t.Contains('?')) {
                 $there = & $Anchors ($parts -join '/')
                 if ($null -ne $there -and -not $there.Contains($fragment)) { @{ Line = $linkAt + 1; Message = "the link to $t names no heading of $($parts -join '/')" } }
             }
@@ -391,7 +396,7 @@ function Test-Markdown {
 
         # Links, on every line outside a fence, a table's rows included. Only a line holding
         # `](` or `]:` is handed over: called for every line, the script block made -All over
-        # realistic-fusion-refreshed's 115 files take 18.6 to 22.8 s where it had taken 12.1 to 16.0
+        # realistic-fusion-refreshed's 115 files at f3238c5 take 18.6 to 22.8 s where it had taken 12.1 to 16.0
         # (grado-factorio-tools#155, one machine, a run at a time).
         $prose = $line
         if ($line.Contains('](') -or $line.Contains(']:')) { . $links $line $i }
@@ -647,7 +652,7 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
                 '## _open underscore' = '_open-underscore'; '## a _ b' = 'a-_-b'; '## `__init__` and `a*b`' = '__init__-and-ab'
                 '## ![alt text](x.png) image' = '-image'; '## Hyphens - and -- double' = 'hyphens---and----double'
                 '## 1. Numbered-looking heading' = '1-numbered-looking-heading'; '## Trailing space   ' = 'trailing-space'
-                '## <code>tag</code> heading' = 'tag-heading'; '## &amp; entity &copy;' = '-entity-'; '## foo_ trailing' = 'foo_-trailing'
+                '## <code>tag</code> heading' = 'tag-heading'; "## Caf$([char] 0xE9)" = "caf$([char] 0xE9)"; '## &amp; entity &copy;' = '-entity-'; '## foo_ trailing' = 'foo_-trailing'
                 '## *emphasis_with_under*' = 'emphasis_with_under'; "## $([char]::ConvertFromUtf32(0x1F4A5)) Emoji literal" = '-emoji-literal'
                 '> ## Quoted heading' = 'quoted-heading'; '   ## Indented three' = 'indented-three'
             }
@@ -657,9 +662,16 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
             $wrong = @($want | Where-Object { -not $got.Contains($_) }) + @($got | Where-Object { $_ -cnotin $want })
             $wrong | ForEach-Object { Write-Host "    not as GitHub gave it: $_" }
             $wrong.Count -eq 0 } }
-        @{ Name = 'a heading in a fence, in front matter or indented as code makes no anchor'; Test = {
-            $got = Get-HeadingAnchor -Lines '---', 'title: x', '---', '', '```', '# Fenced', '```', '', '    # Code', '', 'text', '', '# Real'
-            $got.Count -eq 1 -and $got.Contains('real') } }
+        @{ Name = 'a heading in a fence, in front matter or indented as code makes no anchor; one after an opening rule does'; Test = {
+            $got = Get-HeadingAnchor -Lines '---', 'title: x', '# a yaml comment', '---', '', '```', '# Fenced', '```', '', '    # Code', '', 'text', '', '# Real'
+            $rule = Get-HeadingAnchor -Lines '---', '', '# Kept', '', '---'
+            $got.Count -eq 1 -and $got.Contains('real') -and $rule.Contains('kept') } }
+        @{ Name = 'a < that opens no tag is text in a heading, and an autolink keeps its address'; Test = {
+            $got = Get-HeadingAnchor -Lines '## A <-> B', '', '## See <https://example.com>', '', '## <b>Bold</b> <br/> end'
+            @($got) -join ' ' -ceq 'a---b see-httpsexamplecom bold--end' } }
+        @{ Name = 'a [label]: line is read for its target and its fragment, and a ?query link''s fragment is not checked'; Test = {
+            $f = @(& $find "[a]: gone.md`n[b]: #no-heading`n[c]: there.md?plain=1#L3")
+            $f.Count -eq 2 -and $f[0] -match '^1: the link to gone\.md' -and $f[1] -match '^2: the link to #no-heading' } }
         @{ Name = 'a run refuses a dangling #fragment and a dangling other.md#fragment, and passes once each names a heading'; Test = {
             $own = Join-Path $temp 'fragments'
             New-Item -ItemType Directory -Path $own | Out-Null
