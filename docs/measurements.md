@@ -491,6 +491,90 @@ output of `-All` was the same before and after the change, with no limit and wit
 `-MaxLineLength 100`: `diff` printed nothing. That repository had put its one such address in
 angle brackets.
 
+### The anchor GitHub gives a heading
+
+Asked 2026-10-15 (grado-factorio-tools#155), with gh 2.102.0.
+
+**`gh api markdown` gives no anchor.** With `-f mode=gfm`, as above, every heading came back as
+`<h1 dir="auto">Results</h1>` with no `id`. Only a `<span id="...">` written in the source had
+one.
+
+**The repository's contents API does.** One file of headings was pushed as the only file of a
+throwaway branch, `155-anchor-probe` at `f2b38ed`, read with
+`gh api "repos/trulsjo/grado-factorio-tools/contents/probe.md?ref=155-anchor-probe" -H "Accept: application/vnd.github.html"`,
+and the branch deleted. Each heading's anchor is the `href` of the `<a class="anchor">` after it.
+In order, each written as it was and what GitHub gave it:
+
+| Written | Anchor |
+|---|---|
+| `# Results` | `results` |
+| `# Results` | `results-1` |
+| `# Results-1` | `results-1-1` |
+| `# Results` | `results-2` |
+| ``## A `code_span` heading, with punctuation: (yes!) & "quotes"?`` | `a-code_span-heading-with-punctuation-yes--quotes` |
+| `## Temperature 150 °C × 2` | `temperature-150-c--2` |
+| `## _Underscore emphasis_ and snake_case_name` | `underscore-emphasis-and-snake_case_name` |
+| `## *Star emphasis* and **strong**` | `star-emphasis-and-strong` |
+| `## __Strong underscores__ done` | `strong-underscores-done` |
+| `## Escaped \_under\_ and \*star\*` | `escaped-_under_-and-star` |
+| `## A [link](https://example.com) in it` | `a-link-in-it` |
+| `## Closing hashes ##` | `closing-hashes` |
+| `## Æble Ö CAPS` | `æble-ö-caps` |
+| `## Dots.and/slashes—dash – en` | `dotsandslashesdash--en` |
+| `## Trailing space`, three spaces after it | `trailing-space` |
+| `Setext one` over `==========` | `setext-one` |
+| `Setext two` over `----------` | `setext-two` |
+| `## <span id="custom">Raw html</span> heading` | `raw-html-heading` |
+| `## Emoji :tada: here` | `emoji-tada-here` |
+| `## 10² superscript` | `10-superscript` |
+| `## Tab`, a tab, `inside` | `tabinside` |
+| `## Multiple   spaces` | `multiple---spaces` |
+| `## _open underscore` | `_open-underscore` |
+| `## a _ b` | `a-_-b` |
+| ``## `__init__` and `a*b` `` | `__init__-and-ab` |
+| `## ![alt text](x.png) image` | `-image` |
+| `## 1. Numbered-looking heading` | `1-numbered-looking-heading` |
+| `## Hyphens - and -- double` | `hyphens---and----double` |
+| `## <code>tag</code> heading` | `tag-heading` |
+| `## &amp; entity &copy;` | `-entity-` |
+| `## foo_ trailing` | `foo_-trailing` |
+| `## *emphasis_with_under*` | `emphasis_with_under` |
+| `## Café` | `café` |
+| `## 💥 Emoji literal` | `-emoji-literal` |
+| `> ## Quoted heading` | `quoted-heading` |
+| `- ## Heading in a list item` | `heading-in-a-list-item` |
+| `## Indented four`, four spaces in, after the list item | `indented-four` |
+| `## Indented three`, three spaces in | `indented-three` |
+
+So the anchor is made from the text as it renders, not as it is written: a code span's content
+is kept and its backticks drop, a link keeps its text, an image and a tag drop whole, and `_`
+emphasis that closes drops its underscores, where an unclosed `_` and an escaped one stay. An
+emoji written as `:tada:` is read as written, so its name is kept. An entity is read before the
+drop: `&amp;` leaves nothing, not `amp`. A tab drops; only a space becomes a hyphen. A repeat
+counts per anchor: the third `Results-1` is `results-1-1`, because `results-1` was taken.
+
+The check follows all of these but the list item: a heading inside one is not read, so a link to
+it fails. The row after it, `Indented four`, was a heading only because it continued that list
+item. The self-test holds `Get-HeadingAnchor` to every row but those two.
+Not asked: whether GitHub follows a link whose fragment differs from an anchor only in case.
+
+**The check, before and after**, on the development machine, pwsh 7.6.6. Run with `-All` over
+fresh clones of `realistic-fusion-refreshed` at `f3238c5` and `grado-factorio-modpack` at
+`8334481`, and over this repository. Before, at `14f1066`, all three passed. After, the modpack
+and this repository passed and `realistic-fusion-refreshed` had two findings, both a link to a
+heading that is not there: `docs/research/mod-set-coexistence-targets.md:28` and
+`docs/research/socket-underside-cut.md:47`. `diff` of its two outputs showed only those, and of
+the modpack's printed nothing. That repository's
+clone's checkout had not finished the first time, which left no index, and so `-All` read 0
+files and passed; a `git reset --hard` with `core.longpaths=true` made the index, and the run
+read 115.
+
+Over that clone, timed with `Measure-Command` one run at a time: the check before took 12.1 to
+16.0 s in five runs. The first version of this change called the link rule, a script block, for
+every line, and took 18.6 to 22.8 s in five runs, two of them with the anchors or the table
+rows stubbed out, which made no difference. Called only for a line holding `](` or `]:`, it took
+12.1 and 14.0 s.
+
 ## `refuse-cd-into-mod-cache.ps1`
 
 ### The self-test on Windows and on Linux

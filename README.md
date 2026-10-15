@@ -274,7 +274,8 @@ can fail, in a scratch repository of its own.
 
 `scripts/markdown-check.ps1` reads Markdown for three things a machine can decide: emphasis or a
 code span left open at the end of its paragraph, a table row whose column count differs from its
-header's, and a link to a file git does not track, in exact case. It knows nothing of Factorio.
+header's, and a link to a file git does not track, in exact case, or to a heading its file does
+not have. It knows nothing of Factorio.
 
     pwsh -File scripts/markdown-check.ps1
     pwsh -File scripts/markdown-check.ps1 -Range origin/main...HEAD
