@@ -2,9 +2,9 @@
 .SYNOPSIS
     Checks Markdown for three things a machine can decide: emphasis or a code span left open at
     the end of its paragraph, a table row whose column count differs from its header's, and a
-    link to a file in the repository that is not there. Handed -MaxLineLength, a fourth: a prose
-    line longer than that. Exit 0 means none was found in the files read; exit 1 names each as
-    <file>:<line>: <what>.
+    link to a file in the repository, or to a heading, that is not there. Handed -MaxLineLength,
+    a fourth: a prose line longer than that. Exit 0 means none was found in the files read;
+    exit 1 names each as <file>:<line>: <what>.
 
 .DESCRIPTION
     A PRE-COMMIT CHECK (grado-factorio-modpack#149, where it was written). Run with no arguments,
@@ -25,9 +25,15 @@
     still open when its paragraph ends is reported, and a lone `*` that could open is one: `*.md`
     in prose wants a code span or `\*`. A table is a line holding a `|` followed by a delimiter
     row holding one; every line after it up to a blank line is a row, and each cell is read as a
-    paragraph of its own. A link is `[text](target)` or a `[label]: target` line; a target with a
-    scheme (`https:`, `mailto:`) or that is only a `#fragment` is not checked, and the rest must
-    name a file or directory git tracks, in exact case, as GitHub serves it.
+    paragraph of its own. A link is `[text](target)` or a `[label]: target` line, in prose or in
+    any row of a table; a target with a scheme (`https:`, `mailto:`) is not checked, and the
+    rest must name a file or directory git tracks, in exact case, as GitHub serves it.
+    A FRAGMENT, `#name` alone or after a `.md` file, must be the anchor of a heading in that
+    file, read as the file is read, in exact case (grado-factorio-tools#155). The anchor is
+    the one GitHub gives, asked of it 2026-10-15 and in docs/measurements.md: the heading's
+    text as it renders, lower-cased, with all but letters, marks, digits, `_`, `-` and spaces
+    dropped and each space made a hyphen; a repeat takes -1, -2 and on. A heading is a `#`
+    line or a line alone after a blank one and underlined with `=` or `-`.
     A BARE ADDRESS, `https://...` with no brackets, is not read for emphasis, and ends where
     GitHub's renderer ends one, asked 2026-10-12 (grado-factorio-tools#124; the answers are in
     docs/measurements.md, with what the GitHub Flavored Markdown spec says, read the same day).
@@ -68,14 +74,18 @@
     `xhttps://...`, nor of an address inside `[square brackets]`, and both are hidden here,
     so a `_` or `*` inside such an address is not read as the emphasis it may be to GitHub.
 
-    WHAT IT CANNOT SEE. Prose: numbers, dates and quantifiers stay the reviewer's. Whether a
-    `#fragment` names a heading. A code block made by indenting, which all but the length rule
-    read as text. Emphasis that closes in the wrong place, or that a bullet nested in a numbered
-    item leaves open and the next numbered item closes. Markdown outside
-    `.md` files. A link whose target a commit deletes or renames, unless the linking file is
-    staged too: -All sees it. A link into a submodule is asked of the working tree, so neither its
-    case nor whether git tracks it is checked; into one not initialised it is said to be unchecked,
-    and passes.
+    WHAT IT CANNOT SEE. Prose: numbers, dates and quantifiers stay the reviewer's. Of a
+    fragment: an anchor made by raw HTML, as `<a id="x">`, a heading inside a list item, and a
+    setext heading of more than one line, so a link to any of them fails; a heading holding a
+    reference link, `[text][label]`, read as written; whether GitHub follows a fragment that
+    differs from an anchor only in case, which is reported and was not asked; and a fragment
+    into a submodule, a directory or a file that is not `.md`, which is not checked. A code
+    block made by indenting, which all but the length rule read as text. Emphasis that closes
+    in the wrong place, or that a bullet nested in a numbered item leaves open and the next
+    numbered item closes. Markdown outside `.md` files. A link whose target file or heading a
+    commit deletes or renames, unless the linking file is staged too: -All sees it. A link into
+    a submodule is asked of the working tree, so neither its case nor whether git tracks it is
+    checked; into one not initialised it is said to be unchecked, and passes.
 
 .PARAMETER Range
     Check the Markdown files changed in a commit range, as they are at its end:
@@ -149,6 +159,58 @@ function Get-BareAddress {
         }
         @{ Index = $m.Index; Length = $end }
     }
+}
+
+function Get-HeadingAnchor {
+    <#  The anchor GitHub gives each heading in $Lines, as a set, asked of it on 2026-10-15
+        (grado-factorio-tools#155; the answers are in docs/measurements.md). The anchor is made
+        from the heading's text as it renders: a code span's content kept, a link's text kept,
+        an image and a tag dropped, `_` emphasis that closes dropped, an escape and an entity
+        read. That is lower-cased, all but letters, marks, decimal digits, connector punctuation
+        such as `_`, hyphens and spaces dropped, and each space made a hyphen. A heading whose
+        anchor is taken gets the first of -1, -2 and on that is not, counted per anchor.
+        Ported from realistic-fusion-refreshed's ship-check.ps1, Get-HeadingAnchors, at
+        f3238c5, which kept the underscores of emphasis.  #>
+    param([Parameter(Mandatory)] [AllowEmptyCollection()] [AllowEmptyString()] [string[]] $Lines)
+
+    $anchors = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $seen = @{}
+    # Front matter is no paragraph, so its closing --- underlines nothing.
+    $i = 0
+    if ($Lines.Count -and $Lines[0] -match '^---\s*$') { for ($i = 1; $i -lt $Lines.Count -and $Lines[$i] -notmatch '^---\s*$'; $i++) { }; $i++ }
+    $fence = $null
+    $blank = $true
+    for (; $i -lt $Lines.Count; $i++) {
+        $line = $Lines[$i] -replace '^(\s*>)+\s?'
+        if ($fence) { if ($line -match "^\s*$([regex]::Escape($fence))+\s*$") { $fence = $null }; continue }
+        if ($line -match '^\s*(`{3,}|~{3,})') { $fence = $Matches[1]; continue }
+        $next = if ($i + 1 -lt $Lines.Count) { $Lines[$i + 1] -replace '^(\s*>)+\s?' } else { '' }
+        $text = $null
+        if ($line -match '^ {0,3}#{1,6}(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$') { $text = "$($Matches[1])" }
+        # A setext heading of one line: a line alone after a blank one, underlined.
+        elseif ($blank -and $next -match '^ {0,3}(=+|-+)\s*$' -and $line -match '\S' -and $line -notmatch '^\s{0,3}([-*+]|\d+[.)])\s') { $text = $line.Trim(); $i++ }
+        $blank = $line -notmatch '\S'
+        if ($null -eq $text) { continue }
+        $blank = $true
+
+        # Code spans become one private character each, so nothing below reads inside them.
+        $codes = [System.Collections.Generic.List[string]]::new()
+        $shown = [regex]::Replace($text, '(`+)(.+?)\1', { param($m) $codes.Add($m.Groups[2].Value); [string] [char] (0xE000 + $codes.Count - 1) })
+        $shown = $shown -replace '!\[[^\]]*\]\([^)]*\)' -replace '\[([^\]]*)\]\([^)]*\)', '$1' -replace '<[^>]+>'
+        # `_` emphasis that closes, innermost first; an unclosed or escaped `_` stays.
+        do {
+            $was = $shown
+            $shown = $shown -replace '(?<![\p{L}\p{N}_\\])(_+)(?=[^\s_])(.*?[^\s\\_])\1(?![\p{L}\p{N}_])', '$2'
+        } while ($shown -ne $was)
+        $shown = [Net.WebUtility]::HtmlDecode(($shown -replace '\\([!-/:-@\[-`{-~])', '$1'))
+        $shown = [regex]::Replace($shown, '[\uE000-\uF8FF]', { param($m) $codes[[int] $m.Value[0] - 0xE000] })
+        $anchor = [regex]::Replace($shown.ToLowerInvariant(), '[^\p{L}\p{M}\p{Nd}\p{Pc}\- ]', '').Replace(' ', '-')
+        $base = $anchor
+        if (-not $seen.ContainsKey($base)) { $seen[$base] = 0 }
+        while ($anchors.Contains($anchor)) { $seen[$base]++; $anchor = "$base-$($seen[$base])" }
+        $null = $anchors.Add($anchor)
+    }
+    , $anchors
 }
 
 function Test-Inline {
@@ -244,13 +306,51 @@ function Split-TableRow {
 function Test-Markdown {
     <#  The findings in one Markdown file, each as @{ Line; Message }. $Exists is asked whether a
         repository-relative path, with forward slashes, is a tracked file or directory; it answers
-        $null for one it cannot tell.  #>
+        $null for one it cannot tell. $Anchors is asked for the heading anchors of a tracked
+        Markdown file by the same path, and answers $null for one it cannot read.  #>
     param(
         [Parameter(Mandatory)] [AllowEmptyCollection()] [AllowEmptyString()] [string[]] $Lines,
         [Parameter(Mandatory)] [string] $Path,
         [Parameter(Mandatory)] [scriptblock] $Exists,
+        [Parameter(Mandatory)] [scriptblock] $Anchors,
         [int] $MaxLineLength = 0
     )
+
+    # The links on one line, dot-sourced, so that $prose, the line less its code spans, is left
+    # for the length rule. A path in a code span is no link.
+    $own = $null
+    $links = {
+        param([string] $linkLine, [int] $linkAt)
+        $prose = [regex]::Replace($linkLine, '(`+)(?:(?!\1).)+?\1', '')
+        $targets = @(foreach ($m in [regex]::Matches($prose, '\]\(\s*(?:<([^>]*)>|([^)\s]+))')) { $m.Groups[1].Value + $m.Groups[2].Value })
+        if ($prose -match '^\s{0,3}\[[^\]^][^\]]*\]:\s*<?([^\s>]+)') { $targets += $Matches[1] }
+        foreach ($t in $targets) {
+            if ($t -match '^([a-zA-Z][a-zA-Z0-9+.-]*:|//)') { continue }
+            $fragment = if ($t.Contains('#')) { [uri]::UnescapeDataString(($t -replace '^[^#]*#')) } else { '' }
+            if ($t.StartsWith('#')) {
+                if (-not $fragment) { continue }
+                if ($null -eq $own) { $own = Get-HeadingAnchor -Lines $Lines }
+                if (-not $own.Contains($fragment)) { @{ Line = $linkAt + 1; Message = "the link to $t names no heading of this file" } }
+                continue
+            }
+            $file = [uri]::UnescapeDataString(($t -replace '[#?].*$'))
+            $parts = [System.Collections.Generic.List[string]]::new()
+            if (-not $file.StartsWith('/')) { $parts.AddRange([string[]] @((Split-Path $Path -Parent) -split '[\\/]' | Where-Object { $_ })) }
+            $outside = $false
+            foreach ($p in $file -split '/') {
+                if ($p -eq '' -or $p -eq '.') { continue }
+                if ($p -ne '..') { $parts.Add($p); continue }
+                if ($parts.Count) { $parts.RemoveAt($parts.Count - 1) } else { $outside = $true }
+            }
+            $found = if ($outside) { $false } else { & $Exists ($parts -join '/') }
+            if ($null -eq $found) { Write-Host "markdown-check: ${Path}:$($linkAt + 1): $t is in a submodule that is not initialised, so it was NOT checked." }
+            elseif (-not $found) { @{ Line = $linkAt + 1; Message = "the link to $t names no tracked file or directory (case matters)" } }
+            elseif ($fragment -and $file -match '\.md$') {
+                $there = & $Anchors ($parts -join '/')
+                if ($null -ne $there -and -not $there.Contains($fragment)) { @{ Line = $linkAt + 1; Message = "the link to $t names no heading of $($parts -join '/')" } }
+            }
+        }
+    }
 
     $delimiter = '^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$'
     $paragraph = [System.Collections.Generic.List[string]]::new()
@@ -289,30 +389,18 @@ function Test-Markdown {
         }
         if ($line -match '^\s*(`{3,}|~{3,})') { . $flush; $fence = $Matches[1]; $fenceLine = $i + 1; continue }
 
-        # Links, on every line outside a fence. Code spans are blanked first: a path in one is no link.
-        $prose = [regex]::Replace($line, '(`+)(?:(?!\1).)+?\1', '')
-        $targets = @(foreach ($m in [regex]::Matches($prose, '\]\(\s*(?:<([^>]*)>|([^)\s]+))')) { $m.Groups[1].Value + $m.Groups[2].Value })
-        if ($prose -match '^\s{0,3}\[[^\]^][^\]]*\]:\s*<?([^\s>]+)') { $targets += $Matches[1] }
-        foreach ($t in $targets) {
-            if ($t -match '^([a-zA-Z][a-zA-Z0-9+.-]*:|#|//)') { continue }
-            $file = [uri]::UnescapeDataString(($t -replace '[#?].*$'))
-            $parts = [System.Collections.Generic.List[string]]::new()
-            if (-not $file.StartsWith('/')) { $parts.AddRange([string[]] @((Split-Path $Path -Parent) -split '[\\/]' | Where-Object { $_ })) }
-            $outside = $false
-            foreach ($p in $file -split '/') {
-                if ($p -eq '' -or $p -eq '.') { continue }
-                if ($p -ne '..') { $parts.Add($p); continue }
-                if ($parts.Count) { $parts.RemoveAt($parts.Count - 1) } else { $outside = $true }
-            }
-            $found = if ($outside) { $false } else { & $Exists ($parts -join '/') }
-            if ($null -eq $found) { Write-Host "markdown-check: ${Path}:$($i + 1): $t is in a submodule that is not initialised, so it was NOT checked." }
-            elseif (-not $found) { @{ Line = $i + 1; Message = "the link to $t names no tracked file or directory (case matters)" } }
-        }
+        # Links, on every line outside a fence, a table's rows included. Only a line holding
+        # `](` or `]:` is handed over: called for every line, the script block made -All over
+        # realistic-fusion-refreshed's 115 files take 18.6 to 22.8 s where it had taken 12.1 to 16.0
+        # (grado-factorio-tools#155, one machine, a run at a time).
+        $prose = $line
+        if ($line.Contains('](') -or $line.Contains(']:')) { . $links $line $i }
 
         if ($line -match '\|' -and $i + 1 -lt $Lines.Count -and $Lines[$i + 1] -match '\|' -and ($Lines[$i + 1] -replace '^(\s*>)+\s?') -match $delimiter) {
             . $flush
             $columns = (Split-TableRow $line).Count
             for ($r = $i; $r -lt $Lines.Count -and ($Lines[$r] -replace '^(\s*>)+\s?') -match '\S'; $r++) {
+                if ($r -gt $i -and $Lines[$r].Contains('](')) { . $links ($Lines[$r] -replace '^(\s*>)+\s?') $r }
                 $cells = Split-TableRow ($Lines[$r] -replace '^(\s*>)+\s?')
                 if ($cells.Count -ne $columns) {
                     @{ Line = $r + 1; Message = "the table row has $($cells.Count) column(s) and its header has $columns" }
@@ -393,24 +481,36 @@ function Invoke-Check {
     $start.StandardInputEncoding = [Text.UTF8Encoding]::new($false)
     $git = [Diagnostics.Process]::Start($start)
     $out = $git.StandardOutput.BaseStream
+    $readLines = {
+        param([string] $f)
+        $git.StandardInput.Write("${Revision}:$f`n")
+        $git.StandardInput.Flush()
+        $header = [System.Collections.Generic.List[byte]]::new()
+        while (($b = $out.ReadByte()) -notin 10, -1) { $header.Add($b) }
+        if ([Text.Encoding]::UTF8.GetString($header.ToArray()) -notmatch ' blob (\d+)$') { throw "git could not read ${Revision}:$f." }
+        $bytes = [byte[]]::new([int] $Matches[1])
+        for ($read = 0; $read -lt $bytes.Length; $read += $got) {
+            if (($got = $out.Read($bytes, $read, $bytes.Length - $read)) -le 0) { throw "git could not read ${Revision}:$f." }
+        }
+        $null = $out.ReadByte()
+        # Lines as PowerShell takes them from a program's output: ended by a line feed, a
+        # carriage return or both, and no empty one after the last.
+        $reader = [IO.StringReader]::new([Text.Encoding]::UTF8.GetString($bytes))
+        , @(while ($null -ne ($l = $reader.ReadLine())) { $l })
+    }
+    # A linked file's anchors, read once. A file in a submodule is not this repository's to read.
+    $known = @{}
+    $anchors = {
+        param($p)
+        if (-not $tracked.Contains($p) -or ($submodules | Where-Object { $p.StartsWith("$_/") })) { return $null }
+        if (-not $known.ContainsKey($p)) { $known[$p] = Get-HeadingAnchor -Lines (& $readLines $p) }
+        , $known[$p]
+    }
     $count = 0
     try {
         foreach ($f in $Files | Where-Object { $_ -match '\.md$' }) {
-            $git.StandardInput.Write("${Revision}:$f`n")
-            $git.StandardInput.Flush()
-            $header = [System.Collections.Generic.List[byte]]::new()
-            while (($b = $out.ReadByte()) -notin 10, -1) { $header.Add($b) }
-            if ([Text.Encoding]::UTF8.GetString($header.ToArray()) -notmatch ' blob (\d+)$') { throw "git could not read ${Revision}:$f." }
-            $bytes = [byte[]]::new([int] $Matches[1])
-            for ($read = 0; $read -lt $bytes.Length; $read += $got) {
-                if (($got = $out.Read($bytes, $read, $bytes.Length - $read)) -le 0) { throw "git could not read ${Revision}:$f." }
-            }
-            $null = $out.ReadByte()
-            # Lines as PowerShell takes them from a program's output: ended by a line feed, a
-            # carriage return or both, and no empty one after the last.
-            $reader = [IO.StringReader]::new([Text.Encoding]::UTF8.GetString($bytes))
-            $lines = @(while ($null -ne ($l = $reader.ReadLine())) { $l })
-            foreach ($finding in Test-Markdown -Lines $lines -Path $f -Exists $exists -MaxLineLength $MaxLineLength | Sort-Object { $_.Line }) {
+            $lines = & $readLines $f
+            foreach ($finding in Test-Markdown -Lines $lines -Path $f -Exists $exists -Anchors $anchors -MaxLineLength $MaxLineLength | Sort-Object { $_.Line }) {
                 Write-Host "${f}:$($finding.Line): $($finding.Message)"
                 $count++
             }
@@ -422,8 +522,9 @@ function Invoke-Check {
 
 function Invoke-SelfTest {
     $exists = { param($p) $p -cin 'docs', 'docs/there.md', 'README.md' }
-    $find = { param([string] $text, [string] $path = 'docs/note.md') @(Test-Markdown -Lines ($text -split "`n") -Path $path -Exists $exists | ForEach-Object { "$($_.Line): $($_.Message)" }) }
-    $long = { param([string] $text, [int] $max) @(Test-Markdown -Lines ($text -split "`n") -Path 'docs/note.md' -Exists $exists -MaxLineLength $max | ForEach-Object { "$($_.Line): $($_.Message)" }) }
+    $anchors = { param($p) if ($p -ceq 'README.md') { , (Get-HeadingAnchor -Lines '# The chain') } elseif ($p -ceq 'docs/there.md') { , (Get-HeadingAnchor -Lines '## Results', '## Results') } }
+    $find = { param([string] $text, [string] $path = 'docs/note.md') @(Test-Markdown -Lines ($text -split "`n") -Path $path -Exists $exists -Anchors $anchors | ForEach-Object { "$($_.Line): $($_.Message)" }) }
+    $long = { param([string] $text, [int] $max) @(Test-Markdown -Lines ($text -split "`n") -Path 'docs/note.md' -Exists $exists -Anchors $anchors -MaxLineLength $max | ForEach-Object { "$($_.Line): $($_.Message)" }) }
     $clean = @'
 # A title with `code_in_it` and a snake_case_name
 
@@ -433,7 +534,7 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
 
 * a bullet made with a star, holding **strong** text
 - [a link](there.md), [one up](../README.md#the-chain), [a directory](../docs/),
-  [outside](https://example.com/a_b_c) and [a fragment](#here)
+  [outside](https://example.com/a_b_c) and [a fragment](#a-title-with-code_in_it-and-a-snake_case_name)
 
 | mod | ruling |
 |---|---|
@@ -517,6 +618,62 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
             $f.Count -eq 2 -and $f[0] -match '^1: the link to gone\.md' -and $f[1] -match '^2: the link to There\.md' } }
         @{ Name = 'a link that climbs out of the repository fails'; Test = {
             @(& $find '[sibling](../../other/README.md)').Count -eq 1 } }
+        @{ Name = 'a link to a file that is not tracked fails in a table row too, below the header'; Test = {
+            $f = @(& $find "| a |`n|---|`n| [this](gone.md) |")
+            $f.Count -eq 1 -and $f[0] -match '^3: the link to gone\.md' } }
+        @{ Name = 'a #fragment that names no heading of its file fails, in prose and in a table row, and one that names a later heading passes'; Test = {
+            $f = @(& $find "[up](#later) and [x](#no-such-heading)`n`n| a |`n|---|`n| [y](#no-such-heading) |`n`n## Later")
+            $f | ForEach-Object { Write-Host "    $_" }
+            $f.Count -eq 2 -and $f[0] -match '^1: the link to #no-such-heading names no heading of this file' -and $f[1] -match '^5: the link to #no-such-heading' } }
+        @{ Name = 'a path.md#fragment fails when that file has no such heading, and passes on its first and its repeated heading'; Test = {
+            $f = @(& $find "[a](there.md#results), [b](there.md#results-1), [c](../README.md#the-chain)`n[d](there.md#results-2) and [e](../README.md#the-chain-1)")
+            $f | ForEach-Object { Write-Host "    $_" }
+            $f.Count -eq 2 -and $f[0] -match '^2: the link to there\.md#results-2 names no heading of docs/there\.md' -and $f[1] -match '^2: the link to \.\./README\.md#the-chain-1 names no heading of README\.md' } }
+        @{ Name = 'a fragment into a file the anchors cannot be read of, or on a link to a directory, is not checked'; Test = {
+            @(& $find '[a](../docs/#anything) and [b](there.md#) and [c](#)').Count -eq 0 } }
+        @{ Name = 'anchors are what GitHub gave each heading, asked 2026-10-15: backticks, punctuation, non-ASCII, emphasis, escapes, entities, repeats'; Test = {
+            # Each heading and the anchor GitHub gave it, in order (docs/measurements.md).
+            $asked = [ordered]@{
+                '# Results' = 'results'; '# Results ' = 'results-1'; '# Results-1' = 'results-1-1'; '# Results  ' = 'results-2'
+                '## A `code_span` heading, with punctuation: (yes!) & "quotes"?' = 'a-code_span-heading-with-punctuation-yes--quotes'
+                "## Temperature 150 $([char] 0xB0)C $([char] 0xD7) 2" = 'temperature-150-c--2'
+                '## _Underscore emphasis_ and snake_case_name' = 'underscore-emphasis-and-snake_case_name'
+                '## *Star emphasis* and **strong**' = 'star-emphasis-and-strong'; '## __Strong underscores__ done' = 'strong-underscores-done'
+                '## Escaped \_under\_ and \*star\*' = 'escaped-_under_-and-star'; '## A [link](https://example.com) in it' = 'a-link-in-it'
+                '## Closing hashes ##' = 'closing-hashes'; "## $([char] 0xC6)ble $([char] 0xD6) CAPS" = "$([char] 0xE6)ble-$([char] 0xF6)-caps"
+                "## Dots.and/slashes$([char] 0x2014)dash $([char] 0x2013) en" = 'dotsandslashesdash--en'
+                '## <span id="custom">Raw html</span> heading' = 'raw-html-heading'; '## Emoji :tada: here' = 'emoji-tada-here'
+                "## 10$([char] 0xB2) superscript" = '10-superscript'; "## Tab`tinside" = 'tabinside'; '## Multiple   spaces' = 'multiple---spaces'
+                '## _open underscore' = '_open-underscore'; '## a _ b' = 'a-_-b'; '## `__init__` and `a*b`' = '__init__-and-ab'
+                '## ![alt text](x.png) image' = '-image'; '## Hyphens - and -- double' = 'hyphens---and----double'
+                '## 1. Numbered-looking heading' = '1-numbered-looking-heading'; '## Trailing space   ' = 'trailing-space'
+                '## <code>tag</code> heading' = 'tag-heading'; '## &amp; entity &copy;' = '-entity-'; '## foo_ trailing' = 'foo_-trailing'
+                '## *emphasis_with_under*' = 'emphasis_with_under'; "## $([char]::ConvertFromUtf32(0x1F4A5)) Emoji literal" = '-emoji-literal'
+                '> ## Quoted heading' = 'quoted-heading'; '   ## Indented three' = 'indented-three'
+            }
+            $lines = @(foreach ($h in $asked.Keys) { $h; '' }) + 'Setext one', '==========', '', 'Setext two', '----------'
+            $got = Get-HeadingAnchor -Lines $lines
+            $want = @($asked.Values) + 'setext-one', 'setext-two'
+            $wrong = @($want | Where-Object { -not $got.Contains($_) }) + @($got | Where-Object { $_ -cnotin $want })
+            $wrong | ForEach-Object { Write-Host "    not as GitHub gave it: $_" }
+            $wrong.Count -eq 0 } }
+        @{ Name = 'a heading in a fence, in front matter or indented as code makes no anchor'; Test = {
+            $got = Get-HeadingAnchor -Lines '---', 'title: x', '---', '', '```', '# Fenced', '```', '', '    # Code', '', 'text', '', '# Real'
+            $got.Count -eq 1 -and $got.Contains('real') } }
+        @{ Name = 'a run refuses a dangling #fragment and a dangling other.md#fragment, and passes once each names a heading'; Test = {
+            $own = Join-Path $temp 'fragments'
+            New-Item -ItemType Directory -Path $own | Out-Null
+            git -C $own init --quiet
+            Set-Content -LiteralPath (Join-Path $own 'other.md') -Value "# Other`n`n## Its `code` part"
+            Set-Content -LiteralPath (Join-Path $own 'page.md') -Value "# Page`n`n[x](#no-such-heading) and [y](other.md#no-such-heading)"
+            git -C $own add other.md page.md
+            $refused = & $run $own @()
+            Set-Content -LiteralPath (Join-Path $own 'page.md') -Value "# Page`n`n[x](#page) and [y](other.md#its-code-part)"
+            git -C $own add page.md
+            $passed = & $run $own @('-All')
+            Write-Host ($refused.Text.TrimEnd() -replace '(?m)^', '    ')
+            $refused.Code -eq 1 -and $refused.Text -match '(?m)^page\.md:3: the link to #no-such-heading names no heading of this file' -and
+                $refused.Text -match '(?m)^page\.md:3: the link to other\.md#no-such-heading names no heading of other\.md' -and $passed.Code -eq 0 } }
         @{ Name = 'a commit''s staged content is what is read: a staged defect is refused by file and line, an unstaged one is not'; Test = {
             Set-Content -LiteralPath (Join-Path $temp 'good.md') -Value 'fine *text*'
             Set-Content -LiteralPath (Join-Path $temp 'bad.md') -Value "one`n`n[dead](nowhere.md) and *open"
@@ -594,7 +751,7 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
             $zero = & $run $temp @('-MaxLineLength', '0')
             $zero.Code -eq 1 -and $zero.Text -match '-MaxLineLength must be 1 or more' } }
         @{ Name = 'a link target, a bare address and a [label]: line are not counted, and the text around them is'; Test = {
-            $target = 'there.md#' + ('a' * 60)
+            $target = 'there.md?' + ('a' * 60)
             $passes = @(& $long "see [this]($target) and https://example.com/$('b' * 60) too`n`n[label]: $target" 40)
             $fails = @(& $long "$('word ' * 8)[this]($target)" 40)
             $passes.Count -eq 0 -and $fails.Count -eq 1 -and $fails[0] -match '^1: the line is 46 characters' } }

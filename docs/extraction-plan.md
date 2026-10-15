@@ -711,6 +711,15 @@ and `git grep` for each helper's `function` line, against `realistic-fusion-refr
 and defines none of the five helpers under `scripts/` or `tools/`. It still has
 `scripts/name-check.ps1` and `scripts/factorio-lib.ps1`, which stay, as ruled above.
 
+## The heading anchors, ported and not moved
+
+`Get-HeadingAnchor` in `scripts/markdown-check.ps1` is ported from `realistic-fusion-refreshed`'s
+`scripts/ship-check.ps1`, `Get-HeadingAnchors`, at `f3238c5` (#155). It is not a move:
+`ship-check.ps1` keeps its own, which its section 10 uses, so the two are copies until
+realistic-fusion-refreshed#710 is settled. That ticket bumps the pin past #155 and asks Truls
+whether section 10's anchor code is then redundant. The two already differ: the port drops the
+underscores of `_` emphasis, as GitHub does, and that one keeps them.
+
 ## What has to be written, not moved
 
 **Mod portal upload.** It does not exist in any repo. `pack-mods.ps1` is explicit in its own header:
