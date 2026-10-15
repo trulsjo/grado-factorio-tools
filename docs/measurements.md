@@ -495,9 +495,9 @@ angle brackets.
 
 Asked 2026-10-15 (grado-factorio-tools#155), with gh 2.102.0.
 
-**`gh api markdown` gives no anchor.** With `-f mode=gfm`, as above, every heading came back as
-`<h1 dir="auto">Results</h1>` with no `id`. Only a `<span id="...">` written in the source had
-one.
+**`gh api markdown` gives no anchor.** With `-f mode=gfm`, as above, every heading came back in
+the form `<h1 dir="auto">Results</h1>`, with no `id`. Only a `<span id="...">` written in the
+source had one.
 
 **The repository's contents API does.** One file of headings was pushed as the only file of a
 throwaway branch, `155-anchor-probe` at `f2b38ed`, read with
@@ -547,8 +547,9 @@ In order, each written as it was and what GitHub gave it:
 | `## Indented three`, three spaces in | `indented-three` |
 
 So the anchor is made from the text as it renders, not as it is written: a code span's content
-is kept and its backticks drop, a link keeps its text, an image and a tag drop whole, and `_`
-emphasis that closes drops its underscores, where an unclosed `_` and an escaped one stay. An
+is kept and its backticks drop, a link keeps its text, an image drops whole, a tag drops and its
+text stays, and `_` emphasis that closes drops its underscores, where an unclosed `_` and an
+escaped one stay. An
 emoji written as `:tada:` is read as written, so its name is kept. An entity is read before the
 drop: `&amp;` leaves nothing, not `amp`. A tab drops; only a space becomes a hyphen. A repeat
 counts per anchor: the third `Results-1` is `results-1-1`, because `results-1` was taken.
@@ -564,7 +565,7 @@ fresh clones of `realistic-fusion-refreshed` at `f3238c5` and `grado-factorio-mo
 and this repository passed and `realistic-fusion-refreshed` had two findings, both a link to a
 heading that is not there: `docs/research/mod-set-coexistence-targets.md:28` and
 `docs/research/socket-underside-cut.md:47`. `diff` of its two outputs showed only those, and of
-the modpack's printed nothing. That repository's
+the modpack's printed nothing. The `realistic-fusion-refreshed`
 clone's checkout had not finished the first time, which left no index, and so `-All` read 0
 files and passed; a `git reset --hard` with `core.longpaths=true` made the index, and the run
 read 115.
