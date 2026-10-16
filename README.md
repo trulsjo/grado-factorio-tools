@@ -47,7 +47,8 @@ the locale check on 2026-10-14. Each contraction, with its tickets and commits, 
 ([#96](https://github.com/trulsjo/grado-factorio-tools/issues/96)), both below.
 
 The commit-message convention this repo and its siblings share is declared in
-[docs/commit-convention.md](docs/commit-convention.md).
+[docs/commit-convention.md](docs/commit-convention.md). The three claim grades they share, and
+the rules of review that go with them, are in [docs/claim-grades.md](docs/claim-grades.md).
 
 Nothing is moved out of a working repo until it is agreed — see `CLAUDE.md`.
 
