@@ -1,18 +1,19 @@
 # Claim grades
 
 **This page is where the three claim grades are defined, for the repositories that link to it.**
-Each claim in a document has one of three grades of evidence: *Measured*, *Read from source* and
-*Inferred*. The rules below say how a reviewer checks those grades.
+A claim in a document is graded by its evidence: *Measured*, *Read from source* or *Inferred*,
+or it has no grade. The rules below say how a reviewer checks those grades.
 
 A repository that adopts the grades states its own scope, meaning which files they apply to and
 why, beside its link to this page. This page sets no scope. This repository does not apply the
 grades to its own docs (Truls, 2026-10-16, on
 [#159](https://github.com/trulsjo/grado-factorio-tools/issues/159)).
 
-The text was taken from trulsjo/grado-factorio-modpack at `39dfb8c`, with the meanings unchanged.
-The grades come from its `GLOSSARY.md`: added in trulsjo/grado-factorio-modpack#157 (2026-10-06),
-with *Measured* amended in trulsjo/grado-factorio-modpack#292 (2026-10-15). The rules come from
-its `docs/agents/code-review.md`, *A claim has a grade, and two of the three are always marked*.
+The text was taken from trulsjo/grado-factorio-modpack at `39dfb8c` (read 2026-10-16), with the
+meanings unchanged. The grades come from its `GLOSSARY.md`: added in
+trulsjo/grado-factorio-modpack#157 (2026-10-06), with *Measured* amended in
+trulsjo/grado-factorio-modpack#292 (2026-10-15). The rules come from its
+`docs/agents/code-review.md`, *A claim has a grade, and two of the three are always marked*.
 An example that comes from one repository names it.
 
 ## The grades
@@ -50,8 +51,8 @@ or it is a finding), likely without saying from what
 ## The rules of review
 
 - ***Measured* may go unmarked inside a section that says how and when it was measured.** Two
-  examples: a load record's build line, and, from grado-factorio-modpack, a catalogue header's
-  portal-reading date.
+  examples, both from grado-factorio-modpack: a load record's build line, and a catalogue
+  header's portal-reading date.
 - ***Read from source* and *Inferred* are marked every time**, and again wherever the conclusion
   is repeated.
 - **Each grade has something it carries**: its day and build, the release read, or the claims it
