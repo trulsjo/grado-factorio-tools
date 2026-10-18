@@ -25,13 +25,13 @@
     still copied; so does a --benchmark that exits non-zero after grado-count wrote them.
 
     WHAT IT CANNOT SEE. A change to a mod directory that keeps its file count and its bytes, or a
-    change to a zip. Which mods a set should hold: the caller passes the list. What the counts
+    change to a zip. A mod path with a comma in it: -Mods is split on commas. Which mods a set should hold: the caller passes the list. What the counts
     mean: that is compare-resource-counts.ps1's, and what grado-count cannot see is in its
     control.lua. It has no -SelfTest; it needs the game, and a run of it is its check.
 
 .PARAMETER Mods
-    Mod directories, mod zips, or directories of them, as load-harness.ps1 takes. None counts the
-    game alone.
+    Mod directories, mod zips, or directories of them, as load-harness.ps1 takes,
+    comma-separated. None counts the game alone.
 
 .PARAMETER Seed
     The map seed, for --map-gen-seed.
@@ -50,7 +50,8 @@
     is Nauvis alone.
 
 .PARAMETER With
-    Bundled mods to enable, as load-harness.ps1 takes: space-age.
+    Bundled mods to enable, comma-separated, as load-harness.ps1 takes: space-age, or
+    space-age,quality.
 
 .PARAMETER FactorioExe
     As load-harness.ps1 takes it.
@@ -76,6 +77,10 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'load-harness-lib.ps1')
+
+# Under pwsh -File a comma list arrives as one string.
+$Mods = @($Mods | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
+$With = @($With | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 
 function Get-Fingerprint([string] $Root) {
     $files = @(Get-ChildItem -LiteralPath $Root -Recurse -File -Force)
