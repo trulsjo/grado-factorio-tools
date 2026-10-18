@@ -8,6 +8,7 @@ pack
 upload
 commit-check
 resolve-modpack
+resource-counts
 markdown-check
 pr-body-check
 cd-hook
