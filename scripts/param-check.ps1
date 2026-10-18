@@ -6,7 +6,7 @@
 
 .DESCRIPTION
     WHY (grado-factorio-tools#163). Under `pwsh -File`, a [string[]] parameter gets `-With a,b`
-    as one string, "a,b"; called from PowerShell it gets two. Five scripts here split their lists
+    as one string, "a,b"; called from PowerShell it gets two. Other scripts here split their lists
     in the body, each on its own, and count-resources.ps1, merged in PR #162, split neither of
     its two: `-With space-age,quality` reached Resolve-BundledSelection as one name and threw.
     A parameter that takes the remaining arguments binds each argument by itself, and is passed.
@@ -17,7 +17,8 @@
     reference to its variable and a -split whose right side is a string with a comma in it. So
     `$With = @($With -split ',')` passes, and so does a foreach over several lists that splits
     each. A function's param block is not read: a function is called from PowerShell, where a
-    comma list binds as an array.
+    comma list binds as an array. Nor is a split inside a function's body counted. A script that
+    does not parse fails, named as such, and so does a -Path that holds no *.ps1.
 
     WHAT IT CANNOT SEE. Whether the split runs before the parameter's first use, or on every
     path: a statement that names the variable and splits something else on a comma passes it.
@@ -49,10 +50,14 @@ function Get-UnsplitParameter {
         the remaining arguments nor is split on a comma by a top-level statement, and how many
         such list parameters it has, as @{ Lists; Unsplit }.  #>
     param([Parameter(Mandatory)] [string] $File)
-    $ast = [System.Management.Automation.Language.Parser]::ParseFile($File, [ref] $null, [ref] $null)
+    $errors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile($File, [ref] $null, [ref] $errors)
+    if ($errors) { throw "$(Split-Path $File -Leaf) does not parse: line $($errors[0].Extent.StartLineNumber), $($errors[0].Message)" }
     $result = @{ Lists = 0; Unsplit = @() }
     if (-not $ast.ParamBlock) { return $result }
-    $statements = @($ast.BeginBlock, $ast.ProcessBlock, $ast.EndBlock | Where-Object { $_ } | ForEach-Object Statements)
+    # A function's body is not the script's: a split there may never run.
+    $statements = @($ast.BeginBlock, $ast.ProcessBlock, $ast.EndBlock | Where-Object { $_ } | ForEach-Object Statements |
+        Where-Object { $_ -isnot [System.Management.Automation.Language.FunctionDefinitionAst] })
     foreach ($p in $ast.ParamBlock.Parameters) {
         if ($p.StaticType -ne [string[]]) { continue }
         $result.Lists++
@@ -61,8 +66,9 @@ function Get-UnsplitParameter {
         if ($rest) { continue }
         $name = $p.Name.VariablePath.UserPath
         $split = $statements | Where-Object {
-            $_.Find({ param($n) $n -is [System.Management.Automation.Language.VariableExpressionAst] -and $n.VariablePath.UserPath -eq $name }, $true) -and
-            $_.Find({ param($n) $n -is [System.Management.Automation.Language.BinaryExpressionAst] -and $n.Operator -in 'Split', 'Isplit', 'Csplit' -and
+            $_.Find({ param($n) $n -is [System.Management.Automation.Language.VariableExpressionAst] -and ($n.VariablePath.UserPath -replace '^(script|local):') -eq $name }, $true) -and
+            # Binary -split parses as Isplit.
+            $_.Find({ param($n) $n -is [System.Management.Automation.Language.BinaryExpressionAst] -and $n.Operator -in 'Isplit', 'Csplit' -and
                 $n.Right -is [System.Management.Automation.Language.StringConstantExpressionAst] -and $n.Right.Value.Contains(',') }, $true)
         }
         if (-not $split) { $result.Unsplit += $name }
@@ -86,16 +92,19 @@ function Invoke-SelfTest {
             $one = & $read 'param([string[]] $L) $L'
             $two = & $read "param([string[]] `$A, [string[]] `$B)`n`$B = @(`$B -split ',')`n`$A + `$B"
             $one.Lists -eq 1 -and "$($one.Unsplit)" -eq 'L' -and $two.Lists -eq 2 -and "$($two.Unsplit)" -eq 'A' } }
-        @{ Name = 'a split on a comma passes: the parameter split itself, through ForEach-Object, inside a foreach over several lists, and with -csplit'; Test = {
+        @{ Name = 'a split on a comma passes: the parameter split itself, through ForEach-Object, inside a foreach over several lists, with -csplit, in a begin block, and as $script:'; Test = {
             $self = & $read "param([string[]] `$L)`n`$L = @(`$L -split ',' | Where-Object { `$_ })"
             $each = & $read "param([string[]] `$L)`n`$L = @(`$L | ForEach-Object { `$_ -split ',' })"
             $loop = & $read "param([string[]] `$A, [string[]] `$B)`n`$A, `$B = foreach (`$x in `$A, `$B) { , @(`$x | ForEach-Object { `$_ -split ',' }) }"
             $case = & $read "param([string[]] `$L)`nif (`$L) { `$L = `$L -csplit '\s*,\s*' }"
-            -not ($self, $each, $loop, $case | Where-Object { $_.Unsplit }) -and $loop.Lists -eq 2 } }
-        @{ Name = 'a split on something other than a comma, or of another variable alone, does not pass it'; Test = {
+            $begin = & $read "param([string[]] `$L)`nbegin { `$L = @(`$L -split ',') }`nprocess { `$L }"
+            $scoped = & $read "param([string[]] `$L)`n`$script:L = @(`$script:L -split ',')"
+            -not ($self, $each, $loop, $case, $begin, $scoped | Where-Object { $_.Unsplit }) -and $loop.Lists -eq 2 -and $begin.Lists -eq 1 } }
+        @{ Name = 'a split on something other than a comma, of another variable alone, or inside a function''s body does not pass it'; Test = {
             $space = & $read "param([string[]] `$L)`n`$L = `$L -split ' '"
             $other = & $read "param([string[]] `$L, [string] `$S)`n`$parts = `$S -split ','`n`$L"
-            "$($space.Unsplit)" -eq 'L' -and "$($other.Unsplit)" -eq 'L' } }
+            $inFunction = & $read "param([string[]] `$L)`nfunction f { param(`$L) `$L -split ',' }`n`$L"
+            "$($space.Unsplit)" -eq 'L' -and "$($other.Unsplit)" -eq 'L' -and "$($inFunction.Unsplit)" -eq 'L' } }
         @{ Name = 'a parameter taking the remaining arguments passes, and so does one typed [string]'; Test = {
             $rest = & $read 'param([Parameter(ValueFromRemainingArguments)] [string[]] $L, [string] $S) $L'
             $rest.Lists -eq 1 -and -not $rest.Unsplit } }
@@ -115,6 +124,16 @@ function Invoke-SelfTest {
             Write-Host ($passed.Text.TrimEnd() -replace '(?m)^', '    ')
             $refused.Code -eq 1 -and $refused.Text -match '(?m)^param-check: count\.ps1 -Mods ' -and $refused.Text -match '(?m)^param-check: count\.ps1 -With ' -and
                 $refused.Text -match '(?m)^FAILED - param-check: 2 ' -and $passed.Code -eq 0 -and $passed.Text -match '(?m)^OK - param-check: 1 list parameter\(s\) in 1 script' } }
+        @{ Name = 'a script that does not parse fails, named as such, and so does a directory with no script in it'; Test = {
+            $broken = Join-Path $temp 'broken'; $empty = Join-Path $temp 'empty'
+            New-Item -ItemType Directory -Path $broken, $empty -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $broken 'half.ps1') -Value 'param([string[]] $L'
+            $unparsed = & $run $broken
+            $none = & $run $empty
+            Write-Host ($unparsed.Text.TrimEnd() -replace '(?m)^', '    ')
+            Write-Host ($none.Text.TrimEnd() -replace '(?m)^', '    ')
+            $unparsed.Code -eq 1 -and $unparsed.Text -match 'half\.ps1 does not parse' -and $unparsed.Text -notmatch 'never split' -and
+                $none.Code -eq 1 -and $none.Text -match '(?m)^FAILED - param-check: no \*\.ps1 in ' } }
     )
 
     $failures = 0
@@ -137,6 +156,8 @@ function Invoke-SelfTest {
 if ($SelfTest) { Invoke-SelfTest }
 
 $scripts = @(Get-ChildItem -LiteralPath $Path -Filter *.ps1 -File | Sort-Object Name)
+# A path that holds no script must not pass for having had nothing to read.
+if (-not $scripts) { Write-Host "FAILED - param-check: no *.ps1 in $Path."; exit 1 }
 $lists = 0
 $unsplit = 0
 foreach ($s in $scripts) {

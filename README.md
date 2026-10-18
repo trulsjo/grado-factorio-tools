@@ -166,6 +166,7 @@ without `rso-mod` leaves them out too, and `-AlsoDiffers` names them.
 counts every `resource` entity by name in a square of chunks around each surface's origin. It
 creates the map, runs it 700 ticks, and copies out the counts, the game's stdout, the mods it
 resolved, and a fingerprint of each mod directory before and after. It needs the game.
+`-Mods` and `-With` each take a comma list, as `-With space-age,quality`.
 `-Radius` sets the square, and `-NoPlanets` creates no planet's surface, so with Space Age the
 map has Nauvis alone.
 
