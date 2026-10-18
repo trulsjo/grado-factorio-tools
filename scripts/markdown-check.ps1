@@ -1,8 +1,9 @@
 <#
 .SYNOPSIS
     Checks Markdown for three things a machine can decide: emphasis or a code span left open at
-    the end of its paragraph, a table row whose column count differs from its header's, and a
-    link to a file in the repository, or to a heading, that is not there. Handed -MaxLineLength,
+    the end of its paragraph, or a `*` with nothing to close; a table row whose column count
+    differs from its header's; and a link to a file in the repository, or to a heading, that is
+    not there. Handed -MaxLineLength,
     a fourth: a prose line longer than that. Exit 0 means none was found in the files read;
     exit 1 names each as <file>:<line>: <what>.
 
@@ -21,9 +22,11 @@
     fenced code block; nothing inside a fence is read, and a fence never closed is reported. A
     number ends a paragraph only as `1.`; inside a numbered list any number is the next item.
     Emphasis follows CommonMark's flanking rules: a `*` or `_` with whitespace on both sides is a
-    literal, so is a `_` inside a word, and so is a closer with nothing to close. Only an opener
-    still open when its paragraph ends is reported, and a lone `*` that could open is one: `*.md`
-    in prose wants a code span or `\*`. A table is a line holding a `|` followed by a delimiter
+    literal, and so is a `_` inside a word. An opener still open when its paragraph ends is
+    reported, and a lone `*` that could open is one: `*.md` in prose wants a code span or `\*`.
+    So is a `*` that can only close, with nothing open to close (grado-factorio-tools#164): it
+    renders as text, as `reach*.` does where an inverted italic meant it to reopen, and `2.0.*`
+    in prose wants a code span too. A `_` closer with nothing to close is a literal, not reported. A table is a line holding a `|` followed by a delimiter
     row holding one; every line after it up to a blank line is a row, and each cell is read as a
     paragraph of its own. A link is `[text](target)` or a `[label]: target` line, in prose or in
     any row of a table; a target with a scheme (`https:`, `mailto:`) is not checked, and the
@@ -294,6 +297,12 @@ function Test-Inline {
             if ($open[$at].Length -eq 0) { $open.RemoveAt($at) }
         }
         if ($canOpen -and $length -gt 0) { $open.Add(@{ Char = $char; Length = $length; Offset = $run.Index }) }
+        # A `*` that can only close, left with nothing to close, renders as text, and is most often
+        # an inverted italic whose reopening `*` stands against punctuation (grado-factorio-tools#164).
+        # A `_` is not held to it: snake_case_ and the like end in one.
+        elseif ($char -eq '*' -and $canClose -and $length -gt 0) {
+            @{ Offset = $run.Index; Message = "a $([string]::new('*', $length)) that can only close has nothing open to close, so it renders as text; a * that reopens emphasis needs a space or a letter before it, not a letter before and punctuation after" }
+        }
     }
     foreach ($o in $open) { @{ Offset = $o.Offset; Message = "emphasis opened with $([string]::new($o.Char, $o.Length)) is not closed in its paragraph" } }
 }
@@ -535,7 +544,7 @@ function Invoke-SelfTest {
 # A title with `code_in_it` and a snake_case_name
 
 A paragraph with *emphasis*, **strong**, _underscores_ and `a * in code`, an escaped \*star and \_under, 2 * 3 * 4,
-a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Aside *line. One took
+a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* Aside *line. One took
 31. That wrapped line is no list item, so this closes.*
 
 * a bullet made with a star, holding **strong** text
@@ -568,13 +577,24 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
             $f = @(& $find $clean)
             $f | ForEach-Object { Write-Host "    $_" }
             $f.Count -eq 0 } }
-        @{ Name = 'emphasis left open at the end of its paragraph fails, on the line that opened it'; Test = {
+        @{ Name = 'emphasis left open at the end of its paragraph fails, on the line that opened it, and the next paragraph''s * closes nothing'; Test = {
             $f = @(& $find "fine`n`nline two`nand *this never closes`n`na new paragraph*")
-            $f.Count -eq 1 -and $f[0] -match '^4: emphasis opened with \* is not closed' } }
+            $f.Count -eq 2 -and $f[0] -match '^4: emphasis opened with \* is not closed' -and $f[1] -match '^6: a \* that can only close' } }
         @{ Name = 'strong and underscore emphasis left open fail too'; Test = {
             @(& $find 'a **strong start')[0] -match '^1: emphasis opened with \*\*' -and @(& $find 'an _underscore start')[0] -match '^1: emphasis opened with _' } }
         @{ Name = 'emphasis whose closer has a space before it is left open'; Test = {
             @(& $find '*Later: see* Decisions *for more. *').Count -eq 1 } }
+        @{ Name = 'a * that can only close, with nothing open, fails on its line: the inverted italics of grado-factorio-modpack#315, and one alone'; Test = {
+            $note = @(& $find "fine`n`n*Chased again in ``docs/catalogue/Grado_ABC.md`` under* Technologies`nthe walk cannot reach*. Counted again on 2026-10-18.*")
+            $alone = @(& $find 'a word* alone')
+            $under = @(& $find 'a word_ alone is a literal')
+            ($note + $alone + $under) | ForEach-Object { Write-Host "    $_" }
+            $note.Count -ge 1 -and $note[0] -match '^4: a \* that can only close has nothing open' -and $alone.Count -eq 1 -and $alone[0] -match '^1: a \* that can only close' -and
+                $under.Count -eq 0 } }
+        @{ Name = 'the catalogues'' inverted italics pass, with a space before the * that reopens: a* Patch *in, as* Measured *in'; Test = {
+            $f = @(& $find "*Moving it would do one member's own job, a* Patch *in*`n``GLOSSARY.md``.`n`n*That the cause is measured as* Measured *in ``GLOSSARY.md`` asks.*")
+            $f | ForEach-Object { Write-Host "    $_" }
+            $f.Count -eq 0 } }
         @{ Name = 'emphasis that closes straight after a bare address is closed, in a paragraph and in a table cell'; Test = {
             $lines = '*"colors from https://u.nu/factoriogfx"*', '*see https://u.nu/factoriogfx*', '_see https://u.nu/a_b_', '**see https://u.nu/x**', '*see https://u.nu/x.* and *more*'
             $alone = @(& $find ($lines -join "`n`n"))
@@ -606,9 +626,9 @@ a glob like 2.0.* and a note: *Until 2026-10-01 this said two: it missed an* Asi
         @{ Name = 'a code span left open fails'; Test = {
             $f = @(& $find "a ``code span`nthat runs on`n`nnext")
             $f.Count -eq 1 -and $f[0] -match '^1: a code span opened with ` is not closed' } }
-        @{ Name = 'emphasis left open in a numbered item is not closed by the next item'; Test = {
+        @{ Name = 'emphasis left open in a numbered item is not closed by the next item, whose * has nothing to close'; Test = {
             $f = @(& $find "1. first`n2. second *open`n3. third* closes")
-            $f.Count -eq 1 -and $f[0] -match '^2: emphasis opened' } }
+            $f.Count -eq 2 -and $f[0] -match '^2: emphasis opened' -and $f[1] -match '^3: a \* that can only close' } }
         @{ Name = 'a fence never closed fails, on the line that opened it'; Test = {
             $f = @(& $find "text`n`n``````powershell`n*hidden")
             $f.Count -eq 1 -and $f[0] -match '^3: the code fence opened with ``` is not closed' } }
