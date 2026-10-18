@@ -10,6 +10,7 @@ commit-check
 resolve-modpack
 resource-counts
 markdown-check
+param-check
 pr-body-check
 cd-hook
 hook-skip

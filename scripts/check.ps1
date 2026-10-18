@@ -1,8 +1,8 @@
 <#
 .SYNOPSIS
-    Parses every script under scripts/, runs every self-test that needs neither the game nor the
-    network, holds the agent pages to their size limits, and runs markdown-check.ps1 over the
-    tracked Markdown. Exit 0 means all of that held.
+    Parses every script under scripts/, reads their list parameters with param-check.ps1, runs
+    every self-test that needs neither the game nor the network, holds the agent pages to their
+    size limits, and runs markdown-check.ps1 over the tracked Markdown. Exit 0 means all of that held.
 
 .DESCRIPTION
     THE ONE COMMAND BEFORE A PUSH (grado-factorio-tools#60). The only gate here was commit-msg,
@@ -17,6 +17,8 @@
     self-test reaches, and in the libraries that have no self-test. Then -SelfTest of each script
     in $SELF_TESTS, each in a pwsh of its own, so one script's `exit` does not end the run. A
     self-test that passes prints one line here; one that fails prints everything it said.
+    param-check.ps1 reads every script here for a list parameter that `pwsh -File` would hand
+    over as one string (grado-factorio-tools#163).
 
     THE PAGES AN AGENT ALWAYS LOADS HAVE A SIZE LIMIT (grado-factorio-tools#69). CLAUDE.md loads on
     every turn and the code-review rules before every review; grado-factorio-tools#65 cut both, and
@@ -65,7 +67,7 @@
 $ErrorActionPreference = 'Stop'
 
 $SELF_TESTS = @('commit-check.ps1', 'compare-resource-counts.ps1', 'dump-diff.ps1', 'dump-keys.ps1', 'dump-planets.ps1', 'dump-shared-names.ps1', 'fetch-mods.ps1',
-    'get-dump.ps1', 'hook-matcher.ps1', 'markdown-check.ps1', 'mod-info.ps1', 'pack-mods.ps1', 'pr-body-check.ps1',
+    'get-dump.ps1', 'hook-matcher.ps1', 'markdown-check.ps1', 'mod-info.ps1', 'pack-mods.ps1', 'param-check.ps1', 'pr-body-check.ps1',
     'refuse-cd-into-mod-cache.ps1', 'refuse-git-hook-skip.ps1', 'resolve-modpack.ps1', 'self-test-halves.ps1')
 # Has a self-test this does not run, and why: it needs Factorio installed.
 $NEEDS_GAME = @('dump-walk.ps1', 'load-harness.ps1', 'locale-check.ps1', 'tree-viewer.ps1')
@@ -95,6 +97,15 @@ foreach ($script in Get-ChildItem -LiteralPath $PSScriptRoot -Filter *.ps1 | Sor
     }
 }
 Write-Host "check: every script parsed $(& $took)"
+
+$clock.Restart()
+$said = & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'param-check.ps1') $PSScriptRoot 2>&1 | Out-String
+$bad = $LASTEXITCODE -or $said -notmatch '(?m)^OK - param-check: '
+Write-Host "check: param-check.ps1 scripts -- $($bad ? 'FAILED' : 'ok') $(& $took)"
+if ($bad) {
+    $said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
+    $failed.Add('param-check.ps1 found a list parameter never split on a comma')
+}
 
 foreach ($name in $SELF_TESTS) {
     $clock.Restart()
