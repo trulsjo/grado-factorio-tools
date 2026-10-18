@@ -25,9 +25,10 @@
     still copied; so does a --benchmark that exits non-zero after grado-count wrote them.
 
     WHAT IT CANNOT SEE. A change to a mod directory that keeps its file count and its bytes, or a
-    change to a zip. A mod path with a comma in it: -Mods is split on commas. Which mods a set should hold: the caller passes the list. What the counts
-    mean: that is compare-resource-counts.ps1's, and what grado-count cannot see is in its
-    control.lua. It has no -SelfTest; it needs the game, and a run of it is its check.
+    change to a zip. A mod path with a comma in it: -Mods is split on commas. Which mods a set
+    should hold: the caller passes the list. What the counts mean: that is
+    compare-resource-counts.ps1's, and what grado-count cannot see is in its control.lua. It has
+    no -SelfTest; it needs the game, and a run of it is its check.
 
 .PARAMETER Mods
     Mod directories, mod zips, or directories of them, as load-harness.ps1 takes,

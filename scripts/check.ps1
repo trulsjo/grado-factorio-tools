@@ -14,11 +14,11 @@
     Windows, it names.
 
     WHAT IT RUNS. A parse of each script beside it, which finds a syntax error on a line no
-    self-test reaches, and in the libraries that have no self-test. Then -SelfTest of each script
-    in $SELF_TESTS, each in a pwsh of its own, so one script's `exit` does not end the run. A
-    self-test that passes prints one line here; one that fails prints everything it said.
-    param-check.ps1 reads every script here for a list parameter that `pwsh -File` would hand
-    over as one string (grado-factorio-tools#163).
+    self-test reaches, and in the libraries that have no self-test. Then param-check.ps1 over the
+    same scripts, for a list parameter that `pwsh -File` would hand over as one string
+    (grado-factorio-tools#163). Then -SelfTest of each script in $SELF_TESTS, each in a pwsh of
+    its own, so one script's `exit` does not end the run. A self-test that passes prints one line
+    here; one that fails prints everything it said.
 
     THE PAGES AN AGENT ALWAYS LOADS HAVE A SIZE LIMIT (grado-factorio-tools#69). CLAUDE.md loads on
     every turn and the code-review rules before every review; grado-factorio-tools#65 cut both, and
