@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
     Checks Markdown for three things a machine can decide: emphasis or a code span left open at
-    the end of its paragraph, or a `*` with nothing to close; a table row whose column count
-    differs from its header's; and a link to a file in the repository, or to a heading, that is
-    not there. Handed -MaxLineLength,
-    a fourth: a prose line longer than that. Exit 0 means none was found in the files read;
-    exit 1 names each as <file>:<line>: <what>.
+    the end of its paragraph, or a `*` that can only close with nothing open to close; a table
+    row whose column count differs from its header's; and a link to a file in the repository,
+    or to a heading, that is not there. Handed -MaxLineLength, a fourth: a prose line longer than
+    that. Exit 0 means none was found in the files read; exit 1 names each as
+    <file>:<line>: <what>.
 
 .DESCRIPTION
     A PRE-COMMIT CHECK (grado-factorio-modpack#149, where it was written). Run with no arguments,
@@ -21,12 +21,14 @@
     WHAT IT READS AS WHAT. A paragraph ends at a blank line, a heading, a list item, a table or a
     fenced code block; nothing inside a fence is read, and a fence never closed is reported. A
     number ends a paragraph only as `1.`; inside a numbered list any number is the next item.
-    Emphasis follows CommonMark's flanking rules: a `*` or `_` with whitespace on both sides is a
-    literal, and so is a `_` inside a word. An opener still open when its paragraph ends is
-    reported, and a lone `*` that could open is one: `*.md` in prose wants a code span or `\*`.
-    So is a `*` that can only close, with nothing open to close (grado-factorio-tools#164): it
-    renders as text, as `reach*.` does where an inverted italic meant it to reopen, and `2.0.*`
-    in prose wants a code span too. A `_` closer with nothing to close is a literal, not reported. A table is a line holding a `|` followed by a delimiter
+    Emphasis follows CommonMark's flanking rules and its rule of 3: a `*` or `_` with whitespace
+    on both sides is a literal, and so is a `_` inside a word. An opener still open when its
+    paragraph ends is reported, and a lone `*` that could open is one: `*.md` in prose wants a
+    code span or `\*`. A `*` that can only close, with nothing open to close, is reported too
+    (grado-factorio-tools#164): it renders as text, as `reach*.` does where an inverted italic
+    meant it to reopen, and `2.0.*` in prose wants a code span as well. A `_` closer with nothing
+    to close is a literal, and not reported. An HTML comment and a tag, attributes and all, on
+    one line, are not read for emphasis. A table is a line holding a `|` followed by a delimiter
     row holding one; every line after it up to a blank line is a row, and each cell is read as a
     paragraph of its own. A link is `[text](target)` or a `[label]: target` line, in prose or in
     any row of a table; a target with a scheme (`https:`, `mailto:`) is not checked, and the
@@ -223,7 +225,8 @@ function Get-HeadingAnchor {
 
 function Test-Inline {
     <#  The openers left open in one paragraph: a backtick run with no partner, and `*` or `_`
-        emphasis never closed. Each as @{ Offset; Message }, the offset into $Text.  #>
+        emphasis never closed; and each `*` that can only close, with nothing open to close.
+        Each as @{ Offset; Message }, the offset into $Text.  #>
     param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text)
 
     # Code spans and backslash escapes first, left to right, since each hides the other: what is
@@ -260,7 +263,8 @@ function Test-Inline {
     # No script block is made or called from here on, as an evaluator, a predicate or a helper:
     # this runs for every paragraph and table cell, and those were most of its time
     # (grado-factorio-tools#125, in docs/measurements.md).
-    foreach ($pattern in '(?<=\])\([^)\s]*(\s+"[^"]*")?\)', '://', '<[a-zA-Z][^>\s]*>') {
+    # Raw HTML is not prose either: a comment, and a tag with its attributes, on one line.
+    foreach ($pattern in '(?<=\])\([^)\s]*(\s+"[^"]*")?\)', '://', '(?s)<!--.*?-->', '</?[a-zA-Z][^>\n]*>') {
         $hidden = [Text.StringBuilder]::new($masked)
         # The second is no pattern: a bare address, looked for only where the text holds a
         # scheme, and before anything in angle brackets is hidden, so that it ends at a
@@ -286,8 +290,16 @@ function Test-Inline {
         $canOpen  = if ($char -eq '_') { $left -and (-not $right -or $prevPunct) } else { $left }
         $canClose = if ($char -eq '_') { $right -and (-not $left -or $nextPunct) } else { $right }
         $length = $run.Length
+        $both = $canOpen -and $canClose
         while ($canClose -and $length -gt 0) {
-            for ($at = $open.Count - 1; $at -ge 0 -and $open[$at].Char -ne $char; $at--) { }
+            # CommonMark's rule of 3: where either run can both open and close, two runs whose
+            # lengths sum to a multiple of 3 do not pair, unless both lengths are multiples of 3.
+            for ($at = $open.Count - 1; $at -ge 0; $at--) {
+                $o = $open[$at]
+                if ($o.Char -ne $char) { continue }
+                if (($o.Both -or $both) -and ($o.Run + $run.Length) % 3 -eq 0 -and ($o.Run % 3 -ne 0 -or $run.Length % 3 -ne 0)) { continue }
+                break
+            }
             if ($at -lt 0) { break }
             # An opener of the other kind above it can no longer close around this one: a literal.
             if ($at + 1 -lt $open.Count) { $open.RemoveRange($at + 1, $open.Count - $at - 1) }
@@ -296,12 +308,12 @@ function Test-Inline {
             $length -= $used
             if ($open[$at].Length -eq 0) { $open.RemoveAt($at) }
         }
-        if ($canOpen -and $length -gt 0) { $open.Add(@{ Char = $char; Length = $length; Offset = $run.Index }) }
+        if ($canOpen -and $length -gt 0) { $open.Add(@{ Char = $char; Length = $length; Offset = $run.Index; Run = $run.Length; Both = $both }) }
         # A `*` that can only close, left with nothing to close, renders as text, and is most often
         # an inverted italic whose reopening `*` stands against punctuation (grado-factorio-tools#164).
         # A `_` is not held to it: snake_case_ and the like end in one.
         elseif ($char -eq '*' -and $canClose -and $length -gt 0) {
-            @{ Offset = $run.Index; Message = "a $([string]::new('*', $length)) that can only close has nothing open to close, so it renders as text; a * that reopens emphasis needs a space or a letter before it, not a letter before and punctuation after" }
+            @{ Offset = $run.Index; Message = "a $([string]::new('*', $length)) that can only close has nothing open to close, so it renders as text: put a space before a * meant to reopen emphasis, and write a * meant as text as \* or in a code span" }
         }
     }
     foreach ($o in $open) { @{ Offset = $o.Offset; Message = "emphasis opened with $([string]::new($o.Char, $o.Length)) is not closed in its paragraph" } }
@@ -591,6 +603,15 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             ($note + $alone + $under) | ForEach-Object { Write-Host "    $_" }
             $note.Count -ge 1 -and $note[0] -match '^4: a \* that can only close has nothing open' -and $alone.Count -eq 1 -and $alone[0] -match '^1: a \* that can only close' -and
                 $under.Count -eq 0 } }
+        @{ Name = 'CommonMark''s rule of 3 holds, as GitHub rendered each on 2026-10-18: a * that can open and close does not close **, so the closer after it is matched'; Test = {
+            $f = @(& $find "**foo*bar baz* qux**`n`n**a*b c* d**`n`n*a**b c** d*")
+            $wrong = @(& $find '***a**b c* d*')
+            ($f + $wrong) | ForEach-Object { Write-Host "    $_" }
+            $f.Count -eq 0 -and $wrong.Count -eq 1 -and $wrong[0] -match '^1: a \* that can only close' } }
+        @{ Name = 'a * inside an HTML comment or a tag''s attribute is not read, as GitHub shows none'; Test = {
+            $f = @(& $find "<!-- TODO: say why* -->`n`nA paragraph.`n<!-- see the note* -->`n`ntext <!-- note* --> more`n`n<span title=`"a*`">x</span> and <a href=`"x`" title=`"b*`">y</a>")
+            $f | ForEach-Object { Write-Host "    $_" }
+            $f.Count -eq 0 } }
         @{ Name = 'the catalogues'' inverted italics pass, with a space before the * that reopens: a* Patch *in, as* Measured *in'; Test = {
             $f = @(& $find "*Moving it would do one member's own job, a* Patch *in*`n``GLOSSARY.md``.`n`n*That the cause is measured as* Measured *in ``GLOSSARY.md`` asks.*")
             $f | ForEach-Object { Write-Host "    $_" }
