@@ -2,7 +2,7 @@
 .SYNOPSIS
     Compares the resource counts of runs with a mod and runs without it, and prints each resource
     one side places and the other places on no surface. Exit 0 means the comparison was printed,
-    whatever it found; exit 1 means it refused, and printed only why.
+    whatever it found; exit 1 means it refused, and printed only why, or could not read its input.
 
 .DESCRIPTION
     WHAT IT READS. The JSONs count-resources.ps1 copies out of grado-count, at tick 600: -With
@@ -19,16 +19,11 @@
     and unplaced with it, on the same seed and set, and unplaced means no planet has an entity of
     it in the area counted. The area is not decided here: each square is read from the JSONs.
 
-    WHEN IT REFUSES, it prints why and nothing else:
-      - a JSON lacks the map seed, tick 600's counts, or a surface's radius, as one written by
-        grado-count before 0.1.0 does;
-      - the seeds differ, between the sides or inside one;
-      - a side's JSONs differ in active_mods, so they are not one set;
-      - the mod -Under names is not active on the with side, or is on the without side;
-      - the two sides' active_mods differ in a mod's name or version other than -Under's and
-        those -AlsoDiffers names: the "same set" of the rule;
-      - a surface is counted on one side only;
-      - a surface's square differs between the two sides.
+    WHEN IT REFUSES, it prints why and nothing else. It refuses a JSON written before
+    grado-count 0.1.0, which lacks the squares, and a pair that is not one comparison: the seeds,
+    a surface's square, the surfaces counted or the mods differ, less the mod -Under names and
+    those -AlsoDiffers names, as the "same set" of the rule asks. Compare-ResourceCount holds
+    each refusal, and the self-test one case for each.
 
     WHAT IT CANNOT SEE. Anything grado-count cannot, which its control.lua lists: an ore placed
     only outside the square reads as unplaced. Whether the mods on disk were the ones named:
@@ -49,8 +44,8 @@
     so leave with it.
 
 .PARAMETER SelfTest
-    Compare fixture JSONs in a temp directory: each refusal refuses, and a resource neither side
-    places is not reported. No game.
+    Compare fixture JSONs in a temp directory: a case of each refusal, and one of a resource
+    neither side places, which is not reported. No game.
 
 .EXAMPLE
     pwsh -File scripts/compare-resource-counts.ps1 -Under rso-mod `
@@ -91,7 +86,7 @@ function Read-Side([string[]] $Paths, [string] $Label, $Refusals) {
 function Format-Names($names) { if ($names) { (@($names) | Sort-Object) -join ', ' } else { 'none' } }
 
 function Get-ModDifference($a, $b) {
-    @(@(Get-Keys $a) + @(Get-Keys $b) | Sort-Object -Unique | Where-Object { "$($a[$_])" -cne "$($b[$_])" })
+    @(@(Get-Keys $a) + @(Get-Keys $b) | Sort-Object -Unique -CaseSensitive | Where-Object { "$($a[$_])" -cne "$($b[$_])" })
 }
 
 function Compare-ResourceCount {
@@ -103,7 +98,7 @@ function Compare-ResourceCount {
     $refused = { [pscustomobject]@{ Refused = $true; Lines = @($refusals) } }
     if ($refusals.Count) { return & $refused }
 
-    $seeds = @{ with = @($sides.with.Seed | Sort-Object -Unique); without = @($sides.without.Seed | Sort-Object -Unique) }
+    $seeds = @{ with = @($sides.with.Seed | Sort-Object -Unique -CaseSensitive); without = @($sides.without.Seed | Sort-Object -Unique -CaseSensitive) }
     if ($seeds.with.Count -gt 1 -or $seeds.without.Count -gt 1 -or "$($seeds.with)" -ne "$($seeds.without)") {
         $refusals.Add("the seeds differ: with $($seeds.with -join ' and '), without $($seeds.without -join ' and ')")
     }
@@ -128,32 +123,32 @@ function Compare-ResourceCount {
         foreach ($run in $sides[$label]) {
             foreach ($s in $run.Surfaces.Keys) {
                 $c = $run.Surfaces[$s]
-                if (-not $pick[$label].ContainsKey($s) -or $c.chunks -gt $pick[$label][$s].Count.chunks) { $pick[$label][$s] = @{ Count = $c; Leaf = $run.Leaf } }
+                if (-not $pick[$label].ContainsKey($s) -or $c.chunks -gt $pick[$label][$s].Surface.chunks) { $pick[$label][$s] = @{ Surface = $c; Leaf = $run.Leaf } }
             }
         }
     }
-    $surfaces = @(@($pick.with.Keys) + @($pick.without.Keys) | Sort-Object -Unique)
+    $surfaces = @(@($pick.with.Keys) + @($pick.without.Keys) | Sort-Object -Unique -CaseSensitive)
     $side = { param($r) 2 * $r + 1 }
     foreach ($s in $surfaces) {
         $a = $pick.with[$s]; $b = $pick.without[$s]
         if (-not $a -or -not $b) { $refusals.Add("$s is counted on the $(if ($a) { 'with' } else { 'without' }) side only"); continue }
-        if ($a.Count.radius -ne $b.Count.radius) {
-            $refusals.Add("$s's square differs: $(& $side $a.Count.radius) chunks a side with, $(& $side $b.Count.radius) without")
+        if ($a.Surface.radius -ne $b.Surface.radius) {
+            $refusals.Add("$s's square differs: $(& $side $a.Surface.radius) chunks a side with, $(& $side $b.Surface.radius) without")
         }
     }
     if ($refusals.Count) { return & $refused }
 
-    $placed = { param($p) @(Get-Keys $p.Count.resources | Where-Object { $p.Count.resources[$_] -gt 0 }) }
+    $placed = { param($p) @(Get-Keys $p.Surface.resources | Where-Object { $p.Surface.resources[$_] -gt 0 }) }
     $all = @{ with = @(); without = @() }
     $rows = foreach ($s in $surfaces) {
         $a = & $placed $pick.with[$s]; $b = & $placed $pick.without[$s]
         $all.with += $a; $all.without += $b
-        $n = & $side $pick.with[$s].Count.radius
+        $n = & $side $pick.with[$s].Surface.radius
         "- ${s}, $n by $n chunks ($($pick.with[$s].Leaf) and $($pick.without[$s].Leaf)): placed without and not with: " +
             "$(Format-Names @($b | Where-Object { $_ -cnotin $a })); placed with and not without: $(Format-Names @($a | Where-Object { $_ -cnotin $b }))"
     }
-    $lost = @($all.without | Sort-Object -Unique | Where-Object { $_ -cnotin $all.with })
-    $gained = @($all.with | Sort-Object -Unique | Where-Object { $_ -cnotin $all.without })
+    $lost = @($all.without | Sort-Object -Unique -CaseSensitive | Where-Object { $_ -cnotin $all.with })
+    $gained = @($all.with | Sort-Object -Unique -CaseSensitive | Where-Object { $_ -cnotin $all.without })
     $lines = @(
         "compare-resource-counts: seed $($seeds.with), $($surfaces.Count) surface(s), with $Under against without it."
         $(if ($differs | Where-Object { $_ -cne $Under }) { "Also differs, as -AlsoDiffers allows: $(Format-Names @($differs | Where-Object { $_ -cne $Under }))." })
@@ -189,14 +184,15 @@ function Invoke-SelfTest {
             $path
         }
         $rso = @{ 'rso-mod' = '7.0.26' }
-        # With: rso-mod hides ore-b everywhere, and ore-x on Nauvis's r24 square (the r48 file
-        # still has it there). Neither side places never-placed, an empty table on Vulcanus.
+        # rso-mod hides ore-b everywhere. ore-x is in the r48 files alone, so Nauvis's row shows
+        # which file was read; the r24 files are listed first, so the first listed is not it.
+        # never-placed has a zero count on Vulcanus and is a prototype of both sides.
         $w48 = & $write 'w48' @{ nauvis = 48, @{ 'ore-a' = 5; 'ore-x' = 1 } } $rso
         $w24 = & $write 'w24' @{ nauvis = 24, @{ 'ore-a' = 2 }; vulcanus = 24, @{ 'never-placed' = 0 } } $rso
         $o48 = & $write 'o48' @{ nauvis = 48, @{ 'ore-a' = 5; 'ore-b' = 3; 'ore-x' = 2 } }
         $o24 = & $write 'o24' @{ nauvis = 24, @{ 'ore-a' = 2 }; vulcanus = 24, @{ 'ore-b' = 1 } }
         $run = { param($with, $without, $also = @()) Compare-ResourceCount -With $with -Without $without -Under 'rso-mod' -AlsoDiffers $also }
-        $ok = & $run @($w48, $w24) @($o48, $o24)
+        $ok = & $run @($w24, $w48) @($o24, $o48)
         $okText = $ok.Lines -join "`n"
         $refuses = { param($r, $pattern) $r.Refused -and ($r.Lines -join "`n") -match $pattern -and ($r.Lines -join "`n") -notmatch 'Placed' }
 
@@ -207,7 +203,8 @@ function Invoke-SelfTest {
             'each surface is read from the run with the most chunks there' = $okText -match '(?m)^- nauvis, 97 by 97 chunks \(w48\.json and o48\.json\): placed without and not with: ore-b;'
             'a resource neither side places is not reported'               = $okText -notmatch 'never-placed'
             'it refuses different seeds'                                   = & $refuses (& $run @($w48) @((& $write 'o48s' @{ nauvis = 48, @{ 'ore-a' = 1 } } -seed 307307))) 'the seeds differ: with 140140, without 307307'
-            'it refuses a side of two seeds'                               = & $refuses (& $run @($w48, (& $write 'w24s' @{ vulcanus = 24, @{} } $rso -seed 307307)) @($o48, $o24)) 'the seeds differ'
+            'it refuses two sides that mix the same two seeds'             = & $refuses (& $run @($w48, (& $write 'w24s' @{ vulcanus = 24, @{} } $rso -seed 307307)) @($o48, (& $write 'o24s' @{ vulcanus = 24, @{} } -seed 307307))) 'the seeds differ: with 140140 and 307307'
+            'it refuses a surface counted on the without side only'        = & $refuses (& $run @($w48) @($o48, $o24)) 'vulcanus is counted on the without side only'
             'it refuses different squares'                                 = & $refuses (& $run @($w48) @($o24)) "nauvis's square differs: 97 chunks a side with, 49 without"
             'it refuses a surface counted on one side only'                = & $refuses (& $run @($w48, $w24) @($o48)) 'vulcanus is counted on the with side only'
             'it refuses a mod that differs and is not named'               = & $refuses (& $run @($w48) @((& $write 'o48m' @{ nauvis = 48, @{} } @{ 'Grado_ABC' = '0.1.0' }))) 'not the same set: active_mods also differ in Grado_ABC'

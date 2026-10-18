@@ -155,22 +155,27 @@ pwsh -File scripts/count-resources.ps1 .mod-cache/Grado_ABCS -With space-age -Se
     -Radius 48 -NoPlanets -Name abcs-rso-r48 -OutDirectory counts
 pwsh -File scripts/compare-resource-counts.ps1 -Under rso-mod `
     -With counts/abcs-rso-r48.json,counts/abcs-rso-r24.json `
-    -Without counts/abcs-norso-r48.json,counts/abcs-norso-r24.json
+    -Without counts/abcs-norso-r48.json,counts/abcs-norso-r24.json `
+    -AlsoDiffers Grado_ABC,Grado_ABCS,Grado_ChangingBase,Grado_NonChanging
 ```
+
+The cache is the modpack's, from its checkout. Its four pack mods require `rso-mod`, so a run
+without `rso-mod` leaves them out too, and `-AlsoDiffers` names them.
 
 `count-resources.ps1` loads the mods through the harness with `scripts/grado-count`, a mod that
 counts every `resource` entity by name in a square of chunks around each surface's origin. It
 creates the map, runs it 700 ticks, and copies out the counts, the game's stdout, the mods it
 resolved, and a fingerprint of each mod directory before and after. It needs the game.
-`-Radius` sets the square, and `-NoPlanets` counts Nauvis alone.
+`-Radius` sets the square, and `-NoPlanets` creates no planet's surface, so with Space Age the
+map has Nauvis alone.
 
 `compare-resource-counts.ps1` prints each resource one side places and the other places on no
 surface, and per surface what each places that the other does not. A side may be several runs:
 each surface is read from the run that generated the most chunks there. It refuses, and prints
 only why, when the seeds, a surface's square, the surfaces counted, or the mods differ;
-`-AlsoDiffers` names the mods that may differ besides `-Under`'s. `-SelfTest` proves each
-refusal, with no game. What each cannot see is in its header, and grado-count's in its
-`control.lua`.
+`-AlsoDiffers` names the mods that may differ besides `-Under`'s. `-SelfTest` runs a case
+of each refusal and one of a resource neither side places, with no game. What each cannot see
+is in its header, and grado-count's in its `control.lua`.
 
 ## Seeing a set's technology tree
 

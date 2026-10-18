@@ -1,8 +1,8 @@
 <#
 .SYNOPSIS
     Creates a map of a set of mods at a seed, runs it 700 ticks with the grado-count mod, and
-    copies out the resource counts it wrote. Exit 0 means the map was created, the run ended,
-    the counts were copied, and no mod directory changed while it ran.
+    copies out the resource counts it wrote. Exit 0 means the map was created, both runs of the
+    game exited 0, the counts were copied, and no mod directory changed while it ran.
 
 .DESCRIPTION
     WHAT IT DOES. Builds a harness (load-harness-lib.ps1) of -Mods and a copy of scripts/grado-count
@@ -20,8 +20,9 @@
     trulsjo/grado-factorio-modpack#307 (grado-factorio-tools#161).
 
     WHY THE FINGERPRINT. The harness junctions a mod directory in, so the game runs on the
-    directory itself, and #307's runs were on a sibling's fetched cache. A directory that changed
-    between before and after fails the run, and the counts are still copied.
+    directory itself, and grado-factorio-modpack#307's runs were on that repository's fetched
+    cache. A directory that changed between before and after fails the run, and the counts are
+    still copied; so does a --benchmark that exits non-zero after grado-count wrote them.
 
     WHAT IT CANNOT SEE. A change to a mod directory that keeps its file count and its bytes, or a
     change to a zip. Which mods a set should hold: the caller passes the list. What the counts
@@ -98,8 +99,9 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'grado-count') -Destination $cou
     Set-Content -LiteralPath (Join-Path $counter 'config.lua') -Encoding utf8
 
 $failed = $null
-$h = New-LoadHarness -Mods (@($Mods) + $counter) -With $With -FactorioExe $FactorioExe
+$h = $null
 try {
+    $h = New-LoadHarness -Mods (@($Mods) + $counter) -With $With -FactorioExe $FactorioExe
     Write-ModList -ModDirectory $h.ModDirectory -Bundled $h.Bundled -EnabledBundled $h.EnabledBundled -Mods @($h.Mods.Name)
     ConvertTo-Json -InputObject @($h.Mods | Where-Object Path -ne $counter | Select-Object Name, Version, Kind, Path) |
         Set-Content -LiteralPath (& $out '-mods.json') -Encoding utf8
@@ -117,11 +119,14 @@ try {
         Copy-Item -LiteralPath $bench.OutFile -Destination (& $out '-bench-stdout.txt') -Force
         $json = Join-Path $h.Temp 'write-data/script-output/grado-count.json'
         if (Test-Path -LiteralPath $json) { Copy-Item -LiteralPath $json -Destination (& $out '.json') -Force }
-        else { Write-FactorioTail $bench; $failed = "--benchmark exited $($bench.Code) and grado-count wrote no counts" }
+        if ($bench.Code -ne 0 -or -not (Test-Path -LiteralPath $json)) {
+            Write-FactorioTail $bench
+            $failed = "--benchmark exited $($bench.Code) and grado-count $(if (Test-Path -LiteralPath $json) { 'wrote' } else { 'wrote no' }) counts"
+        }
     }
 }
 finally {
-    Remove-LoadHarness -Harness $h
+    if ($h) { Remove-LoadHarness -Harness $h }
     Remove-Item -LiteralPath $counter -Recurse -Force -ErrorAction SilentlyContinue
 }
 
