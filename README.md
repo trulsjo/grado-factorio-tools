@@ -348,6 +348,18 @@ CI runs it on the body of every pull request here, and again when the body is ed
 names no commit in the clone, such as a commit of a sibling, is said to be unchecked and passes.
 What else it cannot see is in its header. `-SelfTest` proves it can fail.
 
+## Checking that list parameters are split
+
+Under `pwsh -File`, a `[string[]]` parameter gets `-With a,b` as one string, `"a,b"`.
+`scripts/param-check.ps1` reads the param block of each script in a directory, and fails on a
+`[string[]]` parameter that neither takes the remaining arguments nor is split on a comma by a
+statement of its script. A function's param block is not read.
+
+    pwsh -File scripts/param-check.ps1 scripts
+
+`scripts/check.ps1` runs it on `scripts/`. It reads that a split exists, not that it runs before
+the parameter is used; the rest it cannot see is in its header. `-SelfTest` proves it can fail.
+
 ## What does not belong here
 
 Anything that encodes one mod's domain. A reactor invariant, a fuel table, a balance figure or a
