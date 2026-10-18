@@ -143,6 +143,35 @@ the script reads and what it does not see.
 All five take `-SelfTest`. The walk's runs on a dump of Space Age alone, which it makes through
 `get-dump.ps1` and so needs the game, unless `-Dump` names one; the other four read fixtures.
 
+## Counting resources on a new map
+
+Two scripts and a mod answer which resources a mod leaves with no entity, on a map of the same
+seed and set with it and without it. They were written for
+[#161](https://github.com/trulsjo/grado-factorio-tools/issues/161), from the throwaway scripts of
+[grado-factorio-modpack#307](https://github.com/trulsjo/grado-factorio-modpack/issues/307).
+
+```powershell
+pwsh -File scripts/count-resources.ps1 .mod-cache/Grado_ABCS -With space-age -Seed 140140 `
+    -Radius 48 -NoPlanets -Name abcs-rso-r48 -OutDirectory counts
+pwsh -File scripts/compare-resource-counts.ps1 -Under rso-mod `
+    -With counts/abcs-rso-r48.json,counts/abcs-rso-r24.json `
+    -Without counts/abcs-norso-r48.json,counts/abcs-norso-r24.json
+```
+
+`count-resources.ps1` loads the mods through the harness with `scripts/grado-count`, a mod that
+counts every `resource` entity by name in a square of chunks around each surface's origin. It
+creates the map, runs it 700 ticks, and copies out the counts, the game's stdout, the mods it
+resolved, and a fingerprint of each mod directory before and after. It needs the game.
+`-Radius` sets the square, and `-NoPlanets` counts Nauvis alone.
+
+`compare-resource-counts.ps1` prints each resource one side places and the other places on no
+surface, and per surface what each places that the other does not. A side may be several runs:
+each surface is read from the run that generated the most chunks there. It refuses, and prints
+only why, when the seeds, a surface's square, the surfaces counted, or the mods differ;
+`-AlsoDiffers` names the mods that may differ besides `-Under`'s. `-SelfTest` proves each
+refusal, with no game. What each cannot see is in its header, and grado-count's in its
+`control.lua`.
+
 ## Seeing a set's technology tree
 
 `tree-viewer.ps1` renders the technology tree of a set of mods as one zoomable HTML page, each
@@ -326,7 +355,8 @@ scripts/     PowerShell entry points, one job each, and the libraries they
              dot-source: load-harness-lib.ps1, dump-lib.ps1, game-mods.ps1, mod-info.ps1,
              which reads a mod's info.json for four of them,
              self-test-halves.ps1, the runner a -SelfTest hands its halves to,
-             and hook-matcher.ps1, which reads a session hook's matcher
+             and hook-matcher.ps1, which reads a session hook's matcher;
+             grado-count/, the counting mod count-resources.ps1 loads
 .githooks/   this repo's own commit-msg and pre-push hooks, opted into once per
              clone
 .claude/     settings.json, which wires the session hook that refuses a commit
