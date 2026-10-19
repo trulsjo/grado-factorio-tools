@@ -320,7 +320,7 @@ does not track, in exact case, or to a heading its file does not have. It knows 
 
 With no arguments it reads the staged files as they are staged, which is what a `pre-commit` hook
 wants; `-Range` reads the files a range changed, and `-All` every tracked one, failing when
-there is none, since that means the checkout is wrong rather than the Markdown. With three dots
+there is none, since then nothing was checked. With three dots
 the files are those the branch at the range's end has changed since it left the base; two dots
 would also list each file the base has edited or deleted since then. The check reads the
 repository it is run in, so a consumer runs it from the submodule on its own Markdown.
