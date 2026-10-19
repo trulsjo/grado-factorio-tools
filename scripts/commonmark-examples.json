@@ -5,7 +5,7 @@
   "licence": "Creative Commons Attribution-ShareAlike 4.0 International, https://creativecommons.org/licenses/by-sa/4.0/. This file is under that licence, not the repository's MIT licence.",
   "taken": "2026-10-19",
   "sections": ["Emphasis and strong emphasis","Raw HTML"],
-  "use": "markdown-check.ps1 -SelfTest reads it (grado-factorio-tools#167). The examples are the spec's, unchanged; only the two sections were kept.",
+  "use": "markdown-check.ps1 -SelfTest reads it (grado-factorio-tools#167). Only the two sections were kept, and of each example its number, section, markdown and html as spec.json gives them; start_line and end_line were dropped.",
   "examples": [
     {"example":350,"section":"Emphasis and strong emphasis","markdown":"*foo bar*\n","html":"<p><em>foo bar</em></p>\n"},
     {"example":351,"section":"Emphasis and strong emphasis","markdown":"a * foo bar*\n","html":"<p>a * foo bar*</p>\n"},
