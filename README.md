@@ -325,9 +325,10 @@ the files are those the branch at the range's end has changed since it left the 
 would also list each file the base has edited or deleted since then. The check reads the
 repository it is run in, so a consumer runs it from the submodule on its own Markdown.
 `scripts/check.ps1` runs it here with `-All`. `-SelfTest` proves each of the three can fail, and
-runs the check over CommonMark's own emphasis and raw-HTML examples, failing a finding the spec
-renders as emphasis; they are in `scripts/commonmark-examples.json`, under the spec's licence (see
-Licence below). What it reads as what, and what it cannot see, is in its header.
+runs the check over CommonMark's own emphasis and raw-HTML examples, failing one that draws more
+emphasis findings than the spec's HTML shows literal marks; they are in
+`scripts/commonmark-examples.json`, under the spec's licence (see Licence below). What it reads
+as what, and what it cannot see, is in its header.
 
     pwsh -File scripts/markdown-check.ps1 -All -MaxLineLength 100
 
@@ -404,7 +405,8 @@ it carries Krastorio 2 code; that reasoning does not transfer to tooling written
 Forced then rather than later because a submodule makes this repo a build dependency of two
 others, so "all rights reserved by default" stopped being harmless.
 
-One file is not under MIT: `scripts/commonmark-examples.json` holds examples from the
-[CommonMark Spec](https://spec.commonmark.org/0.31.2/) by John MacFarlane, version 0.31.2,
-unchanged, under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). That file stays
+One file is not under MIT: `scripts/commonmark-examples.json` holds the examples of two sections
+of the [CommonMark Spec](https://spec.commonmark.org/0.31.2/) by John MacFarlane, version 0.31.2,
+each example's text and HTML unchanged, under
+[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). That file stays
 under that licence, as its own header says. Truls chose to keep it here on 2026-10-19 (#167).

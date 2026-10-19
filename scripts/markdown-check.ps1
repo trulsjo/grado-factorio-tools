@@ -112,13 +112,16 @@
 .PARAMETER SelfTest
     Run the cases that hold the check to what this header says, naming each as it runs. Needs git,
     for a fixture repository in a temp directory.
-    One case reads commonmark-examples.json beside this script: the 152 examples of CommonMark
+    One case reads commonmark-examples.json beside this script: the examples of CommonMark
     0.31.2's Emphasis and Raw HTML sections, under CC BY-SA 4.0 (grado-factorio-tools#167). It
     runs each through the check and fails where emphasis left open, or a `*` with nothing to
-    close, is reported more often than the spec's HTML shows a literal `*` or `_`. That proves no
-    false failure on those examples. It cannot prove a literal mark is found, nor say anything of
-    GitHub's renderer, cmark-gfm, where it parts from the spec. And no example holds a `*` in an
-    HTML comment or a tag's attribute: their own case holds those.
+    close, is reported more often than the spec's HTML shows a literal `*` or `_`: a count, not
+    which mark each finding names. That proves no example holds more such findings than literal
+    marks. It cannot prove a literal mark is found, nor say anything of GitHub's renderer,
+    cmark-gfm, where it parts from the spec. Nor does it hold the hiding of HTML comments and
+    tags: no example puts a `*` in a comment, and examples 475 to 477, which put one in a tag's
+    attribute, pair it with a mark outside the tag, so reading the attribute drops a finding
+    rather than adding one. Their own case holds those.
 
 .EXAMPLE
     pwsh -File scripts/markdown-check.ps1
@@ -622,7 +625,7 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             $f = @(& $find "<!-- TODO: say why* -->`n`nA paragraph.`n<!-- see the note* -->`n`ntext <!-- note* --> more`n`n<span title=`"a*`">x</span> and <a href=`"x`" title=`"b*`">y</a>")
             $f | ForEach-Object { Write-Host "    $_" }
             $f.Count -eq 0 } }
-        @{ Name = 'no emphasis finding marks a * or _ that CommonMark''s own examples render as emphasis: the 152 of its Emphasis and Raw HTML sections, 0.31.2'; Test = {
+        @{ Name = 'no example of CommonMark 0.31.2''s Emphasis and Raw HTML sections draws more emphasis findings than its HTML shows literal * and _'; Test = {
             # The spec's HTML is the oracle, one way only: a finding says a mark renders as text, so
             # the HTML must show at least as many literal marks as there are findings.
             $corpus = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'commonmark-examples.json') | ConvertFrom-Json
@@ -632,8 +635,9 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
                             ForEach-Object Message | Where-Object { $_ -match '^(a \*+ that can only close|emphasis opened with)' })
                     $shown = $e.html -replace '(?s)<code>.*?</code>', '' -replace '(?s)<!--.*?-->', '' -replace '<[^>]*>', ''
                     if ($found.Count -gt [regex]::Matches($shown, '[*_]').Count) { "example $($e.example): $($markdown -replace "`n", '\n') -> $($found -join '; ')" } })
+            if ($corpus.examples.Count -ne 152) { $wrong += "the file holds $($corpus.examples.Count) examples, where the two sections hold 152" }
             $wrong | ForEach-Object { Write-Host "    $_" }
-            $corpus.examples.Count -eq 152 -and $wrong.Count -eq 0 } }
+            $wrong.Count -eq 0 } }
         @{ Name = 'the catalogues'' inverted italics pass, with a space before the * that reopens: a* Patch *in, as* Measured *in'; Test = {
             $f = @(& $find "*Moving it would do one member's own job, a* Patch *in*`n``GLOSSARY.md``.`n`n*That the cause is measured as* Measured *in ``GLOSSARY.md`` asks.*")
             $f | ForEach-Object { Write-Host "    $_" }
