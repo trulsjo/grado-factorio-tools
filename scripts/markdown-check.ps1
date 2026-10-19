@@ -4,8 +4,8 @@
     the end of its paragraph, or a `*` that can only close with nothing open to close; a table
     row whose column count differs from its header's; and a link to a file in the repository,
     or to a heading, that is not there. Handed -MaxLineLength, a fourth: a prose line longer than
-    that. Exit 0 means none was found in the files read; exit 1 names each as
-    <file>:<line>: <what>.
+    that. Exit 0 means none was found in the files read, and with -All that there was at least
+    one to read; exit 1 names each as <file>:<line>: <what>.
 
 .DESCRIPTION
     A PRE-COMMIT CHECK (grado-factorio-modpack#149, where it was written). Run with no arguments,
@@ -101,6 +101,8 @@
 
 .PARAMETER All
     Check every tracked Markdown file, as staged, naming those whose unstaged edits were not read.
+    With none tracked it fails, having checked nothing (grado-factorio-tools#168): a checkout that
+    failed partway leaves the index empty. With no argument or -Range, no file is no failure.
 
 .PARAMETER MaxLineLength
     Also report a prose line longer than this many characters, 1 or more. Without it, length is
@@ -849,6 +851,21 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
                     $after.Text -match '1 file\(s\) have unstaged edits that were not read' -and $after.Text -match '(?m)^ +unread\.md\r?$'
             }
             $ok } }
+        @{ Name = '-All with no tracked Markdown file fails, as a checkout that failed would; nothing staged, and a range that changes none, pass'; Test = {
+            $none = Join-Path $temp 'none'
+            New-Item -ItemType Directory -Path $none | Out-Null
+            git -C $none init --quiet
+            $all = & $run $none @('-All')
+            $staged = & $run $none @()
+            foreach ($m in 'one', 'two') {
+                git -C $none -c user.name=self-test -c user.email=self-test@example.invalid -c commit.gpgsign=false commit --quiet --allow-empty -m $m 2>&1 | Out-Null
+                if ($LASTEXITCODE -ne 0) { throw "git could not commit '$m' in the fixture repository." }
+            }
+            $range = & $run $none @('-Range', 'HEAD~1..HEAD')
+            ($all, $staged, $range) | ForEach-Object { Write-Host ($_.Text.TrimEnd() -replace '(?m)^', '    ') }
+            $all.Code -eq 1 -and $all.Text -match '(?m)^FAILED - markdown-check: -All found no Markdown file' -and
+                $staged.Code -eq 0 -and $staged.Text -match '(?m)^OK - markdown-check: 0 Markdown file' -and
+                $range.Code -eq 0 -and $range.Text -match '(?m)^OK - markdown-check: 0 Markdown file' } }
     )
 
     $failures = 0
@@ -888,6 +905,11 @@ else {
 }
 if ($LASTEXITCODE -ne 0) { throw 'git could not list the files to check.' }
 $files = @($files | Where-Object { $_ -match '\.md$' })
+# -All asks for every Markdown file, so none at all says the checkout is wrong, not the Markdown.
+if ($All -and -not $Range -and -not $files) {
+    Write-Host 'FAILED - markdown-check: -All found no Markdown file that git tracks here, so nothing was checked. A checkout that failed partway leaves the index empty.'
+    exit 1
+}
 
 $found = Invoke-Check -Files $files -Revision $revision -Top $top -MaxLineLength $MaxLineLength
 # What was read is the index; a file whose working tree differs passed or failed on what is staged.
