@@ -324,8 +324,10 @@ there is none, since then nothing was checked. With three dots
 the files are those the branch at the range's end has changed since it left the base; two dots
 would also list each file the base has edited or deleted since then. The check reads the
 repository it is run in, so a consumer runs it from the submodule on its own Markdown.
-`scripts/check.ps1` runs it here with `-All`. `-SelfTest` proves each of the three can fail. What
-it reads as what, and what it cannot see, is in its header.
+`scripts/check.ps1` runs it here with `-All`. `-SelfTest` proves each of the three can fail, and
+runs the check over CommonMark's own emphasis and raw-HTML examples, failing a finding the spec
+renders as emphasis; they are in `scripts/commonmark-examples.json`, under the spec's licence (see
+Licence below). What it reads as what, and what it cannot see, is in its header.
 
     pwsh -File scripts/markdown-check.ps1 -All -MaxLineLength 100
 
@@ -375,7 +377,9 @@ scripts/     PowerShell entry points, one job each, and the libraries they
              which reads a mod's info.json for four of them,
              self-test-halves.ps1, the runner a -SelfTest hands its halves to,
              and hook-matcher.ps1, which reads a session hook's matcher;
-             grado-count/, the counting mod count-resources.ps1 loads
+             grado-count/, the counting mod count-resources.ps1 loads;
+             commonmark-examples.json, CommonMark's examples, which
+             markdown-check.ps1 -SelfTest reads (CC BY-SA 4.0)
 .githooks/   this repo's own commit-msg and pre-push hooks, opted into once per
              clone
 .claude/     settings.json, which wires the session hook that refuses a commit
@@ -399,3 +403,8 @@ MIT, in `LICENSE`. Decided 2026-09-21. The sibling `realistic-fusion-refreshed` 
 it carries Krastorio 2 code; that reasoning does not transfer to tooling written from scratch.
 Forced then rather than later because a submodule makes this repo a build dependency of two
 others, so "all rights reserved by default" stopped being harmless.
+
+One file is not under MIT: `scripts/commonmark-examples.json` holds examples from the
+[CommonMark Spec](https://spec.commonmark.org/0.31.2/) by John MacFarlane, version 0.31.2,
+unchanged, under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). That file stays
+under that licence, as its own header says. Truls chose to keep it here on 2026-10-19 (#167).
