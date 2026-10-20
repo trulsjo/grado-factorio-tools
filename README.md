@@ -145,6 +145,21 @@ the script reads and what it does not see.
 All five take `-SelfTest`. The walk's runs on a dump of Space Age alone, which it makes through
 `get-dump.ps1` and so needs the game, unless `-Dump` names one; the other four read fixtures.
 
+## Tracing which mods define a name
+
+A dump says which definition of a name stands, not which mods wrote one.
+`scripts/trace-definitions.ps1` loads a set of mods through the harness with a tracing mod it
+writes into the harness's mod directory, which logs every `data.extend` with the mod whose stage
+file made it. It prints each name two or more mods define, each definer with its stage in order,
+and the one that stands. Names core or base define are counted apart. Written for
+[#173](https://github.com/trulsjo/grado-factorio-tools/issues/173), for
+[grado-factorio-modpack#331](https://github.com/trulsjo/grado-factorio-modpack/issues/331).
+
+    pwsh -File scripts/trace-definitions.ps1 .mod-cache/Grado_ABCS -With space-age
+
+`-SelfTest` loads five fixture mods, and so needs the game. What the tracing mod cannot see, such
+as a prototype assigned into `data.raw` directly, is in the header.
+
 ## Counting resources on a new map
 
 Two scripts and a mod answer which resources a mod leaves with no entity, on a map of the same
