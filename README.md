@@ -370,9 +370,14 @@ each and in that order: Truls's ruling of 2026-10-19 (grado-factorio-modpack#320
 since #171 (2026-10-20). The rule is ported from that repository's `Get-DraftProblem`
 (`scripts/pr-body.ps1` at `0a58b02`, read 2026-10-20).
 
-CI runs it on the body of every pull request here, and again when the body is edited. A word that
-names no commit in the clone, such as a commit of a sibling, is said to be unchecked and passes.
-What else it cannot see is in its header. `-SelfTest` proves it can fail.
+With `-CiteSiblings` it also fails a sentence about a sibling repository that lacks a commit or
+an ISO date (#177). That is this repository's rule, so it is asked for; a run that does not ask,
+as a sibling's CI does, checks what it did before.
+
+CI runs it, with `-CiteSiblings`, on the body of every pull request here, and again when the
+body is edited. A word that names no commit in the clone, such as a commit of a sibling, is
+said to be unchecked and passes. What else it cannot see is in its header. `-SelfTest` proves
+it can fail.
 
 ## Checking that list parameters are split
 

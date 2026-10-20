@@ -6,7 +6,8 @@
     that is an ancestor of origin/main, no line holds a closing keyword before an issue reference
     unless the line is `Closes #N` alone, and `## Summary`, `## Evidence` and `## Merge Danger`
     each stand once, in that order; exit 1 names each commit, each line and each heading that
-    fails that.
+    fails that. With -CiteSiblings, a fourth: each statement about a sibling repository carries
+    a commit and an ISO date, and exit 1 names each sentence that does not.
 
 .DESCRIPTION
     WHY (grado-factorio-tools#96). Pull requests here are rebase-merged, which rewrites every
@@ -52,6 +53,22 @@
     reported as found. Other sections may stand before, between and after them. An empty body
     lacks all three and fails. This third job reads the text alone and asks git nothing.
 
+    A STATEMENT ABOUT A SIBLING CARRIES ITS COMMIT AND ITS DATE, WITH -CiteSiblings
+    (grado-factorio-tools#177). docs/agents/code-review-prose.md held a body to this, and only a
+    review's prose lane read it, after the pull request was open: PR #174's body said "No sibling
+    calls it until its pin moves", which that lane found. Truls ruled on 2026-10-20, on #177,
+    what is read. A sentence is a statement when it names grado-factorio-modpack or
+    realistic-fusion-refreshed, or holds the word "sibling" or "siblings" as a word of its own,
+    in any case. A bare reference to a sibling's ticket or pull request,
+    `grado-factorio-modpack#337` with or without `trulsjo/` before it, is taken out first, so a
+    sentence holding only that is none. A statement carries
+    a commit and an ISO date: a word of 7 to 40 hexadecimal characters with a digit among them,
+    and a YYYY-MM-DD. The rule is this repository's, so it is asked for: both siblings run this
+    script on their pull request bodies, from their pin (grado-factorio-modpack's check.yml at
+    dcb10df and realistic-fusion-refreshed's gates.yml at 9f3504f, read 2026-10-20), and a run
+    there that does not ask checks what it did before (Truls, 2026-10-20). This repository's CI
+    asks, and so does the command before `gh pr create` in docs/agents/issue-tracker.md.
+
     A SHALLOW CLONE IS REFUSED, and nothing is checked: there an ancestor cannot be told from a
     commit whose history was cut off. CI therefore fetches the whole history for this. Whatever
     else git cannot answer fails the run too; nothing passes for not having been asked.
@@ -81,6 +98,13 @@
     every heading after it until the next fence line. A fence of one character inside one of
     the other, or a shorter fence inside a longer one, ends the outer fence early, and a
     heading inside it is counted.
+    Of statements about a sibling: whether the commit and the date are the sibling's, or true. A
+    sentence is cut where a . ! or ? is followed by a space and anything but a lower-case letter,
+    so "e.g. A" ends one, and a commit cited in the next part is not counted; a paragraph's lines
+    are joined, and a list item, a heading or a table row stands alone. A line in a fenced block
+    is not read, by the fence rule above. A sibling named some other way, by its title or an
+    address, is read as a statement; one named by neither its name nor the word is not seen. A
+    run id of 7 or more digits counts as a commit.
 
 .PARAMETER Path
     The file holding the body, as handed to `gh pr create --body-file`.
@@ -92,6 +116,9 @@
 
 .PARAMETER Main
     The branch a cited commit must be on. origin/main unless said.
+
+.PARAMETER CiteSiblings
+    Hold each statement about a sibling to a commit and an ISO date, as above. Off unless asked.
 
 .PARAMETER SelfTest
     Run the cases that hold the check to what this header says, naming each as it runs. Needs
@@ -110,7 +137,8 @@ param(
     [Parameter(ParameterSetName = 'Path', Mandatory, Position = 0)] [string] $Path,
     [Parameter(ParameterSetName = 'Body', Mandatory)] [AllowEmptyString()] [string] $Body,
     [Parameter(ParameterSetName = 'SelfTest', Mandatory)] [switch] $SelfTest,
-    [string] $Main = 'origin/main'
+    [string] $Main = 'origin/main',
+    [switch] $CiteSiblings
 )
 
 Set-StrictMode -Version Latest
@@ -182,6 +210,36 @@ function Get-HeadingProblem {
         $problems += "the headings stand in the order $($found -join ', ')"
     }
     $problems
+}
+
+function Get-SiblingProblem {
+    <#  Each sentence of $Text that is a statement about a sibling repository and lacks a commit
+        or an ISO date, as @{ Line; Missing; Sentence }: the line its block starts on, what it
+        lacks, and the sentence.  #>
+    param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text)
+    # Blocks: a paragraph's lines joined, a list item, a heading or a table row; nothing fenced.
+    $blocks = [System.Collections.Generic.List[hashtable]]::new()
+    $current = $null; $fenced = $false; $n = 0
+    foreach ($line in $Text -split '\r?\n') {
+        $n++
+        if ($line -match '^\s*(```|~~~)') { $fenced = -not $fenced; $current = $null; continue }
+        if ($fenced -or $line -match '^\s*$') { $current = $null; continue }
+        if ($null -eq $current -or $line -match '^\s*(?:[-*+]|\d+[.)]|#{1,6})\s|^\s*\|') {
+            $current = @{ Line = $n; Text = $line.Trim() }; $blocks.Add($current)
+        }
+        else { $current.Text += ' ' + $line.Trim() }
+    }
+    foreach ($b in $blocks) {
+        # A sentence ends at . ! or ? before a space and anything but a lower-case letter.
+        foreach ($sentence in [regex]::Split($b.Text, '(?<=[.!?])\s+(?=[^a-z\s])')) {
+            $plain = $sentence -replace '(?<![\w.-])(?:trulsjo/)?(?:grado-factorio-modpack|realistic-fusion-refreshed)#\d+', ''
+            if ($plain -notmatch 'grado-factorio-modpack|realistic-fusion-refreshed|\bsiblings?\b') { continue }
+            $missing = @()
+            if ($sentence -notmatch '(?<![0-9A-Za-z_])(?=[a-fA-F]*\d)[0-9a-fA-F]{7,40}(?![0-9A-Za-z_])') { $missing += 'a commit' }
+            if ($sentence -notmatch '(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)') { $missing += 'an ISO date' }
+            if ($missing) { @{ Line = $b.Line; Missing = $missing -join ' and '; Sentence = $sentence } }
+        }
+    }
 }
 
 function Invoke-SelfTest {
@@ -295,6 +353,31 @@ function Invoke-SelfTest {
             $refused.Code -eq 1 -and $empty.Code -eq 1 -and
                 @([regex]::Matches($refused.Text, '(?m)^pr-body-check: `## (Summary|Evidence|Merge Danger)` is missing')).Count -eq 3 -and
                 $refused.Text -match '(?m)^FAILED - pr-body-check: .*3 problem' } }
+        @{ Name = 'PR #174''s first-drafted sentence about a sibling is refused, naming it, and passes with a commit and an ISO date'; Test = {
+            $bare = @(Get-SiblingProblem 'No sibling calls it until its pin moves.')
+            $cited = @(Get-SiblingProblem 'No sibling calls it until its pin moves past 3e86514, merged 2026-10-20.')
+            $bare.Count -eq 1 -and $bare[0].Missing -eq 'a commit and an ISO date' -and $bare[0].Sentence -eq 'No sibling calls it until its pin moves.' -and
+                $cited.Count -eq 0 } }
+        @{ Name = 'a sentence naming either sibling repository, or Siblings in capitals, with only one of the two is refused, and only that sentence of its paragraph'; Test = {
+            $commitOnly = @(Get-SiblingProblem "Intro.`n`ngrado-factorio-modpack pins a882314. Its gate is fine.")
+            $dateOnly = @(Get-SiblingProblem 'realistic-fusion-refreshed was read on 2026-10-20.')
+            $capital = @(Get-SiblingProblem 'Siblings are untouched, read 2026-10-20.')
+            $commitOnly.Count -eq 1 -and $commitOnly[0].Line -eq 3 -and $commitOnly[0].Missing -eq 'an ISO date' -and $commitOnly[0].Sentence -eq 'grado-factorio-modpack pins a882314.' -and
+                $dateOnly.Count -eq 1 -and $dateOnly[0].Missing -eq 'a commit' -and $capital.Count -eq 1 } }
+        @{ Name = 'a bare reference to a sibling''s ticket or pull request is no statement, nor is the word inside a longer one; a sentence in a fenced block is not read, and a hex word with no digit is no commit'; Test = {
+            $refs = @(Get-SiblingProblem "Filed as grado-factorio-modpack#337, after trulsjo/realistic-fusion-refreshed#12.`n- Unblocks grado-factorio-modpack#331.")
+            $fenced = @(Get-SiblingProblem "``````text`nThe sibling is grado-factorio-modpack.`n```````n")
+            $word = @(Get-SiblingProblem 'The sibling defaced nothing on 2026-10-20.')
+            $inName = @(Get-SiblingProblem 'Get-SiblingProblem and -CiteSiblings are new.')
+            $refs.Count -eq 0 -and $fenced.Count -eq 0 -and $word.Count -eq 1 -and $word[0].Missing -eq 'a commit' -and $inName.Count -eq 0 } }
+        @{ Name = 'run with -CiteSiblings on such a body it exits 1 naming the line; without it, as a sibling''s CI runs it, the same body passes'; Test = {
+            $file = Join-Path $temp 'body.md'
+            Set-Content -LiteralPath $file -Value "## Summary`n`nNo sibling calls it until its pin moves.`n`n## Evidence`n`n## Merge Danger"
+            $refused = & $run @($file, '-CiteSiblings')
+            $passed = & $run @($file)
+            Write-Host ($refused.Text.TrimEnd() -replace '(?m)^', '    ')
+            $refused.Code -eq 1 -and $refused.Text -match '(?m)^pr-body-check: line 3 says "No sibling calls it until its pin moves\.", a statement about a sibling with no commit and no ISO date' -and
+                $refused.Text -match '(?m)^FAILED - pr-body-check: .*1 statement' -and $passed.Code -eq 0 } }
     )
 
     $failures = 0
@@ -332,11 +415,19 @@ $headings = @(Get-HeadingProblem -Text "$Body")
 foreach ($h in $headings) {
     Write-Host "pr-body-check: $h. The body carries ## Summary, ## Evidence and ## Merge Danger, once each and in that order."
 }
+$siblings = @(if ($CiteSiblings) { Get-SiblingProblem -Text "$Body" })
+foreach ($s in $siblings) {
+    Write-Host "pr-body-check: line $($s.Line) says `"$($s.Sentence)`", a statement about a sibling with no $($s.Missing -replace '^an? ' -replace ' and an? ', ' and no '). Give it the commit and the date it was read at."
+}
 $unchecked = if ($read.Unknown) { " $($read.Unknown) named no commit here and were NOT checked." } else { '' }
-if ($read.Off -or $closing -or $headings) {
+$found = @("$($read.Off.Count) word(s) of the body name a commit that is not on $Main", "$($closing.Count) closing keyword(s) stand outside a Closes #N line",
+    "$($headings.Count) problem(s) with the pr template's three headings")
+if ($CiteSiblings) { $found += "$($siblings.Count) statement(s) about a sibling lack a commit or an ISO date" }
+if ($read.Off -or $closing -or $headings -or $siblings) {
     Write-Host ''
-    Write-Host "FAILED - pr-body-check: $($read.Off.Count) word(s) of the body name a commit that is not on $Main, $($closing.Count) closing keyword(s) stand outside a Closes #N line, and $($headings.Count) problem(s) with the pr template's three headings.$unchecked"
+    Write-Host "FAILED - pr-body-check: $(($found | Select-Object -SkipLast 1) -join ', '), and $($found[-1]).$unchecked"
     exit 1
 }
-Write-Host "OK - pr-body-check: $($read.On) word(s) of the body name a commit, each on $Main, no closing keyword stands outside a Closes #N line, and the pr template's three headings stand once each, in order.$unchecked"
+$cited = if ($CiteSiblings) { ' Each statement about a sibling carries a commit and an ISO date.' } else { '' }
+Write-Host "OK - pr-body-check: $($read.On) word(s) of the body name a commit, each on $Main, no closing keyword stands outside a Closes #N line, and the pr template's three headings stand once each, in order.$cited$unchecked"
 exit 0

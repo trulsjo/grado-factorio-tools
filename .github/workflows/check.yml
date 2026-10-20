@@ -57,4 +57,4 @@ jobs:
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
         shell: pwsh
-        run: ./scripts/pr-body-check.ps1 -Body "$env:PR_BODY"
+        run: ./scripts/pr-body-check.ps1 -Body "$env:PR_BODY" -CiteSiblings

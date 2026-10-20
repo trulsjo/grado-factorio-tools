@@ -72,7 +72,7 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
 - **The title and the body are checked before the create, in one command joined with `&&`**, so
   that a failure of either stops it:
 
-      pwsh -File scripts/commit-check.ps1 -ScopeFile commit-scopes.txt -Title "<title>" && pwsh -File scripts/pr-body-check.ps1 <body file> && gh pr create --title "<title>" --body-file <body file>
+      pwsh -File scripts/commit-check.ps1 -ScopeFile commit-scopes.txt -Title "<title>" && pwsh -File scripts/pr-body-check.ps1 <body file> -CiteSiblings && gh pr create --title "<title>" --body-file <body file>
 
   PR #104 was opened with a 76-character title, by the session's account of 2026-10-11: the
   check ran in a command joined with `;`, which does not stop on a failure.

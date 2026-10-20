@@ -16,6 +16,7 @@ what it reports are in [code-review.md](code-review.md); the evidence is in
 - **An old figure struck through beside what replaced it is not a defect; an unmarked one is.**
 - **A statement about a sibling repository**, the diff's, a lane's or the session's, is read
   with the passage around it and carries the commit and the date; one without is a finding.
+  `pr-body-check.ps1 -CiteSiblings` holds a pull request body to this, not a commit or a page.
   The session opens the place itself before the statement goes into the comment; unopened, it
   is left out and told to Truls in the report.
 - **A sibling's ticket or pull request is written with its repository**, as
