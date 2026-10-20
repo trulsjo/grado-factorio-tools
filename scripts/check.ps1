@@ -19,7 +19,9 @@
     self-test reaches, and in the libraries that have no self-test. Then param-check.ps1 over the
     same scripts, for a list parameter that `pwsh -File` would hand over as one string
     (grado-factorio-tools#163). Then -SelfTest of each script in $SELF_TESTS, each in a pwsh of
-    its own, so one script's `exit` does not end the run. A self-test that passes prints one line
+    its own, so one script's `exit` does not end the run, and -SelfTest -NoGame of each in
+    $NO_GAME_CASES: the cases of a script that needs the game which read no game's output but a
+    log written for them (grado-factorio-tools#175). A self-test that passes prints one line
     here; one that fails prints everything it said.
 
     THE PAGES AN AGENT ALWAYS LOADS HAVE A SIZE LIMIT (grado-factorio-tools#69). CLAUDE.md loads on
@@ -38,7 +40,7 @@
     check is silent on length for a repository that hands it none.
 
     WHAT IT DOES NOT RUN. The self-tests in $NEEDS_GAME, because each starts Factorio, and a CI
-    runner has no game. Every script named there loads its mods through the harness, and the
+    runner has no game: of one in $NO_GAME_CASES too, the cases that start it. Every script named there loads its mods through the harness, and the
     harness reads through mod-info.ps1. So after a change to either of those run all of them by
     hand, and after a change to one of the others, its own:
 
@@ -97,6 +99,8 @@ $SELF_TESTS = @('check.ps1', 'commit-check.ps1', 'compare-resource-counts.ps1', 
     'refuse-cd-into-mod-cache.ps1', 'refuse-git-hook-skip.ps1', 'resolve-modpack.ps1', 'self-test-halves.ps1')
 # Has a self-test this does not run, and why: it needs Factorio installed.
 $NEEDS_GAME = @('dump-walk.ps1', 'load-harness.ps1', 'locale-check.ps1', 'trace-definitions.ps1', 'tree-viewer.ps1')
+# Of those, each whose -SelfTest -NoGame runs the cases that need no game. This runs them.
+$NO_GAME_CASES = @('trace-definitions.ps1')
 # Bytes, with LF line endings; a page must be under its limit. Paths are from the repository root.
 $PAGE_LIMITS = [ordered]@{ 'CLAUDE.md' = 4000; 'docs/agents/code-review.md' = 3000; 'docs/agents/code-review-prose.md' = 2000 }
 # Characters a line of tracked Markdown prose may run to. What counts is in markdown-check.ps1's header.
@@ -247,16 +251,17 @@ if ($bad) {
     $failed.Add('param-check.ps1 found a list parameter never split on a comma')
 }
 
-foreach ($name in $SELF_TESTS) {
+foreach ($run in @($SELF_TESTS | ForEach-Object { , @($_, '-SelfTest') }) + @($NO_GAME_CASES | ForEach-Object { , @($_, '-SelfTest', '-NoGame') })) {
+    $name = $run[0]; $switches = @($run | Select-Object -Skip 1)
     $clock.Restart()
-    $said = & pwsh -NoProfile -File (Join-Path $PSScriptRoot $name) -SelfTest 2>&1 | Out-String
+    $said = & pwsh -NoProfile -File (Join-Path $PSScriptRoot $name) @switches 2>&1 | Out-String
     # Exit 0 having run no case is not a pass: mod-info.ps1 has no param block, so it would take
     # a -SelfTest it no longer answers in silence.
     $ran = $said -match 'self-test'
-    Write-Host "check: $name -SelfTest -- $($LASTEXITCODE -or -not $ran ? 'FAILED' : 'ok') $(& $took)"
+    Write-Host "check: $name $switches -- $($LASTEXITCODE -or -not $ran ? 'FAILED' : 'ok') $(& $took)"
     if ($LASTEXITCODE -or -not $ran) {
         $said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
-        $failed.Add($ran ? "$name -SelfTest exited $LASTEXITCODE" : "$name -SelfTest ran no case")
+        $failed.Add($ran ? "$name $switches exited $LASTEXITCODE" : "$name $switches ran no case")
     }
 }
 
@@ -301,5 +306,5 @@ if ($failed) {
 # no one tree passed.
 $said = Complete-PassRecord -Root $root -Record $record -Tree $tree
 if ($said) { Write-Host $said }
-Write-Host "OK - check passed. Not run, because each needs the game: -SelfTest of $($NEEDS_GAME -join ', ')."
+Write-Host "OK - check passed. Not run, because each needs the game: -SelfTest of $($NEEDS_GAME -join ', '); of $($NO_GAME_CASES -join ', '), only the cases that need no game ran."
 exit 0
