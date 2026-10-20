@@ -70,7 +70,7 @@ $SELF_TESTS = @('commit-check.ps1', 'compare-resource-counts.ps1', 'dump-diff.ps
     'get-dump.ps1', 'hook-matcher.ps1', 'markdown-check.ps1', 'mod-info.ps1', 'pack-mods.ps1', 'param-check.ps1', 'pr-body-check.ps1',
     'refuse-cd-into-mod-cache.ps1', 'refuse-git-hook-skip.ps1', 'resolve-modpack.ps1', 'self-test-halves.ps1')
 # Has a self-test this does not run, and why: it needs Factorio installed.
-$NEEDS_GAME = @('dump-walk.ps1', 'load-harness.ps1', 'locale-check.ps1', 'tree-viewer.ps1')
+$NEEDS_GAME = @('dump-walk.ps1', 'load-harness.ps1', 'locale-check.ps1', 'trace-definitions.ps1', 'tree-viewer.ps1')
 # Bytes, with LF line endings; a page must be under its limit. Paths are from the repository root.
 $PAGE_LIMITS = [ordered]@{ 'CLAUDE.md' = 4000; 'docs/agents/code-review.md' = 3000; 'docs/agents/code-review-prose.md' = 2000 }
 # Characters a line of tracked Markdown prose may run to. What counts is in markdown-check.ps1's header.
