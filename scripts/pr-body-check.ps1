@@ -43,14 +43,14 @@
     grado-factorio-modpack#320, that a pull request body carries the `mattpocock-skills:pr`
     template's `## Summary`, `## Evidence` and `## Merge Danger`, and that the ruling reaches
     realistic-fusion-refreshed too; on 2026-10-20, triaging #171, that it holds here as well.
-    The rule is the modpack's, ported from
-    its Get-DraftProblem (scripts/pr-body.ps1 at 0a58b02) so that the repositories read one
-    definition. A heading is its line exactly, case and all, from the first column, with
-    trailing spaces allowed; a line inside a fenced block is not one. Each of the three stands
-    once, and then in that order. Each missing one and each repeated one is reported by name,
-    a repeat with its count; with none missing or repeated, a wrong order is reported as found.
-    Other sections may stand before, between and after them. An empty body lacks all three and
-    fails. This half reads the text alone and asks git nothing.
+    The rule is the modpack's, ported from its Get-DraftProblem (scripts/pr-body.ps1 at
+    0a58b02, read 2026-10-20) so that the repositories read one definition. A heading is its
+    line exactly, case and all, from the first column, with trailing whitespace allowed: spaces,
+    tabs, and the carriage return of a CRLF line. A line inside a fenced block is not one. Each
+    of the three stands once, and then in that order. Each missing one and each repeated one is
+    reported by name, a repeat with its count; with none missing or repeated, a wrong order is
+    reported as found. Other sections may stand before, between and after them. An empty body
+    lacks all three and fails. This third job reads the text alone and asks git nothing.
 
     A SHALLOW CLONE IS REFUSED, and nothing is checked: there an ancestor cannot be told from a
     commit whose history was cut off. CI therefore fetches the whole history for this. Whatever
@@ -74,9 +74,13 @@
     taken as missing, though GitHub renders each as a heading. One in an HTML comment is taken
     as a heading, though GitHub shows none. A fence is any line of optional spaces then three
     backticks or three tildes, at any indent, and the next such line closes it, whichever of the
-    two it uses; CommonMark reads an indent of four or more as code, and closes a fence only
-    with its own character. So a fence line in an indented code block hides every heading after
-    it until the next fence line.
+    two it uses and however long. CommonMark reads an indent of four or more as code, closes a
+    fence only with its own character at least as long, and reads a backtick line with a
+    backtick after its opening run, such as a code span, as no fence. So the check can be wrong
+    both ways. A fence line in an indented code block, or a line opening with a code span, hides
+    every heading after it until the next fence line. A fence of one character inside one of
+    the other, or a shorter fence inside a longer one, ends the outer fence early, and a
+    heading inside it is counted.
 
 .PARAMETER Path
     The file holding the body, as handed to `gh pr create --body-file`.
@@ -263,7 +267,7 @@ function Invoke-SelfTest {
             Write-Host ($passed.Text.TrimEnd() -replace '(?m)^', '    ')
             $refused.Code -eq 1 -and $refused.Text -match '(?m)^pr-body-check: line 4 says "closed: #103"' -and $refused.Text -match '(?m)^FAILED - pr-body-check: .*1 closing keyword' -and
                 $passed.Code -eq 0 -and $passed.Text -match '(?m)^OK - pr-body-check: ' } }
-        @{ Name = 'the three headings in order pass, with other sections before, between and after them, trailing spaces, and CRLF line endings'; Test = {
+        @{ Name = 'the three headings in order pass, with other sections before, between and after them, trailing whitespace, and CRLF line endings (whose carriage return the trim takes)'; Test = {
             $lf = @(Get-HeadingProblem "Closes #1`n`n## Why`n`n## Summary`n`nA change.`n`n## Notes`n`n## Evidence  `n`nRun.`n`n## Merge Danger`t`n`nNone.`n`n## Review`n")
             $crlf = @(Get-HeadingProblem "## Summary`r`n`r`n## Evidence`r`n`r`n## Merge Danger`r`n")
             $lf.Count -eq 0 -and $crlf.Count -eq 0 } }
