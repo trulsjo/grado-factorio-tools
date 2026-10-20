@@ -23,13 +23,13 @@
     (Truls, 2026-10-20, on #173). Where the frame that called data.extend is another mod's file,
     a library's, that mod is named beside it as the caller.
 
-    MEASURED ON 2.0.77, 2026-10-20, by a run of -SelfTest on a copy of this script whose
-    Invoke-Trace passes -Keep to Remove-LoadHarness, reading the kept trace-stdout.txt. The game
-    loaded core, then $TRACER, then base. debug.getinfo gave each frame's source as
-    `@__<mod>__/<path>`, so the calling mod and the running one are both read: tdp-e's call
-    through tdp-a's lib.lua was logged as run by tdp-e and called from tdp-a. log() reached the
-    game's stdout. With the wrap removed, -SelfTest stops on this script's refusal, having logged
-    only core's 147.
+    MEASURED ON 2.0.77, 2026-10-20, by `-SelfTest -KeepTemp`, reading the kept trace-stdout.txt
+    (grado-factorio-tools#175). The game loaded core, then $TRACER, then base. debug.getinfo gave
+    each frame's source as `@__<mod>__/<path>`, so the calling mod and the running one are both
+    read: tdp-e's call through tdp-a's lib.lua was logged as run by tdp-e and called from tdp-a.
+    log() reached the game's stdout, with 147 lines of core's. With the wrap removed, on a copy of
+    this script the same day (grado-factorio-tools#173), -SelfTest stopped on this script's
+    refusal, having logged only those 147.
 
     A SHARED NAME is a type and name that two or more mods define. A mod defining its own name
     again is not one. A name core or base defines is a base-game name: those a mod defines again
@@ -55,9 +55,18 @@
 .PARAMETER FactorioExe
     As load-harness.ps1 takes it.
 
+.PARAMETER KeepTemp
+    Keep the harness's temp directory, the game's trace-stdout.txt in it, and say where, as
+    load-harness.ps1's -KeepTemp does.
+
 .PARAMETER SelfTest
     Load fixture mods from a temp directory with the tracing mod and check what is printed, and
     read two logs written without the game. Needs the game.
+
+.PARAMETER NoGame
+    With -SelfTest, only read the two logs written without the game. scripts/check.ps1 runs this,
+    so the cases that need no game run on every push and in CI; the cases that load the fixture
+    mods are left out, and it says nothing of them.
 
 .EXAMPLE
     pwsh -File scripts/trace-definitions.ps1 .mod-cache/Grado_ABCS -With space-age
@@ -69,7 +78,9 @@ param(
     [Parameter(Position = 0)] [string[]] $Mods = @(),
     [string[]] $With = @(),
     [string] $FactorioExe,
-    [switch] $SelfTest
+    [switch] $KeepTemp,
+    [switch] $SelfTest,
+    [switch] $NoGame
 )
 
 Set-StrictMode -Version Latest
@@ -182,7 +193,7 @@ function Write-Definitions {
 function Invoke-Trace {
     <#  Load -Mods with the tracing mod and return Read-Definitions' rows. Throws when the game fails,
         or when the tracing mod saw no call from base.  #>
-    param([string[]] $Mods = @(), [string[]] $With = @(), [string] $FactorioExe)
+    param([string[]] $Mods = @(), [string[]] $With = @(), [string] $FactorioExe, [switch] $KeepTemp)
     $h = New-LoadHarness -Mods $Mods -With $With -FactorioExe $FactorioExe
     try {
         New-Tracer -ModDirectory $h.ModDirectory
@@ -190,10 +201,11 @@ function Invoke-Trace {
         $out = Invoke-FactorioStep -FactorioExe $h.FactorioExe -ModDirectory $h.ModDirectory -Arguments @('--dump-data') -OutputDirectory $h.Temp -Tag 'trace'
         Read-Definitions -Path $out
     }
-    finally { Remove-LoadHarness -Harness $h }
+    finally { Remove-LoadHarness -Harness $h -Keep:$KeepTemp }
 }
 
 function Invoke-SelfTest {
+    param([switch] $NoGame, [switch] $KeepTemp)
     $temp = Join-Path ([IO.Path]::GetTempPath()) "trace-definitions-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
     $item = { param($name) "{ type = `"item`", name = `"$name`", stack_size = 50, icon = `"__base__/graphics/icons/iron-plate.png`" }" }
     $newMod = {
@@ -217,8 +229,9 @@ function Invoke-SelfTest {
         'data-final-fixes.lua' = "data:extend({ $(& $item 'tdp-own') })" }
     & $newMod 'tdp-e' @{ 'data.lua' = "require('__tdp-a__/lib').make()" }
 
-    $userData = Join-Path $env:APPDATA 'Factorio'
     $fingerprint = {
+        # Read here, as the game's cases alone run it: a system with no APPDATA runs -NoGame.
+        $userData = Join-Path $env:APPDATA 'Factorio'
         foreach ($p in @('mods', 'saves', 'player-data.json', 'config')) {
             $root = Join-Path $userData $p
             if (-not (Test-Path -LiteralPath $root)) { continue }
@@ -235,26 +248,29 @@ function Invoke-SelfTest {
     try {
         $one = @(Write-Definitions -Definitions @(Read-Definitions -Path $oneLog))
         $refused = try { Read-Definitions -Path $coreLog | Out-Null; '' } catch { $_.Exception.Message }
-        $before = @(& $fingerprint)
-        $found = @(Invoke-Trace -Mods $temp)
-        $after = @(& $fingerprint)
-        $out = (Write-Definitions -Definitions $found) -join "`n"
+        $out = $one -join "`n"
         $cases = [ordered]@{
-            'two mods defining one name are listed, the second standing, data.extend as data:extend' =
-                $out -match '\| `tdp-shared` \| `item` \| 1\. `tdp-a` in data; 2\. `tdp-b` in data \| `tdp-b` \|'
-            'a mod that defines a name only when the other is loaded is listed, with its stage' =
-                $out -match '\| `tdp-cond` \| `item` \| 1\. `tdp-a` in data; 2\. `tdp-c` in data-updates \| `tdp-c` \|'
-            'a mod redefining its own name is counted, not listed' = $out -notmatch '`tdp-own`' -and $out -match ' 1 more are defined twice by one mod'
-            'a base prototype redefined is counted, not listed, and core is counted as base' =
-                $out -notmatch '`iron-plate`' -and $out -match ' 1 base-game names are defined again' -and ($found | Where-Object Mod -ceq 'core')
-            'a definition through another mod''s file is the running mod''s, naming the caller' =
-                $out -match '\| `tdp-lib` \| `item` \| 1\. `tdp-a` in data; 2\. `tdp-e` in data, through `tdp-a` \| `tdp-e` \|'
-            'only these three names are listed' = $out -match '^\*\*3 prototype names'
-            'the player''s files and the fixtures are untouched' = -not (Compare-Object $before $after)
             'one shared name is one row of four cells, and names that differ in case are two names' =
                 $one[0] -match '^\*\*1 prototype names' -and @($one | Where-Object { $_ -like '|*' }).Count -eq 3 -and
                 ($one -ccontains '| `x` | `item` | 1. `a` in data; 2. `b` in data | `b` |')
             'a log with no data.extend by base is refused' = $refused -match 'logged no data\.extend by base'
+        }
+        if (-not $NoGame) {
+            $before = @(& $fingerprint)
+            $found = @(Invoke-Trace -Mods $temp -KeepTemp:$KeepTemp)
+            $after = @(& $fingerprint)
+            $out = (Write-Definitions -Definitions $found) -join "`n"
+            $cases['two mods defining one name are listed, the second standing, data.extend as data:extend'] =
+                $out -match '\| `tdp-shared` \| `item` \| 1\. `tdp-a` in data; 2\. `tdp-b` in data \| `tdp-b` \|'
+            $cases['a mod that defines a name only when the other is loaded is listed, with its stage'] =
+                $out -match '\| `tdp-cond` \| `item` \| 1\. `tdp-a` in data; 2\. `tdp-c` in data-updates \| `tdp-c` \|'
+            $cases['a mod redefining its own name is counted, not listed'] = $out -notmatch '`tdp-own`' -and $out -match ' 1 more are defined twice by one mod'
+            $cases['a base prototype redefined is counted, not listed, and core is counted as base'] =
+                $out -notmatch '`iron-plate`' -and $out -match ' 1 base-game names are defined again' -and ($found | Where-Object Mod -ceq 'core')
+            $cases['a definition through another mod''s file is the running mod''s, naming the caller'] =
+                $out -match '\| `tdp-lib` \| `item` \| 1\. `tdp-a` in data; 2\. `tdp-e` in data, through `tdp-a` \| `tdp-e` \|'
+            $cases['only these three names are listed'] = $out -match '^\*\*3 prototype names'
+            $cases['the player''s files and the fixtures are untouched'] = -not (Compare-Object $before $after)
         }
         $failures = 0; $n = 0
         foreach ($name in $cases.Keys) {
@@ -264,13 +280,13 @@ function Invoke-SelfTest {
         }
         Write-Host ''
         if ($failures) { Write-Host $out; Write-Host "FAILED - self-test: $failures of $($cases.Count) case(s) did not hold."; exit 1 }
-        Write-Host "OK - self-test passed: all $($cases.Count) cases."
+        Write-Host "OK - self-test passed: all $($cases.Count) cases.$(if ($NoGame) { ' With -NoGame: the cases that load the fixture mods were not run.' })"
         exit 0
     }
     finally { Remove-TempDirectory -Path $temp -Label 'trace-definitions self-test' }
 }
 
-if ($SelfTest) { Invoke-SelfTest }
+if ($SelfTest) { Invoke-SelfTest -NoGame:$NoGame -KeepTemp:$KeepTemp }
 if (-not $Mods) { throw 'Name the mods to load: mod directories, zips, or directories of them. Or -SelfTest.' }
-Write-Definitions -Definitions @(Invoke-Trace -Mods $Mods -With $With -FactorioExe $FactorioExe)
+Write-Definitions -Definitions @(Invoke-Trace -Mods $Mods -With $With -FactorioExe $FactorioExe -KeepTemp:$KeepTemp)
 exit 0

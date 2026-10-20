@@ -157,8 +157,10 @@ and the one that stands. Names core or base define are counted apart. Written fo
 
     pwsh -File scripts/trace-definitions.ps1 .mod-cache/Grado_ABCS -With space-age
 
-`-SelfTest` loads five fixture mods, and so needs the game. What the tracing mod cannot see, such
-as a prototype assigned into `data.raw` directly, is in the header.
+`-SelfTest` loads five fixture mods, and so needs the game; `-SelfTest -NoGame` reads only two
+logs written for it, and `scripts/check.ps1` runs that. `-KeepTemp` keeps the harness, the game's
+`trace-stdout.txt` in it. What the tracing mod cannot see, such as a prototype assigned into
+`data.raw` directly, is in the header.
 
 ## Counting resources on a new map
 
