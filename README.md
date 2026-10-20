@@ -44,7 +44,9 @@ the locale check on 2026-10-14. Each contraction, with its tickets and commits, 
 **Two tools written here from nothing:** `scripts/resolve-modpack.ps1`
 ([#14](https://github.com/trulsjo/grado-factorio-tools/issues/14)) and
 `scripts/pr-body-check.ps1`
-([#96](https://github.com/trulsjo/grado-factorio-tools/issues/96)), both below.
+([#96](https://github.com/trulsjo/grado-factorio-tools/issues/96)), both below. The second's
+heading check is ported from `grado-factorio-modpack`
+([#171](https://github.com/trulsjo/grado-factorio-tools/issues/171)).
 
 The commit-message convention this repo and its siblings share is declared in
 [docs/commit-convention.md](docs/commit-convention.md). The three claim grades, for a sibling
@@ -349,8 +351,9 @@ It also fails on a closing keyword before an issue reference, such as `fixed` an
 and an issue's number, on any line that is not `Closes #N` alone: GitHub closes that issue when
 the pull request merges, whether or not the sentence meant it. And it fails a body that lacks
 the `mattpocock-skills:pr` template's `## Summary`, `## Evidence` and `## Merge Danger`, once
-each and in that order: Truls's ruling of 2026-10-19 (grado-factorio-modpack#320), read as that
-repository's own builder reads it.
+each and in that order: Truls's ruling of 2026-10-19 (grado-factorio-modpack#320), held here
+since #171 (2026-10-20). The rule is ported from that repository's `Get-DraftProblem`
+(`scripts/pr-body.ps1` at `0a58b02`, read 2026-10-20).
 
 CI runs it on the body of every pull request here, and again when the body is edited. A word that
 names no commit in the clone, such as a commit of a sibling, is said to be unchecked and passes.

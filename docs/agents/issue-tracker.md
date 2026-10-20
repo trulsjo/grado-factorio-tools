@@ -81,10 +81,11 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
   PR #105 (2026-10-11), and `scripts/pr-body-check.ps1` fails such a line. Its title is checked;
   see *Pull request titles* in [`docs/commit-convention.md`](../commit-convention.md).
 - **Pull request body**: the `mattpocock-skills:pr` template's `## Summary`, `## Evidence` and
-  `## Merge Danger`, once each and in that order (Truls, 2026-10-19, grado-factorio-modpack#320),
-  filled with that skill where it is installed and by hand where not. `scripts/pr-body-check.ps1`
-  holds a body to the three. This repository adds to the template: above it, the `Closes` lines
-  of the rule above, where the branch closes any ticket; below it, nothing.
+  `## Merge Danger`, once each and in that order (Truls, 2026-10-19,
+  grado-factorio-modpack#320; for this repository, 2026-10-20, #171), filled with that skill
+  where it is installed and by hand where not. `scripts/pr-body-check.ps1` holds a body to the
+  three. This repository adds to the template: above it, the `Closes` lines of the rule above,
+  where the branch closes any ticket; below it, nothing.
   The body does not recount the review: each review posts its findings as one comment on the
   pull request, by the rule in [`code-review.md`](code-review.md).
 - **The bar for a follow-up ticket** (Truls, 2026-10-06): a leftover from a review, a session or
