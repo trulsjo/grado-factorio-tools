@@ -1,7 +1,9 @@
 #!/bin/sh
 # Runs scripts/check.ps1 before a push leaves: a parse of every script and every self-test that
-# needs neither the game nor the network. What it does not run and cannot see is in that script's
-# header. This file is only the wiring, as commit-msg is, and is installed by the same one step:
+# needs neither the game nor the network. With -SkipIfPassed, so a tree that check already passed
+# is not run again (grado-factorio-tools#176); what a skip shows and cannot see is in that
+# script's header, with what the check does not run. This file is only the wiring, as commit-msg
+# is, and is installed by the same one step:
 #
 #     git config core.hooksPath .githooks
 #
@@ -25,4 +27,4 @@ fi
 # this repository's index. Cleared here, after the last git call this hook makes for itself.
 unset $(git rev-parse --local-env-vars)
 
-exec pwsh -NoProfile -File "$CHECK"
+exec pwsh -NoProfile -File "$CHECK" -SkipIfPassed
