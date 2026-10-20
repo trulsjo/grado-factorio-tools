@@ -53,17 +53,32 @@
     markdown-check.ps1 names it, and the check still passes.
     And fetch-mods.ps1's self-test listens on a loopback port, so it fails where that is refused.
 
+    A PASS IS RECORDED, AND -SkipIfPassed READS IT (grado-factorio-tools#176). The pre-push hook
+    ran this again on a tree it had just passed, minutes each time. A pass records the tree it
+    read in the repository's git directory, in check-passed, never in a tracked file: the working
+    tree's tracked and unignored files, written as a git tree, and the index's tree, since the
+    Markdown is read as staged. It is recorded only when the tree is the same at the end of the
+    run as at the start. A run that fails deletes the record. With -SkipIfPassed, as the hook runs
+    it, a tree that matches the record runs nothing, and the run says so, naming both trees and
+    when they passed. A skip shows that this same tree passed once; it cannot see what is outside
+    the tree: an ignored file, the pwsh or git in use, the loopback port fetch-mods.ps1 needs, or
+    a self-test that passes only sometimes. CI runs without the switch.
+
     HOW LONG IT TAKES ON THE DEVELOPMENT MACHINE DEPENDS ON WHAT ELSE IS RUNNING THERE
     (grado-factorio-tools#70). On a quiet machine it is under twice CI's time; it was reported as
     ten times slower while review lanes and the game were running beside it. No step here carries
     that. Each line prints its seconds so two runs can be compared; the measurement is in
     docs/measurements.md.
 
+.PARAMETER SkipIfPassed
+    Run nothing when the record says this tree passed, as above.
+
 .EXAMPLE
     pwsh -File scripts/check.ps1
 #>
 
 #Requires -Version 7
+param([switch] $SkipIfPassed)
 $ErrorActionPreference = 'Stop'
 
 $SELF_TESTS = @('commit-check.ps1', 'compare-resource-counts.ps1', 'dump-diff.ps1', 'dump-keys.ps1', 'dump-planets.ps1', 'dump-shared-names.ps1', 'fetch-mods.ps1',
@@ -81,6 +96,37 @@ $failed = [System.Collections.Generic.List[string]]::new()
 $clock = [Diagnostics.Stopwatch]::new()
 # What a step took, for the end of its line. Invariant, so a log reads the same on every machine.
 $took = { '({0}s)' -f $clock.Elapsed.TotalSeconds.ToString('0.0', [cultureinfo]::InvariantCulture) }
+
+# The tree as this check reads it: the working tree's tracked and unignored files, written as a
+# tree from a copy of the index, then the index itself, which the Markdown is read from. Empty
+# where git cannot say, as outside a repository, and then no pass is recorded or skipped.
+function Get-CheckedTree {
+    $index = git -C $root rev-parse --path-format=absolute --git-path index 2>$null
+    if ($LASTEXITCODE) { return '' }
+    $copy = New-TemporaryFile
+    $was = $env:GIT_INDEX_FILE
+    try {
+        if (Test-Path -LiteralPath $index) { Copy-Item -LiteralPath $index -Destination $copy -Force }
+        $env:GIT_INDEX_FILE = $copy.FullName
+        git -C $root add -A 2>$null
+        $work = git -C $root write-tree 2>$null
+        if ($LASTEXITCODE) { return '' }
+        $env:GIT_INDEX_FILE = $was
+        $staged = git -C $root write-tree 2>$null
+        if ($LASTEXITCODE) { return '' }
+        "$work $staged"
+    }
+    finally { $env:GIT_INDEX_FILE = $was; Remove-Item -LiteralPath $copy -Force -ErrorAction SilentlyContinue }
+}
+$record = git -C $root rev-parse --path-format=absolute --git-path check-passed 2>$null
+$tree = Get-CheckedTree
+if ($SkipIfPassed -and $tree -and (Test-Path -LiteralPath $record)) {
+    $passed = (Get-Content -LiteralPath $record -Raw).Trim() -split ' ', 3
+    if ("$($passed[0]) $($passed[1])" -eq $tree) {
+        Write-Host "OK - check skipped: this tree (working $($passed[0]), index $($passed[1])) passed it at $($passed[2]). Nothing was run."
+        exit 0
+    }
+}
 
 $clock.Restart()
 foreach ($script in Get-ChildItem -LiteralPath $PSScriptRoot -Filter *.ps1 | Sort-Object Name) {
@@ -152,6 +198,16 @@ if ($bad) {
 elseif ($said -match '(?ms)^markdown-check: \d+ file\(s\) have unstaged edits.*?(?=^OK - )') { $Matches[0].TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" } }
 
 Write-Host ''
-if ($failed) { Write-Host "FAILED - check: $($failed -join '; ')."; exit 1 }
+if ($failed) {
+    if ($record) { Remove-Item -LiteralPath $record -Force -ErrorAction SilentlyContinue }
+    Write-Host "FAILED - check: $($failed -join '; ')."
+    exit 1
+}
+# Recorded only for a tree that stood still while it was read: an edit during the run means
+# no one tree passed.
+if ($tree -and $tree -eq (Get-CheckedTree)) {
+    Set-Content -LiteralPath $record -Value "$tree $([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ', [cultureinfo]::InvariantCulture))"
+}
+elseif ($tree) { Write-Host 'check: the tree changed while it was read, so this pass is not recorded for -SkipIfPassed.' }
 Write-Host "OK - check passed. Not run, because each needs the game: -SelfTest of $($NEEDS_GAME -join ', ')."
 exit 0
