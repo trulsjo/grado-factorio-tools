@@ -102,9 +102,10 @@
     sentence is cut where a . ! or ? is followed by a space and anything but a lower-case letter,
     so "e.g. A" ends one, and a commit cited in the next part is not counted; a paragraph's lines
     are joined, and a list item, a heading or a table row stands alone. A line in a fenced block
-    is not read, by the fence rule above. A sibling named some other way, by its title or an
-    address, is read as a statement; one named by neither its name nor the word is not seen. A
-    run id of 7 or more digits counts as a commit.
+    is not read, by the fence rule above. A sibling named by an address that holds its name is
+    read as a statement. One named by its title, "the Grado Factorio Modpack", or any way that
+    holds neither its name nor the word, is not seen. A run id of 7 or more digits counts as a
+    commit.
 
 .PARAMETER Path
     The file holding the body, as handed to `gh pr create --body-file`.
@@ -364,12 +365,16 @@ function Invoke-SelfTest {
             $capital = @(Get-SiblingProblem 'Siblings are untouched, read 2026-10-20.')
             $commitOnly.Count -eq 1 -and $commitOnly[0].Line -eq 3 -and $commitOnly[0].Missing -eq 'an ISO date' -and $commitOnly[0].Sentence -eq 'grado-factorio-modpack pins a882314.' -and
                 $dateOnly.Count -eq 1 -and $dateOnly[0].Missing -eq 'a commit' -and $capital.Count -eq 1 } }
-        @{ Name = 'a bare reference to a sibling''s ticket or pull request is no statement, nor is the word inside a longer one; a sentence in a fenced block is not read, and a hex word with no digit is no commit'; Test = {
+        @{ Name = 'a bare reference to a sibling''s ticket or pull request is no statement, nor is the word inside a longer one or a title; an address is read; a sentence in a fenced block is not read, and a hex word with no digit is no commit'; Test = {
             $refs = @(Get-SiblingProblem "Filed as grado-factorio-modpack#337, after trulsjo/realistic-fusion-refreshed#12.`n- Unblocks grado-factorio-modpack#331.")
             $fenced = @(Get-SiblingProblem "``````text`nThe sibling is grado-factorio-modpack.`n```````n")
             $word = @(Get-SiblingProblem 'The sibling defaced nothing on 2026-10-20.')
             $inName = @(Get-SiblingProblem 'Get-SiblingProblem and -CiteSiblings are new.')
-            $refs.Count -eq 0 -and $fenced.Count -eq 0 -and $word.Count -eq 1 -and $word[0].Missing -eq 'a commit' -and $inName.Count -eq 0 } }
+            # Held to what the header says is not seen: a title. An address holding the name is read.
+            $title = @(Get-SiblingProblem 'The Grado Factorio Modpack pins this.')
+            $address = @(Get-SiblingProblem 'See https://github.com/trulsjo/grado-factorio-modpack for it.')
+            $refs.Count -eq 0 -and $fenced.Count -eq 0 -and $word.Count -eq 1 -and $word[0].Missing -eq 'a commit' -and $inName.Count -eq 0 -and
+                $title.Count -eq 0 -and $address.Count -eq 1 } }
         @{ Name = 'run with -CiteSiblings on such a body it exits 1 naming the line; without it, as a sibling''s CI runs it, the same body passes'; Test = {
             $file = Join-Path $temp 'body.md'
             Set-Content -LiteralPath $file -Value "## Summary`n`nNo sibling calls it until its pin moves.`n`n## Evidence`n`n## Merge Danger"
