@@ -1,7 +1,7 @@
 # What .githooks/pre-push runs, for a clone that never opted into the hooks, plus two things a
-# hook cannot see: the pull request's title, and its body, for the commits it cites and for a
-# closing keyword outside a `Closes #N` line. `edited` is listed so a retitle or an edited body
-# is checked again.
+# hook cannot see: the pull request's title, and its body, for the commits it cites, for a
+# closing keyword outside a `Closes #N` line, and for the pr template's three headings. `edited`
+# is listed so a retitle or an edited body is checked again.
 #
 # On windows-latest and on ubuntu-latest, a job each (grado-factorio-tools#117): the scripts
 # were written on Windows, grado-factorio-modpack's check runs on ubuntu-latest (its

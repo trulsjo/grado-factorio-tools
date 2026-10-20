@@ -347,7 +347,10 @@ the merge deletes.
 
 It also fails on a closing keyword before an issue reference, such as `fixed` and then a colon
 and an issue's number, on any line that is not `Closes #N` alone: GitHub closes that issue when
-the pull request merges, whether or not the sentence meant it.
+the pull request merges, whether or not the sentence meant it. And it fails a body that lacks
+the `mattpocock-skills:pr` template's `## Summary`, `## Evidence` and `## Merge Danger`, once
+each and in that order: Truls's ruling of 2026-10-19 (grado-factorio-modpack#320), read as that
+repository's own builder reads it.
 
 CI runs it on the body of every pull request here, and again when the body is edited. A word that
 names no commit in the clone, such as a commit of a sibling, is said to be unchecked and passes.
