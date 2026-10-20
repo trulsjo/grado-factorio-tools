@@ -1,10 +1,12 @@
 <#
 .SYNOPSIS
-    Checks a pull request body for two things a merge acts on: a commit it cites that is not on
-    the main branch, and a closing keyword that is not a `Closes #N` line. Exit 0 means each
-    word in the body that names a commit of this repository names one that is an ancestor of
-    origin/main, and no line holds a closing keyword before an issue reference unless the line
-    is `Closes #N` alone; exit 1 names each commit and each line that fails that.
+    Checks a pull request body for three things: a commit it cites that is not on the main
+    branch, a closing keyword that is not a `Closes #N` line, and the pr template's three
+    headings. Exit 0 means each word in the body that names a commit of this repository names one
+    that is an ancestor of origin/main, no line holds a closing keyword before an issue reference
+    unless the line is `Closes #N` alone, and `## Summary`, `## Evidence` and `## Merge Danger`
+    each stand once, in that order; exit 1 names each commit, each line and each heading that
+    fails that.
 
 .DESCRIPTION
     WHY (grado-factorio-tools#96). Pull requests here are rebase-merged, which rewrites every
@@ -37,6 +39,19 @@
     because CI and a session already hand this script every body; it reads the text alone and
     asks git nothing.
 
+    THE PR TEMPLATE'S THREE HEADINGS (grado-factorio-tools#171). Truls ruled on 2026-10-19, in
+    grado-factorio-modpack#320, that a pull request body carries the `mattpocock-skills:pr`
+    template's `## Summary`, `## Evidence` and `## Merge Danger`, and that the ruling reaches
+    realistic-fusion-refreshed too; on 2026-10-20, triaging #171, that it holds here as well.
+    The rule is the modpack's, ported from
+    its Get-DraftProblem (scripts/pr-body.ps1 at 0a58b02) so that the repositories read one
+    definition. A heading is its line exactly, case and all, from the first column, with
+    trailing spaces allowed; a line inside a fenced block is not one. Each of the three stands
+    once, and then in that order. Each missing one and each repeated one is reported by name,
+    a repeat with its count; with none missing or repeated, a wrong order is reported as found.
+    Other sections may stand before, between and after them. An empty body lacks all three and
+    fails. This half reads the text alone and asks git nothing.
+
     A SHALLOW CLONE IS REFUSED, and nothing is checked: there an ancestor cannot be told from a
     commit whose history was cut off. CI therefore fetches the whole history for this. Whatever
     else git cannot answer fails the run too; nothing passes for not having been asked.
@@ -54,6 +69,14 @@
     one there.
     And a word is asked of git as a name, so a branch or a tag whose name is 7 to 40 hexadecimal
     characters answers for the commit it points at.
+    Of the headings: what stands under each, and any section a repository names itself, such as
+    where its review stands. An indented heading, one closed with `##`, or an underlined one is
+    taken as missing, though GitHub renders each as a heading. One in an HTML comment is taken
+    as a heading, though GitHub shows none. A fence is any line of optional spaces then three
+    backticks or three tildes, at any indent, and the next such line closes it, whichever of the
+    two it uses; CommonMark reads an indent of four or more as code, and closes a fence only
+    with its own character. So a fence line in an indented code block hides every heading after
+    it until the next fence line.
 
 .PARAMETER Path
     The file holding the body, as handed to `gh pr create --body-file`.
@@ -132,6 +155,31 @@ function Get-ClosingKeyword {
     }
 }
 
+$TemplateHeadings = 'Summary', 'Evidence', 'Merge Danger'
+
+function Get-HeadingProblem {
+    <#  What is wrong with the pr template's three headings in $Text, one line each: each one
+        missing, each one standing more than once, or the order they stand in. Empty if nothing
+        is. Ported from grado-factorio-modpack's Get-DraftProblem (scripts/pr-body.ps1 at 0a58b02).  #>
+    param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text)
+    $found = [System.Collections.Generic.List[string]]::new()
+    $fenced = $false
+    foreach ($line in $Text -split '\r?\n') {
+        if ($line -match '^\s*(```|~~~)') { $fenced = -not $fenced; continue }
+        if ($fenced) { continue }
+        foreach ($h in $TemplateHeadings) { if ($line.TrimEnd() -ceq "## $h") { $found.Add($h) } }
+    }
+    $problems = @(foreach ($h in $TemplateHeadings) {
+            $count = @($found | Where-Object { $_ -ceq $h }).Count
+            if ($count -eq 0) { "``## $h`` is missing" }
+            elseif ($count -gt 1) { "``## $h`` stands $count times" }
+        })
+    if (-not $problems -and ($found -join '|') -cne ($TemplateHeadings -join '|')) {
+        $problems += "the headings stand in the order $($found -join ', ')"
+    }
+    $problems
+}
+
 function Invoke-SelfTest {
     $temp = Join-Path ([IO.Path]::GetTempPath()) "pr-body-check-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
     $repo = Join-Path $temp 'repo'
@@ -181,17 +229,17 @@ function Invoke-SelfTest {
             $noMain = try { & $check 'nothing' $repo 'origin/nowhere'; 'ran' } catch { $_.Exception.Message }
             Write-Host "    $atShallow`n    $noMain"
             $atShallow -match 'shallow' -and $noMain -match 'origin/nowhere' } }
-        @{ Name = 'run on a body file it exits 1 naming the branch commit, and 0 on a body that cites none; an empty -Body passes'; Test = {
+        @{ Name = 'run on a body file it exits 1 naming the branch commit, and 0 on a body that cites none'; Test = {
             $file = Join-Path $temp 'body.md'
-            Set-Content -LiteralPath $file -Value "## Evidence`n`nRun at ``$($onBranch.Substring(0, 7))``, after $($onMain.Substring(0, 7)) and 0123abc."
+            Set-Content -LiteralPath $file -Value "## Summary`n`n## Evidence`n`nRun at ``$($onBranch.Substring(0, 7))``, after $($onMain.Substring(0, 7)) and 0123abc.`n`n## Merge Danger"
             $refused = & $run @($file)
-            Set-Content -LiteralPath $file -Value "Run on PR #94, after $($onMain.Substring(0, 7))."
+            Set-Content -LiteralPath $file -Value "## Summary`n`n## Evidence`n`nRun on PR #94, after $($onMain.Substring(0, 7)).`n`n## Merge Danger"
             $passed = & $run @($file)
-            $empty = & $run @('-Body', '')
             Write-Host ($refused.Text.TrimEnd() -replace '(?m)^', '    ')
             Write-Host ($passed.Text.TrimEnd() -replace '(?m)^', '    ')
             $refused.Code -eq 1 -and $refused.Text -match "(?m)^pr-body-check: $($onBranch.Substring(0, 7)) is a commit that is not on origin/main" -and
-                $refused.Text -match '1 named no commit here' -and $passed.Code -eq 0 -and $passed.Text -match '(?m)^OK - pr-body-check: 1 ' -and $empty.Code -eq 0 } }
+                $refused.Text -match '1 named no commit here' -and $refused.Text -match '0 problem' -and
+                $passed.Code -eq 0 -and $passed.Text -match '(?m)^OK - pr-body-check: 1 ' } }
         @{ Name = 'a closing keyword before an issue reference is found with its line: each keyword, in capitals, around a colon, in underscores, before another repository''s issue or an issue''s address, and in a code span'; Test = {
             $each = 'close', 'closes', 'closed', 'fix', 'fixes', 'fixed', 'resolve', 'resolves', 'resolved' | ForEach-Object { @(Get-ClosingKeyword "It $_ #7.").Count }
             $forms = @(Get-ClosingKeyword "Summary`n`nCLOSES #7 and Fixed: #8, with resolves:#9.`r`nIt fixes octo-org/octo-repo#100, and ``closes #10`` too.")
@@ -209,12 +257,40 @@ function Invoke-SelfTest {
             $start = "## Summary`n`nTruls ruled on 2026-10-11 that ``name-check.ps1`` stays in ``realistic-fusion-refreshed`` for now.`n"
             Set-Content -LiteralPath $file -Value ($start + 'No ticket is closed: #103, the measurement, closed with #104.')
             $refused = & $run @($file)
-            Set-Content -LiteralPath $file -Value ($start + 'This pull request closes no ticket. The measurement''s ticket, #103, went with #104.')
+            Set-Content -LiteralPath $file -Value ($start + 'This pull request closes no ticket. The measurement''s ticket, #103, went with #104.' + "`n`n## Evidence`n`n## Merge Danger")
             $passed = & $run @($file)
             Write-Host ($refused.Text.TrimEnd() -replace '(?m)^', '    ')
             Write-Host ($passed.Text.TrimEnd() -replace '(?m)^', '    ')
             $refused.Code -eq 1 -and $refused.Text -match '(?m)^pr-body-check: line 4 says "closed: #103"' -and $refused.Text -match '(?m)^FAILED - pr-body-check: .*1 closing keyword' -and
                 $passed.Code -eq 0 -and $passed.Text -match '(?m)^OK - pr-body-check: ' } }
+        @{ Name = 'the three headings in order pass, with other sections before, between and after them, trailing spaces, and CRLF line endings'; Test = {
+            $lf = @(Get-HeadingProblem "Closes #1`n`n## Why`n`n## Summary`n`nA change.`n`n## Notes`n`n## Evidence  `n`nRun.`n`n## Merge Danger`t`n`nNone.`n`n## Review`n")
+            $crlf = @(Get-HeadingProblem "## Summary`r`n`r`n## Evidence`r`n`r`n## Merge Danger`r`n")
+            $lf.Count -eq 0 -and $crlf.Count -eq 0 } }
+        @{ Name = 'a heading missing, one twice and the three out of order are each refused by name; a run with problems reports them all'; Test = {
+            $missing = @(Get-HeadingProblem "## Summary`n`n## Merge Danger`n")
+            $twice = @(Get-HeadingProblem "## Summary`n## Evidence`n## Evidence`n## Merge Danger`n## Evidence`n")
+            $order = @(Get-HeadingProblem "## Evidence`n## Summary`n## Merge Danger`n")
+            $both = @(Get-HeadingProblem "## Summary`n## Summary`n")
+            $missing.Count -eq 1 -and $missing[0] -match '`## Evidence` is missing' -and
+                $twice.Count -eq 1 -and $twice[0] -match '`## Evidence` stands 3 times' -and
+                $order.Count -eq 1 -and $order[0] -match 'in the order Evidence, Summary, Merge Danger' -and
+                $both.Count -eq 3 -and $both[0] -match 'Summary` stands 2 times' } }
+        @{ Name = 'a heading only inside a fenced block, indented, closed with ##, underlined, or in other case is taken as missing'; Test = {
+            $rest = "`n## Evidence`n## Merge Danger`n"
+            $forms = "``````text`n## Summary`n```````n", "~~~`n## Summary`n~~~`n", "  ``````md`n## Summary`n  ```````n",
+                " ## Summary`n", "## Summary ##`n", "Summary`n-------`n", "Summary`n=======`n", "## summary`n", "##Summary`n"
+            $missing = @($forms | ForEach-Object { @(Get-HeadingProblem ($_ + $rest)) | Where-Object { $_ -match '`## Summary` is missing' } })
+            $missing.Count -eq $forms.Count } }
+        @{ Name = 'run on a body without the headings, or an empty one, it exits 1 naming each heading missing'; Test = {
+            $file = Join-Path $temp 'body.md'
+            Set-Content -LiteralPath $file -Value 'Just prose, with no headings.'
+            $refused = & $run @($file)
+            $empty = & $run @('-Body', '')
+            Write-Host ($refused.Text.TrimEnd() -replace '(?m)^', '    ')
+            $refused.Code -eq 1 -and $empty.Code -eq 1 -and
+                @([regex]::Matches($refused.Text, '(?m)^pr-body-check: `## (Summary|Evidence|Merge Danger)` is missing')).Count -eq 3 -and
+                $refused.Text -match '(?m)^FAILED - pr-body-check: .*3 problem' } }
     )
 
     $failures = 0
@@ -248,11 +324,15 @@ $closing = @(Get-ClosingKeyword -Text "$Body")
 foreach ($c in $closing) {
     Write-Host "pr-body-check: line $($c.Line) says `"$($c.Found)`", which GitHub reads as closing that issue when this merges. If it is meant, give it a line of its own, as Closes #N; if not, reword it."
 }
+$headings = @(Get-HeadingProblem -Text "$Body")
+foreach ($h in $headings) {
+    Write-Host "pr-body-check: $h. The body carries ## Summary, ## Evidence and ## Merge Danger, once each and in that order."
+}
 $unchecked = if ($read.Unknown) { " $($read.Unknown) named no commit here and were NOT checked." } else { '' }
-if ($read.Off -or $closing) {
+if ($read.Off -or $closing -or $headings) {
     Write-Host ''
-    Write-Host "FAILED - pr-body-check: $($read.Off.Count) word(s) of the body name a commit that is not on $Main, and $($closing.Count) closing keyword(s) stand outside a Closes #N line.$unchecked"
+    Write-Host "FAILED - pr-body-check: $($read.Off.Count) word(s) of the body name a commit that is not on $Main, $($closing.Count) closing keyword(s) stand outside a Closes #N line, and $($headings.Count) problem(s) with the pr template's three headings.$unchecked"
     exit 1
 }
-Write-Host "OK - pr-body-check: $($read.On) word(s) of the body name a commit, each on $Main, and no closing keyword stands outside a Closes #N line.$unchecked"
+Write-Host "OK - pr-body-check: $($read.On) word(s) of the body name a commit, each on $Main, no closing keyword stands outside a Closes #N line, and the pr template's three headings stand once each, in order.$unchecked"
 exit 0
