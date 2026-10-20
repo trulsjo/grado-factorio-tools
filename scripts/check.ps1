@@ -3,6 +3,8 @@
     Parses every script under scripts/, reads their list parameters with param-check.ps1, runs
     every self-test that needs neither the game nor the network, holds the agent pages to their
     size limits, and runs markdown-check.ps1 over the tracked Markdown. Exit 0 means all of that held.
+    With -SkipIfPassed, as the pre-push hook runs it, exit 0 may instead mean that nothing ran,
+    because a run recorded that this same tree passed it; the run then says so.
 
 .DESCRIPTION
     THE ONE COMMAND BEFORE A PUSH (grado-factorio-tools#60). The only gate here was commit-msg,
@@ -58,11 +60,16 @@
     read in the repository's git directory, in check-passed, never in a tracked file: the working
     tree's tracked and unignored files, written as a git tree, and the index's tree, since the
     Markdown is read as staged. It is recorded only when the tree is the same at the end of the
-    run as at the start. A run that fails deletes the record. With -SkipIfPassed, as the hook runs
-    it, a tree that matches the record runs nothing, and the run says so, naming both trees and
-    when they passed. A skip shows that this same tree passed once; it cannot see what is outside
-    the tree: an ignored file, the pwsh or git in use, the loopback port fetch-mods.ps1 needs, or
-    a self-test that passes only sometimes. CI runs without the switch.
+    run as at the start. A changed file git cannot read makes no tree, so nothing is recorded or
+    skipped. A run that ends in FAILED deletes the record; one cut short, by an error or Ctrl-C,
+    leaves it. A record that does not hold both trees and a time, such as an empty file, is no
+    record. With -SkipIfPassed, as the hook runs it, a tree that matches the record runs nothing,
+    and the run says so, naming both trees and when they passed. A skip shows that this same tree
+    passed once; it cannot see what is outside the tree: an ignored file, the pwsh or git in use,
+    the loopback port fetch-mods.ps1 needs, or a self-test that passes only sometimes. CI runs
+    without the switch. -SelfTest holds this against a scratch repository, and this check runs
+    it like the others (grado-factorio-tools#176's review); a file made unreadable off Windows
+    needs a user other than root.
 
     HOW LONG IT TAKES ON THE DEVELOPMENT MACHINE DEPENDS ON WHAT ELSE IS RUNNING THERE
     (grado-factorio-tools#70). On a quiet machine it is under twice CI's time; it was reported as
@@ -73,15 +80,19 @@
 .PARAMETER SkipIfPassed
     Run nothing when the record says this tree passed, as above.
 
+.PARAMETER SelfTest
+    Run the cases that hold the record and the skip, in a scratch repository, and nothing else.
+    Needs git.
+
 .EXAMPLE
     pwsh -File scripts/check.ps1
 #>
 
 #Requires -Version 7
-param([switch] $SkipIfPassed)
+param([switch] $SkipIfPassed, [switch] $SelfTest)
 $ErrorActionPreference = 'Stop'
 
-$SELF_TESTS = @('commit-check.ps1', 'compare-resource-counts.ps1', 'dump-diff.ps1', 'dump-keys.ps1', 'dump-planets.ps1', 'dump-shared-names.ps1', 'fetch-mods.ps1',
+$SELF_TESTS = @('check.ps1', 'commit-check.ps1', 'compare-resource-counts.ps1', 'dump-diff.ps1', 'dump-keys.ps1', 'dump-planets.ps1', 'dump-shared-names.ps1', 'fetch-mods.ps1',
     'get-dump.ps1', 'hook-matcher.ps1', 'markdown-check.ps1', 'mod-info.ps1', 'pack-mods.ps1', 'param-check.ps1', 'pr-body-check.ps1',
     'refuse-cd-into-mod-cache.ps1', 'refuse-git-hook-skip.ps1', 'resolve-modpack.ps1', 'self-test-halves.ps1')
 # Has a self-test this does not run, and why: it needs Factorio installed.
@@ -99,33 +110,116 @@ $took = { '({0}s)' -f $clock.Elapsed.TotalSeconds.ToString('0.0', [cultureinfo]:
 
 # The tree as this check reads it: the working tree's tracked and unignored files, written as a
 # tree from a copy of the index, then the index itself, which the Markdown is read from. Empty
-# where git cannot say, as outside a repository, and then no pass is recorded or skipped.
+# where git cannot say, as outside a repository or with a changed file it cannot read, and then
+# no pass is recorded or skipped.
 function Get-CheckedTree {
-    $index = git -C $root rev-parse --path-format=absolute --git-path index 2>$null
+    param([Parameter(Mandatory)] [string] $Root)
+    $index = git -C $Root rev-parse --path-format=absolute --git-path index 2>$null
     if ($LASTEXITCODE) { return '' }
     $copy = New-TemporaryFile
     $was = $env:GIT_INDEX_FILE
     try {
-        if (Test-Path -LiteralPath $index) { Copy-Item -LiteralPath $index -Destination $copy -Force }
+        # With no index yet, git makes one; an empty file it would refuse.
+        if (Test-Path -LiteralPath $index) { Copy-Item -LiteralPath $index -Destination $copy -Force } else { Remove-Item -LiteralPath $copy }
         $env:GIT_INDEX_FILE = $copy.FullName
-        git -C $root add -A 2>$null
-        $work = git -C $root write-tree 2>$null
+        git -C $Root add -A 2>$null
+        if ($LASTEXITCODE) { return '' }
+        $work = git -C $Root write-tree 2>$null
         if ($LASTEXITCODE) { return '' }
         $env:GIT_INDEX_FILE = $was
-        $staged = git -C $root write-tree 2>$null
+        $staged = git -C $Root write-tree 2>$null
         if ($LASTEXITCODE) { return '' }
         "$work $staged"
     }
     finally { $env:GIT_INDEX_FILE = $was; Remove-Item -LiteralPath $copy -Force -ErrorAction SilentlyContinue }
 }
-$record = git -C $root rev-parse --path-format=absolute --git-path check-passed 2>$null
-$tree = Get-CheckedTree
-if ($SkipIfPassed -and $tree -and (Test-Path -LiteralPath $record)) {
-    $passed = (Get-Content -LiteralPath $record -Raw).Trim() -split ' ', 3
-    if ("$($passed[0]) $($passed[1])" -eq $tree) {
-        Write-Host "OK - check skipped: this tree (working $($passed[0]), index $($passed[1])) passed it at $($passed[2]). Nothing was run."
-        exit 0
+
+# The record's trees and time, or nothing: no file, or one that does not hold all three, such as
+# the empty file a cut-off write leaves, is no record.
+function Read-PassRecord {
+    param([string] $Record)
+    if (-not $Record -or -not (Test-Path -LiteralPath $Record)) { return $null }
+    $parts = @("$(Get-Content -LiteralPath $Record -Raw)".Trim() -split ' ', 3)
+    if ($parts.Count -lt 3) { return $null }
+    @{ Tree = "$($parts[0]) $($parts[1])"; Working = $parts[0]; Index = $parts[1]; At = $parts[2] }
+}
+
+# The end of a run: a failed one deletes the record; a pass records $Tree if the tree is still
+# $Tree, and otherwise returns the line that says it was not.
+function Complete-PassRecord {
+    param([string] $Root, [string] $Record, [string] $Tree, [switch] $Failed)
+    if (-not $Record) { return }
+    if ($Failed) { Remove-Item -LiteralPath $Record -Force -ErrorAction SilentlyContinue; return }
+    if (-not $Tree) { return }
+    if ($Tree -ne (Get-CheckedTree -Root $Root)) { return 'check: the tree changed while it was read, so this pass is not recorded for -SkipIfPassed.' }
+    Set-Content -LiteralPath $Record -Value "$Tree $([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ', [cultureinfo]::InvariantCulture))"
+}
+
+if ($SelfTest) {
+    $temp = Join-Path ([IO.Path]::GetTempPath()) "check-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+    $repo = Join-Path $temp 'repo'; $outside = Join-Path $temp 'outside'; $rec = Join-Path $temp 'check-passed'
+    New-Item -ItemType Directory -Path $repo, $outside -Force | Out-Null
+    $file = { param($name, $text) Set-Content -LiteralPath (Join-Path $repo $name) -Value $text }
+    try {
+        git -C $repo init --quiet; if ($LASTEXITCODE) { throw 'git init failed; the self-test needs git.' }
+        & $file '.gitignore' 'ignored.txt'; & $file 'a.txt' 'one'
+        git -C $repo add -A
+        $base = Get-CheckedTree -Root $repo
+        $changed = {
+            param([scriptblock] $Change, [scriptblock] $Undo)
+            & $Change; $t = Get-CheckedTree -Root $repo; & $Undo
+            $t -and $t -ne $base
+        }
+        $cases = [ordered]@{
+            'a pass records the tree, and the record reads back as that tree' = {
+                $said = Complete-PassRecord -Root $repo -Record $rec -Tree $base
+                $base -and -not $said -and (Read-PassRecord $rec).Tree -eq $base -and (Get-CheckedTree -Root $repo) -eq $base }
+            'an unstaged edit, an untracked file and a staged-only change each make another tree; an ignored file does not' = {
+                $edit = & $changed { & $file 'a.txt' 'two' } { & $file 'a.txt' 'one' }
+                $new = & $changed { & $file 'b.txt' 'new' } { Remove-Item -LiteralPath (Join-Path $repo 'b.txt') }
+                $staged = & $changed { & $file 'a.txt' 'two'; git -C $repo add a.txt; & $file 'a.txt' 'one' } { git -C $repo add a.txt }
+                & $file 'ignored.txt' 'x'; $ignored = (Get-CheckedTree -Root $repo) -eq $base; Remove-Item -LiteralPath (Join-Path $repo 'ignored.txt')
+                $edit -and $new -and $staged -and $ignored -and (Get-CheckedTree -Root $repo) -eq $base }
+            'a failed run deletes the record, and a tree changed during a pass is not recorded' = {
+                Complete-PassRecord -Root $repo -Record $rec -Tree $base | Out-Null
+                Complete-PassRecord -Root $repo -Record $rec -Tree $base -Failed
+                $gone = -not (Test-Path -LiteralPath $rec)
+                & $file 'a.txt' 'two'; $said = Complete-PassRecord -Root $repo -Record $rec -Tree $base; & $file 'a.txt' 'one'
+                $gone -and $said -match 'not recorded' -and -not (Test-Path -LiteralPath $rec) }
+            'an empty record, or one cut short, is no record, and reading it throws nothing' = {
+                Set-Content -LiteralPath $rec -Value '' -NoNewline; $empty = Read-PassRecord $rec
+                Set-Content -LiteralPath $rec -Value $base.Split(' ')[0]; $short = Read-PassRecord $rec
+                Remove-Item -LiteralPath $rec
+                $null -eq $empty -and $null -eq $short -and $null -eq (Read-PassRecord $rec) }
+            'a changed file git cannot read, and a directory outside a repository, make no tree' = {
+                $path = Join-Path $repo 'a.txt'; & $file 'a.txt' 'two'
+                # Locked on Windows; unreadable elsewhere, which needs a user other than root.
+                $lock = if ($IsWindows) { [IO.File]::Open($path, 'Open', 'Read', 'None') } else { chmod 000 $path; $null }
+                try { $unread = Get-CheckedTree -Root $repo } finally { if ($lock) { $lock.Dispose() } else { chmod 644 $path } }
+                & $file 'a.txt' 'one'
+                $unread -eq '' -and (Get-CheckedTree -Root $outside) -eq '' }
+        }
+        $failures = 0; $n = 0
+        foreach ($name in $cases.Keys) {
+            $n++
+            $ok = try { [bool] (& $cases[$name]) } catch { Write-Host "    threw: $($_.Exception.Message)"; $false }
+            Write-Host ("self-test {0}/{1}: {2} -- {3}" -f $n, $cases.Count, $name, $(if ($ok) { 'ok' } else { 'FAILED' }))
+            if (-not $ok) { $failures++ }
+        }
     }
+    finally { Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue }
+    Write-Host ''
+    if ($failures) { Write-Host "FAILED - self-test: $failures of $($cases.Count) case(s) did not hold."; exit 1 }
+    Write-Host "OK - self-test passed: all $($cases.Count) cases."
+    exit 0
+}
+
+$record = git -C $root rev-parse --path-format=absolute --git-path check-passed 2>$null
+$tree = Get-CheckedTree -Root $root
+$passed = if ($SkipIfPassed -and $tree) { Read-PassRecord $record }
+if ($passed -and $passed.Tree -eq $tree) {
+    Write-Host "OK - check skipped: this tree (working $($passed.Working), index $($passed.Index)) passed it at $($passed.At). Nothing was run."
+    exit 0
 }
 
 $clock.Restart()
@@ -199,15 +293,13 @@ elseif ($said -match '(?ms)^markdown-check: \d+ file\(s\) have unstaged edits.*?
 
 Write-Host ''
 if ($failed) {
-    if ($record) { Remove-Item -LiteralPath $record -Force -ErrorAction SilentlyContinue }
+    Complete-PassRecord -Root $root -Record $record -Tree $tree -Failed
     Write-Host "FAILED - check: $($failed -join '; ')."
     exit 1
 }
 # Recorded only for a tree that stood still while it was read: an edit during the run means
 # no one tree passed.
-if ($tree -and $tree -eq (Get-CheckedTree)) {
-    Set-Content -LiteralPath $record -Value "$tree $([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ', [cultureinfo]::InvariantCulture))"
-}
-elseif ($tree) { Write-Host 'check: the tree changed while it was read, so this pass is not recorded for -SkipIfPassed.' }
+$said = Complete-PassRecord -Root $root -Record $record -Tree $tree
+if ($said) { Write-Host $said }
 Write-Host "OK - check passed. Not run, because each needs the game: -SelfTest of $($NEEDS_GAME -join ', ')."
 exit 0
