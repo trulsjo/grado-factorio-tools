@@ -1,13 +1,15 @@
 <#
 .SYNOPSIS
-    Checks a pull request body for three things: a commit it cites that is not on the main
-    branch, a closing keyword that is not a `Closes #N` line, and the pr template's three
-    headings. Exit 0 means each word in the body that names a commit of this repository names one
-    that is an ancestor of origin/main, no line holds a closing keyword before an issue reference
-    unless the line is `Closes #N` alone, and `## Summary`, `## Evidence` and `## Merge Danger`
-    each stand once, in that order; exit 1 names each commit, each line and each heading that
-    fails that. With -CiteSiblings, a fourth: each statement about a sibling repository carries
-    a commit and an ISO date, and exit 1 names each sentence that does not.
+    Checks a pull request body for four things: a commit it cites that is not on the main
+    branch, a closing keyword that is not a `Closes #N` line, the pr template's three headings,
+    and its four markers. Exit 0 means each word in the body that names a commit of this
+    repository names one that is an ancestor of origin/main, no line holds a closing keyword
+    before an issue reference unless the line is `Closes #N` alone, `## Summary`, `## Evidence`
+    and `## Merge Danger` each stand once, in that order, and **Before:** and **After:** stand
+    under `## Evidence` and **Door:** and **Blast Radius:** under `## Merge Danger`; exit 1 names
+    each commit, each line, each heading and each marker that fails that. With -CiteSiblings, a
+    fifth: each statement about a sibling repository carries a commit and an ISO date, and exit
+    1 names each sentence that does not.
 
 .DESCRIPTION
     WHY (grado-factorio-tools#96). Pull requests here are rebase-merged, which rewrites every
@@ -52,6 +54,17 @@
     reported by name, a repeat with its count; with none missing or repeated, a wrong order is
     reported as found. Other sections may stand before, between and after them. An empty body
     lacks all three and fails. This third job reads the text alone and asks git nothing.
+
+    THE PR TEMPLATE'S FOUR MARKERS (grado-factorio-tools#185). A body written by hand to the three
+    headings alone passed the third job: realistic-fusion-refreshed#743 and #747 held none of
+    the template's markers (read 2026-10-21). Truls ruled on 2026-10-21, on #185, that the check
+    reaches them, and that a change with nothing to show says none after **Before:** and
+    **After:**. A marker is its text exactly, `**Before:**`, `**After:**`, `**Door:**` or
+    `**Blast Radius:**`, case, asterisks and colon and all, anywhere in a line under its own
+    heading: from that heading's line to the next line that begins `## `. A line in a fenced
+    block, by the fence rule above, is not read. Each marker missing is reported with its
+    heading; a heading that is missing has its markers reported missing too. This fourth job
+    reads the text alone and asks git nothing.
 
     A STATEMENT ABOUT A SIBLING CARRIES ITS COMMIT AND ITS DATE, WITH -CiteSiblings
     (grado-factorio-tools#177). docs/agents/code-review-prose.md held a body to this, and only a
@@ -98,6 +111,10 @@
     every heading after it until the next fence line. A fence of one character inside one of
     the other, or a shorter fence inside a longer one, ends the outer fence early, and a
     heading inside it is counted.
+    Of the markers: what follows each, so whether a marker says none or something true, and
+    whether the line means it: one in a code span, or quoted in a sentence, counts. A section
+    ends only at a level-2 heading, so a `# ` heading after `## Evidence` does not end it. A
+    marker under a heading that stands twice counts under either.
     Of statements about a sibling: whether the commit and the date are the sibling's, or true. A
     sentence is cut where a . ! or ? is followed by a space and anything but a lower-case letter,
     so "e.g. A" ends one, and a commit cited in the next part is not counted; a paragraph's lines
@@ -214,6 +231,27 @@ function Get-HeadingProblem {
     $problems
 }
 
+$TemplateMarkers = [ordered]@{ 'Evidence' = 'Before', 'After'; 'Merge Danger' = 'Door', 'Blast Radius' }
+
+function Get-MarkerProblem {
+    <#  Each of the pr template's four markers that stands nowhere under its own heading in $Text,
+        one line each. Empty if none is missing.  #>
+    param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text)
+    $found = [System.Collections.Generic.HashSet[string]]::new()
+    $section = $null; $fenced = $false
+    foreach ($line in $Text -split '\r?\n') {
+        if ($line -match '^\s*(```|~~~)') { $fenced = -not $fenced; continue }
+        if ($fenced) { continue }
+        # Any level-2 heading ends a section; only one of the template's starts one.
+        if ($line -match '^## ') { $section = $TemplateMarkers.Keys | Where-Object { $line.TrimEnd() -ceq "## $_" }; continue }
+        if (-not $section) { continue }
+        foreach ($m in $TemplateMarkers[$section]) { if ($line.Contains("**${m}:**")) { [void] $found.Add($m) } }
+    }
+    foreach ($h in $TemplateMarkers.Keys) {
+        foreach ($m in $TemplateMarkers[$h]) { if (-not $found.Contains($m)) { "``**${m}:**`` is missing under ``## $h``" } }
+    }
+}
+
 function Get-SiblingProblem {
     <#  Each sentence of $Text that is a statement about a sibling repository and lacks a commit
         or an ISO date, as @{ Line; Missing; Sentence }: the line its block starts on, what it
@@ -262,6 +300,8 @@ function Invoke-SelfTest {
     git -C $repo update-ref refs/remotes/origin/main $onMain
     $onBranch = & $commit 'on the branch'
     $check = { param([string] $text, [string] $top = $repo, [string] $main = 'origin/main') Test-Body -Text $text -Top $top -Main $main }
+    # The two headings that carry markers, each with its markers, for a body that is to pass.
+    $marked = "## Evidence`n`n**Before:** none`n**After:** none`n`n## Merge Danger`n`n**Door:** two-way`n`n**Blast Radius:** none"
     $run = {
         param([string[]] $Arguments)
         Push-Location $repo
@@ -297,7 +337,7 @@ function Invoke-SelfTest {
             $file = Join-Path $temp 'body.md'
             Set-Content -LiteralPath $file -Value "## Summary`n`n## Evidence`n`nRun at ``$($onBranch.Substring(0, 7))``, after $($onMain.Substring(0, 7)) and 0123abc.`n`n## Merge Danger"
             $refused = & $run @($file)
-            Set-Content -LiteralPath $file -Value "## Summary`n`n## Evidence`n`nRun on PR #94, after $($onMain.Substring(0, 7)).`n`n## Merge Danger"
+            Set-Content -LiteralPath $file -Value "## Summary`n`nRun on PR #94, after $($onMain.Substring(0, 7)).`n`n$marked"
             $passed = & $run @($file)
             Write-Host ($refused.Text.TrimEnd() -replace '(?m)^', '    ')
             Write-Host ($passed.Text.TrimEnd() -replace '(?m)^', '    ')
@@ -321,7 +361,7 @@ function Invoke-SelfTest {
             $start = "## Summary`n`nTruls ruled on 2026-10-11 that ``name-check.ps1`` stays in ``realistic-fusion-refreshed`` for now.`n"
             Set-Content -LiteralPath $file -Value ($start + 'No ticket is closed: #103, the measurement, closed with #104.')
             $refused = & $run @($file)
-            Set-Content -LiteralPath $file -Value ($start + 'This pull request closes no ticket. The measurement''s ticket, #103, went with #104.' + "`n`n## Evidence`n`n## Merge Danger")
+            Set-Content -LiteralPath $file -Value ($start + 'This pull request closes no ticket. The measurement''s ticket, #103, went with #104.' + "`n`n$marked")
             $passed = & $run @($file)
             Write-Host ($refused.Text.TrimEnd() -replace '(?m)^', '    ')
             Write-Host ($passed.Text.TrimEnd() -replace '(?m)^', '    ')
@@ -379,12 +419,31 @@ function Invoke-SelfTest {
                 $title.Count -eq 0 -and $address.Count -eq 1 } }
         @{ Name = 'run with -CiteSiblings on such a body it exits 1 naming the line; without it, as a sibling''s CI runs it, the same body passes'; Test = {
             $file = Join-Path $temp 'body.md'
-            Set-Content -LiteralPath $file -Value "## Summary`n`nNo sibling calls it until its pin moves.`n`n## Evidence`n`n## Merge Danger"
+            Set-Content -LiteralPath $file -Value "## Summary`n`nNo sibling calls it until its pin moves.`n`n$marked"
             $refused = & $run @($file, '-CiteSiblings')
             $passed = & $run @($file)
             Write-Host ($refused.Text.TrimEnd() -replace '(?m)^', '    ')
             $refused.Code -eq 1 -and $refused.Text -match '(?m)^pr-body-check: line 3 says "No sibling calls it until its pin moves\.", a statement about a sibling with no commit and no ISO date' -and
                 $refused.Text -match '(?m)^FAILED - pr-body-check: .*1 statement' -and $passed.Code -eq 0 } }
+        @{ Name = 'the four markers each under its heading pass: in a list, after a ### heading or other lines, and with none after Before and After; run on such a body it exits 0'; Test = {
+            $listed = @(Get-MarkerProblem "## Summary`n`n## Evidence`n`nRun.`n`n### Runs`n`n- **Before:** 3 failed`n- **After:** none failed`n`n## Merge Danger`n`n**Door:** one-way`n`nWhy.`n`n**Blast Radius:** consumers`n`n## Review")
+            $file = Join-Path $temp 'body.md'
+            Set-Content -LiteralPath $file -Value "## Summary`n`nA change.`n`n$marked"
+            $passed = & $run @($file)
+            Write-Host ($passed.Text.TrimEnd() -replace '(?m)^', '    ')
+            $listed.Count -eq 0 -and @(Get-MarkerProblem "## Summary`n`n$marked").Count -eq 0 -and
+                $passed.Code -eq 0 -and $passed.Text -match '(?m)^OK - pr-body-check: .*each with its markers' } }
+        @{ Name = 'a body with the three headings and no marker is refused, naming each of the four and its heading; one under the wrong heading, in other case, without its colon, or only in a fenced block is missing'; Test = {
+            $file = Join-Path $temp 'body.md'
+            Set-Content -LiteralPath $file -Value "## Summary`n`nA change.`n`n## Evidence`n`nIt works.`n`n## Merge Danger`n`nLow."
+            $refused = & $run @($file)
+            Write-Host ($refused.Text.TrimEnd() -replace '(?m)^', '    ')
+            $named = @('Before', 'After' | ForEach-Object { "\*\*${_}:\*\*`` is missing under ``## Evidence``" }) + @('Door', 'Blast Radius' | ForEach-Object { "\*\*${_}:\*\*`` is missing under ``## Merge Danger``" })
+            $wrong = @(Get-MarkerProblem "## Summary`n`n**Before:** none`n`n## Evidence`n`n**after:** none`n**Before** none`n`n## Merge Danger`n`n``````text`n**Door:** two-way`n```````n**Blast Radius:** none")
+            $refused.Code -eq 1 -and -not ($named | Where-Object { $refused.Text -notmatch "(?m)^pr-body-check: ``$_" }) -and
+                $refused.Text -match '(?m)^FAILED - pr-body-check: .*4 marker' -and
+                ($wrong -join '|') -eq ('`**Before:**` is missing under `## Evidence`|`**After:**` is missing under `## Evidence`|' +
+                    '`**Door:**` is missing under `## Merge Danger`') } }
     )
 
     $failures = 0
@@ -422,19 +481,23 @@ $headings = @(Get-HeadingProblem -Text "$Body")
 foreach ($h in $headings) {
     Write-Host "pr-body-check: $h. The body carries ## Summary, ## Evidence and ## Merge Danger, once each and in that order."
 }
+$markers = @(Get-MarkerProblem -Text "$Body")
+foreach ($m in $markers) {
+    Write-Host "pr-body-check: $m. Under ## Evidence the body carries **Before:** and **After:**, and under ## Merge Danger **Door:** and **Blast Radius:**; where there is nothing to show, the marker says none."
+}
 $siblings = @(if ($CiteSiblings) { Get-SiblingProblem -Text "$Body" })
 foreach ($s in $siblings) {
     Write-Host "pr-body-check: line $($s.Line) says `"$($s.Sentence)`", a statement about a sibling with no $($s.Missing -replace '^an? ' -replace ' and an? ', ' and no '). Give it the commit and the date it was read at."
 }
 $unchecked = if ($read.Unknown) { " $($read.Unknown) named no commit here and were NOT checked." } else { '' }
 $found = @("$($read.Off.Count) word(s) of the body name a commit that is not on $Main", "$($closing.Count) closing keyword(s) stand outside a Closes #N line",
-    "$($headings.Count) problem(s) with the pr template's three headings")
+    "$($headings.Count) problem(s) with the pr template's three headings", "$($markers.Count) marker(s) of the pr template missing")
 if ($CiteSiblings) { $found += "$($siblings.Count) statement(s) about a sibling lack a commit or an ISO date" }
-if ($read.Off -or $closing -or $headings -or $siblings) {
+if ($read.Off -or $closing -or $headings -or $markers -or $siblings) {
     Write-Host ''
     Write-Host "FAILED - pr-body-check: $(($found | Select-Object -SkipLast 1) -join ', '), and $($found[-1]).$unchecked"
     exit 1
 }
 $cited = if ($CiteSiblings) { ' Each statement about a sibling carries a commit and an ISO date.' } else { '' }
-Write-Host "OK - pr-body-check: $($read.On) word(s) of the body name a commit, each on $Main, no closing keyword stands outside a Closes #N line, and the pr template's three headings stand once each, in order.$cited$unchecked"
+Write-Host "OK - pr-body-check: $($read.On) word(s) of the body name a commit, each on $Main, no closing keyword stands outside a Closes #N line, and the pr template's three headings stand once each, in order, each with its markers.$cited$unchecked"
 exit 0
