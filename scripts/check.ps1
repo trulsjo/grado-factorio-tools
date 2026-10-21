@@ -103,8 +103,10 @@
     Run nothing when the record says this tree passed, as above.
 
 .PARAMETER SelfTest
-    Run the cases that hold the record and the skip, in a scratch repository, and nothing else.
-    Needs git.
+    Run the cases that hold the record and the skip, in a scratch repository, and those that hold
+    the functions each script and each self-test's run are judged by, on files outside it, and
+    nothing else. The run's loops are not run: a loop that stopped calling those functions, or
+    passed them less, would still pass. Needs git.
 
 .EXAMPLE
     pwsh -File scripts/check.ps1
@@ -311,7 +313,7 @@ if ($SelfTest) {
                 $unlisted.Count -eq 1 -and $noGame.Count -eq 1 -and $noGame[0] -match 'NoGame' -and
                 -not (Get-ListProblem -Name 'a.ps1' -Text $quoted @lists) -and
                 -not (Get-ListProblem -Name 'n.ps1' -Text $both @lists) -and -not (Get-ListProblem -Name 'a.ps1' -Text $both.Replace(', [switch] $NoGame', '') @lists) }
-            'the run reads each script and each self-test with the checks above' = {
+            "one script's problems are its list and width problems; one run's is its exit, then no case" = {
                 $script = Join-Path $outside 'bad.ps1'
                 Set-Content -LiteralPath $script -Value 'param([switch] $SelfTest, [switch] $NoGame)', "# $('word ' * 20)x"
                 $bad = @(Get-ScriptProblem -Path $script -Limit 100)
@@ -320,6 +322,7 @@ if ($SelfTest) {
                 $bad.Count -eq 3 -and $bad[2] -eq 'bad.ps1 has comment lines over 100 characters, line 2' -and -not $good -and
                 (Get-RunProblem 'x.ps1 -SelfTest' 0 'OK - self-test passed: all 0 cases.') -eq 'x.ps1 -SelfTest ran no case' -and
                 (Get-RunProblem 'x.ps1 -SelfTest' 1 'OK - self-test passed: all 3 cases.') -eq 'x.ps1 -SelfTest exited 1' -and
+                (Get-RunProblem 'x.ps1 -SelfTest' 1 'ParserError: no case ran') -eq 'x.ps1 -SelfTest exited 1' -and
                 -not (Get-RunProblem 'x.ps1 -SelfTest' 0 'OK - self-test passed: all 3 cases.') }
         }
         $failures = 0; $n = 0
