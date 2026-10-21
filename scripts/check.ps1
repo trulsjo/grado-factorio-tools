@@ -105,8 +105,11 @@
 .PARAMETER SelfTest
     Run the cases that hold the record and the skip, in a scratch repository, and those that hold
     the functions each script and each self-test's run are judged by, on strings and on files
-    outside it, and nothing else. The run's loops are not run: a loop that stopped calling those
-    functions, or passed them less, would still pass. Needs git.
+    outside it, and those that hold the two loops, Test-ScriptFolder and Invoke-SelfTestRun, over
+    a folder of fixture scripts outside it with lists of their own, four of them run as
+    self-tests; and nothing else. The run's own call of each loop, with this folder and this
+    script's lists, is not run: a run that stopped making either call, or passed it a list less,
+    would still pass. Needs git, and no game.
 
 .EXAMPLE
     pwsh -File scripts/check.ps1
@@ -247,6 +250,44 @@ function Get-RunProblem {
     if ($ExitCode) { "$Run exited $ExitCode" } elseif (Test-RanNoCase $Said) { "$Run ran no case" }
 }
 
+# Each script in $Folder parsed and judged by Get-ScriptProblem, a line printed for each; returns
+# what failed.
+function Test-ScriptFolder {
+    param([string] $Folder, [int] $Limit, [string[]] $SelfTests, [string[]] $NeedsGame, [string[]] $NoGameCases)
+    foreach ($script in Get-ChildItem -LiteralPath $Folder -Filter *.ps1 | Sort-Object Name) {
+        $errors = $null
+        [void] [System.Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref] $null, [ref] $errors)
+        Write-Host "check: $($script.Name) parses -- $($errors ? 'FAILED' : 'ok')"
+        foreach ($e in $errors) { Write-Host "    line $($e.Extent.StartLineNumber): $($e.Message)" }
+        if ($errors) { "$($script.Name) does not parse" }
+
+        foreach ($problem in Get-ScriptProblem -Path $script.FullName -Limit $Limit -SelfTests $SelfTests -NeedsGame $NeedsGame -NoGameCases $NoGameCases) {
+            Write-Host "check: $problem -- FAILED"
+            $problem
+        }
+    }
+}
+
+# -SelfTest of each of $SelfTests and -SelfTest -NoGame of each of $NoGameCases in $Folder, each in
+# a pwsh of its own, judged by Get-RunProblem, a line printed for each; returns what failed.
+function Invoke-SelfTestRun {
+    param([string] $Folder, [string[]] $SelfTests, [string[]] $NoGameCases)
+    foreach ($run in @($SelfTests | ForEach-Object { , @($_, '-SelfTest') }) + @($NoGameCases | ForEach-Object { , @($_, '-SelfTest', '-NoGame') })) {
+        $name = $run[0]; $switches = @($run | Select-Object -Skip 1)
+        $clock.Restart()
+        $said = & pwsh -NoProfile -File (Join-Path $Folder $name) @switches 2>&1 | Out-String
+        # Exit 0 having run no case is not a pass: mod-info.ps1 has no param block, so it would
+        # take a -SelfTest it no longer answers in silence, and a broken -NoGame passed with all 0
+        # cases.
+        $problem = Get-RunProblem -Run "$name $switches" -ExitCode $LASTEXITCODE -Said $said
+        Write-Host "check: $name $switches -- $($problem ? 'FAILED' : 'ok') $(& $took)"
+        if ($problem) {
+            $said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
+            $problem
+        }
+    }
+}
+
 if ($SelfTest) {
     $temp = Join-Path ([IO.Path]::GetTempPath()) "check-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
     $repo = Join-Path $temp 'repo'; $outside = Join-Path $temp 'outside'; $rec = Join-Path $temp 'check-passed'
@@ -324,6 +365,22 @@ if ($SelfTest) {
                 (Get-RunProblem 'x.ps1 -SelfTest' 1 'OK - self-test passed: all 3 cases.') -eq 'x.ps1 -SelfTest exited 1' -and
                 (Get-RunProblem 'x.ps1 -SelfTest' 1 'ParserError: no case ran') -eq 'x.ps1 -SelfTest exited 1' -and
                 -not (Get-RunProblem 'x.ps1 -SelfTest' 0 'OK - self-test passed: all 3 cases.') }
+            "a folder's scripts and self-tests are each judged, against the lists the run is given" = {
+                $folder = Join-Path $outside 'scripts'; New-Item -ItemType Directory -Path $folder | Out-Null
+                $say = { param($name, [string[]] $text) Set-Content -LiteralPath (Join-Path $folder $name) -Value $text }
+                $pass = "'OK - self-test passed: all 1 cases.'"
+                & $say 'bad.ps1' 'param([switch] $SelfTest, [switch] $NoGame)', "# $('word ' * 20)x", "'OK - self-test passed: all 0 cases.'"
+                & $say 'broken.ps1' 'if ('
+                & $say 'crash.ps1' 'param([switch] $SelfTest)', 'exit 3'
+                & $say 'game.ps1' 'param([switch] $SelfTest, [switch] $NoGame)', $pass
+                & $say 'good.ps1' 'param([switch] $SelfTest)', $pass
+                $lists = @{ SelfTests = 'bad.ps1', 'crash.ps1', 'good.ps1'; NoGameCases = @('game.ps1') }
+                # Their lines go to the host; only what failed is kept.
+                $scripts = @(Test-ScriptFolder -Folder $folder -Limit 100 -NeedsGame 'game.ps1' @lists 6>$null)
+                $runs = @(Invoke-SelfTestRun -Folder $folder @lists 6>$null)
+                ($scripts -join '|') -eq ('bad.ps1 declares -NoGame and is not in $NO_GAME_CASES, so its no-game cases are not run|' +
+                    'bad.ps1 has comment lines over 100 characters, line 2|broken.ps1 does not parse') -and
+                ($runs -join '|') -eq 'bad.ps1 -SelfTest ran no case|crash.ps1 -SelfTest exited 3' }
         }
         $failures = 0; $n = 0
         foreach ($name in $cases.Keys) {
@@ -349,18 +406,7 @@ if ($passed -and $passed.Tree -eq $tree) {
 }
 
 $clock.Restart()
-foreach ($script in Get-ChildItem -LiteralPath $PSScriptRoot -Filter *.ps1 | Sort-Object Name) {
-    $errors = $null
-    [void] [System.Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref] $null, [ref] $errors)
-    Write-Host "check: $($script.Name) parses -- $($errors ? 'FAILED' : 'ok')"
-    foreach ($e in $errors) { Write-Host "    line $($e.Extent.StartLineNumber): $($e.Message)" }
-    if ($errors) { $failed.Add("$($script.Name) does not parse") }
-
-    foreach ($problem in Get-ScriptProblem -Path $script.FullName -Limit $COMMENT_LINE_LIMIT -SelfTests $SELF_TESTS -NeedsGame $NEEDS_GAME -NoGameCases $NO_GAME_CASES) {
-        Write-Host "check: $problem -- FAILED"
-        $failed.Add($problem)
-    }
-}
+foreach ($f in Test-ScriptFolder -Folder $PSScriptRoot -Limit $COMMENT_LINE_LIMIT -SelfTests $SELF_TESTS -NeedsGame $NEEDS_GAME -NoGameCases $NO_GAME_CASES) { $failed.Add($f) }
 Write-Host "check: every script parsed $(& $took)"
 
 $clock.Restart()
@@ -372,19 +418,7 @@ if ($bad) {
     $failed.Add('param-check.ps1 found a list parameter never split on a comma')
 }
 
-foreach ($run in @($SELF_TESTS | ForEach-Object { , @($_, '-SelfTest') }) + @($NO_GAME_CASES | ForEach-Object { , @($_, '-SelfTest', '-NoGame') })) {
-    $name = $run[0]; $switches = @($run | Select-Object -Skip 1)
-    $clock.Restart()
-    $said = & pwsh -NoProfile -File (Join-Path $PSScriptRoot $name) @switches 2>&1 | Out-String
-    # Exit 0 having run no case is not a pass: mod-info.ps1 has no param block, so it would take
-    # a -SelfTest it no longer answers in silence, and a broken -NoGame passed with all 0 cases.
-    $problem = Get-RunProblem -Run "$name $switches" -ExitCode $LASTEXITCODE -Said $said
-    Write-Host "check: $name $switches -- $($problem ? 'FAILED' : 'ok') $(& $took)"
-    if ($problem) {
-        $said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
-        $failed.Add($problem)
-    }
-}
+foreach ($f in Invoke-SelfTestRun -Folder $PSScriptRoot -SelfTests $SELF_TESTS -NoGameCases $NO_GAME_CASES) { $failed.Add($f) }
 
 $clock.Restart()
 foreach ($page in $PAGE_LIMITS.Keys) {
