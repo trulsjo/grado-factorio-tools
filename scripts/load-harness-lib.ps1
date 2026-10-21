@@ -373,9 +373,9 @@ function Remove-ModJunctions {
 #
 #   A FOREIGN PLACEHOLDER is a string another mod ships on purpose. "Something went wrong" is not
 #   an engine string at all: it is the literal value Angels' own locale gives [item-name]
-#   angels-void, and the 334 recipes carrying it in Angels' mods at 2.0.77 point their localised_name
-#   at that key deliberately, to mark a recipe a missing dependency stranded. A viewer is right to
-#   refuse it as a LABEL. A gate over a mod's own prototypes must not fail on it.
+#   angels-void, and the 334 recipes carrying it in Angels' mods at 2.0.77 point their
+#   localised_name at that key deliberately, to mark a recipe a missing dependency stranded. A
+#   viewer is right to refuse it as a LABEL. A gate over a mod's own prototypes must not fail on it.
 #
 # What the engine does NOT do is dump a name it could not work out. Measured on 2.0.77, in
 # realistic-fusion-refreshed: a prototype with no locale entry, one whose localised_name names a

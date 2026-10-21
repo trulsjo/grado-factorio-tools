@@ -1,10 +1,11 @@
 <#
 .SYNOPSIS
-    Parses every script under scripts/, reads their list parameters with param-check.ps1, runs
-    every self-test that needs neither the game nor the network, holds the agent pages to their
-    size limits, and runs markdown-check.ps1 over the tracked Markdown. Exit 0 means all of that held.
-    With -SkipIfPassed, as the pre-push hook runs it, exit 0 may instead mean that nothing ran,
-    because a run recorded that this same tree passed it; the run then says so.
+    Parses every script under scripts/, holds their comment lines to a width, reads their list
+    parameters with param-check.ps1, runs every self-test that needs neither the game nor the
+    network, holds the agent pages to their size limits, and runs markdown-check.ps1 over the
+    tracked Markdown. Exit 0 means all of that held. With -SkipIfPassed, as the pre-push hook runs
+    it, exit 0 may instead mean that nothing ran, because a run recorded that this same tree
+    passed it; the run then says so.
 
 .DESCRIPTION
     THE ONE COMMAND BEFORE A PUSH (grado-factorio-tools#60). The only gate here was commit-msg,
@@ -22,7 +23,20 @@
     its own, so one script's `exit` does not end the run, and -SelfTest -NoGame of each in
     $NO_GAME_CASES: the cases of a script that needs the game which read no game's output but a
     log written for them (grado-factorio-tools#175). A self-test that passes prints one line
-    here; one that fails prints everything it said.
+    here; one that fails prints everything it said. One that exits 0 having run no case fails:
+    one that never says `self-test`, or that says it passed with 0 cases, all of them or 0 of
+    some, as a -NoGame broken to run nothing would (grado-factorio-tools#181). It reads the
+    output, so a self-test that counts a case it did not run is not seen.
+
+    A COMMENT OR HEADER LINE OF A SCRIPT HERE IS HELD TO $COMMENT_LINE_LIMIT, the Markdown's limit
+    (grado-factorio-tools#181): this header had a line of 147 characters, from
+    grado-factorio-tools#179. A line counts when it is in a block comment or begins with #, as the
+    parser's comment tokens give them, so a # line in a here-string is not one. A line in a help
+    block's .EXAMPLE section, from that keyword to the next, is not counted, as an example is
+    copied whole; nor is a line of one word after its indent and comment marker, as an address
+    is, which cannot be broken (Truls, 2026-10-21, on grado-factorio-tools#181). Not read: a
+    code line, and a comment after code on one, however long; and characters are counted as
+    UTF-16 units, so a character outside the Basic Multilingual Plane counts as two.
 
     THE PAGES AN AGENT ALWAYS LOADS HAVE A SIZE LIMIT (grado-factorio-tools#69). CLAUDE.md loads on
     every turn and the code-review rules before every review; grado-factorio-tools#65 cut both, and
@@ -40,14 +54,17 @@
     check is silent on length for a repository that hands it none.
 
     WHAT IT DOES NOT RUN. The self-tests in $NEEDS_GAME, because each starts Factorio, and a CI
-    runner has no game: of one in $NO_GAME_CASES too, the cases that start it. Every script named there loads its mods through the harness, and the
-    harness reads through mod-info.ps1. So after a change to either of those run all of them by
-    hand, and after a change to one of the others, its own:
+    runner has no game: of one in $NO_GAME_CASES too, the cases that start it. Every script named
+    there loads its mods through the harness, and the harness reads through mod-info.ps1. So
+    after a change to either of those run all of them by hand, and after a change to one of the
+    others, its own:
 
         pwsh -File scripts/load-harness.ps1 -SelfTest
 
     A script that declares a -SelfTest the way these do and is named in neither list below fails
-    this check, so a new one is not left out in silence. One declared some other way is missed.
+    this check, so a new one is not left out in silence. So does one that declares a [switch]
+    $NoGame and is not in $NO_GAME_CASES, whose no-game cases would otherwise not run
+    (grado-factorio-tools#181). One declared some other way is missed.
 
     WHAT IT CANNOT SEE. A parse proves syntax and nothing else: a misspelled cmdlet or variable
     parses. No linter runs. It reads the working tree, so through the pre-push hook it checks
@@ -103,8 +120,11 @@ $NEEDS_GAME = @('dump-walk.ps1', 'load-harness.ps1', 'locale-check.ps1', 'trace-
 $NO_GAME_CASES = @('trace-definitions.ps1')
 # Bytes, with LF line endings; a page must be under its limit. Paths are from the repository root.
 $PAGE_LIMITS = [ordered]@{ 'CLAUDE.md' = 4000; 'docs/agents/code-review.md' = 3000; 'docs/agents/code-review-prose.md' = 2000 }
-# Characters a line of tracked Markdown prose may run to. What counts is in markdown-check.ps1's header.
+# Characters a line of tracked Markdown prose may run to. What counts is in markdown-check.ps1's
+# header.
 $MARKDOWN_LINE_LIMIT = 100
+# Characters a comment or header line of a script here may run to: the Markdown's, as above.
+$COMMENT_LINE_LIMIT = $MARKDOWN_LINE_LIMIT
 
 $root = Split-Path $PSScriptRoot -Parent
 $failed = [System.Collections.Generic.List[string]]::new()
@@ -159,6 +179,51 @@ function Complete-PassRecord {
     Set-Content -LiteralPath $Record -Value "$Tree $([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ', [cultureinfo]::InvariantCulture))"
 }
 
+# The numbers of a script's comment and header lines over $Limit characters: each line of a <# #>
+# block, and a line that begins with #. A help block's .EXAMPLE section is skipped, as an example
+# is copied whole. Read from the parser's comment tokens, so a # line in a here-string is not one.
+function Get-LongCommentLine {
+    param([Parameter(Mandatory)] [string] $Path, [Parameter(Mandatory)] [int] $Limit)
+    $tokens = $null
+    [void] [Management.Automation.Language.Parser]::ParseFile($Path, [ref] $tokens, [ref] $null)
+    $lines = [IO.File]::ReadAllLines($Path)
+    # One word after its indent and comment marker, as an address is, cannot be broken.
+    $over = { param($line) $line.Length -gt $Limit -and $line -notmatch '^\s*(#+\s*)?\S+\s*$' }
+    foreach ($comment in $tokens | Where-Object Kind -eq 'Comment') {
+        $first = $comment.Extent.StartLineNumber
+        if (-not $comment.Text.StartsWith('<#')) {
+            if ($lines[$first - 1] -match '^\s*#' -and (& $over $lines[$first - 1])) { $first }
+            continue
+        }
+        $section = ''
+        foreach ($n in $first..$comment.Extent.EndLineNumber) {
+            # Upper case, as help keywords are written here: a line beginning `.githooks` is text.
+            if ($lines[$n - 1] -cmatch '^\s*\.([A-Z]+)\s*$') { $section = $Matches[1] }
+            if ($section -ne 'EXAMPLE' -and (& $over $lines[$n - 1])) { $n }
+        }
+    }
+}
+
+# Whether a self-test's output says it ran no case: it never says `self-test`, or it passed
+# with 0 cases, all of them or 0 of some.
+function Test-RanNoCase {
+    param([string] $Said)
+    $Said -notmatch 'self-test' -or $Said -match '(?m)^OK - self-test passed: (all )?0 (of \d+ )?cases?\b'
+}
+
+# What is wrong with how a script stands in the lists: a -SelfTest in none of them, or a -NoGame
+# that $NO_GAME_CASES does not name. Read from the declaration text, so one made another way is
+# missed.
+function Get-ListProblem {
+    param([string] $Name, [string] $Text, [string[]] $SelfTests, [string[]] $NeedsGame, [string[]] $NoGameCases)
+    if ($Text -match '\[switch\]\s*\$SelfTest|\$args -contains ''-SelfTest''' -and $Name -notin $SelfTests + $NeedsGame) {
+        "$Name has a -SelfTest that is neither run here nor named as needing the game"
+    }
+    if ($Text -match '\[switch\]\s*\$NoGame\b' -and $Name -notin $NoGameCases) {
+        "$Name declares -NoGame and is not in `$NO_GAME_CASES, so its no-game cases are not run"
+    }
+}
+
 if ($SelfTest) {
     $temp = Join-Path ([IO.Path]::GetTempPath()) "check-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
     $repo = Join-Path $temp 'repo'; $outside = Join-Path $temp 'outside'; $rec = Join-Path $temp 'check-passed'
@@ -202,6 +267,25 @@ if ($SelfTest) {
                 try { $unread = Get-CheckedTree -Root $repo } finally { if ($lock) { $lock.Dispose() } else { chmod 644 $path } }
                 & $file 'a.txt' 'one'
                 $unread -eq '' -and (Get-CheckedTree -Root $outside) -eq '' }
+            'a comment or header line over the limit is named; code, a here-string, .EXAMPLE and an address are not' = {
+                $long = 'word ' * 20 + 'x'; $script = Join-Path $outside 'long.ps1'
+                Set-Content -LiteralPath $script -Value @(
+                    '<#', '.SYNOPSIS', "    $long", '.EXAMPLE', "    $long", '.NOTES', "    $long", '#>',
+                    "# $long", "`$a = '$long'", "`$b = 1 # $long", "`$c = @'", "# $long", "'@", "    # $('y' * 94)",
+                    "<#", "    https://example.com/$('x' * 101)", "    two $long", "#>", "#   https://example.com/$('x' * 101)")
+                $got = @(Get-LongCommentLine -Path $script -Limit 100)
+                "$got" -eq '3 7 9 18' }
+            'a self-test whose output says it ran no case is not a pass' = {
+                (Test-RanNoCase 'OK - self-test passed: all 0 cases.') -and (Test-RanNoCase 'nothing said') -and
+                (Test-RanNoCase 'OK - self-test passed: 0 of 2 cases; 2 skipped off Windows') -and
+                -not (Test-RanNoCase 'OK - self-test passed: all 10 cases.') -and -not (Test-RanNoCase 'OK - self-test passed.') }
+            'a -NoGame not in $NO_GAME_CASES, and a -SelfTest in neither list, are named' = {
+                $both = 'param([switch] $SelfTest, [switch] $NoGame)'
+                $lists = @{ SelfTests = @('a.ps1'); NeedsGame = @('g.ps1', 'n.ps1'); NoGameCases = @('n.ps1') }
+                $unlisted = @(Get-ListProblem -Name 'u.ps1' -Text 'param([switch] $SelfTest)' @lists)
+                $noGame = @(Get-ListProblem -Name 'g.ps1' -Text $both @lists)
+                $unlisted.Count -eq 1 -and $noGame.Count -eq 1 -and $noGame[0] -match 'NoGame' -and
+                -not (Get-ListProblem -Name 'n.ps1' -Text $both @lists) -and -not (Get-ListProblem -Name 'a.ps1' -Text $both.Replace(', [switch] $NoGame', '') @lists) }
         }
         $failures = 0; $n = 0
         foreach ($name in $cases.Keys) {
@@ -234,10 +318,16 @@ foreach ($script in Get-ChildItem -LiteralPath $PSScriptRoot -Filter *.ps1 | Sor
     foreach ($e in $errors) { Write-Host "    line $($e.Extent.StartLineNumber): $($e.Message)" }
     if ($errors) { $failed.Add("$($script.Name) does not parse") }
 
-    $hasSelfTest = (Get-Content -LiteralPath $script.FullName -Raw) -match '\[switch\]\s*\$SelfTest|\$args -contains ''-SelfTest'''
-    if ($hasSelfTest -and $script.Name -notin $SELF_TESTS + $NEEDS_GAME) {
-        Write-Host "check: $($script.Name) has a -SelfTest that is neither run here nor named as needing the game -- FAILED"
-        $failed.Add("$($script.Name) has a -SelfTest this check does not know")
+    $text = Get-Content -LiteralPath $script.FullName -Raw
+    foreach ($problem in Get-ListProblem -Name $script.Name -Text $text -SelfTests $SELF_TESTS -NeedsGame $NEEDS_GAME -NoGameCases $NO_GAME_CASES) {
+        Write-Host "check: $problem -- FAILED"
+        $failed.Add($problem)
+    }
+
+    $long = @(Get-LongCommentLine -Path $script.FullName -Limit $COMMENT_LINE_LIMIT)
+    if ($long) {
+        Write-Host "check: $($script.Name) has comment lines over $COMMENT_LINE_LIMIT characters, line $($long -join ', ') -- FAILED"
+        $failed.Add("$($script.Name) has $($long.Count) comment line(s) over $COMMENT_LINE_LIMIT characters")
     }
 }
 Write-Host "check: every script parsed $(& $took)"
@@ -256,8 +346,8 @@ foreach ($run in @($SELF_TESTS | ForEach-Object { , @($_, '-SelfTest') }) + @($N
     $clock.Restart()
     $said = & pwsh -NoProfile -File (Join-Path $PSScriptRoot $name) @switches 2>&1 | Out-String
     # Exit 0 having run no case is not a pass: mod-info.ps1 has no param block, so it would take
-    # a -SelfTest it no longer answers in silence.
-    $ran = $said -match 'self-test'
+    # a -SelfTest it no longer answers in silence, and a broken -NoGame passed with all 0 cases.
+    $ran = -not (Test-RanNoCase $said)
     Write-Host "check: $name $switches -- $($LASTEXITCODE -or -not $ran ? 'FAILED' : 'ok') $(& $took)"
     if ($LASTEXITCODE -or -not $ran) {
         $said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }

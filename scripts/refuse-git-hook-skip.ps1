@@ -11,14 +11,11 @@
     and is a reason for a longer timeout and not for skipping them.
 
     HOW IT IS WIRED. In .claude/settings.json, a PreToolUse hook on the two shell tools, matcher
-    `Bash|PowerShell`. This repository's own tracked settings wire it as
-
-        i=$(cat); case $i in *commit*|*push*) printf '%s' "$i" | pwsh -NoProfile -File "$CLAUDE_PROJECT_DIR/scripts/refuse-git-hook-skip.ps1";; esac
-
-    and a consumer names the script under vendor/grado-factorio-tools/ in its own. The session
-    hands the hook the tool call as JSON on stdin: this reads `tool_input.command`. The `case`
-    keeps PowerShell from starting before every shell command: whatever is refused names one of
-    the two subcommands.
+    `Bash|PowerShell`. This repository's own tracked settings wire it as the first example below
+    shows, and a consumer names the script under vendor/grado-factorio-tools/ in its own. The
+    session hands the hook the tool call as JSON on stdin: this reads `tool_input.command`. The
+    `case` keeps PowerShell from starting before every shell command: whatever is refused names
+    one of the two subcommands.
 
     WHAT IT REFUSES. A command in which the word `git`, alone or at the end of a path, is
     followed by `commit` or `push` as its subcommand, and by --no-verify, or an abbreviation
@@ -50,10 +47,7 @@
     with -n as the next word; and one with -n in a comment after it. Write such a text to a
     file with another tool, and give a message with -F.
 
-    TO CHECK IT. The first is refused with exit 2, the second passes with exit 0:
-
-        '{"tool_input":{"command":"git push --no-verify"}}' | pwsh -NoProfile -File scripts/refuse-git-hook-skip.ps1; $LASTEXITCODE
-        '{"tool_input":{"command":"git push -n"}}' | pwsh -NoProfile -File scripts/refuse-git-hook-skip.ps1; $LASTEXITCODE
+    TO CHECK IT, run the second example below.
 
 .PARAMETER SelfTest
     Prove it refuses what it should and lets the rest through, that the wired command
@@ -69,6 +63,18 @@
     unless a session would start the hook for Bash and for PowerShell. An entry with no matcher
     passes: it is started for every tool. How a matcher is read is in hook-matcher.ps1. A
     consumer gives its own file to know its wiring still reaches the hook, from both tools.
+
+.EXAMPLE
+    The wired command: the PreToolUse hook in this repository's .claude/settings.json, as HOW IT
+    IS WIRED says.
+
+        i=$(cat); case $i in *commit*|*push*) printf '%s' "$i" | pwsh -NoProfile -File "$CLAUDE_PROJECT_DIR/scripts/refuse-git-hook-skip.ps1";; esac
+
+.EXAMPLE
+    To check it. The first is refused with exit 2, the second passes with exit 0:
+
+        '{"tool_input":{"command":"git push --no-verify"}}' | pwsh -NoProfile -File scripts/refuse-git-hook-skip.ps1; $LASTEXITCODE
+        '{"tool_input":{"command":"git push -n"}}' | pwsh -NoProfile -File scripts/refuse-git-hook-skip.ps1; $LASTEXITCODE
 #>
 
 #Requires -Version 7

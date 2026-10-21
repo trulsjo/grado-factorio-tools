@@ -193,7 +193,8 @@ $TemplateHeadings = 'Summary', 'Evidence', 'Merge Danger'
 function Get-HeadingProblem {
     <#  What is wrong with the pr template's three headings in $Text, one line each: each one
         missing, each one standing more than once, or the order they stand in. Empty if nothing
-        is. Ported from grado-factorio-modpack's Get-DraftProblem (scripts/pr-body.ps1 at 0a58b02).  #>
+        is. Ported from grado-factorio-modpack's Get-DraftProblem (scripts/pr-body.ps1 at
+        0a58b02).  #>
     param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text)
     $found = [System.Collections.Generic.List[string]]::new()
     $fenced = $false
@@ -370,7 +371,8 @@ function Invoke-SelfTest {
             $fenced = @(Get-SiblingProblem "``````text`nThe sibling is grado-factorio-modpack.`n```````n")
             $word = @(Get-SiblingProblem 'The sibling defaced nothing on 2026-10-20.')
             $inName = @(Get-SiblingProblem 'Get-SiblingProblem and -CiteSiblings are new.')
-            # Held to what the header says is not seen: a title. An address holding the name is read.
+            # Held to what the header says is not seen: a title. An address holding the name is
+            # read.
             $title = @(Get-SiblingProblem 'The Grado Factorio Modpack pins this.')
             $address = @(Get-SiblingProblem 'See https://github.com/trulsjo/grado-factorio-modpack for it.')
             $refs.Count -eq 0 -and $fenced.Count -eq 0 -and $word.Count -eq 1 -and $word[0].Missing -eq 'a commit' -and $inName.Count -eq 0 -and

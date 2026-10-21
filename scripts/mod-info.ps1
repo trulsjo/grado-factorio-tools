@@ -29,9 +29,9 @@
 
     WHAT IT READS, WHERE ConvertFrom-Json ALONE WOULD NOT. An empty key, which is legal JSON:
     fluid-connection-indicators 0.2.9's `package` table holds `"": ""`
-    (grado-factorio-tools#38, and #40 for the packer). And a `"Name"` beside `name`, or a `"Version"` beside `version`:
-    the lower-case key is read and the other ignored, which is how the game reads them -- the run
-    is in docs/measurements.md.
+    (grado-factorio-tools#38, and #40 for the packer). And a `"Name"` beside `name`, or a
+    `"Version"` beside `version`: the lower-case key is read and the other ignored, which is how
+    the game reads them -- the run is in docs/measurements.md.
 
     WHAT IT CANNOT SEE. It reads `name` and `version` and checks nothing else about them: not a
     version's format, not that the name matches the directory or zip the file came from, and a
@@ -48,7 +48,8 @@
 #>
 
 function Read-ModInfo {
-    <#  A mod's info.json as a hashtable whose keys match case exactly, or a refusal naming -Where.  #>
+    <#  A mod's info.json as a hashtable whose keys match case exactly, or a refusal naming
+        -Where.  #>
     param(
         [Parameter(Mandatory)] [AllowNull()] [AllowEmptyString()] [string] $Text,
         [Parameter(Mandatory)] [string] $Where

@@ -345,11 +345,12 @@ try {
                 # Three planted prototypes, one per failure this check claims to see, named with the
                 # prefix so they count. They live in the temp directory, never beside the mods.
                 #
-                # The two unresolved ones lean on __ITEM__...__ naming an item that does not exist, because
-                # that is the shape the engine answers with text rather than by refusing: a localised string
-                # that is structurally wrong -- too deep, too many parameters -- stops the data stage and
-                # never reaches a dump, and a localised_name pointing straight at a missing key is dropped
-                # from the dump entirely, which is the FIRST canary's case, not this one. Measured on 2.0.77.
+                # The two unresolved ones lean on __ITEM__...__ naming an item that does not exist,
+                # because that is the shape the engine answers with text rather than by refusing: a
+                # localised string that is structurally wrong -- too deep, too many parameters --
+                # stops the data stage and never reaches a dump, and a localised_name pointing
+                # straight at a missing key is dropped from the dump entirely, which is the FIRST
+                # canary's case, not this one. Measured on 2.0.77.
                 $stem   = "${Prefix}localecheck-canary"
                 $canary = Join-Path $modDir 'localecheck-canary'
                 New-Item -ItemType Directory -Path (Join-Path $canary 'locale/en') -Force | Out-Null
@@ -380,8 +381,9 @@ data:extend({
 
                 $canaryReport = Test-Locale -Dumps (Invoke-Dumps -Mods ($ourMods + 'localecheck-canary') -Tag 'canary')
 
-                # Caught is not enough: caught as the right kind. A run that reported the unresolved pair as
-                # missing would send someone to write a locale entry that is already there.
+                # Caught is not enough: caught as the right kind. A run that reported the
+                # unresolved pair as missing would send someone to write a locale entry that is
+                # already there.
                 $wanted = @(
                     @{ Name = "$stem-item";             In = 'Missing';    Field = $null
                        What = 'a prototype with no locale entry' }

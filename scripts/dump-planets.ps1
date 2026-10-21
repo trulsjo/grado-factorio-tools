@@ -20,8 +20,8 @@
     WHAT IT CANNOT SEE. A map: nothing is generated. What a mod places from its control script.
     A mod that zeroes a resource's autoplace and places it itself shows here as the count of
     resources whose probability is 0, and no further. Amounts: the richness and frequency of an
-    autoplace control are not compared. What a property expression's value names, since a value may be an expression and
-    not a name. Asteroids and routes.
+    autoplace control are not compared. What a property expression's value names, since a value
+    may be an expression and not a name. Asteroids and routes.
 
 .PARAMETER Dump
     The dump to read.

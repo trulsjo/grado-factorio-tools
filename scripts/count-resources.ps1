@@ -91,7 +91,8 @@ function Get-Fingerprint([string] $Root) {
 New-Item -ItemType Directory -Force $OutDirectory | Out-Null
 $out = { param($suffix) Join-Path $OutDirectory "$Name$suffix" }
 
-# Each directory -Mods names, a mod or a directory of mods: what the harness junctions in, or holds it.
+# Each directory -Mods names, a mod or a directory of mods: what the harness junctions in, or holds
+# it.
 $directories = @(foreach ($p in $Mods) {
     $item = Get-Item -LiteralPath $p
     if ($item -isnot [IO.DirectoryInfo]) { continue }

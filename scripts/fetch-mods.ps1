@@ -40,11 +40,12 @@
     PARAMETERS, so the URL itself is a secret. Four things follow, and all four are enforced rather
     than hoped for: the URL is never written to output; `Invoke-WebRequest` is called with
     -Verbose:$false so a caller's -Verbose cannot print it; every error that escapes the download is
-    scrubbed before it is rethrown; and the ErrorRecord PowerShell files in $Error is DROPPED, because
-    a scrubbed message is not the only copy -- the record's TargetObject holds the request URI, token
-    and all, even when the message does not. `-SelfTest` proves all of it with a sentinel rather than
-    asserting it, and it checks the captured output and $Error separately for that reason: a child
-    process takes its $Error to the grave, so only an in-process call can see that leak.
+    scrubbed before it is rethrown; and the ErrorRecord PowerShell files in $Error is DROPPED,
+    because a scrubbed message is not the only copy -- the record's TargetObject holds the request
+    URI, token and all, even when the message does not. `-SelfTest` proves all of it with a sentinel
+    rather than asserting it, and it checks the captured output and $Error separately for that
+    reason: a child process takes its $Error to the grave, so only an in-process call can see that
+    leak.
 
     WHAT IT CANNOT SEE. It fetches what the manifest names and nothing else: a dependency the
     manifest omits is not fetched, and nothing here reports it -- that is the load's job, and
@@ -67,7 +68,8 @@
             Default = 'krastorio2'                        # optional: the set when -Set is omitted
             Sets = @{
                 krastorio2 = @(
-                    @{ Name = 'flib'; Version = '0.16.2'; Git = 'https://github.com/factoriolib/flib.git' }
+                    @{ Name = 'flib'; Version = '0.16.2'
+                       Git = 'https://github.com/factoriolib/flib.git' }
                     @{ Name = 'Krastorio2Assets'; Version = '2.0.5' }
                 )
                 riteg = @( @{ Name = 'RITEG'; Version = '1.3.11' } )
@@ -105,9 +107,9 @@
     Pass this explicitly only if you want that behaviour back.
 
 .PARAMETER PreferPortal
-    Take the portal route even for a mod that has a Git source. Nothing needs this to work; it exists
-    so the credential path can be exercised on a mod whose git route is known good, instead of only
-    ever running when some other mod happens to lack a repository.
+    Take the portal route even for a mod that has a Git source. Nothing needs this to work; it
+    exists so the credential path can be exercised on a mod whose git route is known good, instead
+    of only ever running when some other mod happens to lack a repository.
 
 .PARAMETER Force
     Re-fetch even when the cache already holds the pinned version.
@@ -277,7 +279,8 @@ function Protect-Token {
 
         THE LAST LINE OF DEFENCE FOR THE DOWNLOAD URL. Invoke-WebRequest's failures can carry the
         request URI, and the URI carries the token as a query parameter, so an unscrubbed error
-        message is a leak into whatever captured it. Called on the way out of every portal failure.  #>
+        message is a leak into whatever captured it. Called on the way out of every portal
+        failure.  #>
     param(
         [string] $Text,
         [string] $Secret
@@ -406,8 +409,8 @@ function Save-PortalMod {
             # 7.6.5: Message clean, TargetObject dirty, `$Error[0] | Format-List *` dirty.
             #
             # Scrubbing the message and leaving the record is a leak into anything that later reads
-            # $Error: a CI wrapper dumping it on failure, a transcript, or a session that dot-sourced
-            # this script. Dropping the records rather than trusting nobody looks.
+            # $Error: a CI wrapper dumping it on failure, a transcript, or a session that
+            # dot-sourced this script. Dropping the records rather than trusting nobody looks.
             while ($Error.Count -gt $errorFloor) { $Error.RemoveAt(0) }
             throw "$name`: the mod portal download failed -- $safe"
         }
@@ -440,7 +443,8 @@ function Save-PortalMod {
 }
 
 function Save-GitMod {
-    <#  Clone the pinned tag, shallow. No credential, no hash step -- git verifies its own objects.  #>
+    <#  Clone the pinned tag, shallow. No credential, no hash step -- git verifies its own
+        objects.  #>
     param(
         [Parameter(Mandatory)] [hashtable] $Mod,
         [Parameter(Mandatory)] [string]    $CacheDirectory
@@ -520,8 +524,9 @@ function Start-FakePortal {
         WHY THIS EXISTS RATHER THAN A REFUSING ADDRESS. The first version of this self-test pointed
         -PortalBaseUrl at a port nothing listens on and searched the output for a sentinel token. It
         passed, and it proved nothing: the API call fails first, so Get-PortalCredential is never
-        reached and the token never enters the URL the check exists to police. A leak test that never
-        handles the secret is the same class of pass as an asset check that never opens the archive.
+        reached and the token never enters the URL the check exists to police. A leak test that
+        never handles the secret is the same class of pass as an asset check that never opens the
+        archive.
 
         So this answers /api/mods/{name}/full for real, hands back a download_url, and logs every
         request line it receives -- INCLUDING the query string, token and all. That log is the proof
@@ -850,9 +855,10 @@ function Invoke-SelfTest {
 
         # -------------------------------------------------------------------------------------
         # THE LEAK THE CHILD-PROCESS CHECK CANNOT SEE. The token check above reads files the child
-        # wrote, and a child that exits takes its $Error with it -- so a token sitting in the ErrorRecord looks
-        # identical to no token at all. This calls Save-PortalMod IN THIS PROCESS, where $Error
-        # survives the failure and can be read, which is the only way to tell those apart.
+        # wrote, and a child that exits takes its $Error with it -- so a token sitting in the
+        # ErrorRecord looks identical to no token at all. This calls Save-PortalMod IN THIS PROCESS,
+        # where $Error survives the failure and can be read, which is the only way to tell those
+        # apart.
         Write-Host 'self-test: a failed download must leave no token in $Error either.'
         $log4 = Join-Path $temp 'requests-errorscan.log'
         New-Item -ItemType File -Path $log4 -Force | Out-Null
@@ -916,12 +922,12 @@ if (-not $Set) { $Set = $pins.Default }
 if (-not $Set) { throw "Give -Set: $PinFile names no Default." }
 if (-not $CacheDirectory) { $CacheDirectory = Join-Path (Get-Location).Path (Join-Path '.mod-cache' $Set) }
 
-# @() FOR THE SAME REASON THE $results LINE BELOW HAS ONE, and this needed it only once Resolve-ModSet
-# existed: `$MOD_SETS[$Set]` was a hashtable INDEX and indexes do not unroll, while a function RETURN
-# does. Without it a one-mod set came back as the bare hashtable, so $mods.Count counted
-# its two KEYS and the banner said "2 mods" for a set of one. Invoke-Fetch declares [array] $Mods and
-# coerces, so the fetch itself still worked and -SelfTest still passed -- which is exactly why the
-# wrong number is the only symptom, and why it would have survived a long time.
+# @() FOR THE SAME REASON THE $results LINE BELOW HAS ONE, and this needed it only once
+# Resolve-ModSet existed: `$MOD_SETS[$Set]` was a hashtable INDEX and indexes do not unroll, while a
+# function RETURN does. Without it a one-mod set came back as the bare hashtable, so $mods.Count
+# counted its two KEYS and the banner said "2 mods" for a set of one. Invoke-Fetch declares [array]
+# $Mods and coerces, so the fetch itself still worked and -SelfTest still passed -- which is exactly
+# why the wrong number is the only symptom, and why it would have survived a long time.
 $mods = @(Resolve-ModSet -Name $Set)
 
 Write-Host "fetch-mods: $Set -- $($mods.Count) mods into $CacheDirectory"
