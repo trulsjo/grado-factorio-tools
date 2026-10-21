@@ -104,9 +104,9 @@
 
 .PARAMETER SelfTest
     Run the cases that hold the record and the skip, in a scratch repository, and those that hold
-    the functions each script and each self-test's run are judged by, on files outside it, and
-    nothing else. The run's loops are not run: a loop that stopped calling those functions, or
-    passed them less, would still pass. Needs git.
+    the functions each script and each self-test's run are judged by, on strings and on files
+    outside it, and nothing else. The run's loops are not run: a loop that stopped calling those
+    functions, or passed them less, would still pass. Needs git.
 
 .EXAMPLE
     pwsh -File scripts/check.ps1
