@@ -1,0 +1,37 @@
+#!/bin/sh
+# Runs scripts/markdown-check.ps1 -All with check.ps1's line limit before a commit is made, so a
+# Markdown problem is refused in seconds and not minutes later by pre-push
+# (grado-factorio-tools#182).
+# This file is only the wiring, as commit-msg is, and is installed by the same one step:
+#
+#     git config core.hooksPath .githooks
+#
+# It reads every tracked Markdown file as staged, which is what the commit commits: with
+# `git commit -a` or a path, the index git hands the hook. An edit not staged is not read, and
+# markdown-check.ps1 names each file that has one. What that script checks, and what it cannot
+# see, is in its header. Nothing else is run here: scripts and self-tests are pre-push's.
+#
+# The limit is $MARKDOWN_LINE_LIMIT, read from scripts/check.ps1, so the two cannot drift apart.
+# The posture on a missing pwsh, script or limit is commit-msg's: say nothing was checked, and let
+# the commit through.
+if ! command -v pwsh >/dev/null 2>&1; then
+    echo "pre-commit: pwsh not found, so the Markdown was NOT checked." >&2
+    exit 0
+fi
+
+ROOT="$(git rev-parse --show-toplevel)"
+CHECK="$ROOT/scripts/markdown-check.ps1"
+if [ ! -f "$CHECK" ]; then
+    echo "pre-commit: $CHECK not found, so the Markdown was NOT checked." >&2
+    exit 0
+fi
+
+LIMIT="$(sed -n 's/^\$MARKDOWN_LINE_LIMIT = \([0-9][0-9]*\)\r*$/\1/p' "$ROOT/scripts/check.ps1" 2>/dev/null)"
+if [ -z "$LIMIT" ]; then
+    echo "pre-commit: no \$MARKDOWN_LINE_LIMIT in scripts/check.ps1, so the Markdown was NOT checked." >&2
+    exit 0
+fi
+
+# markdown-check.ps1 reads the repository it stands in.
+cd "$ROOT" || exit 1
+exec pwsh -NoProfile -File "$CHECK" -All -MaxLineLength "$LIMIT"

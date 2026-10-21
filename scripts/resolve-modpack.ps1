@@ -391,7 +391,8 @@ function Invoke-SelfTest {
         # Another mod in the wrong case: the portal serves `lib`, not `LIB`.
         'wrongcase' = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0'; dependencies = @('LIB') } })
     }
-    # Through JSON, so each release has the shape Invoke-RestMethod hands back rather than a hashtable's.
+    # Through JSON, so each release has the shape Invoke-RestMethod hands back rather than a
+    # hashtable's.
     foreach ($k in @($portal.Keys)) { $portal[$k] = @(ConvertTo-Json -InputObject @($portal[$k]) -Depth 6 | ConvertFrom-Json) }
     # Exact case, as the portal answers: /api/mods/Krastorio2 does, /api/mods/krastorio2 does not.
     $get = { param($n) if ($portal.Keys -ccontains $n) { return , $portal[$n] } else { $null } }
@@ -453,8 +454,9 @@ function Invoke-SelfTest {
                 ($r[0].Unresolved -join ' ') -cmatch "P 0\.1\.0 declares 'Base >= 2\.0\.0'" -and
                 ($r[0].Unresolved -join ' ') -cmatch "shouty 1\.0\.0 declares 'Base >= 2\.0\.99'.*'base'" -and
                 ($r[0].Unresolved -join ' ') -cmatch "shouty 1\.0\.0 declares 'Space-Age >= 2\.0\.0'.*'space-age'" } }
-        # `lib` is picked before `LIB` is reached, and `Low` walked before `low`, so ignoring case in
-        # the closure, the lookup cache or the local-pack table each lets one of the two lines pass.
+        # `lib` is picked before `LIB` is reached, and `Low` walked before `low`, so ignoring case
+        # in the closure, the lookup cache or the local-pack table each lets one of the two lines
+        # pass.
         @{ Name = 'any other mod named in the wrong case is not the one in the closure or the local pack: its line is reported'; Test = {
             $r = & $resolve (& $pack 'Low' @('lib')), (& $pack 'High' @('Low', 'wrongcase', 'low'))
             (($r[1].Picks.Keys | Sort-Object -CaseSensitive) -join ',') -ceq 'lib,wrongcase' -and -not $r[1].Violations -and

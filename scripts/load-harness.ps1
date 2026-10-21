@@ -51,7 +51,8 @@
     load-harness-lib.ps1 for what is picked up from a directory.
 
 .PARAMETER FactorioExe
-    Path to Factorio.exe. Defaults to $env:FACTORIO_EXE, then the Steam path Resolve-FactorioExe names.
+    Path to Factorio.exe. Defaults to $env:FACTORIO_EXE, then the Steam path Resolve-FactorioExe
+    names.
 
 .PARAMETER With
     Bundled mods to enable, comma-separated, e.g. -With space-age. Dependencies are pulled in, so

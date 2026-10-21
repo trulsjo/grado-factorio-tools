@@ -96,7 +96,8 @@ $TRACER = '0-trace-definitions'
 $MARK = 'trace-definitions'
 
 # Each line logged: the mark, then type, name, the running mod, its stage file, and the mod whose
-# file made the call. Core's prototypes, there before the tracing mod, are logged as core's, in `data`.
+# file made the call. Core's prototypes, there before the tracing mod, are logged as core's, in
+# `data`.
 $TRACER_DATA = @'
 local mark = "@MARK@"
 for type, names in pairs(data.raw) do
@@ -191,8 +192,8 @@ function Write-Definitions {
 }
 
 function Invoke-Trace {
-    <#  Load -Mods with the tracing mod and return Read-Definitions' rows. Throws when the game fails,
-        or when the tracing mod saw no call from base.  #>
+    <#  Load -Mods with the tracing mod and return Read-Definitions' rows. Throws when the game
+        fails, or when the tracing mod saw no call from base.  #>
     param([string[]] $Mods = @(), [string[]] $With = @(), [string] $FactorioExe, [switch] $KeepTemp)
     $h = New-LoadHarness -Mods $Mods -With $With -FactorioExe $FactorioExe
     try {

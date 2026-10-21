@@ -38,20 +38,21 @@
     NAMES ARE CASE-SENSITIVE. The 2.0.77 mod-structure documentation says nothing about case, so
     it was measured on 2026-09-26 against Factorio 2.0.77 (build 84539): a zip, a directory or a
     dependency whose name differs from the mod's only in case is refused. The mod portal agrees,
-    answering for a name in one case only. So `Alpha` and `alpha` are two mods. The name check refuses a case-only mismatch, and
-    the one-copy rule leaves the other case's zips alone -- whatever the check accepts, the rule
-    cleans up after. Two places cannot follow that, because at one version the two mods' zips are
-    one file on a case-insensitive file system: packing `alpha` 1.0.0 replaces an
-    `Alpha_1.0.0.zip` already there, and giving both in one run is refused as the same mod twice.
+    answering for a name in one case only. So `Alpha` and `alpha` are two mods. The name check
+    refuses a case-only mismatch, and the one-copy rule leaves the other case's zips alone --
+    whatever the check accepts, the rule cleans up after. Two places cannot follow that, because
+    at one version the two mods' zips are one file on a case-insensitive file system: packing
+    `alpha` 1.0.0 replaces an `Alpha_1.0.0.zip` already there, and giving both in one run is
+    refused as the same mod twice.
 
     THE VERSION BOUNDS are the portal's: major.minor.sub, each 0-65535, and 0.0.0 invalid. A regex
     of three digit-runs accepts 0.0.0 and 1.0.99999, which the portal rejects at upload, so the
     bounds are enforced rather than described.
 
     ONE COPY PER MOD. Once a mod's new zip is in place, every other `<name>_<x.y.z>.zip` of that
-    mod in -OutputDirectory is deleted, whatever its version. A mod whose name only contains this one
-    is left alone, and so is anything that is not a zip -- an unpacked `<name>` directory there is
-    not this script's to remove. A mod that fails leaves any earlier zip of it untouched.
+    mod in -OutputDirectory is deleted, whatever its version. A mod whose name only contains this
+    one is left alone, and so is anything that is not a zip -- an unpacked `<name>` directory there
+    is not this script's to remove. A mod that fails leaves any earlier zip of it untouched.
 
     A WRONG-CASE NAME OR VERSION KEY IS REFUSED, AND THAT IS THE GAME'S RULE. An info.json whose
     only name key is spelled `"Name"`, or whose only version key is `"Version"`, is refused as
@@ -127,7 +128,8 @@ function Get-ModManifest {
     $info = Read-ModInfo -Text (Get-Content -LiteralPath $infoPath -Raw) -Where "$leaf/info.json"
 
     # -cne, as the one-copy rule's -cmatch: Factorio compares mod names case-sensitively (see the
-    # header), so the two must agree or a name this accepts is one that rule does not clean up after.
+    # header), so the two must agree or a name this accepts is one that rule does not clean up
+    # after.
     if ($info.name -cne $leaf) {
         throw "$leaf/info.json declares name '$($info.name)'. The zip is named from info.json and the files come from the directory, so these must agree."
     }

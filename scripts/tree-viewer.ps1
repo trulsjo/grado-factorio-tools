@@ -268,7 +268,7 @@ end)
     $m = Select-String -Path $createOut -Pattern 'Factorio (\d+\.\d+\.\d+)' | Select-Object -First 1
     if ($m) { $factorioVersion = $m.Matches[0].Groups[1].Value }
 
-    # ------------------------------------------------------------------------- read the three outputs
+    # ------------------------------------------ read the three outputs
     $scriptOutput = Join-Path $temp 'write-data/script-output'
     $rawPath  = Join-Path $scriptOutput 'data-raw-dump.json'
     $histPath = Join-Path $scriptOutput 'treeview-history.json'
@@ -278,10 +278,11 @@ end)
     Write-Host 'parsing dumps...'
     $raw     = Get-Content -LiteralPath $rawPath  -Raw | ConvertFrom-Json -AsHashtable
     $history = Get-Content -LiteralPath $histPath -Raw | ConvertFrom-Json -AsHashtable
-    # EVERY read of a key from these two dumps uses INDEX access, never dot (realistic-fusion-refreshed#167). On a hashtable,
-    # dot-access falls back to .NET members when the key is absent, so a missing key yields metadata
-    # instead of $null: `.item` renders the Item indexer's signature, `.count` the entry count. Both
-    # shipped. Dot-access on the tables THIS script builds ($h.c, $t.packs) is safe and stays.
+    # EVERY read of a key from these two dumps uses INDEX access, never dot
+    # (realistic-fusion-refreshed#167). On a hashtable, dot-access falls back to .NET members when
+    # the key is absent, so a missing key yields metadata instead of $null: `.item` renders the Item
+    # indexer's signature, `.count` the entry count. Both shipped. Dot-access on the tables THIS
+    # script builds ($h.c, $t.packs) is safe and stays.
 
     function Read-LocaleNames([string] $File) {
         $p = Join-Path $scriptOutput $File
@@ -297,11 +298,12 @@ end)
     # Absent key OR a value that is not a name -> $null, so a caller's existing fall-through runs.
     # Nothing else here changes: the chain behind an unlock label already knew where to look next,
     # and was only ever stopped by an unusable value arriving as a truthy one -- which is how
-    # "Something went wrong" reached the Sulphur processing card (realistic-fusion-refreshed#169). Every locale read goes
-    # through this, and what counts as unusable lives in load-harness-lib.ps1 -- which keeps
-    # two lists, not one. This reads BOTH, engine errors and the placeholders other mods ship,
-    # because the question here is whether a string makes a usable label. locale-check.ps1 asks
-    # the narrower question of whether it resolved, so it reads only the engine half.
+    # "Something went wrong" reached the Sulphur processing card (realistic-fusion-refreshed#169).
+    # Every locale read goes through this, and what counts as unusable lives in load-harness-lib.ps1
+    # -- which keeps two lists, not one. This reads BOTH, engine errors and the placeholders other
+    # mods ship, because the question here is whether a string makes a usable label.
+    # locale-check.ps1 asks the narrower question of whether it resolved, so it reads only the
+    # engine half.
     function Get-LocaleName($Map, [string] $Key) {
         $v = $Map[$Key]
         if (-not $v -or (Get-LocaleFailure $v)) { return $null }
@@ -317,15 +319,16 @@ end)
     # Both dumps write an empty Lua table as {}, so a key that should be a list arrives as an empty
     # OBJECT -- and an absent key arrives as $null, which @() turns into a one-element array holding
     # $null. Either ships junk the template silently filters. Every list-valued dump key comes
-    # through here (realistic-fusion-refreshed#167); the comma keeps the empty array from unrolling to $null on return.
+    # through here (realistic-fusion-refreshed#167); the comma keeps the empty array from unrolling
+    # to $null on return.
     function Get-DumpList($Value) {
         if ($Value -is [System.Collections.IList]) { return ,@($Value) }
         return ,@()
     }
 
-    # A boolean the dump OMITS when it holds its default -- which is how all three of a
-    # technology's researchability flags arrive when nothing switched them (realistic-fusion-refreshed#168): `enabled`
-    # defaults to true, `hidden` and `visible_when_disabled` to false.
+    # A boolean the dump OMITS when it holds its default -- which is how all three of a technology's
+    # researchability flags arrive when nothing switched them (realistic-fusion-refreshed#168):
+    # `enabled` defaults to true, `hidden` and `visible_when_disabled` to false.
     # <https://lua-api.factorio.com/2.0.77/prototypes/TechnologyPrototype.html>
     function Get-DumpFlag($Value, [bool] $Default) {
         if ($null -eq $Value) { return $Default }
@@ -353,7 +356,7 @@ end)
         return @{ c = $row['c']; ch = (Get-DumpList $row['ch']) }
     }
 
-    # ------------------------------------------------------------------------- overlap candidates (realistic-fusion-refreshed#160)
+    # ------------------------------------------ overlap candidates (realistic-fusion-refreshed#160)
     $focusSet = [System.Collections.Generic.HashSet[string]]::new([string[]]$FocusMod, [StringComparer]::Ordinal)
 
     $STOP = @('the','and','with','from','advanced','basic','improved','empty','used','mk1','mk2','mk3')
@@ -373,13 +376,13 @@ end)
         foreach ($kv in $locale.GetEnumerator()) {
             $h = Get-History $catName $kv.Key
             # A thing whose dumped name is not usable as one stays in the analysis under its
-            # prototype name rather than dropping out of it (realistic-fusion-refreshed#169). Tier 3 reads the prototype name
-            # anyway, so it can still pair; and a thing silently missing from the pool is a worse
-            # answer than one labelled plainly. Its tokens then come from that name, not from the
-            # unusable text -- and that text carries real tokens if you let it. "wrong" and
-            # "something" from Angels' placeholder, "unknown" and "sequence" from an engine error:
-            # four letters or more, straight through the stopword filter, and feeding tier 2
-            # overlap between two things that have nothing whatever in common.
+            # prototype name rather than dropping out of it (realistic-fusion-refreshed#169). Tier 3
+            # reads the prototype name anyway, so it can still pair; and a thing silently missing
+            # from the pool is a worse answer than one labelled plainly. Its tokens then come from
+            # that name, not from the unusable text -- and that text carries real tokens if you let
+            # it. "wrong" and "something" from Angels' placeholder, "unknown" and "sequence" from an
+            # engine error: four letters or more, straight through the stopword filter, and feeding
+            # tier 2 overlap between two things that have nothing whatever in common.
             $label = Get-LocaleName $locale $kv.Key
             if (-not $label) { $label = $kv.Key }
             $things.Add([pscustomobject]@{
@@ -418,20 +421,21 @@ end)
             }
         }
     }
-    # Base pairs are computed but viewer-filtered (realistic-fusion-refreshed#160): shipped flagged and capped separately so
-    # the toggle has something to reveal without drowning the mod pairs.
+    # Base pairs are computed but viewer-filtered (realistic-fusion-refreshed#160): shipped flagged
+    # and capped separately so the toggle has something to reveal without drowning the mod pairs.
     $overlaps = @(
         @($overlaps | Where-Object { -not $_.base } | Sort-Object score -Descending | Select-Object -First 150) +
         @($overlaps | Where-Object base            | Sort-Object score -Descending | Select-Object -First 100)
     )
 
-    # ------------------------------------------------------------------------- technologies (realistic-fusion-refreshed#159)
+    # ------------------------------------------ technologies (realistic-fusion-refreshed#159)
     # The comma is load-bearing, exactly as in Get-DumpList: PowerShell UNROLLS a one-element
     # array on return, so a single-result recipe came back as the bare string and $results[0] then
-    # indexed that STRING -- yielding 's' for sulfuric-acid, never the name. Silent since realistic-fusion-refreshed#159,
-    # because the label chain only reaches $results[0] when the recipe's own locale entry misses,
-    # which before realistic-fusion-refreshed#169 also meant it had stopped on the sentinel. Nineteen of the Angels lane's
-    # twenty-eight failed labels are this bug, not the sentinel.
+    # indexed that STRING -- yielding 's' for sulfuric-acid, never the name. Silent since
+    # realistic-fusion-refreshed#159, because the label chain only reaches $results[0] when the
+    # recipe's own locale entry misses, which before realistic-fusion-refreshed#169 also meant it
+    # had stopped on the sentinel. Nineteen of the Angels lane's twenty-eight failed labels are this
+    # bug, not the sentinel.
     function Get-RecipeResults($recipe) {
         if (-not $recipe['results']) { return ,@() }
         ,@($recipe['results'] | ForEach-Object { $_['name'] } | Where-Object { $_ })
@@ -474,7 +478,8 @@ end)
                 # Recipe name, then the first result's item and fluid names, then the prototype
                 # name. Same order as before; it just no longer halts on the sentinel, so
                 # sulfuric-acid falls through the failed recipe entry to the fluid's "Sulfuric
-                # acid". The last step is the prototype name and never the sentinel (realistic-fusion-refreshed#169).
+                # acid". The last step is the prototype name and never the sentinel
+                # (realistic-fusion-refreshed#169).
                 $first = if ($results.Count) { $results[0] } else { $null }
                 $label = Get-LocaleName $recipeLocale $recipeName
                 if (-not $label -and $first) { $label = Get-LocaleName $itemLocale  $first }
@@ -489,7 +494,8 @@ end)
                 $bonuses.Add($desc)
             }
         }
-        # The changed chain, order kept, deduplicated, without the creator's own later edits (realistic-fusion-refreshed#164).
+        # The changed chain, order kept, deduplicated, without the creator's own later edits
+        # (realistic-fusion-refreshed#164).
         $changedBy = [System.Collections.Generic.List[string]]::new()
         foreach ($c in $h.ch) { if ($c -ne $h.c -and $changedBy -notcontains $c) { $changedBy.Add($c) } }
         # No technology carries the sentinel on the Angels lane, but the path has the same shape
@@ -504,11 +510,11 @@ end)
             prereqs = (Get-DumpList $t['prerequisites'])
             count = $count; formula = $formula; trigger = $trigger; time = $time
             packs = $packs; unlocks = @($unlocks); bonuses = @($bonuses)
-            # Researchability, shipped rather than dropped (realistic-fusion-refreshed#168): a tech another mod switched off
-            # is a finding about how the lane interleaves, so the viewer flags and hides it behind
-            # a toggle instead of the dataset losing it. Angels leaves 72 of these on the canvas,
-            # sulfur-processing among them -- an orphan card with no edges, which is what a reader
-            # notices first.
+            # Researchability, shipped rather than dropped (realistic-fusion-refreshed#168): a tech
+            # another mod switched off is a finding about how the lane interleaves, so the viewer
+            # flags and hides it behind a toggle instead of the dataset losing it. Angels leaves 72
+            # of these on the canvas, sulfur-processing among them -- an orphan card with no edges,
+            # which is what a reader notices first.
             enabled = (Get-DumpFlag $t['enabled'] $true)
             hidden = (Get-DumpFlag $t['hidden'] $false)
             visibleWhenDisabled = (Get-DumpFlag $t['visible_when_disabled'] $false)
@@ -523,7 +529,7 @@ end)
         $packLabels[$p] = if ($n) { $n } else { $p }
     }
 
-    # ------------------------------------------------------------------------- mod legend and colours
+    # ------------------------------------------ mod legend and colours
     # Every mod the viewer will name: creators of techs, their modifiers, and both sides of every
     # pair. Focus first, base and core last, the rest in load-list order.
     $named = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
@@ -552,7 +558,7 @@ end)
         $legend.Add([ordered]@{ name = $m; label = $label; color = $color })
     }
 
-    # ------------------------------------------------------------------------- emit
+    # ------------------------------------------ emit
     $dataset = [ordered]@{
         meta = [ordered]@{
             name = $OutName; generated = (Get-Date -Format 'yyyy-MM-dd HH:mm')

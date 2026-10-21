@@ -65,8 +65,9 @@
     comment character git is configured with where the check runs: core.commentChar or
     core.commentString, and `#` when neither is set. With `auto` the character is read off git's
     own instruction or scissors line, and is `#` where the message has neither. -Range strips
-    with it too. Reading the configuration needs git; without it, `#`. Git keeps comment lines when it does not strip them, as `git commit -F` with no editor
-    does, and the check does not know which it did.
+    with it too. Reading the configuration needs git; without it, `#`. Git keeps comment lines
+    when it does not strip them, as `git commit -F` with no editor does, and the check does not
+    know which it did.
 
 .PARAMETER Range
     Check the messages of every commit in a revision range instead of a file, e.g. `-Range
@@ -390,7 +391,8 @@ if ($SelfTest) {
         @{ comment = ';'; msg = @('🐛 fix(repo): with ; the ; lines are dropped', '', '#626 is kept.',
                                   ('; ' + ('instruction ' * 7).Trim()),
                                   '; ------------------------ >8 ------------------------', ('diff ' * 20).Trim()) }
-        # COMMENT CHARACTER auto: git chose ; because a line starts with #, and wrote it on its lines.
+        # COMMENT CHARACTER auto: git chose ; because a line starts with #, and wrote it on its
+        # lines.
         @{ comment = 'auto'; msg = @('🐛 fix(repo): with auto the character is read', '', '#626 is kept.',
                                      '; Please enter the commit message for your changes. Lines starting',
                                      ('; ' + ('instruction ' * 7).Trim()),

@@ -13,10 +13,10 @@
     are on disk. A review there on 2026-10-05 found emphasis that could not close, so the rest of
     a note rendered wrongly, and a reviewer had to find it. Run with no arguments or with -All, it
     then names each file it read whose working tree differs from the index: those edits were not
-    read. That is a note, which does not change the exit code (grado-factorio-tools#138). It reads the repository it is run in,
-    which need not be the one that holds it, and from any directory inside that repository it
-    reads the same files and says the same. In grado-factorio-tools, which holds it,
-    scripts/check.ps1 runs it with -All and a line limit.
+    read. That is a note, which does not change the exit code (grado-factorio-tools#138). It
+    reads the repository it is run in, which need not be the one that holds it, and from any
+    directory inside that repository it reads the same files and says the same. In
+    grado-factorio-tools, which holds it, scripts/check.ps1 runs it with -All and a line limit.
 
     WHAT IT READS AS WHAT. A paragraph ends at a blank line, a heading, a list item, a table or a
     fenced code block; nothing inside a fence is read, and a fence never closed is reported. A
@@ -37,8 +37,9 @@
     file, read as the file is read, in exact case (grado-factorio-tools#155). The anchor is
     the one GitHub gives, asked of it 2026-10-15 and in docs/measurements.md: the heading's
     text as it renders, lower-cased, with all but letters, marks, decimal digits, connector
-    punctuation such as `_`, `-` and spaces dropped and each space made a hyphen; a repeat takes -1, -2 and on. A heading is a `#`
-    line or a line alone after a blank one and underlined with `=` or `-`.
+    punctuation such as `_`, `-` and spaces dropped and each space made a hyphen; a repeat takes
+    -1, -2 and on. A heading is a `#` line or a line alone after a blank one and underlined with
+    `=` or `-`.
     A BARE ADDRESS, `https://...` with no brackets, is not read for emphasis, and ends where
     GitHub's renderer ends one, asked 2026-10-12 (grado-factorio-tools#124; the answers are in
     docs/measurements.md, with what the GitHub Flavored Markdown spec says, read the same day).
@@ -87,10 +88,10 @@
     into a submodule, a directory or a file that is not `.md`, or after a `?query`, which is
     not checked. A code block made by indenting, which all but the length rule read as text.
     Emphasis that closes in the wrong place, or that a bullet nested in a numbered item leaves
-    open and the next numbered item closes. Markdown outside `.md` files. A link whose target file or heading a
-    commit deletes or renames, unless the linking file is staged too: -All sees it. A link into
-    a submodule is asked of the working tree, so neither its case nor whether git tracks it is
-    checked; into one not initialised it is said to be unchecked, and passes.
+    open and the next numbered item closes. Markdown outside `.md` files. A link whose target
+    file or heading a commit deletes or renames, unless the linking file is staged too: -All sees
+    it. A link into a submodule is asked of the working tree, so neither its case nor whether git
+    tracks it is checked; into one not initialised it is said to be unchecked, and passes.
 
 .PARAMETER Range
     Check the Markdown files changed in a commit range, as they are at its end:
@@ -323,8 +324,8 @@ function Test-Inline {
         }
         if ($canOpen -and $length -gt 0) { $open.Add(@{ Char = $char; Length = $length; Offset = $run.Index; Run = $run.Length; Both = $both }) }
         # A `*` that can only close, left with nothing to close, renders as text, and is most often
-        # an inverted italic whose reopening `*` stands against punctuation (grado-factorio-tools#164).
-        # A `_` is not held to it: snake_case_ and the like end in one.
+        # an inverted italic whose reopening `*` stands against punctuation
+        # (grado-factorio-tools#164). A `_` is not held to it: snake_case_ and the like end in one.
         elseif ($char -eq '*' -and $canClose -and $length -gt 0) {
             @{ Offset = $run.Index; Message = "a $([string]::new('*', $length)) that can only close has nothing open to close, so it renders as text: put a space before a * meant to reopen emphasis, and write a * meant as text as \* or in a code span" }
         }
@@ -431,8 +432,8 @@ function Test-Markdown {
 
         # Links, on every line outside a fence, a table's rows included. Only a line holding
         # `](` or `]:` is handed over: called for every line, the script block made -All over
-        # realistic-fusion-refreshed's 115 files at f3238c5 take 18.6 to 22.8 s where it had taken 12.1 to 16.0
-        # (grado-factorio-tools#155, one machine, a run at a time).
+        # realistic-fusion-refreshed's 115 files at f3238c5 take 18.6 to 22.8 s where it had taken
+        # 12.1 to 16.0 (grado-factorio-tools#155, one machine, a run at a time).
         $prose = $line
         if ($line.Contains('](') -or $line.Contains(']:')) { . $links $line $i }
 
@@ -452,10 +453,10 @@ function Test-Markdown {
             continue
         }
 
-        # Length, only where a limit was handed in: the line as written, less what cannot be wrapped.
-        # A heading and a `[label]: target` line cannot be broken at all, and neither can a line
-        # with no space at or before the limit, past its list marker and first word. A space inside
-        # a code span is no place to break: a command wrapped there is no longer the command.
+        # Length, only where a limit was handed in: the line as written, less what cannot be
+        # wrapped. A heading and a `[label]: target` line cannot be broken at all, and neither can a
+        # line with no space at or before the limit, past its list marker and first word. A space
+        # inside a code span is no place to break: a command wrapped there is no longer the command.
         # A line of an indented code block is quoted output, which cannot be wrapped.
         if ($MaxLineLength -gt 0) {
             $counted = [regex]::Replace($Lines[$i].TrimEnd(), '(?<=\])\([^)\s]*(\s+"[^"]*")?\)|<[a-zA-Z][a-zA-Z0-9+.-]*:[^>\s]*>', '')
@@ -659,7 +660,8 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             $inside += @(& $find "[*see https://u.nu/x*]`n`n[ and *see https://u.nu/x*]`n`n[*see https://u.nu/x* more]`n`n*[see https://u.nu/x]*`n`n[*see https://u.nu/x*](there.md)")
             $open.Count -eq 1 -and $open[0] -match '^1: emphasis opened with \*' -and $cell.Count -eq 1 -and $tag.Count -eq 1 -and $inside.Count -eq 0 -and $bracket.Count -eq 3 } }
         @{ Name = 'a bare address ends where GitHub ends one: before trailing punctuation, an entity and a ) nothing opened, and at a <; and at a >, where GitHub does not'; Test = {
-            # Each: what follows https://u.nu/ up to the next space, and how much of that is the address.
+            # Each: what follows https://u.nu/ up to the next space, and how much of that is the
+            # address.
             $ends = [ordered]@{ 'x".' = 'x'; 'x."' = 'x'; 'x?!.,:;*_~' = 'x'; "x'" = 'x'; 'x?q=1.' = 'x?q=1'; 'a"b' = 'a"b'; 'a*b' = 'a*b'; 'a_b_' = 'a_b'
                 'x)' = 'x'; 'x))' = 'x'; 'a(b)' = 'a(b)'; 'a(b))' = 'a(b)'; 'a(b' = 'a(b'; 'a)b' = 'a)b'; 'x]' = 'x]'; 'x].' = 'x]'; 'x[1]' = 'x[1]'; 'a]b' = 'a]b'
                 'x&amp;' = 'x'; 'x&amp' = 'x&amp'; 'x&frac12;' = 'x&frac12'; 'x}' = 'x}'; 'x/' = 'x/'; 'x<b' = 'x'; 'x>y' = 'x' }
@@ -801,7 +803,8 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             $afterTable = @(& $long "- item`n`n| a | b |`n|---|---|`n`n    $wide" 40)
             $afterRule = @(& $long "- item`n`n* * *`n`n    $wide" 40)
             $lazy = @(& $long "- item`nlazy line`n`n    $wide" 40)
-            # After a fence closes there is no paragraph left to continue, so the line ends the list.
+            # After a fence closes there is no paragraph left to continue, so the line ends the
+            # list.
             $afterFence = @(& $long "- item`n`n  ``````text`n  code`n  ```````nunindented`n`n    $wide" 40)
             $afterTable.Count -eq 0 -and $afterRule.Count -eq 0 -and $afterFence.Count -eq 0 -and $lazy.Count -eq 1 -and $lazy[0] -match '^4: the line is 63 characters' } }
         @{ Name = 'what the parser calls a code block is not held to the limit: indented by a tab, inside a quote, inside a numbered item; an indented line with no blank line before it is its paragraph, and is'; Test = {

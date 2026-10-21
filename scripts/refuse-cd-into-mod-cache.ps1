@@ -13,9 +13,8 @@
 
     HOW A CONSUMER WIRES IT. This repository cannot: a session reads its hooks from the
     consumer's own tracked settings. In .claude/settings.json, a PreToolUse hook on the two shell
-    tools, matcher `Bash|PowerShell`, whose command is
-
-        i=$(cat); case $i in *mod-cache*) h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-cd-into-mod-cache.ps1"; if [ -f "$h" ]; then printf '%s' "$i" | pwsh -NoProfile -File "$h" -Root "$CLAUDE_PROJECT_DIR"; else printf '%s' '{"systemMessage":"refuse-cd-into-mod-cache: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"refuse-cd-into-mod-cache: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it."}}'; fi;; esac
+    tools, matcher `Bash|PowerShell`, whose command is the first example below, the wired
+    command.
 
     The session hands the hook the tool call as JSON on stdin: this reads `tool_input.command`
     and `cwd`. The `case` starts this script only when that JSON holds the cache's name, because
@@ -23,7 +22,7 @@
     runs before every shell command.
 
     WHERE THE SCRIPT IS NOT THERE (grado-factorio-tools#115), as in a clone whose submodule was
-    never fetched, the command above lets the shell command run and prints JSON that tells the
+    never fetched, the wired command lets the shell command run and prints JSON that tells the
     agent it was not checked. Without that branch pwsh exits 64 for the missing file
     (measured 2026-10-08, PowerShell 7.6.6). What reaches the agent from that exit was not
     measured. By the account of grado-factorio-modpack#228, read 2026-10-12, a wiring of that
@@ -35,16 +34,16 @@
     event and carries an additionalContext that is not empty. So a quote that breaks the JSON
     fails here; a percent sign that only mangles the message does not. The case has no
     switch to leave it out. A consumer whose wiring refuses the command in that branch, or
-    says nothing, fails it, and is to tell the agent and let the command run, as the command
-    above does.
+    says nothing, fails it, and is to tell the agent and let the command run, as the wired
+    command does.
 
     WHAT IT REFUSES. A cd, chdir, pushd, sl, Set-Location or Push-Location, standing where a
     command can stand, whose target resolves to the cache or anything under it: relative or
     absolute, and on Windows with either slash, as /c/... or C:\.... A relative target is resolved
     from where the earlier ones in the command left the shell, and from where it started, since
-    one in a subshell does not last. A target it cannot resolve - one holding a variable, a substitution or a
-    wildcard - is refused if it holds the cache's name. And any command at all while the shell
-    already stands in the cache, unless it begins by changing directory out.
+    one in a subshell does not last. A target it cannot resolve - one holding a variable, a
+    substitution or a wildcard - is refused if it holds the cache's name. And any command at all
+    while the shell already stands in the cache, unless it begins by changing directory out.
 
     WHAT IT LETS THROUGH. Everything else, and so a command that reads, lists or searches the
     cache by path, and a script that is given a path and never stands there, as fetch-mods.ps1,
@@ -65,11 +64,7 @@
     and not whether a session reads a matcher as hook-matcher.ps1 does. A wiring with an entry
     for each shell tool fails it, since one entry is read.
 
-    TO CHECK IT, from a repository root. The first is refused with exit 2, the second passes with
-    exit 0:
-
-        '{"cwd":".","tool_input":{"command":"cd .mod-cache/a-set && ls"}}' | pwsh -NoProfile -File scripts/refuse-cd-into-mod-cache.ps1 -Root .; $LASTEXITCODE
-        '{"cwd":".","tool_input":{"command":"ls .mod-cache/a-set"}}' | pwsh -NoProfile -File scripts/refuse-cd-into-mod-cache.ps1 -Root .; $LASTEXITCODE
+    TO CHECK IT, run the second example below.
 
 .PARAMETER Root
     The repository whose cache is guarded. The wiring gives "$CLAUDE_PROJECT_DIR". Without it
@@ -91,13 +86,26 @@
 .PARAMETER Settings
     With -SelfTest: a consumer's .claude/settings.json. The cases that run the wiring then run
     the command wired there, its first PreToolUse hook, with that file's repository as the
-    project, where they would otherwise run the command above against this script. A consumer runs this to
-    know its wiring still reaches the hook, and still tells the agent when it cannot.
+    project, where they would otherwise run the wired command against this script. A consumer
+    runs this to know its wiring still reaches the hook, and still tells the agent when it cannot.
     A last case, run only with -Settings, reads the matcher of that first PreToolUse entry
     (grado-factorio-tools#120) and fails, naming the tool and the file, unless a session would
     start the hook for the Bash tool and for the PowerShell tool. An entry with no matcher
     passes: it is started for every tool. How a matcher is read is in hook-matcher.ps1. The
-    command above comes from no file and has no matcher, so without -Settings none is read.
+    wired command comes from no file and has no matcher, so without -Settings none is read.
+
+.EXAMPLE
+    The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json, as
+    HOW A CONSUMER WIRES IT says.
+
+        i=$(cat); case $i in *mod-cache*) h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-cd-into-mod-cache.ps1"; if [ -f "$h" ]; then printf '%s' "$i" | pwsh -NoProfile -File "$h" -Root "$CLAUDE_PROJECT_DIR"; else printf '%s' '{"systemMessage":"refuse-cd-into-mod-cache: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"refuse-cd-into-mod-cache: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it."}}'; fi;; esac
+
+.EXAMPLE
+    To check it, from a repository root. The first is refused with exit 2, the second passes
+    with exit 0:
+
+        '{"cwd":".","tool_input":{"command":"cd .mod-cache/a-set && ls"}}' | pwsh -NoProfile -File scripts/refuse-cd-into-mod-cache.ps1 -Root .; $LASTEXITCODE
+        '{"cwd":".","tool_input":{"command":"ls .mod-cache/a-set"}}' | pwsh -NoProfile -File scripts/refuse-cd-into-mod-cache.ps1 -Root .; $LASTEXITCODE
 #>
 
 #Requires -Version 7
