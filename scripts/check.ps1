@@ -372,7 +372,8 @@ if ($SelfTest) {
                 & $say 'bad.ps1' 'param([switch] $SelfTest, [switch] $NoGame)', "# $('word ' * 20)x", "'OK - self-test passed: all 0 cases.'"
                 & $say 'broken.ps1' 'if ('
                 & $say 'crash.ps1' 'param([switch] $SelfTest)', 'exit 3'
-                & $say 'game.ps1' 'param([switch] $SelfTest, [switch] $NoGame)', $pass
+                # Passes only when run without -NoGame, so its no-game run is told from no run.
+                & $say 'game.ps1' 'param([switch] $SelfTest, [switch] $NoGame)', 'if ($NoGame) { exit 4 }', $pass
                 & $say 'good.ps1' 'param([switch] $SelfTest)', $pass
                 $lists = @{ SelfTests = 'bad.ps1', 'crash.ps1', 'good.ps1'; NoGameCases = @('game.ps1') }
                 # Their lines go to the host; only what failed is kept.
@@ -380,7 +381,7 @@ if ($SelfTest) {
                 $runs = @(Invoke-SelfTestRun -Folder $folder @lists 6>$null)
                 ($scripts -join '|') -eq ('bad.ps1 declares -NoGame and is not in $NO_GAME_CASES, so its no-game cases are not run|' +
                     'bad.ps1 has comment lines over 100 characters, line 2|broken.ps1 does not parse') -and
-                ($runs -join '|') -eq 'bad.ps1 -SelfTest ran no case|crash.ps1 -SelfTest exited 3' }
+                ($runs -join '|') -eq 'bad.ps1 -SelfTest ran no case|crash.ps1 -SelfTest exited 3|game.ps1 -SelfTest -NoGame exited 4' }
         }
         $failures = 0; $n = 0
         foreach ($name in $cases.Keys) {
