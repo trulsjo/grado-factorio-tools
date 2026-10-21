@@ -230,6 +230,21 @@ function Get-ListProblem {
     }
 }
 
+# What is wrong with one script: how it stands in the lists, and its comment lines over the limit.
+function Get-ScriptProblem {
+    param([string] $Path, [int] $Limit, [string[]] $SelfTests, [string[]] $NeedsGame, [string[]] $NoGameCases)
+    $name = Split-Path -Leaf $Path
+    Get-ListProblem -Name $name -Text (Get-Content -LiteralPath $Path -Raw) -SelfTests $SelfTests -NeedsGame $NeedsGame -NoGameCases $NoGameCases
+    $long = @(Get-LongCommentLine -Path $Path -Limit $Limit)
+    if ($long) { "$name has comment lines over $Limit characters, line $($long -join ', ')" }
+}
+
+# What is wrong with one self-test's run: it exited other than 0, or it said it ran no case.
+function Get-RunProblem {
+    param([string] $Run, [int] $ExitCode, [string] $Said)
+    if ($ExitCode) { "$Run exited $ExitCode" } elseif (Test-RanNoCase $Said) { "$Run ran no case" }
+}
+
 if ($SelfTest) {
     $temp = Join-Path ([IO.Path]::GetTempPath()) "check-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
     $repo = Join-Path $temp 'repo'; $outside = Join-Path $temp 'outside'; $rec = Join-Path $temp 'check-passed'
@@ -296,6 +311,16 @@ if ($SelfTest) {
                 $unlisted.Count -eq 1 -and $noGame.Count -eq 1 -and $noGame[0] -match 'NoGame' -and
                 -not (Get-ListProblem -Name 'a.ps1' -Text $quoted @lists) -and
                 -not (Get-ListProblem -Name 'n.ps1' -Text $both @lists) -and -not (Get-ListProblem -Name 'a.ps1' -Text $both.Replace(', [switch] $NoGame', '') @lists) }
+            'the run reads each script and each self-test with the checks above' = {
+                $script = Join-Path $outside 'bad.ps1'
+                Set-Content -LiteralPath $script -Value 'param([switch] $SelfTest, [switch] $NoGame)', "# $('word ' * 20)x"
+                $bad = @(Get-ScriptProblem -Path $script -Limit 100)
+                Set-Content -LiteralPath $script -Value 'param([switch] $SelfTest)', '# short'
+                $good = @(Get-ScriptProblem -Path $script -Limit 100 -SelfTests 'bad.ps1')
+                $bad.Count -eq 3 -and $bad[2] -eq 'bad.ps1 has comment lines over 100 characters, line 2' -and -not $good -and
+                (Get-RunProblem 'x.ps1 -SelfTest' 0 'OK - self-test passed: all 0 cases.') -eq 'x.ps1 -SelfTest ran no case' -and
+                (Get-RunProblem 'x.ps1 -SelfTest' 1 'OK - self-test passed: all 3 cases.') -eq 'x.ps1 -SelfTest exited 1' -and
+                -not (Get-RunProblem 'x.ps1 -SelfTest' 0 'OK - self-test passed: all 3 cases.') }
         }
         $failures = 0; $n = 0
         foreach ($name in $cases.Keys) {
@@ -328,16 +353,9 @@ foreach ($script in Get-ChildItem -LiteralPath $PSScriptRoot -Filter *.ps1 | Sor
     foreach ($e in $errors) { Write-Host "    line $($e.Extent.StartLineNumber): $($e.Message)" }
     if ($errors) { $failed.Add("$($script.Name) does not parse") }
 
-    $text = Get-Content -LiteralPath $script.FullName -Raw
-    foreach ($problem in Get-ListProblem -Name $script.Name -Text $text -SelfTests $SELF_TESTS -NeedsGame $NEEDS_GAME -NoGameCases $NO_GAME_CASES) {
+    foreach ($problem in Get-ScriptProblem -Path $script.FullName -Limit $COMMENT_LINE_LIMIT -SelfTests $SELF_TESTS -NeedsGame $NEEDS_GAME -NoGameCases $NO_GAME_CASES) {
         Write-Host "check: $problem -- FAILED"
         $failed.Add($problem)
-    }
-
-    $long = @(Get-LongCommentLine -Path $script.FullName -Limit $COMMENT_LINE_LIMIT)
-    if ($long) {
-        Write-Host "check: $($script.Name) has comment lines over $COMMENT_LINE_LIMIT characters, line $($long -join ', ') -- FAILED"
-        $failed.Add("$($script.Name) has $($long.Count) comment line(s) over $COMMENT_LINE_LIMIT characters")
     }
 }
 Write-Host "check: every script parsed $(& $took)"
@@ -357,11 +375,11 @@ foreach ($run in @($SELF_TESTS | ForEach-Object { , @($_, '-SelfTest') }) + @($N
     $said = & pwsh -NoProfile -File (Join-Path $PSScriptRoot $name) @switches 2>&1 | Out-String
     # Exit 0 having run no case is not a pass: mod-info.ps1 has no param block, so it would take
     # a -SelfTest it no longer answers in silence, and a broken -NoGame passed with all 0 cases.
-    $ran = -not (Test-RanNoCase $said)
-    Write-Host "check: $name $switches -- $($LASTEXITCODE -or -not $ran ? 'FAILED' : 'ok') $(& $took)"
-    if ($LASTEXITCODE -or -not $ran) {
+    $problem = Get-RunProblem -Run "$name $switches" -ExitCode $LASTEXITCODE -Said $said
+    Write-Host "check: $name $switches -- $($problem ? 'FAILED' : 'ok') $(& $took)"
+    if ($problem) {
         $said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
-        $failed.Add($ran ? "$name $switches exited $LASTEXITCODE" : "$name $switches ran no case")
+        $failed.Add($problem)
     }
 }
 
