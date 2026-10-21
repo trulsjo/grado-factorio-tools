@@ -32,11 +32,13 @@
     (grado-factorio-tools#181): this header had a line of 147 characters, from
     grado-factorio-tools#179. A line counts when it is in a block comment or begins with #, as the
     parser's comment tokens give them, so a # line in a here-string is not one. A line in a help
-    block's .EXAMPLE section, from that keyword to the next, is not counted, as an example is
-    copied whole; nor is a line of one word after its indent and comment marker, as an address
-    is, which cannot be broken (Truls, 2026-10-21, on grado-factorio-tools#181). Not read: a
-    code line, and a comment after code on one, however long; and characters are counted as
-    UTF-16 units, so a character outside the Basic Multilingual Plane counts as two.
+    block's .EXAMPLE section, from that keyword to the next help keyword, with or without an
+    argument, is not counted, as an example is copied whole; nor is a line of one word after its
+    indent and comment marker, as an address is, which cannot be broken (Truls, 2026-10-21, on
+    grado-factorio-tools#181). Not read: a code line, and a # comment after code on one, however
+    long; a block comment opened after code is read from its first line, code and all; and
+    characters are counted as UTF-16 units, so a character outside the Basic Multilingual Plane
+    counts as two.
 
     THE PAGES AN AGENT ALWAYS LOADS HAVE A SIZE LIMIT (grado-factorio-tools#69). CLAUDE.md loads on
     every turn and the code-review rules before every review; grado-factorio-tools#65 cut both, and
@@ -198,8 +200,10 @@ function Get-LongCommentLine {
         }
         $section = ''
         foreach ($n in $first..$comment.Extent.EndLineNumber) {
-            # Upper case, as help keywords are written here: a line beginning `.githooks` is text.
-            if ($lines[$n - 1] -cmatch '^\s*\.([A-Z]+)\s*$') { $section = $Matches[1] }
+            # A help keyword in upper case, as they are written here, with or without an argument:
+            # a line beginning `.githooks` or `.NET` is text.
+            $keyword = '^\s*\.(SYNOPSIS|DESCRIPTION|PARAMETER|EXAMPLE|INPUTS|OUTPUTS|NOTES|LINK|COMPONENT|ROLE|FUNCTIONALITY)(\s|$)'
+            if ($lines[$n - 1] -cmatch $keyword) { $section = $Matches[1] }
             if ($section -ne 'EXAMPLE' -and (& $over $lines[$n - 1])) { $n }
         }
     }
@@ -274,9 +278,10 @@ if ($SelfTest) {
                 Set-Content -LiteralPath $script -Value @(
                     '<#', '.SYNOPSIS', "    $long", '.EXAMPLE', "    $long", '.NOTES', "    $long", '#>',
                     "# $long", "`$a = '$long'", "`$b = 1 # $long", "`$c = @'", "# $long", "'@", "    # $('y' * 94)",
-                    "<#", "    https://example.com/$('x' * 101)", "    two $long", "#>", "#   https://example.com/$('x' * 101)")
+                    "<#", "    https://example.com/$('x' * 101)", "    two $long", "#>", "#   https://example.com/$('x' * 101)",
+                    '<#', '.EXAMPLE', "    $long", '.PARAMETER Name', "    $long", '.NET reads this', "    $long", '#>')
                 $got = @(Get-LongCommentLine -Path $script -Limit 100)
-                "$got" -eq '3 7 9 18' }
+                "$got" -eq '3 7 9 18 25 27' }
             'a self-test whose output says it ran no case is not a pass' = {
                 (Test-RanNoCase 'OK - self-test passed: all 0 cases.') -and (Test-RanNoCase 'nothing said') -and
                 (Test-RanNoCase 'OK - self-test passed: 0 of 2 cases; 2 skipped off Windows') -and
