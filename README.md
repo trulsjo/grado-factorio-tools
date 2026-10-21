@@ -371,7 +371,10 @@ the pull request merges, whether or not the sentence meant it. And it fails a bo
 the `mattpocock-skills:pr` template's `## Summary`, `## Evidence` and `## Merge Danger`, once
 each and in that order: Truls's ruling of 2026-10-19 (grado-factorio-modpack#320), held here
 since #171 (2026-10-20). The rule is ported from that repository's `Get-DraftProblem`
-(`scripts/pr-body.ps1` at `0a58b02`, read 2026-10-20).
+(`scripts/pr-body.ps1` at `0a58b02`, read 2026-10-20). It fails, too, a body that lacks one of
+the template's four markers under its heading: **Before:** and **After:** under `## Evidence`,
+**Door:** and **Blast Radius:** under `## Merge Danger` (#185, Truls's ruling of 2026-10-21). A
+change with nothing to show says none after **Before:** and **After:**.
 
 With `-CiteSiblings` it also fails a sentence about a sibling repository that lacks a commit or
 an ISO date (#177). That is this repository's rule, so it is asked for; a run that does not ask,

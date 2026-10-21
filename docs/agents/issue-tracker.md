@@ -84,8 +84,11 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
   `## Merge Danger`, once each and in that order (Truls, 2026-10-19,
   grado-factorio-modpack#320; for this repository, 2026-10-20, #171), filled with that skill
   where it is installed and by hand where not. `scripts/pr-body-check.ps1` holds a body to the
-  three. This repository adds to the template: above it, the `Closes` lines of the rule above,
-  where the branch closes any ticket; below it, nothing.
+  three, and to the template's **Before:** and **After:** under `## Evidence` and **Door:** and
+  **Blast Radius:** under `## Merge Danger`; a change with nothing to show says none after
+  **Before:** and **After:** (Truls, 2026-10-21, #185). This repository adds to the template:
+  above it, the `Closes` lines of the rule above, where the branch closes any ticket; below it,
+  nothing.
   The body does not recount the review: each review posts its findings as one comment on the
   pull request, by the rule in [`code-review.md`](code-review.md).
 - **A revert a pull request cites as evidence shows that its copy differs**, with
