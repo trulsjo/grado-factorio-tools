@@ -35,7 +35,8 @@ submodule, [ADR 0001](docs/adr/0001-siblings-consume-this-repo-as-a-submodule.md
 - **Factorio is installed on the development machine**, and `load-harness.ps1` runs it headless and
   isolated from the player's game. So a ticket that needs a measurement of the game is
   `ready-for-agent`.
-- The hooks are opted into once per clone: `git config core.hooksPath .githooks`.
+- The hooks, pre-commit, commit-msg and pre-push, are opted into once per clone:
+  `git config core.hooksPath .githooks`.
 - Commit email is set per-repo — do not change it.
 - `CLAUDE.local.md` is never committed, and its contents never move into a tracked file.
 - **A script does one job and says so in its header**: what exit 0 means, and what the script
