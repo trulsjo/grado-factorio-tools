@@ -56,15 +56,15 @@
     lacks all three and fails. This third job reads the text alone and asks git nothing.
 
     THE PR TEMPLATE'S FOUR MARKERS (grado-factorio-tools#185). A body written by hand to the three
-    headings alone passed the third job: realistic-fusion-refreshed#743 and #747 held none of
-    the template's markers (read 2026-10-21). Truls ruled on 2026-10-21, on #185, that the check
-    reaches them, and that a change with nothing to show says none after **Before:** and
-    **After:**. A marker is its text exactly, `**Before:**`, `**After:**`, `**Door:**` or
-    `**Blast Radius:**`, case, asterisks and colon and all, anywhere in a line under its own
-    heading: from that heading's line to the next line that begins `## `. A line in a fenced
-    block, by the fence rule above, is not read. Each marker missing is reported with its
-    heading; a heading that is missing has its markers reported missing too. This fourth job
-    reads the text alone and asks git nothing.
+    headings alone passed the third job: realistic-fusion-refreshed#743 and
+    realistic-fusion-refreshed#747 held none of the template's markers (read 2026-10-21). Truls
+    ruled on 2026-10-21, on #185, that the check reaches them, and that a change with nothing to
+    show says none after **Before:** and **After:**. A marker is its text exactly, `**Before:**`,
+    `**After:**`, `**Door:**` or `**Blast Radius:**`, case, asterisks and colon and all, anywhere
+    in a line under its own heading: from that heading's line to the next line that begins `## `.
+    A line in a fenced block, by the fence rule above, is not read. Each marker missing is
+    reported with its heading; a heading that is missing has its markers reported missing too.
+    This fourth job reads the text alone and asks git nothing.
 
     A STATEMENT ABOUT A SIBLING CARRIES ITS COMMIT AND ITS DATE, WITH -CiteSiblings
     (grado-factorio-tools#177). docs/agents/code-review-prose.md held a body to this, and only a
@@ -439,11 +439,16 @@ function Invoke-SelfTest {
             $refused = & $run @($file)
             Write-Host ($refused.Text.TrimEnd() -replace '(?m)^', '    ')
             $named = @('Before', 'After' | ForEach-Object { "\*\*${_}:\*\*`` is missing under ``## Evidence``" }) + @('Door', 'Blast Radius' | ForEach-Object { "\*\*${_}:\*\*`` is missing under ``## Merge Danger``" })
-            $wrong = @(Get-MarkerProblem "## Summary`n`n**Before:** none`n`n## Evidence`n`n**after:** none`n**Before** none`n`n## Merge Danger`n`n``````text`n**Door:** two-way`n```````n**Blast Radius:** none")
+            $wrong = @(Get-MarkerProblem ("## Summary`n`n**Before:** none`n`n## Evidence`n`n**after:** none`n**Before** none`n**Door:** two-way`n`n" +
+                "## Merge Danger`n`n**After:** none`n``````text`n**Door:** two-way`n```````n**Blast Radius:** none"))
             $refused.Code -eq 1 -and -not ($named | Where-Object { $refused.Text -notmatch "(?m)^pr-body-check: ``$_" }) -and
                 $refused.Text -match '(?m)^FAILED - pr-body-check: .*4 marker' -and
                 ($wrong -join '|') -eq ('`**Before:**` is missing under `## Evidence`|`**After:**` is missing under `## Evidence`|' +
                     '`**Door:**` is missing under `## Merge Danger`') } }
+        @{ Name = 'any other ## heading ends a section: a marker after it is missing'; Test = {
+            $after = @(Get-MarkerProblem ("## Evidence`n`n**Before:** none`n`n## Notes`n`n**After:** none`n`n" +
+                "## Merge Danger`n`n**Door:** two-way`n`n## Review`n`n**Blast Radius:** none"))
+            ($after -join '|') -eq '`**After:**` is missing under `## Evidence`|`**Blast Radius:**` is missing under `## Merge Danger`' } }
     )
 
     $failures = 0
