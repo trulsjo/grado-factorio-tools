@@ -62,9 +62,10 @@
         pwsh -File scripts/load-harness.ps1 -SelfTest
 
     A script that declares a -SelfTest the way these do and is named in neither list below fails
-    this check, so a new one is not left out in silence. So does one that declares a [switch]
-    $NoGame and is not in $NO_GAME_CASES, whose no-game cases would otherwise not run
-    (grado-factorio-tools#181). One declared some other way is missed.
+    this check, so a new one is not left out in silence. So does one whose own param block
+    declares $NoGame and that is not in $NO_GAME_CASES, whose no-game cases would otherwise not
+    run (grado-factorio-tools#181). A -SelfTest declared some other way is missed, and so is a
+    -NoGame read from $args.
 
     WHAT IT CANNOT SEE. A parse proves syntax and nothing else: a misspelled cmdlet or variable
     parses. No linter runs. It reads the working tree, so through the pre-push hook it checks
@@ -211,15 +212,16 @@ function Test-RanNoCase {
     $Said -notmatch 'self-test' -or $Said -match '(?m)^OK - self-test passed: (all )?0 (of \d+ )?cases?\b'
 }
 
-# What is wrong with how a script stands in the lists: a -SelfTest in none of them, or a -NoGame
-# that $NO_GAME_CASES does not name. Read from the declaration text, so one made another way is
-# missed.
+# What is wrong with how a script stands in the lists: a -SelfTest in none of them, read from the
+# text, or a -NoGame in the script's own param block that $NO_GAME_CASES does not name.
 function Get-ListProblem {
     param([string] $Name, [string] $Text, [string[]] $SelfTests, [string[]] $NeedsGame, [string[]] $NoGameCases)
     if ($Text -match '\[switch\]\s*\$SelfTest|\$args -contains ''-SelfTest''' -and $Name -notin $SelfTests + $NeedsGame) {
         "$Name has a -SelfTest that is neither run here nor named as needing the game"
     }
-    if ($Text -match '\[switch\]\s*\$NoGame\b' -and $Name -notin $NoGameCases) {
+    # The script's own param block, so the name in a string or a function's block is not read.
+    $own = [Management.Automation.Language.Parser]::ParseInput($Text, [ref] $null, [ref] $null).ParamBlock
+    if ($own -and $own.Parameters.Name.VariablePath.UserPath -contains 'NoGame' -and $Name -notin $NoGameCases) {
         "$Name declares -NoGame and is not in `$NO_GAME_CASES, so its no-game cases are not run"
     }
 }
@@ -284,7 +286,10 @@ if ($SelfTest) {
                 $lists = @{ SelfTests = @('a.ps1'); NeedsGame = @('g.ps1', 'n.ps1'); NoGameCases = @('n.ps1') }
                 $unlisted = @(Get-ListProblem -Name 'u.ps1' -Text 'param([switch] $SelfTest)' @lists)
                 $noGame = @(Get-ListProblem -Name 'g.ps1' -Text $both @lists)
+                # Named only in a string or a function's own param block, as this script names it.
+                $quoted = "param([switch] `$SelfTest)`n`$x = '[switch] `$NoGame'`nfunction f { param([switch] `$NoGame) }"
                 $unlisted.Count -eq 1 -and $noGame.Count -eq 1 -and $noGame[0] -match 'NoGame' -and
+                -not (Get-ListProblem -Name 'a.ps1' -Text $quoted @lists) -and
                 -not (Get-ListProblem -Name 'n.ps1' -Text $both @lists) -and -not (Get-ListProblem -Name 'a.ps1' -Text $both.Replace(', [switch] $NoGame', '') @lists) }
         }
         $failures = 0; $n = 0
