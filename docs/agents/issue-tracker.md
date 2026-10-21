@@ -88,6 +88,12 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
   where the branch closes any ticket; below it, nothing.
   The body does not recount the review: each review posts its findings as one comment on the
   pull request, by the rule in [`code-review.md`](code-review.md).
+- **A revert a pull request cites as evidence shows that its copy differs**, with
+  `git diff --no-index --stat <file> <copy>/<file>`, as [`review-brief.md`](review-brief.md) asks
+  of a review lane under *The reverts* (Truls, 2026-10-21, #183). On 2026-10-20, fixing PR #178's
+  review findings, a `perl` revert of the changed-tree guard matched nothing, and the copy's
+  self-test passed 5 of 5 on an unchanged file, which reads as "this fix is not tested". An empty
+  diff showed it; with the pattern fixed, the revert failed case 3, by that session's account.
 - **The bar for a follow-up ticket** (Truls, 2026-10-06): a leftover from a review, a session or
   a retro becomes a ticket only if a real mod hit it or a consumer's gate needs it. Anything else
   is named in the session report and not filed. A ticket Truls asks for directly is not held to
