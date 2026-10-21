@@ -343,7 +343,8 @@ there is none, since then nothing was checked. With three dots
 the files are those the branch at the range's end has changed since it left the base; two dots
 would also list each file the base has edited or deleted since then. The check reads the
 repository it is run in, so a consumer runs it from the submodule on its own Markdown.
-`scripts/check.ps1` runs it here with `-All`. `-SelfTest` proves each of the three can fail, and
+`scripts/check.ps1` runs it here with `-All`, and so does this repository's `pre-commit` hook,
+before each commit. `-SelfTest` proves each of the three can fail, and
 runs the check over CommonMark's own emphasis and raw-HTML examples, failing one that draws more
 emphasis findings than the spec's HTML shows literal marks; they are in
 `scripts/commonmark-examples.json`, under the spec's licence (see Licence below). What it reads
@@ -409,8 +410,8 @@ scripts/     PowerShell entry points, one job each, and the libraries they
              grado-count/, the counting mod count-resources.ps1 loads;
              commonmark-examples.json, CommonMark's examples, which
              markdown-check.ps1 -SelfTest reads (CC BY-SA 4.0)
-.githooks/   this repo's own commit-msg and pre-push hooks, opted into once per
-             clone
+.githooks/   this repo's own pre-commit (the staged Markdown), commit-msg and
+             pre-push hooks, opted into once per clone
 .claude/     settings.json, which wires the session hook that refuses a commit
              or push skipping those
 .github/     the workflow that runs scripts/check.ps1 on pull requests and main
