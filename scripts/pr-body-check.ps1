@@ -64,7 +64,9 @@
     in a line under its own heading: from that heading's line to the next line that begins `## `.
     A line in a fenced block, by the fence rule above, is not read. Each marker missing is
     reported with its heading; a heading that is missing has its markers reported missing too.
-    This fourth job reads the text alone and asks git nothing.
+    A body written before #185 may fail it: merged #184's Evidence writes `**After, on the
+    branch:**`, which is not the marker. A merged body is not checked again. This fourth job
+    reads the text alone and asks git nothing.
 
     A STATEMENT ABOUT A SIBLING CARRIES ITS COMMIT AND ITS DATE, WITH -CiteSiblings
     (grado-factorio-tools#177). docs/agents/code-review-prose.md held a body to this, and only a
@@ -432,7 +434,7 @@ function Invoke-SelfTest {
             $passed = & $run @($file)
             Write-Host ($passed.Text.TrimEnd() -replace '(?m)^', '    ')
             $listed.Count -eq 0 -and @(Get-MarkerProblem "## Summary`n`n$marked").Count -eq 0 -and
-                $passed.Code -eq 0 -and $passed.Text -match '(?m)^OK - pr-body-check: .*each with its markers' } }
+                $passed.Code -eq 0 -and $passed.Text -match '(?m)^OK - pr-body-check: .*, in order, with ## Evidence and ## Merge Danger each carrying its markers\.' } }
         @{ Name = 'a body with the three headings and no marker is refused, naming each of the four and its heading; one under the wrong heading, in other case, without its colon, or only in a fenced block is missing'; Test = {
             $file = Join-Path $temp 'body.md'
             Set-Content -LiteralPath $file -Value "## Summary`n`nA change.`n`n## Evidence`n`nIt works.`n`n## Merge Danger`n`nLow."
@@ -443,6 +445,7 @@ function Invoke-SelfTest {
                 "## Merge Danger`n`n**After:** none`n``````text`n**Door:** two-way`n```````n**Blast Radius:** none"))
             $refused.Code -eq 1 -and -not ($named | Where-Object { $refused.Text -notmatch "(?m)^pr-body-check: ``$_" }) -and
                 $refused.Text -match '(?m)^FAILED - pr-body-check: .*4 marker' -and
+                $refused.Text -match '\*\*Before:\*\* and \*\*After:\*\*, each saying none where there is nothing to show, and under ## Merge Danger \*\*Door:\*\* and \*\*Blast Radius:\*\*\.' -and
                 ($wrong -join '|') -eq ('`**Before:**` is missing under `## Evidence`|`**After:**` is missing under `## Evidence`|' +
                     '`**Door:**` is missing under `## Merge Danger`') } }
         @{ Name = 'any other ## heading ends a section: a marker after it is missing'; Test = {
@@ -488,7 +491,7 @@ foreach ($h in $headings) {
 }
 $markers = @(Get-MarkerProblem -Text "$Body")
 foreach ($m in $markers) {
-    Write-Host "pr-body-check: $m. Under ## Evidence the body carries **Before:** and **After:**, and under ## Merge Danger **Door:** and **Blast Radius:**; where there is nothing to show, the marker says none."
+    Write-Host "pr-body-check: $m. Under ## Evidence the body carries **Before:** and **After:**, each saying none where there is nothing to show, and under ## Merge Danger **Door:** and **Blast Radius:**."
 }
 $siblings = @(if ($CiteSiblings) { Get-SiblingProblem -Text "$Body" })
 foreach ($s in $siblings) {
@@ -504,5 +507,5 @@ if ($read.Off -or $closing -or $headings -or $markers -or $siblings) {
     exit 1
 }
 $cited = if ($CiteSiblings) { ' Each statement about a sibling carries a commit and an ISO date.' } else { '' }
-Write-Host "OK - pr-body-check: $($read.On) word(s) of the body name a commit, each on $Main, no closing keyword stands outside a Closes #N line, and the pr template's three headings stand once each, in order, each with its markers.$cited$unchecked"
+Write-Host "OK - pr-body-check: $($read.On) word(s) of the body name a commit, each on $Main, no closing keyword stands outside a Closes #N line, and the pr template's three headings stand once each, in order, with ## Evidence and ## Merge Danger each carrying its markers.$cited$unchecked"
 exit 0
