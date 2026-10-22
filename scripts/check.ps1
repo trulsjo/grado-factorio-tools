@@ -106,7 +106,7 @@
     Run the cases that hold the record and the skip, in a scratch repository, and those that hold
     the functions each script and each self-test's run are judged by, on strings and on files
     outside it, and those that hold the two loops, Test-ScriptFolder and Invoke-SelfTestRun, over
-    a folder of fixture scripts outside it with lists of their own, four of them run as
+    a folder of fixture scripts outside it with lists of their own, some of them run as
     self-tests; and nothing else. The run's own call of each loop, with this folder and this
     script's lists, is not run: a run that stopped making either call, or passed it a list less,
     would still pass. Needs git, and no game.
