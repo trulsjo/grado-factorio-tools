@@ -65,8 +65,9 @@
     A line in a fenced block, by the fence rule above, is not read. Each marker missing is
     reported with its heading; a heading that is missing has its markers reported missing too.
     A body written before #185 may fail it: merged #184's Evidence writes `**After, on the
-    branch:**`, which is not the marker. A merged body is not checked again. This fourth job
-    reads the text alone and asks git nothing.
+    branch:**`, which is not the marker. A merged body is not checked again unless it is edited:
+    check.yml runs on `edited` and does not ask whether the pull request is merged. This fourth
+    job reads the text alone and asks git nothing.
 
     A STATEMENT ABOUT A SIBLING CARRIES ITS COMMIT AND ITS DATE, WITH -CiteSiblings
     (grado-factorio-tools#177). docs/agents/code-review-prose.md held a body to this, and only a
