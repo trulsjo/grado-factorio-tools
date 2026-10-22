@@ -4,8 +4,9 @@
     the end of its paragraph, or a `*` that can only close with nothing open to close; a table
     row whose column count differs from its header's; and a link to a file in the repository,
     or to a heading, that is not there. Handed -MaxLineLength, a fourth: a prose line longer than
-    that. Exit 0 means none was found in the files read, and with -All alone that there was at
-    least one to read; exit 1 names each as <file>:<line>: <what>.
+    that. Exit 0 means none was found in the files read, with -All alone that there was at least
+    one to read, and with -Path that each file named was read; exit 1 names each as
+    <file>:<line>: <what>.
 
 .DESCRIPTION
     A PRE-COMMIT CHECK (grado-factorio-modpack#149, where it was written). Run with no arguments,
@@ -17,6 +18,16 @@
     reads the repository it is run in, which need not be the one that holds it, and from any
     directory inside that repository it reads the same files and says the same. In
     grado-factorio-tools, which holds it, scripts/check.ps1 runs it with -All and a line limit.
+
+    WITH -Path (grado-factorio-tools#191) it reads the files named as they are on disk, staged or
+    not, tracked or not, so an edit can be checked before it is staged. A name is read against
+    the current directory, and a finding names the file by its path from the root. A named file
+    counts as there for a link, as a tracked one does, and a fragment into one is read against
+    its headings on disk; every other file is answered by the index, as with no arguments. So a
+    link to a file on disk that git does not track and that is not named fails, and one to a
+    tracked file deleted from disk but not from the index passes. A name that is not `.md`, is
+    no file or is outside the repository fails the run before anything is read, and so does
+    -Path beside -All or -Range.
 
     WHAT IT READS AS WHAT. A paragraph ends at a blank line, a heading, a list item, a table or a
     fenced code block; nothing inside a fence is read, and a fence never closed is reported. A
@@ -106,6 +117,11 @@
     whose checkout failed, which has an empty index. With no argument or with -Range, which
     decides the files when given with -All, no file is no failure.
 
+.PARAMETER Path
+    Check these Markdown files as they are on disk, named from the current directory and split
+    on commas: -Path README.md,docs/note.md. What that reads as there, and what it refuses, is
+    under WITH -Path above. Not with -All or -Range.
+
 .PARAMETER MaxLineLength
     Also report a prose line longer than this many characters, 1 or more. Without it, length is
     not read.
@@ -129,6 +145,9 @@
 
 .EXAMPLE
     pwsh -File scripts/markdown-check.ps1 -Range origin/main...HEAD
+
+.EXAMPLE
+    pwsh -File scripts/markdown-check.ps1 -Path README.md,docs/note.md -MaxLineLength 100
 #>
 
 #Requires -Version 7
@@ -136,6 +155,7 @@
 param(
     [string] $Range,
     [switch] $All,
+    [string[]] $Path,
     [int] $MaxLineLength = 0,
     [switch] $SelfTest
 )
@@ -492,12 +512,15 @@ function Test-Markdown {
 function Invoke-Check {
     <#  Check the Markdown files git names, read at $Revision ('' is the index). Prints each
         finding and returns how many.  #>
-    param([string[]] $Files, [string] $Revision = '', [Parameter(Mandatory)] [string] $Top, [int] $MaxLineLength = 0)
+    param([string[]] $Files, [string] $Revision = '', [Parameter(Mandatory)] [string] $Top, [int] $MaxLineLength = 0, [switch] $FromDisk)
 
     $entries = if ($Revision) { git -C $Top -c core.quotepath=off ls-tree -r $Revision } else { git -C $Top -c core.quotepath=off ls-files -s }
     if ($LASTEXITCODE -ne 0) { throw "git could not list the files at '$Revision'." }
     $tracked = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     $submodules = @()
+    # With -FromDisk the files are read as they are on disk, and count as there as if tracked.
+    $onDisk = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    if ($FromDisk) { foreach ($f in $Files) { $null = $onDisk.Add($f) }; $entries = @($entries) + @($Files | ForEach-Object { "100644 0 0`t$_" }) }
     foreach ($e in $entries) {
         $mode, $name = ($e -split ' ', 2)[0], ($e -split "`t", 2)[1]
         if ($mode -eq '160000') { $submodules += $name }
@@ -524,6 +547,10 @@ function Invoke-Check {
     $out = $git.StandardOutput.BaseStream
     $readLines = {
         param([string] $f)
+        if ($onDisk.Contains($f)) {
+            $reader = [IO.StringReader]::new([Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes((Join-Path $Top $f))))
+            return , @(while ($null -ne ($l = $reader.ReadLine())) { $l })
+        }
         $git.StandardInput.Write("${Revision}:$f`n")
         $git.StandardInput.Flush()
         $header = [System.Collections.Generic.List[byte]]::new()
@@ -894,6 +921,49 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             ($all, $staged, $range, $both) | ForEach-Object { Write-Host ($_.Text.TrimEnd() -replace '(?m)^', '    ') }
             $all.Code -eq 1 -and $all.Text -match '(?m)^FAILED - markdown-check: -All found no Markdown file' -and
                 @($staged, $range, $both | Where-Object { $_.Code -eq 0 -and $_.Text -match '(?m)^OK - markdown-check: 0 Markdown file' }).Count -eq 3 } }
+        @{ Name = '-Path reads named files from disk, staged or not, tracked or not: a comma list names each, a named file counts as there, its anchors are its own on disk'; Test = {
+            $own = Join-Path $temp 'paths'
+            New-Item -ItemType Directory -Path (Join-Path $own 'sub') -Force | Out-Null
+            git -C $own init --quiet
+            Set-Content -LiteralPath (Join-Path $own 'other.md') -Value '# Staged'
+            Set-Content -LiteralPath (Join-Path $own 'page.md') -Value 'fine'
+            git -C $own add other.md page.md
+            Set-Content -LiteralPath (Join-Path $own 'other.md') -Value '# Disk'
+            Set-Content -LiteralPath (Join-Path $own 'page.md') -Value "# Page`n`n[a](other.md#disk), [b](new.md) and [c](stray.md)`n`nand *open"
+            Set-Content -LiteralPath (Join-Path $own 'new.md') -Value '# New'
+            Set-Content -LiteralPath (Join-Path $own 'stray.md') -Value '# Stray'
+            Set-Content -LiteralPath (Join-Path $own 'sub/deep.md') -Value '[up](../page.md) and *open'
+            $all3 = & $run $own @('-Path', 'page.md,other.md,new.md')
+            $one = & $run $own @('-Path', 'page.md')
+            $atRoot = & $run $own @('-Path', 'sub/deep.md')
+            $fromBelow = & $run (Join-Path $own 'sub') @('-Path', 'deep.md')
+            ($all3, $one, $fromBelow) | ForEach-Object { Write-Host ($_.Text.TrimEnd() -replace '(?m)^', '    ') }
+            $all3.Code -eq 1 -and $all3.Text -match '(?m)^page\.md:3: the link to stray\.md names no tracked file' -and
+                $all3.Text -match '(?m)^page\.md:5: emphasis opened' -and $all3.Text -notmatch 'other\.md#disk|new\.md names|unstaged' -and
+                $all3.Text -match '2 finding\(s\) in 3 Markdown file' -and
+                $one.Code -eq 1 -and $one.Text -match 'the link to other\.md#disk names no heading of other\.md' -and $one.Text -match 'the link to new\.md names no tracked file' -and
+                $atRoot.Code -eq 1 -and $atRoot.Text -match '(?m)^sub/deep\.md:1: emphasis opened' -and $fromBelow.Text -eq $atRoot.Text } }
+        @{ Name = '-Path refuses -All and -Range beside it, a file that is not .md, one that is missing and one outside the repository, reading nothing'; Test = {
+            $own = Join-Path $temp 'refusals'
+            New-Item -ItemType Directory -Path $own | Out-Null
+            git -C $own init --quiet
+            Set-Content -LiteralPath (Join-Path $own 'page.md') -Value 'and *open'
+            Set-Content -LiteralPath (Join-Path $own 'notes.txt') -Value 'text'
+            Set-Content -LiteralPath (Join-Path $temp 'outside.md') -Value 'text'
+            $said = @(
+                @{ Run = & $run $own @('-Path', 'page.md', '-All'); Want = 'cannot be combined' }
+                @{ Run = & $run $own @('-Path', 'page.md', '-Range', 'HEAD~1..HEAD'); Want = 'cannot be combined' }
+                @{ Run = & $run $own @('-Path', 'page.md,notes.txt'); Want = 'notes\.txt is not a Markdown file' }
+                @{ Run = & $run $own @('-Path', 'page.md,missing.md'); Want = 'missing\.md is no file' }
+                @{ Run = & $run $own @('-Path', 'page.md,../outside.md'); Want = '\.\./outside\.md is outside the repository' }
+            )
+            $ok = $true
+            foreach ($s in $said) {
+                $held = $s.Run.Code -ne 0 -and $s.Run.Text -match $s.Want -and $s.Run.Text -notmatch '(?m)^page\.md:'
+                if (-not $held) { Write-Host ($s.Run.Text.TrimEnd() -replace '(?m)^', '    ') }
+                $ok = $ok -and $held
+            }
+            $ok } }
     )
 
     $failures = 0
@@ -914,6 +984,8 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
 }
 
 if ($SelfTest) { Invoke-SelfTest }
+# Under pwsh -File a comma list arrives as one string.
+$Path = @($Path -split ',' | Where-Object { $_ })
 # A limit that came out as 0 must not pass for a limit that was never asked for.
 if ($PSBoundParameters.ContainsKey('MaxLineLength') -and $MaxLineLength -lt 1) { throw '-MaxLineLength must be 1 or more. Leave it out for no limit.' }
 
@@ -922,7 +994,25 @@ if ($PSBoundParameters.ContainsKey('MaxLineLength') -and $MaxLineLength -lt 1) {
 $top = git rev-parse --show-toplevel
 if ($LASTEXITCODE -ne 0) { throw 'git found no repository here. Run it inside the repository.' }
 
-if ($Range) {
+if ($Path) {
+    if ($All -or $Range) { throw '-Path cannot be combined with -All or -Range: it names the files itself.' }
+    # A name is read against this directory, and reported by its path from the root.
+    $revision = ''
+    $refused = @()
+    $files = @(foreach ($p in $Path) {
+        $relative = [IO.Path]::GetRelativePath($top, [IO.Path]::GetFullPath($p, $PWD.ProviderPath)) -replace '\\', '/'
+        if ($relative -match '^\.\.(/|$)' -or [IO.Path]::IsPathRooted($relative)) { $refused += "$p is outside the repository" }
+        elseif ($p -notmatch '\.md$') { $refused += "$p is not a Markdown file" }
+        elseif (-not (Test-Path -LiteralPath $p -PathType Leaf)) { $refused += "$p is no file" }
+        else { $relative }
+    })
+    if ($refused) {
+        $refused | ForEach-Object { Write-Host "markdown-check: $_." }
+        Write-Host 'FAILED - markdown-check: -Path named a file it cannot read as Markdown, so nothing was checked.'
+        exit 1
+    }
+}
+elseif ($Range) {
     if ($Range -notmatch '\.\.+[^.]') { throw '-Range needs both ends, as origin/main...HEAD: the files are read at its end.' }
     $revision = $Range -replace '^.*\.\.+'
     $files = @(git -C $top -c core.quotepath=off diff --name-only --diff-filter=ACMR $Range)
@@ -939,9 +1029,9 @@ if ($All -and -not $Range -and -not $files) {
     exit 1
 }
 
-$found = Invoke-Check -Files $files -Revision $revision -Top $top -MaxLineLength $MaxLineLength
+$found = Invoke-Check -Files $files -Revision $revision -Top $top -MaxLineLength $MaxLineLength -FromDisk:([bool] $Path)
 # What was read is the index; a file whose working tree differs passed or failed on what is staged.
-if (-not $Range) {
+if (-not $Range -and -not $Path) {
     # safecrlf off: under autocrlf git would otherwise warn of each LF file it compares.
     $unread = @(git -C $top -c core.quotepath=off -c core.safecrlf=false diff --name-only -- '*.md' | Where-Object { $_ -cin $files })
     if ($LASTEXITCODE -ne 0) { throw 'git could not list the files with unstaged edits.' }
