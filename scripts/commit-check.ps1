@@ -73,7 +73,13 @@
     Check the messages of every commit in a revision range instead of a file, e.g. `-Range
     origin/main..HEAD` before opening a pull request, or `-Range '-50 main'` to sweep recent
     history. Split on spaces and passed to `git rev-list`, so anything that takes is a range.
-    Reports every commit that fails and exits non-zero if any did.
+    Reports every commit that fails and exits non-zero if any did. A range with no commits passes
+    and says so, unless -RequireCommits is given.
+
+.PARAMETER RequireCommits
+    With -Range only: a range with no commits fails. CI passes it, where the range is a pull
+    request's and an empty one means a broken checkout; a local run on a branch with nothing on it
+    yet need not.
 
 .PARAMETER Title
     Check a pull request title instead of a file: the subject rules, with a scope required. A
@@ -97,6 +103,9 @@
     pwsh -File scripts/commit-check.ps1 -Range origin/main..HEAD
 
 .EXAMPLE
+    pwsh -File scripts/commit-check.ps1 -Range origin/main..HEAD -RequireCommits
+
+.EXAMPLE
     pwsh -File scripts/commit-check.ps1 -Range '-50 main'
 
 .EXAMPLE
@@ -111,6 +120,7 @@
 param(
     [Parameter(ParameterSetName = 'File', Position = 0)] [string] $Path,
     [Parameter(ParameterSetName = 'Range', Mandatory)]   [string] $Range,
+    [Parameter(ParameterSetName = 'Range')]              [switch] $RequireCommits,
     [Parameter(ParameterSetName = 'Title', Mandatory)]   [string] $Title,
     [Parameter(ParameterSetName = 'SelfTest', Mandatory)] [switch] $SelfTest,
     [string] $ScopeFile
@@ -449,6 +459,31 @@ if ($SelfTest) {
     Write-Host "self-test: comment character ;, run as a hook in a repository that sets it -- $($wrong ? 'FAILED' : 'ok')"
     if ($wrong) { $failures.Add($wrong) }
 
+    # AN EMPTY RANGE, both ways (#196): it passes and says it read nothing, and with
+    # -RequireCommits it fails. A range holding a legal commit passes either way.
+    $checks++
+    $repo = Join-Path ([IO.Path]::GetTempPath()) "commit-check-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+    try {
+        $null = New-Item -ItemType Directory -Path $repo
+        git -C $repo init --quiet
+        git -C $repo -c user.name=t -c user.email=t@t commit --quiet --allow-empty -m '🐛 fix(repo): hold one commit'
+        $run = { param([string[]] $a) Push-Location $repo; try { $out = & pwsh -NoProfile -File $PSCommandPath @a 2>&1 | Out-String; @{ Code = $LASTEXITCODE; Out = $out } } finally { Pop-Location } }
+        $empty = & $run @('-Range', 'HEAD..HEAD')
+        $required = & $run @('-Range', 'HEAD..HEAD', '-RequireCommits')
+        $held = & $run @('-Range', 'HEAD', '-RequireCommits')
+        $wrong = if ($empty.Code -ne 0 -or $empty.Out -notmatch 'no commits in HEAD\.\.HEAD') {
+            "an empty range exited $($empty.Code) (want 0, saying it read no commits): $($empty.Out.Trim())"
+        } elseif ($required.Code -ne 1 -or $required.Out -notmatch 'HEAD\.\.HEAD') {
+            "an empty range with -RequireCommits exited $($required.Code) (want 1, naming the range): $($required.Out.Trim())"
+        } elseif ($held.Code -ne 0) {
+            "a range of one legal commit with -RequireCommits exited $($held.Code) (want 0): $($held.Out.Trim())"
+        }
+    }
+    catch { $wrong = "the empty-range fixture threw: $($_.Exception.Message)" }
+    finally { Remove-Item -LiteralPath $repo -Recurse -Force -ErrorAction SilentlyContinue }
+    Write-Host "self-test: an empty range passes, and fails with -RequireCommits -- $($wrong ? 'FAILED' : 'ok')"
+    if ($wrong) { $failures.Add($wrong) }
+
     # The floor, for the same reason ship-check carries one: this passes by finding nothing, so a
     # table that stopped being read would print green while checking nothing at all.
     $checks++
@@ -473,7 +508,10 @@ if ($PSCmdlet.ParameterSetName -eq 'Range') {
     $revArgs = @($Range -split '\s+' | Where-Object { $_ })
     $shas = @(& git rev-list @revArgs 2>$null)
     if ($LASTEXITCODE -ne 0) { throw "not a revision range: $Range" }
-    if (-not $shas.Count) { Write-Host "commit-check: no commits in $Range."; exit 0 }
+    if (-not $shas.Count) {
+        if ($RequireCommits) { Write-Host "commit-check: no commits in $Range, and -RequireCommits asks for one."; exit 1 }
+        Write-Host "commit-check: no commits in $Range."; exit 0
+    }
     $comment = Get-CommentChar
 
     $bad = 0
