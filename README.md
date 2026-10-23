@@ -336,10 +336,13 @@ does not track, in exact case, or to a heading its file does not have. It knows 
     pwsh -File scripts/markdown-check.ps1
     pwsh -File scripts/markdown-check.ps1 -Range origin/main...HEAD
     pwsh -File scripts/markdown-check.ps1 -All
+    pwsh -File scripts/markdown-check.ps1 -Path README.md,docs/note.md
 
 With no arguments it reads the staged files as they are staged, which is what a `pre-commit` hook
 wants; `-Range` reads the files a range changed, and `-All` every tracked one, failing when
-there is none, since then nothing was checked. With three dots
+there is none, since then nothing was checked. `-Path` reads the files it names as they are on
+disk, staged or not, so an edit can be checked before it is staged; it fails on a name it cannot
+read as Markdown, and beside `-All` or `-Range`. With three dots
 the files are those the branch at the range's end has changed since it left the base; two dots
 would also list each file the base has edited or deleted since then. The check reads the
 repository it is run in, so a consumer runs it from the submodule on its own Markdown.

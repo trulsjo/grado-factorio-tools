@@ -26,8 +26,8 @@
     its headings on disk; every other file is answered by the index, as with no arguments. So a
     link to a file on disk that git does not track and that is not named fails, and one to a
     tracked file deleted from disk but not from the index passes. A name that is not `.md`, is
-    no file or is outside the repository fails the run before anything is read, and so does
-    -Path beside -All or -Range.
+    no file or is outside the repository fails the run before anything is read, and so does a
+    -Path that names no file, as `-Path ''`, and -Path beside -All or -Range.
 
     WHAT IT READS AS WHAT. A paragraph ends at a blank line, a heading, a list item, a table or a
     fenced code block; nothing inside a fence is read, and a fence never closed is reported. A
@@ -943,7 +943,7 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
                 $all3.Text -match '2 finding\(s\) in 3 Markdown file' -and
                 $one.Code -eq 1 -and $one.Text -match 'the link to other\.md#disk names no heading of other\.md' -and $one.Text -match 'the link to new\.md names no tracked file' -and
                 $atRoot.Code -eq 1 -and $atRoot.Text -match '(?m)^sub/deep\.md:1: emphasis opened' -and $fromBelow.Text -eq $atRoot.Text } }
-        @{ Name = '-Path refuses -All and -Range beside it, a file that is not .md, one that is missing and one outside the repository, reading nothing'; Test = {
+        @{ Name = '-Path refuses -All and -Range beside it, a file that is not .md, one that is missing, one outside the repository and a list that names no file, reading nothing'; Test = {
             $own = Join-Path $temp 'refusals'
             New-Item -ItemType Directory -Path $own | Out-Null
             git -C $own init --quiet
@@ -956,6 +956,8 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
                 @{ Run = & $run $own @('-Path', 'page.md,notes.txt'); Want = 'notes\.txt is not a Markdown file' }
                 @{ Run = & $run $own @('-Path', 'page.md,missing.md'); Want = 'missing\.md is no file' }
                 @{ Run = & $run $own @('-Path', 'page.md,../outside.md'); Want = '\.\./outside\.md is outside the repository' }
+                @{ Run = & $run $own @('-Path', ','); Want = '-Path named no file' }
+                @{ Run = & $run $own @('-Path', ',', '-All'); Want = 'cannot be combined' }
             )
             $ok = $true
             foreach ($s in $said) {
@@ -984,7 +986,9 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
 }
 
 if ($SelfTest) { Invoke-SelfTest }
-# Under pwsh -File a comma list arrives as one string.
+# Under pwsh -File a comma list arrives as one string. -Path given is the mode, even when it names
+# nothing, so an empty list fails rather than falling back to the staged files.
+$named = $PSBoundParameters.ContainsKey('Path')
 $Path = @($Path -split ',' | Where-Object { $_ })
 # A limit that came out as 0 must not pass for a limit that was never asked for.
 if ($PSBoundParameters.ContainsKey('MaxLineLength') -and $MaxLineLength -lt 1) { throw '-MaxLineLength must be 1 or more. Leave it out for no limit.' }
@@ -994,8 +998,9 @@ if ($PSBoundParameters.ContainsKey('MaxLineLength') -and $MaxLineLength -lt 1) {
 $top = git rev-parse --show-toplevel
 if ($LASTEXITCODE -ne 0) { throw 'git found no repository here. Run it inside the repository.' }
 
-if ($Path) {
+if ($named) {
     if ($All -or $Range) { throw '-Path cannot be combined with -All or -Range: it names the files itself.' }
+    if (-not $Path) { Write-Host 'FAILED - markdown-check: -Path named no file, so nothing was checked.'; exit 1 }
     # A name is read against this directory, and reported by its path from the root.
     $revision = ''
     $refused = @()
@@ -1029,9 +1034,9 @@ if ($All -and -not $Range -and -not $files) {
     exit 1
 }
 
-$found = Invoke-Check -Files $files -Revision $revision -Top $top -MaxLineLength $MaxLineLength -FromDisk:([bool] $Path)
+$found = Invoke-Check -Files $files -Revision $revision -Top $top -MaxLineLength $MaxLineLength -FromDisk:$named
 # What was read is the index; a file whose working tree differs passed or failed on what is staged.
-if (-not $Range -and -not $Path) {
+if (-not $Range -and -not $named) {
     # safecrlf off: under autocrlf git would otherwise warn of each LF file it compares.
     $unread = @(git -C $top -c core.quotepath=off -c core.safecrlf=false diff --name-only -- '*.md' | Where-Object { $_ -cin $files })
     if ($LASTEXITCODE -ne 0) { throw 'git could not list the files with unstaged edits.' }
