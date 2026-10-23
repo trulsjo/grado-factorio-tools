@@ -102,6 +102,38 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
   is named in the session report and not filed. A ticket Truls asks for directly is not held to
   the bar.
 
+## Pin tickets
+
+A pin ticket asks a sibling to move its `vendor/grado-factorio-tools` pin, and measures what the
+move changes for the sibling's gates. **The measurement is made in a copy of the sibling at
+GitHub's `main` that no other session uses, never in the sibling's checkout**: on 2026-10-23 the
+modpack's checkout was on another session's branch, whose staging changed a run between two
+reads (#195, from grado-factorio-modpack#353). A `git worktree` is not an option: a hook blocks
+it. In a fresh scratch directory, with `<s>` the sibling's name and `<old>` and `<new>` the pin
+and the commit it moves to:
+
+    git clone --quiet --no-checkout <the sibling's checkout> s
+    git -C s fetch --quiet https://github.com/trulsjo/<s>.git main
+    git -C s switch --quiet --detach FETCH_HEAD
+    git -C s update-ref refs/remotes/origin/main FETCH_HEAD
+    git ls-remote https://github.com/trulsjo/<s>.git refs/heads/main
+    for c in <old> <new>; do
+        mkdir $c && git -C <this repository> archive $c scripts | tar -x -C $c
+    done
+
+The clone's own `origin/main` is the checkout's `main`, which may be behind GitHub's, so the fetch
+and `update-ref` set it to GitHub's; `ls-remote` shows that `git -C s rev-parse HEAD` is GitHub's
+`main`. From inside `s`, each script the range changes is run from `../<old>` and `../<new>` in
+every form the sibling's gates run it, read from its `.github/workflows/`, `.githooks/` and
+`.claude/settings.json` at that commit and cited by file, and each copy's `-SelfTest` of it is run.
+The two outputs of each form are compared with `cmp`. The ticket records the sibling commit, and
+each command with what it printed, as *Conventions* asks.
+
+What the copy cannot see: the sibling's submodule is not initialised, so a link into `vendor/` is
+reported as not checked; its index matches `HEAD`, so a no-argument form reads no staged file; and
+a form over `origin/main...HEAD` reads nothing at `main`, so a range of the sibling's own history,
+as `HEAD~20...HEAD`, stands in for a pull request's and is named as such.
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature
