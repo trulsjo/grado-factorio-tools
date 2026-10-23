@@ -25,9 +25,12 @@
     counts as there for a link, as a tracked one does, and a fragment into one is read against
     its headings on disk; every other file is answered by the index, as with no arguments. So a
     link to a file on disk that git does not track and that is not named fails, and one to a
-    tracked file deleted from disk but not from the index passes. A name that is not `.md`, is
-    no file or is outside the repository fails the run before anything is read, and so does a
-    -Path that names no file, as `-Path ''`, and -Path beside -All or -Range.
+    tracked file deleted from disk but not from the index passes. A name that git tracks in
+    another case is read under git's name, so a finding names it as git does and a link in the
+    typed case still fails; the case of a name git does not track is not checked. A file named
+    twice is read once. A name it cannot read as this repository's Markdown fails the run before
+    anything is read, and says why; so does a file inside a submodule, which is read by running
+    the check from inside it.
 
     WHAT IT READS AS WHAT. A paragraph ends at a blank line, a heading, a list item, a table or a
     fenced code block; nothing inside a fence is read, and a fence never closed is reported. A
@@ -119,8 +122,8 @@
 
 .PARAMETER Path
     Check these Markdown files as they are on disk, named from the current directory and split
-    on commas: -Path README.md,docs/note.md. What that reads as there, and what it refuses, is
-    under WITH -Path above. Not with -All or -Range.
+    on commas: -Path README.md,docs/note.md. What that reads as there is under WITH -Path above.
+    Not with -All or -Range.
 
 .PARAMETER MaxLineLength
     Also report a prose line longer than this many characters, 1 or more. Without it, length is
@@ -510,8 +513,9 @@ function Test-Markdown {
 }
 
 function Invoke-Check {
-    <#  Check the Markdown files git names, read at $Revision ('' is the index). Prints each
-        finding and returns how many.  #>
+    <#  Check the Markdown files git names, read at $Revision ('' is the index); with -FromDisk,
+        the files the caller names, read from disk, which count as there for a link whether git
+        tracks them or not. Prints each finding and returns how many.  #>
     param([string[]] $Files, [string] $Revision = '', [Parameter(Mandatory)] [string] $Top, [int] $MaxLineLength = 0, [switch] $FromDisk)
 
     $entries = if ($Revision) { git -C $Top -c core.quotepath=off ls-tree -r $Revision } else { git -C $Top -c core.quotepath=off ls-files -s }
@@ -966,6 +970,39 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
                 $ok = $ok -and $held
             }
             $ok } }
+        @{ Name = '-Path takes a tracked file in git''s case, so a link in another case still fails and a finding names the file as git holds it (#193)'; Test = {
+            $own = Join-Path $temp 'case'
+            New-Item -ItemType Directory -Path $own | Out-Null
+            git -C $own init --quiet
+            Set-Content -LiteralPath (Join-Path $own 'README.md') -Value "# Readme`n`nand *open"
+            git -C $own add README.md
+            Set-Content -LiteralPath (Join-Path $own 'linker.md') -Value '[x](readme.md)'
+            $pair = & $run $own @('-Path', 'readme.md,linker.md')
+            $alone = & $run $own @('-Path', 'readme.md')
+            ($pair, $alone) | ForEach-Object { Write-Host ($_.Text.TrimEnd() -replace '(?m)^', '    ') }
+            # Where the file system holds case, readme.md is no file, and that refusal is the run.
+            if (-not (Test-Path -LiteralPath (Join-Path $own 'readme.md'))) { return $alone.Code -eq 1 -and $alone.Text -match 'readme\.md is no file' }
+            $pair.Code -eq 1 -and $pair.Text -match '(?m)^linker\.md:1: the link to readme\.md names no tracked file' -and
+                $alone.Code -eq 1 -and $alone.Text -cmatch '(?m)^README\.md:3: emphasis opened' -and $alone.Text -cnotmatch '(?m)^readme\.md:' } }
+        @{ Name = '-Path refuses a file inside a submodule, naming the submodule and reading nothing (#193)'; Test = {
+            $own = Join-Path $temp 'insub'
+            New-Item -ItemType Directory -Path (Join-Path $own 'sub') -Force | Out-Null
+            git -C $own init --quiet
+            git -C $own update-index --add --cacheinfo "160000,$('1' * 40),sub"
+            Set-Content -LiteralPath (Join-Path $own 'sub/doc.md') -Value 'and *open'
+            Set-Content -LiteralPath (Join-Path $own 'top.md') -Value 'and *open'
+            $r = & $run $own @('-Path', 'sub/doc.md,top.md')
+            Write-Host ($r.Text.TrimEnd() -replace '(?m)^', '    ')
+            $r.Code -eq 1 -and $r.Text -match 'sub/doc\.md is inside the submodule sub' -and $r.Text -notmatch '(?m)^(sub/doc|top)\.md:' } }
+        @{ Name = '-Path reads a file named twice once, in the same spelling or another (#193)'; Test = {
+            $own = Join-Path $temp 'twice'
+            New-Item -ItemType Directory -Path $own | Out-Null
+            git -C $own init --quiet
+            Set-Content -LiteralPath (Join-Path $own 'a.md') -Value 'and *open'
+            $same = & $run $own @('-Path', 'a.md,a.md')
+            $other = & $run $own @('-Path', 'a.md,./a.md')
+            ($same, $other) | ForEach-Object { Write-Host ($_.Text.TrimEnd() -replace '(?m)^', '    ') }
+            @($same, $other | Where-Object { $_.Code -eq 1 -and @([regex]::Matches($_.Text, '(?m)^a\.md:1:')).Count -eq 1 -and $_.Text -match '1 finding\(s\) in 1 Markdown file' }).Count -eq 2 } }
     )
 
     $failures = 0
@@ -1004,12 +1041,31 @@ if ($named) {
     # A name is read against this directory, and reported by its path from the root.
     $revision = ''
     $refused = @()
+    # A tracked file is taken in git's case, as GitHub serves it, where the file system let another
+    # case through; an untracked one keeps the case it was typed in.
+    $index = @(git -C $top -c core.quotepath=off ls-files -s)
+    if ($LASTEXITCODE -ne 0) { throw 'git could not list the files it tracks.' }
+    $inGit = [System.Collections.Generic.Dictionary[string, string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $exact = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $gitlinks = @()
+    foreach ($e in $index) {
+        $name = ($e -split "`t", 2)[1]
+        if ($e -match '^160000 ') { $gitlinks += $name }
+        $null = $exact.Add($name)
+        if (-not $inGit.ContainsKey($name)) { $inGit[$name] = $name }
+    }
+    $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     $files = @(foreach ($p in $Path) {
         $relative = [IO.Path]::GetRelativePath($top, [IO.Path]::GetFullPath($p, $PWD.ProviderPath)) -replace '\\', '/'
+        $sub = $gitlinks | Where-Object { $relative.StartsWith("$_/") } | Select-Object -First 1
         if ($relative -match '^\.\.(/|$)' -or [IO.Path]::IsPathRooted($relative)) { $refused += "$p is outside the repository" }
         elseif ($p -notmatch '\.md$') { $refused += "$p is not a Markdown file" }
+        elseif ($sub) { $refused += "$p is inside the submodule $sub, which is not this repository's to read: run the check from inside $sub" }
         elseif (-not (Test-Path -LiteralPath $p -PathType Leaf)) { $refused += "$p is no file" }
-        else { $relative }
+        else {
+            if (-not $exact.Contains($relative) -and $inGit.ContainsKey($relative)) { $relative = $inGit[$relative] }
+            if ($seen.Add($relative)) { $relative }
+        }
     })
     if ($refused) {
         $refused | ForEach-Object { Write-Host "markdown-check: $_." }
