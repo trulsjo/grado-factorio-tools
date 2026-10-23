@@ -115,9 +115,12 @@ portal address; `-SelfTest` points both at its own.
 `load-harness.ps1` takes mod directories, zips, or directories of them, and never touches the
 player's mods, saves or `player-data.json`. `-With space-age` enables bundled mods. A consumer with
 checks of its own passes `-Check <script>`, or dot-sources `load-harness-lib.ps1` to dump the data
-stage and load again under other mod lists. `-FactorioExe` names the game, which is otherwise
-`$env:FACTORIO_EXE` or the Steam install; each script below that starts the game takes it the
-same way. Both scripts take `-SelfTest`; the harness's needs the game installed.
+stage and load again under other mod lists. `-FactorioExe` names the game; without it, the game is
+`$env:FACTORIO_EXE`, then a Steam path on the machine the harness was written on, so on any other
+machine pass one of the two. The scripts below that start the game take `-FactorioExe` too, except
+`dump-walk.ps1`: its self-test starts the game through `get-dump.ps1` and passes none, so only
+`$env:FACTORIO_EXE` or that Steam path reaches it. Both scripts take `-SelfTest`; the harness's
+needs the game installed.
 
 `get-dump.ps1` gives the path of a `--dump-data` dump of a directory of mods, and runs the game
 only when its cache holds no dump of that set:
