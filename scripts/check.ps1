@@ -1,9 +1,10 @@
 <#
 .SYNOPSIS
     Parses every script under scripts/, holds their comment lines to a width, reads their list
-    parameters with param-check.ps1, runs every self-test that needs neither the game nor the
-    network, holds the agent pages to their size limits, and runs markdown-check.ps1 over the
-    tracked Markdown. Exit 0 means all of that held. With -SkipIfPassed, as the pre-push hook runs
+    parameters with param-check.ps1, holds README.md to naming each of their parameters, runs
+    every self-test that needs neither the game nor the network, holds the agent pages to their
+    size limits, and runs markdown-check.ps1 over the tracked Markdown. Exit 0 means all of that
+    held. With -SkipIfPassed, as the pre-push hook runs
     it, exit 0 may instead mean that nothing ran, because a run recorded that this same tree
     passed it; the run then says so.
 
@@ -39,6 +40,15 @@
     long; a block comment opened after code is read from its first line, code and all; and
     characters are counted as UTF-16 units, so a character outside the Basic Multilingual Plane
     counts as two.
+
+    README.MD NAMES EVERY SCRIPT PARAMETER (grado-factorio-tools#194). CLAUDE.md says README says
+    what each script does, and PR #192 added markdown-check.ps1 -Path with no line there. Each
+    parameter of a script's own param block, read with the parser, has to appear in README.md as
+    -<Name>, in case and up to a word boundary; one that does not fails, named as
+    <script> -<Name>, and so does a README.md that is not there. Not seen: where README names it,
+    so a parameter named only under another script's section, or one -Name shared by several
+    scripts, passes; what README says of it; a function's parameters; and a script outside
+    scripts/.
 
     THE PAGES AN AGENT ALWAYS LOADS HAVE A SIZE LIMIT (grado-factorio-tools#69). CLAUDE.md loads on
     every turn and the code-review rules before every review; grado-factorio-tools#65 cut both, and
@@ -107,9 +117,10 @@
     the functions each script and each self-test's run are judged by, on strings and on files
     outside it, and those that hold the two loops, Test-ScriptFolder and Invoke-SelfTestRun, over
     a folder of fixture scripts outside it with lists of their own, some of them run as
-    self-tests; and nothing else. The run's own call of each loop, with this folder and this
-    script's lists, is not run: a run that stopped making either call, or passed it a list less,
-    would still pass. Needs git, and no game.
+    self-tests, and the one that holds Get-ReadmeProblem over a fixture script and README there;
+    and nothing else. The run's own call of each loop and of Get-ReadmeProblem, with this folder,
+    this README and this script's lists, is not run: a run that stopped making a call, or passed
+    it a list less, would still pass. Needs git, and no game.
 
 .EXAMPLE
     pwsh -File scripts/check.ps1
@@ -268,6 +279,20 @@ function Test-ScriptFolder {
     }
 }
 
+# Each top-level parameter of a script in $Folder that $Readme never names as -<Name>, in case and
+# up to a word boundary, as "<script> -<Name> is not named in README.md"; a README not there is one.
+function Get-ReadmeProblem {
+    param([string] $Folder, [string] $Readme)
+    if (-not (Test-Path -LiteralPath $Readme -PathType Leaf)) { return "$Readme is not there, so no script parameter was checked against it" }
+    $text = Get-Content -LiteralPath $Readme -Raw
+    foreach ($script in Get-ChildItem -LiteralPath $Folder -Filter *.ps1 | Sort-Object Name) {
+        $block = [Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref] $null, [ref] $null).ParamBlock
+        foreach ($name in @($block.Parameters.Name.VariablePath.UserPath | Where-Object { $_ })) {
+            if ($text -cnotmatch ('-' + [regex]::Escape($name) + '\b')) { "$($script.Name) -$name is not named in $(Split-Path -Leaf $Readme)" }
+        }
+    }
+}
+
 # -SelfTest of each of $SelfTests and -SelfTest -NoGame of each of $NoGameCases in $Folder, each in
 # a pwsh of its own, judged by Get-RunProblem, a line printed for each; returns what failed.
 function Invoke-SelfTestRun {
@@ -382,6 +407,15 @@ if ($SelfTest) {
                 ($scripts -join '|') -eq ('bad.ps1 declares -NoGame and is not in $NO_GAME_CASES, so its no-game cases are not run|' +
                     'bad.ps1 has comment lines over 100 characters, line 2|broken.ps1 does not parse') -and
                 ($runs -join '|') -eq 'bad.ps1 -SelfTest ran no case|crash.ps1 -SelfTest exited 3|game.ps1 -SelfTest -NoGame exited 4' }
+            'a script parameter README never names as -Name is named; one it names, and a function''s, are not; no README fails' = {
+                $folder = Join-Path $outside 'readme'; New-Item -ItemType Directory -Path $folder | Out-Null
+                Set-Content -LiteralPath (Join-Path $folder 'p.ps1') -Value 'param([string] $Named, [switch] $Unnamed, [int] $NamedLonger)', 'function f { param($Inner) }'
+                $readme = Join-Path $outside 'README.md'
+                Set-Content -LiteralPath $readme -Value 'Pass -Named, and -NamedLong is another word. Unnamed alone is no flag; -inner is not -Inner.'
+                $got = @(Get-ReadmeProblem -Folder $folder -Readme $readme)
+                $none = @(Get-ReadmeProblem -Folder $folder -Readme (Join-Path $outside 'no-README.md'))
+                ($got -join '|') -eq 'p.ps1 -Unnamed is not named in README.md|p.ps1 -NamedLonger is not named in README.md' -and
+                    $none.Count -eq 1 -and $none[0] -match 'no-README\.md is not there' }
         }
         $failures = 0; $n = 0
         foreach ($name in $cases.Keys) {
@@ -418,6 +452,11 @@ if ($bad) {
     $said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
     $failed.Add('param-check.ps1 found a list parameter never split on a comma')
 }
+
+$clock.Restart()
+$unnamed = @(Get-ReadmeProblem -Folder $PSScriptRoot -Readme (Join-Path $root 'README.md'))
+Write-Host "check: README.md names every script parameter -- $($unnamed ? 'FAILED' : 'ok') $(& $took)"
+foreach ($f in $unnamed) { Write-Host "    $f"; $failed.Add($f) }
 
 foreach ($f in Invoke-SelfTestRun -Folder $PSScriptRoot -SelfTests $SELF_TESTS -NoGameCases $NO_GAME_CASES) { $failed.Add($f) }
 
