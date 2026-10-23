@@ -85,11 +85,12 @@ still true. It reads only the public portal API, which needs no login.
         Grado_NonChanging/info.json Grado_ChangingBase/info.json Grado_ABC/info.json `
         Grado_ABCX/info.json Grado_ABCS/info.json
 
-Pass the pack and every pack it depends on; a pack named by another is read from those files
-rather than the portal. It prints, per pack, the effective floor and every violation or
-unresolvable member, and exits non-zero on either. A `-Build` off its `-Line`, as `2.1.20` with
-`2.0`, is refused before the portal is asked. `-PinFile` writes the picks as one set per pack.
-`-SelfTest` proves it can fail, with no network. What it cannot see is in its header.
+Pass the pack and every pack it depends on, as `-InfoJson`, the trailing arguments; a pack named by
+another is read from those files rather than the portal. `-PortalBaseUrl` names another portal
+address; only `/api/mods/<name>/full` is read. It prints, per pack, the effective floor and every
+violation or unresolvable member, and exits non-zero on either. A `-Build` off its `-Line`, as
+`2.1.20` with `2.0`, is refused before the portal is asked. `-PinFile` writes the picks as one set
+per pack. `-SelfTest` proves it can fail, with no network. What it cannot see is in its header.
 
 The game's own mods (`base`, `space-age`, `quality`, `elevated-rails`) and the exact-case rule they
 are matched by live in `scripts/game-mods.ps1`. The resolver dot-sources it, and so does a
@@ -106,12 +107,17 @@ cache, and load the cache.
 `fetch-mods.ps1` reads no pins of its own: `-PinFile` is the consumer's manifest, and its header
 shows the format. A mod with a Git entry is cloned at its tag; any other is downloaded from the
 portal with the credentials Factorio keeps in `player-data.json`, so sign in to the game once.
+`-Force` fetches again a version the cache already holds. `-PreferPortal` takes the portal even
+for a mod with a Git entry, to exercise the credential path. `-PlayerDataPath` names another
+`player-data.json`, which a run off Windows must, having no default, and `-PortalBaseUrl` another
+portal address; `-SelfTest` points both at its own.
 
 `load-harness.ps1` takes mod directories, zips, or directories of them, and never touches the
 player's mods, saves or `player-data.json`. `-With space-age` enables bundled mods. A consumer with
 checks of its own passes `-Check <script>`, or dot-sources `load-harness-lib.ps1` to dump the data
-stage and load again under other mod lists. Both scripts take `-SelfTest`; the harness's needs the
-game installed.
+stage and load again under other mod lists. `-FactorioExe` names the game, which is otherwise
+`$env:FACTORIO_EXE` or the Steam install; each script below that starts the game takes it the
+same way. Both scripts take `-SelfTest`; the harness's needs the game installed.
 
 `get-dump.ps1` gives the path of a `--dump-data` dump of a directory of mods, and runs the game
 only when its cache holds no dump of that set:
@@ -121,7 +127,9 @@ only when its cache holds no dump of that set:
 The path is the last line it prints. The cache is `.dump-cache` under the current directory, or
 `-CacheDirectory`; keep it out of git. A set is the game build, the bundled mods enabled and each
 mod's name, version and size, so the same mods in another directory are served the same dump. It
-reads sizes and not contents: what that misses is in its header. `-SelfTest` needs no game.
+reads sizes and not contents: what that misses is in its header. `-Disabled` loads the named mods
+of the directory disabled, a comma list in exact case, and `-FactorioExe` names the game, as the
+harness takes it. `-SelfTest` needs no game.
 
 ## Reading a dump
 
@@ -137,8 +145,8 @@ the script reads and what it does not see.
 | `dump-walk.ps1` | one, or two with `-Against` | what can be researched and made from what the surfaces supply, and what each surface makes from its own materials |
 | `dump-planets.ps1` | one, or two with `-Against` | each planet's resources and settings, and whether they name anything the dump lacks |
 | `dump-shared-names.ps1` | four: `-Base`, `-First`, `-Second`, `-Both` | the names two mod sets each define, and which definition the two together hold |
-| `dump-keys.ps1` | one, or two with `-Below`, and a `config.ini` | the custom inputs that share a default key with an engine control or are linked to one |
-| `dump-diff.ps1` | two | the prototypes one has and the other has not, and those that differ, by field |
+| `dump-keys.ps1` | one, or two with `-Below`, and a `config.ini`, `-Config`, the player's unless named | the custom inputs that share a default key with an engine control or are linked to one |
+| `dump-diff.ps1` | two | the prototypes one has and the other has not, and those that differ, by field; a row lists its names up to `-MaxNames` and counts them above |
 
     pwsh -File scripts/dump-walk.ps1 <pack dump> -Against <Space Age dump> -BroughtIn wood
 
@@ -157,10 +165,10 @@ and the one that stands. Names core or base define are counted apart. Written fo
 
     pwsh -File scripts/trace-definitions.ps1 .mod-cache/Grado_ABCS -With space-age
 
-`-SelfTest` loads five fixture mods, and so needs the game; `-SelfTest -NoGame` reads only two
-logs written for it, and `scripts/check.ps1` runs that. `-KeepTemp` keeps the harness, the game's
-`trace-stdout.txt` in it. What the tracing mod cannot see, such as a prototype assigned into
-`data.raw` directly, is in the header.
+`-SelfTest` loads five fixture mods, and so needs the game; `-SelfTest -NoGame` reads only two logs
+written for it, and `scripts/check.ps1` runs that. `-KeepTemp` keeps the harness, the game's
+`trace-stdout.txt` in it. `-FactorioExe` names the game, as the harness takes it. What the tracing
+mod cannot see, such as a prototype assigned into `data.raw` directly, is in the header.
 
 ## Counting resources on a new map
 
@@ -184,7 +192,8 @@ without `rso-mod` leaves them out too, and `-AlsoDiffers` names them.
 `count-resources.ps1` loads the mods through the harness with `scripts/grado-count`, a mod that
 counts every `resource` entity by name in a square of chunks around each surface's origin. It
 creates the map, runs it 700 ticks, and copies out the counts, the game's stdout, the mods it
-resolved, and a fingerprint of each mod directory before and after. It needs the game.
+resolved, and a fingerprint of each mod directory before and after. It needs the game, which
+`-FactorioExe` names, as the harness takes it.
 `-Mods` and `-With` each take a comma list, as `-With space-age,quality`.
 `-Radius` sets the square, and `-NoPlanets` creates no planet's surface, so with Space Age the
 map has Nauvis alone.
@@ -205,14 +214,14 @@ technology coloured by the mod that created it:
     pwsh -File scripts/tree-viewer.ps1 .mod-cache/krastorio2 path/to/my-mod -FocusMod my-mod
 
 It takes the same mod paths as `load-harness.ps1`, loads them the same isolated way, and writes
-`tree-viewer-out/tech-tree.html` under the current directory; `-OutName` and `-OutDirectory`
-change that. `-FocusMod` names the mods whose items, fluids and entities are paired with
-like-named ones of the other mods. It is a probe: exit 0 means it ran and wrote the page, not
-that the tree is right. The page loads two libraries from a CDN, so it needs the network to
-render. `tree-layout-probe.js` is pasted into the browser console on a rendered page to measure
-layout alternatives. `-SelfTest` needs the game. ~~`realistic-fusion-refreshed` still holds its
-own copy of all three files, until
-[its #676](https://github.com/trulsjo/realistic-fusion-refreshed/issues/676) lands.~~
+`tree-viewer-out/tech-tree.html` under the current directory; `-OutName` and `-OutDirectory` change
+that, and `-FactorioExe` names the game, as the harness takes it. `-FocusMod` names the mods whose
+items, fluids and entities are paired with like-named ones of the other mods. It is a probe: exit 0
+means it ran and wrote the page, not that the tree is right. The page loads two libraries from a
+CDN, so it needs the network to render. `tree-layout-probe.js` is pasted into the browser console on
+a rendered page to measure layout alternatives. `-SelfTest` needs the game.
+~~`realistic-fusion-refreshed` still holds its own copy of all three files, until [its
+#676](https://github.com/trulsjo/realistic-fusion-refreshed/issues/676) lands.~~
 `realistic-fusion-refreshed` deleted its copy of all three files on 2026-10-14, for
 [realistic-fusion-refreshed#676](https://github.com/trulsjo/realistic-fusion-refreshed/issues/676).
 
@@ -226,7 +235,9 @@ place of its name, or a name or description with an engine error left in it:
 It takes the same mod paths as `load-harness.ps1`. `-Prefix` is how it tells the mods' own
 prototypes from the game's, so a mod whose prototype names share no prefix cannot use it. It
 takes two dumps and creates no map: a pass says nothing about the mod loading, and it does not
-read the name of a custom input. `-SelfTest` plants prototypes it must catch, and needs the
+read the name of a custom input. `-Nameless` names prototype types it must not ask a name of, a
+comma list: a type with no name a player sees. `-FactorioExe` names the game, as the harness
+takes it. `-SelfTest` plants prototypes it must catch, and needs the
 game. ~~`realistic-fusion-refreshed` still
 holds its own copy, until
 [its #677](https://github.com/trulsjo/realistic-fusion-refreshed/issues/677) lands.~~
@@ -320,11 +331,29 @@ game take.
 
     pwsh -File scripts/pack-mods.ps1 -OutputDirectory dist my-mod my-mod-graphics
 
+The mod directories are `-ModDirectory`, the trailing arguments, each inside a git work tree.
+
 What goes in is what git tracks under each directory, read from the working tree; untracked files
 are reported and left out. A version the portal would reject — not `x.y.z`, a component above
 65535, or `0.0.0` — is refused, and nothing is written. Any other version's zip of the same mod in
 the output directory is deleted, so one copy is left. It uploads nothing. `-SelfTest` proves it
 can fail, in a scratch repository of its own.
+
+## Checking commit messages
+
+`scripts/commit-check.ps1` holds a commit message to
+[docs/commit-convention.md](docs/commit-convention.md). This repository's `commit-msg` hook runs
+it on each message, and both siblings run it from the submodule.
+
+    pwsh -File scripts/commit-check.ps1 -ScopeFile commit-scopes.txt -Range origin/main..HEAD -RequireCommits
+    pwsh -File scripts/commit-check.ps1 -ScopeFile commit-scopes.txt -Title "<pull request title>"
+
+`-Range` checks every commit in a range. A range with none passes and says so, unless
+`-RequireCommits` is given: a consumer's CI passes it, where a pull request's range is never
+empty, and a local run on a branch with nothing on it yet need not (#196). `-Title` checks a pull
+request title, which needs a scope. `-ScopeFile` names the repository's scopes, one to a line;
+without it any scope passes. `-SelfTest` proves it can fail. What it lets through is in its
+header.
 
 ## Checking Markdown
 
@@ -367,6 +396,11 @@ is not on `main`: a rebase-merge rewrites every SHA on a branch, so such a citat
 the merge deletes.
 
     pwsh -File scripts/pr-body-check.ps1 ../scratch/body.md
+    pwsh -File scripts/pr-body-check.ps1 -Body "$env:PR_BODY" -CiteSiblings
+
+`-Body` takes the body itself, as CI has it in the environment; quote it, or an unset variable
+hands over no argument. `-Main` names the branch a cited commit must be on, `origin/main` unless
+said.
 
 It also fails on a closing keyword before an issue reference, such as `fixed` and then a colon
 and an issue's number, on any line that is not `Closes #N` alone: GitHub closes that issue when
@@ -399,6 +433,17 @@ statement of its script. A function's param block is not read.
 
 `scripts/check.ps1` runs it on `scripts/`. It reads that a split exists, not that it runs before
 the parameter is used; the rest it cannot see is in its header. `-SelfTest` proves it can fail.
+
+## Checking this repository
+
+`scripts/check.ps1` is the one command before a push. It parses every script here, runs each
+self-test that needs neither the game nor the network, runs `param-check.ps1` and
+`markdown-check.ps1` over this repository, holds the agent pages to their size limits, and fails
+on a script parameter this README never names as `-<Name>` (#194). CI runs it, and so does the
+`pre-push` hook, with `-SkipIfPassed`, which runs nothing when a recorded run passed this same
+tree. What it cannot see is in its header.
+
+    pwsh -File scripts/check.ps1
 
 ## What does not belong here
 
