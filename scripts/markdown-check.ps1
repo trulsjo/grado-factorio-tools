@@ -27,10 +27,11 @@
     link to a file on disk that git does not track and that is not named fails, and one to a
     tracked file deleted from disk but not from the index passes. A name that git tracks in
     another case is read under git's name, so a finding names it as git does and a link in the
-    typed case still fails; the case of a name git does not track is not checked. A file named
-    twice is read once. A name it cannot read as this repository's Markdown fails the run before
-    anything is read, and says why; so does a file inside a submodule, which is read by running
-    the check from inside it.
+    typed case still fails; the case of a name git does not track is not checked. Where git's
+    core.ignorecase says the file system ignores case, two spellings are one file: a file named
+    twice, in one case or two, is read once, and a submodule's file is known in either case. A name
+    it cannot read as this repository's Markdown fails the run before anything is read, and says
+    why; so does a file inside a submodule, which is read by running the check from inside it.
 
     WHAT IT READS AS WHAT. A paragraph ends at a blank line, a heading, a list item, a table or a
     fenced code block; nothing inside a fence is read, and a fence never closed is reported. A
@@ -984,7 +985,7 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             if (-not (Test-Path -LiteralPath (Join-Path $own 'readme.md'))) { return $alone.Code -eq 1 -and $alone.Text -match 'readme\.md is no file' }
             $pair.Code -eq 1 -and $pair.Text -match '(?m)^linker\.md:1: the link to readme\.md names no tracked file' -and
                 $alone.Code -eq 1 -and $alone.Text -cmatch '(?m)^README\.md:3: emphasis opened' -and $alone.Text -cnotmatch '(?m)^readme\.md:' } }
-        @{ Name = '-Path refuses a file inside a submodule, naming the submodule and reading nothing (#193)'; Test = {
+        @{ Name = '-Path refuses a file inside a submodule, in any case the file system takes, naming the submodule and reading nothing (#193)'; Test = {
             $own = Join-Path $temp 'insub'
             New-Item -ItemType Directory -Path (Join-Path $own 'sub') -Force | Out-Null
             git -C $own init --quiet
@@ -992,17 +993,27 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             Set-Content -LiteralPath (Join-Path $own 'sub/doc.md') -Value 'and *open'
             Set-Content -LiteralPath (Join-Path $own 'top.md') -Value 'and *open'
             $r = & $run $own @('-Path', 'sub/doc.md,top.md')
-            Write-Host ($r.Text.TrimEnd() -replace '(?m)^', '    ')
-            $r.Code -eq 1 -and $r.Text -match 'sub/doc\.md is inside the submodule sub' -and $r.Text -notmatch '(?m)^(sub/doc|top)\.md:' } }
-        @{ Name = '-Path reads a file named twice once, in the same spelling or another (#193)'; Test = {
+            # In another case: refused as inside sub where the file system ignores case (PR #197's
+            # review, B1), and as no file where it holds case.
+            $upper = & $run $own @('-Path', 'SUB/doc.md')
+            ($r, $upper) | ForEach-Object { Write-Host ($_.Text.TrimEnd() -replace '(?m)^', '    ') }
+            $want = if (Test-Path -LiteralPath (Join-Path $own 'SUB/doc.md')) { 'SUB/doc\.md is inside the submodule sub' } else { 'SUB/doc\.md is no file' }
+            $r.Code -eq 1 -and $r.Text -match 'sub/doc\.md is inside the submodule sub' -and $r.Text -notmatch '(?m)^(sub/doc|top)\.md:' -and
+                $upper.Code -eq 1 -and $upper.Text -match $want -and $upper.Text -notmatch '(?m)^SUB/doc\.md:' } }
+        @{ Name = '-Path reads a file named twice once, in the same spelling or another, tracked or not (#193)'; Test = {
             $own = Join-Path $temp 'twice'
             New-Item -ItemType Directory -Path $own | Out-Null
             git -C $own init --quiet
             Set-Content -LiteralPath (Join-Path $own 'a.md') -Value 'and *open'
             $same = & $run $own @('-Path', 'a.md,a.md')
             $other = & $run $own @('-Path', 'a.md,./a.md')
-            ($same, $other) | ForEach-Object { Write-Host ($_.Text.TrimEnd() -replace '(?m)^', '    ') }
-            @($same, $other | Where-Object { $_.Code -eq 1 -and @([regex]::Matches($_.Text, '(?m)^a\.md:1:')).Count -eq 1 -and $_.Text -match '1 finding\(s\) in 1 Markdown file' }).Count -eq 2 } }
+            # Untracked, in two cases: one file where the file system ignores case (PR #197's
+            # review, B2), and A.md no file where it holds case.
+            $cased = & $run $own @('-Path', 'a.md,A.md')
+            ($same, $other, $cased) | ForEach-Object { Write-Host ($_.Text.TrimEnd() -replace '(?m)^', '    ') }
+            $folded = if (Test-Path -LiteralPath (Join-Path $own 'A.md')) { $cased.Code -eq 1 -and @([regex]::Matches($cased.Text, '(?mi)^a\.md:1:')).Count -eq 1 -and $cased.Text -match '1 finding\(s\) in 1 Markdown file' }
+                else { $cased.Code -eq 1 -and $cased.Text -match 'A\.md is no file' }
+            $folded -and @($same, $other | Where-Object { $_.Code -eq 1 -and @([regex]::Matches($_.Text, '(?m)^a\.md:1:')).Count -eq 1 -and $_.Text -match '1 finding\(s\) in 1 Markdown file' }).Count -eq 2 } }
     )
 
     $failures = 0
@@ -1054,10 +1065,14 @@ if ($named) {
         $null = $exact.Add($name)
         if (-not $inGit.ContainsKey($name)) { $inGit[$name] = $name }
     }
-    $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    # Where the file system ignores case, as git found when it made the repository, two spellings
+    # are one file: a submodule's in another case is still in it, and a name is read once.
+    $foldCase = (git -C $top config --bool --default false core.ignorecase) -eq 'true'
+    $compare = if ($foldCase) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+    $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::FromComparison($compare))
     $files = @(foreach ($p in $Path) {
         $relative = [IO.Path]::GetRelativePath($top, [IO.Path]::GetFullPath($p, $PWD.ProviderPath)) -replace '\\', '/'
-        $sub = $gitlinks | Where-Object { $relative.StartsWith("$_/") } | Select-Object -First 1
+        $sub = $gitlinks | Where-Object { $relative.StartsWith("$_/", $compare) } | Select-Object -First 1
         if ($relative -match '^\.\.(/|$)' -or [IO.Path]::IsPathRooted($relative)) { $refused += "$p is outside the repository" }
         elseif ($p -notmatch '\.md$') { $refused += "$p is not a Markdown file" }
         elseif ($sub) { $refused += "$p is inside the submodule $sub, which is not this repository's to read: run the check from inside $sub" }

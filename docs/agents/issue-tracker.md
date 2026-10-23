@@ -123,11 +123,19 @@ and the commit it moves to:
 
 The clone's own `origin/main` is the checkout's `main`, which may be behind GitHub's, so the fetch
 and `update-ref` set it to GitHub's; `ls-remote` shows that `git -C s rev-parse HEAD` is GitHub's
-`main`. From inside `s`, each script the range changes is run from `../<old>` and `../<new>` in
-every form the sibling's gates run it, read from its `.github/workflows/`, `.githooks/` and
-`.claude/settings.json` at that commit and cited by file, and each copy's `-SelfTest` of it is run.
-The two outputs of each form are compared with `cmp`. The ticket records the sibling commit, and
-each command with what it printed, as *Conventions* asks.
+`main`.
+
+**What is run.** A script the range changes counts with every script here that dot-sources or loads
+it, as the harness's scripts load `load-harness-lib.ps1`; `git grep -l <changed file> <new> --
+scripts` in this repository names them. The forms are read from the whole sibling, not from its gate
+files alone: a sibling's gate scripts run ours too, as realistic-fusion-refreshed's
+`scripts/ship-check.ps1` runs `markdown-check.ps1` and its `scripts/factorio-lib.ps1` dot-sources
+`load-harness-lib.ps1` (both at `34f5ebe`, read 2026-10-23; PR #197's review). `git -C s grep -n
+vendor/grado-factorio-tools/scripts` lists each place; a hit in a sibling script counts where a gate
+runs that script, which its `.github/workflows/`, `.githooks/` or `.claude/settings.json` says. From
+inside `s`, each form is run from `../<old>` and `../<new>` and cited by file, and each copy's
+`-SelfTest` of the script is run. The two outputs of each form are compared with `cmp`. The ticket
+records the sibling commit, and each command with what it printed, as *Conventions* asks.
 
 What the copy cannot see: the sibling's submodule is not initialised, so a link into `vendor/` is
 reported as not checked; its index matches `HEAD`, so a no-argument form reads no staged file; and
