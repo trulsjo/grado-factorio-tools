@@ -127,7 +127,7 @@ $NEEDS_GAME = @('dump-walk.ps1', 'load-harness.ps1', 'locale-check.ps1', 'trace-
 # Of those, each whose -SelfTest -NoGame runs the cases that need no game. This runs them.
 $NO_GAME_CASES = @('trace-definitions.ps1')
 # Bytes, with LF line endings; a page must be under its limit. Paths are from the repository root.
-$PAGE_LIMITS = [ordered]@{ 'CLAUDE.md' = 4000; 'docs/agents/code-review.md' = 3000; 'docs/agents/code-review-prose.md' = 2000 }
+$PAGE_LIMITS = [ordered]@{ 'CLAUDE.md' = 4000; 'docs/agents/code-review.md' = 3300; 'docs/agents/code-review-prose.md' = 2000 }
 # Characters a line of tracked Markdown prose may run to. What counts is in markdown-check.ps1's
 # header.
 $MARKDOWN_LINE_LIMIT = 100

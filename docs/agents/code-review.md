@@ -28,6 +28,10 @@ On top of the `/code-review` plugin. The evidence is in
 - **The working tree stays on the branch the lanes read until every lane has reported**: a
   check run across a switch reads two branches' files.
 - **The reviewing session scores each finding itself**, on the plugin's rubric.
+- **A check fails when the rules it reads, or the set it must cover, come back empty, and its
+  self-test covers that run.** A run that only has nothing to check this time, such as a commit
+  that stages no Markdown, may pass, and says it read nothing. A lister that does not fail is
+  outside this.
 
 ## What is reported
 
@@ -42,3 +46,4 @@ On top of the `/code-review` plugin. The evidence is in
   request unmerged, before any fix commit makes it no longer the tip. The outcome names the
   commit by subject as amended. A body below the tip is recorded.
 - **Do not re-score to make a finding binding.** Say it matters and let a human decide.
+
