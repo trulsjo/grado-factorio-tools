@@ -106,7 +106,7 @@ function Invoke-SelfTest {
         param([string] $Dir, [string] $Name, [string] $Data)
         New-Item -ItemType Directory -Path $Dir -Force | Out-Null
         @{ name = $Name; version = '1.0.0'; title = $Name; author = 'load-harness.ps1'
-           factorio_version = '2.0'; dependencies = @('base'); package = @{ '' = '' } } | ConvertTo-Json | Set-Content (Join-Path $Dir 'info.json')
+           factorio_version = '2.1'; dependencies = @('base'); package = @{ '' = '' } } | ConvertTo-Json | Set-Content (Join-Path $Dir 'info.json')
         $Data | Set-Content (Join-Path $Dir 'data.lua')
     }
     $good = Join-Path $temp 'src/harness-good'

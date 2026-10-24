@@ -478,7 +478,7 @@ function Invoke-SelfTest {
         $temp = Join-Path ([IO.Path]::GetTempPath()) "dump-walk-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
         try {
             New-Item -ItemType Directory -Path (Join-Path $temp 'space-age-alone/stub') -Force | Out-Null
-            Set-Content -LiteralPath (Join-Path $temp 'space-age-alone/stub/info.json') -Value '{"name":"stub","version":"0.0.1","title":"stub","author":"self-test","factorio_version":"2.0"}'
+            Set-Content -LiteralPath (Join-Path $temp 'space-age-alone/stub/info.json') -Value '{"name":"stub","version":"0.0.1","title":"stub","author":"self-test","factorio_version":"2.1"}'
             $Path = & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'get-dump.ps1') (Join-Path $temp 'space-age-alone') -With space-age -Disabled stub | Select-Object -Last 1
             if ($LASTEXITCODE -or -not $Path) { Write-Host 'FAILED - self-test: get-dump.ps1 gave no dump of Space Age alone.'; exit 1 }
         }
