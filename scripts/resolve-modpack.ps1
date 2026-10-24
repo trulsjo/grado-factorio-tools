@@ -83,7 +83,7 @@
     this.
 
 .PARAMETER Build
-    The game build the pack must install on, e.g. `2.0.77`. It must be on -Line: `2.1.20` with
+    The game build the pack must install on, e.g. `2.1.23`. It must be on -Line: `2.1.20` with
     -Line 2.0 is refused.
 
 .PARAMETER PinFile
@@ -99,7 +99,7 @@
     naming the finding it must produce. No network.
 
 .EXAMPLE
-    pwsh -File scripts/resolve-modpack.ps1 -Line 2.0 -Build 2.0.77 -PinFile pins.psd1 `
+    pwsh -File scripts/resolve-modpack.ps1 -Line 2.1 -Build 2.1.23 -PinFile pins.psd1 `
         Grado_NonChanging/info.json Grado_ChangingBase/info.json
 
 .EXAMPLE
