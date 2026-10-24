@@ -7,16 +7,18 @@
 
 .DESCRIPTION
     WHAT IT READS. One dump, or two: get-dump.ps1 gives a path. Nothing else. A walk writes
-    nothing; the self-test may make a dump, as below.
+    nothing; the self-test may make a dump, as below. It reads a 2.1 dump and a 2.0 one: a
+    recipe's `categories`, or 2.0's `category` and `additional_categories`; what a nest drops by
+    its `name`, or 2.0's `item`.
 
     THE WALK (grado-factorio-modpack#132, where the rules were first written down, in
     docs/catalogue/Grado_ABCS.md under "How the walk was made"). Three rules, repeated until
     nothing new is added:
 
       A surface supplies   what is in $SOURCE_RULES below, each rule with what it reads.
-      A recipe counts      when it is not hidden, every ingredient can be had, a machine of its
-                           category can be built, and it is enabled or a technology that unlocks
-                           it can be researched.
+      A recipe counts      when it is not hidden, every ingredient can be had, a machine of one
+                           of its categories can be built, and it is enabled or a technology that
+                           unlocks it can be researched.
       A technology can be  when it is not hidden or disabled, every prerequisite can be, and
       researched           either its trigger can be met or its science packs can be made and
                            one lab that can be built takes them all.
@@ -38,8 +40,8 @@
     FROM ITS OWN MATERIALS asks the opposite question: what one surface makes from what that
     surface supplies, with nothing brought in. There every technology is taken as researched; a
     recipe counts when it is not hidden or is a recycling recipe, every ingredient can be had,
-    its surface conditions hold on that surface, and so do those of some machine of its category
-    or of one of its additional categories, where any machine crafts them (ruled on #132). A
+    its surface conditions hold on that surface, and so do those of some machine of one of its
+    categories, where any machine crafts them (ruled on #132). A
     machine is any prototype with crafting categories. An entity is on a planet when the
     planet's settings list it; a tree, a plant or a nest also when its autoplace control is one
     of the planet's. A pump's own fluid is given to a planet whose tiles give water, which is a
@@ -82,7 +84,9 @@
     item `capture-robot-rocket`; and the category `recycling`. A dump without them is walked
     without them.
 
-    THE SELF-TEST runs the walk on a dump of Space Age alone, where the answer is known. Then it
+    THE SELF-TEST runs the walk on a dump of Space Age alone, where the answer is known: Space Age
+    with the mods it requires and Quality, which 2.1 makes optional but recommended (ruled on
+    #211). The answer, and the rules $NOT_SHOWN_BY_SPACE_AGE lists, were taken on 2.1.23. Then it
     removes each source rule in turn and fails unless the answer changes. A rule
     the Space Age dump cannot show is named in the self-test's output, and is not proven. It
     needs the game, unless -Dump names a dump of Space Age alone.
@@ -162,8 +166,8 @@ function Read-WalkData {
                 Name        = [string] $r['name']
                 Hidden      = [bool] $r['hidden']
                 Enabled     = $r['enabled'] -ne $false
-                Category    = $r['category'] ? [string] $r['category'] : 'crafting'
-                Additional  = [string[]] @(Get-List $r['additional_categories'])
+                # 2.1 lists a recipe's categories; 2.0 gave one and the additional ones.
+                Categories  = [string[]] @(if ($r['categories']) { Get-List $r['categories'] } else { $r['category'] ?? 'crafting'; Get-List $r['additional_categories'] })
                 Ingredients = [string[]] @(Get-List $r['ingredients'] | ForEach-Object { $_['name'] })
                 Results     = [string[]] @(Get-List $r['results'] | ForEach-Object { $_['name'] })
                 Conditions  = @(Get-List $r['surface_conditions'])
@@ -223,7 +227,7 @@ function Read-WalkData {
                     $control = $prototype['autoplace']?['control']
                     if (-not $control -or $control -notin $controls) { continue }
                     foreach ($n in Get-MinedNames $prototype) { [void] $supply[$rule].Add($n) }
-                    foreach ($l in Get-List $prototype['loot']) { [void] $supply[$rule].Add($l['item']) }
+                    foreach ($l in Get-List $prototype['loot']) { [void] $supply[$rule].Add($l['name'] ?? $l['item']) }
                 }
             }
             foreach ($name in & $listed 'tile') { if ($tiles[$name]?['fluid']) { [void] $supply.tiles.Add($tiles[$name]['fluid']) } }
@@ -235,7 +239,7 @@ function Read-WalkData {
         $everywhere = @{}
         foreach ($rule in $SOURCE_RULES.Keys) { $everywhere[$rule] = [Collections.Generic.HashSet[string]]::new() }
         foreach ($prototype in $byControl.plants) { foreach ($n in Get-MinedNames $prototype) { [void] $everywhere.plants.Add($n) } }
-        foreach ($prototype in $byControl.nests) { foreach ($l in Get-List $prototype['loot']) { [void] $everywhere.nests.Add($l['item']) } }
+        foreach ($prototype in $byControl.nests) { foreach ($l in Get-List $prototype['loot']) { [void] $everywhere.nests.Add($l['name'] ?? $l['item']) } }
         foreach ($f in $pumpFluids) { [void] $everywhere.pumps.Add($f) }
         $chunks = [Collections.Generic.HashSet[string]]::new()
         foreach ($c in (Get-DumpTable $doc 'asteroid-chunk').Values) { foreach ($n in Get-MinedNames $c) { [void] $chunks.Add($n) } }
@@ -296,13 +300,13 @@ function Invoke-Walk {
         }
         # A category is barred where machines craft it and none of them may stand here. One
         # that nothing crafts is not barred: the dump forbids nothing there. A recipe is out
-        # when its category and every additional one is barred.
+        # when every category it has is barred.
         $barred = [Collections.Generic.HashSet[string]]::new()
         $stands = [Collections.Generic.HashSet[string]]::new()
         foreach ($m in $Data.Machines) { if (& $hold $m.Conditions) { $stands.UnionWith($m.Categories) } else { $barred.UnionWith($m.Categories) } }
         $barred.ExceptWith($stands)
         $pending = [Collections.Generic.List[object]] @($Data.Recipes | Where-Object {
-                ($_.Category -eq 'recycling' -or -not $_.Hidden) -and -not $barred.IsSupersetOf([string[]] (@($_.Category) + $_.Additional)) -and (& $hold $_.Conditions)
+                ('recycling' -in $_.Categories -or -not $_.Hidden) -and -not $barred.IsSupersetOf($_.Categories) -and (& $hold $_.Conditions)
             })
     }
     else { $pending = [Collections.Generic.List[object]] @($Data.Recipes | Where-Object { -not $_.Hidden }) }
@@ -343,7 +347,7 @@ function Invoke-Walk {
             [void] $researched.Add($t.Name); [void] $technologies.Remove($t); $unlocked.UnionWith($t.Unlocks); $changed = $true
         }
         foreach ($r in @($pending)) {
-            if (-not $Surface -and -not (($r.Enabled -or $unlocked.Contains($r.Name)) -and $categories.Contains($r.Category))) { continue }
+            if (-not $Surface -and -not (($r.Enabled -or $unlocked.Contains($r.Name)) -and $categories.Overlaps($r.Categories))) { continue }
             if (-not (& $all $r.Ingredients)) { continue }
             [void] $used.Add($r.Name); [void] $pending.Remove($r); $changed = $true
             foreach ($n in $r.Results) { if ($have.Add($n)) { $by[$n] = $r.Name } }
@@ -479,7 +483,7 @@ function Invoke-SelfTest {
         try {
             New-Item -ItemType Directory -Path (Join-Path $temp 'space-age-alone/stub') -Force | Out-Null
             Set-Content -LiteralPath (Join-Path $temp 'space-age-alone/stub/info.json') -Value '{"name":"stub","version":"0.0.1","title":"stub","author":"self-test","factorio_version":"2.1"}'
-            $Path = & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'get-dump.ps1') (Join-Path $temp 'space-age-alone') -With space-age -Disabled stub | Select-Object -Last 1
+            $Path = & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'get-dump.ps1') (Join-Path $temp 'space-age-alone') -With space-age,quality -Disabled stub | Select-Object -Last 1
             if ($LASTEXITCODE -or -not $Path) { Write-Host 'FAILED - self-test: get-dump.ps1 gave no dump of Space Age alone.'; exit 1 }
         }
         finally { Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue }
@@ -491,7 +495,7 @@ function Invoke-SelfTest {
         '{0} technologies, {1} of the six packs, {2} of {3} recipes' -f $r.Walk.Researched.Count, @($six | Where-Object { $r.Walk.Have.Contains($_) }).Count,
             @($r.Open | Where-Object { $r.Walk.Used.Contains($_.Name) }).Count, $r.Open.Count
     }
-    $known = '275 technologies, 6 of the six packs, 330 of 340 recipes'
+    $known = '277 technologies, 6 of the six packs, 331 of 341 recipes'
     $whole = & $answer @()
     $ok = $whole -ceq $known
     Write-Host "self-test: Space Age alone gives $whole -- $($ok ? 'ok' : "FAILED, the known answer is $known")"
