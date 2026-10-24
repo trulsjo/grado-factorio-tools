@@ -161,7 +161,7 @@ if ($SelfTest -and -not $Mods -and -not $Prefix) {
     $good = Join-Path $fixture 'localecheck-good'
     New-Item -ItemType Directory -Path (Join-Path $good 'locale/en') -Force | Out-Null
     @{ name = 'localecheck-good'; version = '0.0.1'; title = 'Locale-check fixture'
-       author = 'locale-check.ps1'; factorio_version = '2.0'; dependencies = @('base') } |
+       author = 'locale-check.ps1'; factorio_version = '2.1'; dependencies = @('base') } |
         ConvertTo-Json | Set-Content -Path (Join-Path $good 'info.json') -Encoding utf8
     'data:extend({ { type = "item", name = "lc-named-item", stack_size = 1, icon = "__base__/graphics/icons/pipe.png", icon_size = 64 } })' |
         Set-Content -Path (Join-Path $good 'data.lua') -Encoding utf8
@@ -315,7 +315,7 @@ function Test-Locale {
 }
 
 try {
-    $bundledOn = if ($harness.EnabledBundled) { $harness.EnabledBundled -join ', ' } else { 'none (base 2.0 only)' }
+    $bundledOn = if ($harness.EnabledBundled) { $harness.EnabledBundled -join ', ' } else { 'none (base only)' }
     Write-Host "locale-check: $($ourMods -join ', ')  |  prefix: $Prefix  |  bundled enabled: $bundledOn"
 
     $report = Test-Locale -Dumps (Invoke-Dumps -Mods $ourMods -Tag 'run')
@@ -356,7 +356,7 @@ try {
                 New-Item -ItemType Directory -Path (Join-Path $canary 'locale/en') -Force | Out-Null
                 @{
                     name = 'localecheck-canary'; version = '0.0.1'; title = 'Locale-check canary'
-                    author = 'locale-check.ps1'; factorio_version = '2.0'; dependencies = @('base >= 2.0.77')
+                    author = 'locale-check.ps1'; factorio_version = '2.1'; dependencies = @('base >= 2.0.77')
                 } | ConvertTo-Json | Set-Content -Path (Join-Path $canary 'info.json') -Encoding utf8
 
                 @"

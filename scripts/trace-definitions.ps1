@@ -133,7 +133,7 @@ function New-Tracer {
     param([Parameter(Mandatory)] [string] $ModDirectory)
     $dir = Join-Path $ModDirectory $TRACER
     New-Item -ItemType Directory -Path $dir | Out-Null
-    @{ name = $TRACER; version = '1.0.0'; title = $TRACER; author = 'trace-definitions.ps1'; factorio_version = '2.0'; dependencies = @() } |
+    @{ name = $TRACER; version = '1.0.0'; title = $TRACER; author = 'trace-definitions.ps1'; factorio_version = '2.1'; dependencies = @() } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $dir 'info.json')
     $TRACER_DATA.Replace('@MARK@', $MARK).Replace('@TRACER@', $TRACER) | Set-Content -LiteralPath (Join-Path $dir 'data.lua')
 }
@@ -213,7 +213,7 @@ function Invoke-SelfTest {
         param([string] $Name, [hashtable] $Files)
         $dir = Join-Path $temp $Name
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
-        @{ name = $Name; version = '1.0.0'; title = $Name; author = 'trace-definitions.ps1'; factorio_version = '2.0'; dependencies = @('base') } |
+        @{ name = $Name; version = '1.0.0'; title = $Name; author = 'trace-definitions.ps1'; factorio_version = '2.1'; dependencies = @('base') } |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $dir 'info.json')
         foreach ($f in $Files.Keys) { Set-Content -LiteralPath (Join-Path $dir $f) -Value $Files[$f] }
     }
