@@ -153,8 +153,9 @@ the script reads and what it does not see.
 
     pwsh -File scripts/dump-walk.ps1 <pack dump> -Against <Space Age dump> -BroughtIn wood
 
-All five take `-SelfTest`. The walk's runs on a dump of Space Age alone, which it makes through
-`get-dump.ps1` and so needs the game, unless `-Dump` names one; the other four read fixtures.
+All five take `-SelfTest`. The walk's runs on a dump of Space Age with Quality, which it makes
+through `get-dump.ps1` and so needs the game, unless `-Dump` names one; the other four read
+fixtures.
 
 ## Tracing which mods define a name
 
