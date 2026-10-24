@@ -148,7 +148,9 @@ data:extend({ $($item.Replace('NAME', 'vf-plasma-widget')),
     prerequisites = { "automation" }, effects = {},
     unit = { count = 7, time = 5, ingredients = { { "automation-science-pack", 1 } } } },
   { type = "technology", name = "vf-mined-tech", icon = "__base__/graphics/icons/iron-plate.png", icon_size = 64,
-    effects = {}, research_trigger = { type = "mine-entity", entities = { "crude-oil", "iron-ore" } } } })
+    effects = {}, research_trigger = { type = "mine-entity", entities = { "crude-oil", "iron-ore" } } },
+  { type = "technology", name = "vf-built-tech", icon = "__base__/graphics/icons/iron-plate.png", icon_size = 64,
+    effects = {}, research_trigger = { type = "build-entity", entity = "stone-furnace" } } })
 "@ "[item-name]`nvf-plasma-widget=Plasma widget`n[technology-name]`nvf-planted-tech=Planted technology"
         $other = & $newMod 'viewer-other' "data:extend({ $($item.Replace('NAME', 'vo-plasma-widget')) })" "[item-name]`nvo-plasma-widget=Plasma widget"
 
@@ -171,11 +173,14 @@ data:extend({ $($item.Replace('NAME', 'vf-plasma-widget')),
                 if ($m.Groups[2].Value -notmatch '"automation"') { throw "vf-planted-tech lost its prerequisite: $($m.Groups[2].Value)" }
                 if ((Get-Content -LiteralPath $page -Raw) -notmatch '"label":"Planted technology"') { throw 'its localised name is not on the page.' }
                 'a planted technology reaches the dataset with its name, its prerequisite and the mod that created it' } }
-            @{ Name = 'mine-entity-trigger-named'; Body = {
+            @{ Name = 'entity-triggers-named'; Body = {
                 $m = [regex]::Match((Get-Content -LiteralPath $page -Raw), '\{"id":"vf-mined-tech".*?"trigger":"([^"]*)"')
                 if (-not $m.Success) { throw 'vf-mined-tech has no trigger in the page''s dataset.' }
                 if ($m.Groups[1].Value -cne 'mine-entity crude-oil iron-ore') { throw "its trigger reads '$($m.Groups[1].Value)', not 'mine-entity crude-oil iron-ore'." }
-                'a mine-entity trigger names each of its entities' } }
+                $m = [regex]::Match((Get-Content -LiteralPath $page -Raw), '\{"id":"vf-built-tech".*?"trigger":"([^"]*)"')
+                if (-not $m.Success) { throw 'vf-built-tech has no trigger in the page''s dataset.' }
+                if ($m.Groups[1].Value -cne 'build-entity stone-furnace') { throw "its trigger reads '$($m.Groups[1].Value)', not 'build-entity stone-furnace'." }
+                'a mine-entity trigger names each of its entities, and a build-entity trigger its one entity' } }
             @{ Name = 'focus-overlap-paired'; Body = {
                 if ((Get-Content -LiteralPath $page -Raw) -notmatch '"a":"vf-plasma-widget"[^}]*"b":"vo-plasma-widget"[^}]*"tier":1') {
                     throw 'the focus mod''s item was not paired with the other mod''s item of the same name.'
