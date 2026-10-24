@@ -46,6 +46,7 @@ submodule, [ADR 0001](docs/adr/0001-siblings-consume-this-repo-as-a-submodule.md
 
 ## Factorio facts to check, not remember
 
+- The installed build: `Factorio.exe --version`, never remembered (#199).
 - API docs are per game version at <https://lua-api.factorio.com/>. Pin an explicit version when
   recording a fact: `/stable/` and `/latest/` both move, and `latest` is experimental.
 - `https://mods.factorio.com/api/mods/<name>/full` says what exists and at what version, with no

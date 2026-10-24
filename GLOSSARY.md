@@ -62,3 +62,15 @@ repository is usually both. A repository holding its own copy is not a consumer,
 that copy is today.
 _Avoid_: client, dependent, downstream — "upstream" here means predecessor mod code in the sibling
 repository, so "downstream" cannot be pressed into service as its mirror.
+
+### The game
+
+**Line**:
+A major.minor version of the game, such as `2.1`: the `factorio_version` a mod declares in its
+`info.json`.
+_Avoid_: game version, release, branch
+
+**Build**:
+One installable version of the game, such as `2.1.23`, on the line its first two parts name. A
+measurement of the game is made on a build and names it.
+_Avoid_: game version, release, patch

@@ -81,7 +81,7 @@ the pack's mandatory closure that build would install, and whether those release
 other. A Grado pack runs it before every release, to check that its declared `base >=` minimum is
 still true. It reads only the public portal API, which needs no login.
 
-    pwsh -File scripts/resolve-modpack.ps1 -Line 2.0 -Build 2.0.77 -PinFile pins.psd1 `
+    pwsh -File scripts/resolve-modpack.ps1 -Line 2.1 -Build 2.1.23 -PinFile pins.psd1 `
         Grado_NonChanging/info.json Grado_ChangingBase/info.json Grado_ABC/info.json `
         Grado_ABCX/info.json Grado_ABCS/info.json
 
