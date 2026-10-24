@@ -89,7 +89,7 @@
     #211). The answer, and the rules $NOT_SHOWN_BY_SPACE_AGE lists, were taken on 2.1.23. Then it
     removes each source rule in turn and fails unless the answer changes. A rule
     the Space Age dump cannot show is named in the self-test's output, and is not proven. It
-    needs the game, unless -Dump names a dump of Space Age alone.
+    needs the game, unless -Dump names a dump of Space Age with Quality.
 
 .PARAMETER Dump
     The dump to walk.
