@@ -254,7 +254,7 @@ end)
     }
     $FocusMod = @($FocusMod | Where-Object { $_ -cin $inSet })
 
-    $bundledOn = if ($harness.EnabledBundled) { $harness.EnabledBundled -join ', ' } else { 'none (base 2.0 only)' }
+    $bundledOn = if ($harness.EnabledBundled) { $harness.EnabledBundled -join ', ' } else { 'none (base only)' }
     Write-Host "tree-viewer: $($setMods -join ', ')  |  bundled enabled: $bundledOn"
 
     $step = @{ FactorioExe = $harness.FactorioExe; ModDirectory = $modDir; OutputDirectory = $temp }

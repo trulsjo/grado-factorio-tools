@@ -71,6 +71,7 @@ A major.minor version of the game, such as `2.1`: the `factorio_version` a mod d
 _Avoid_: game version, release, branch
 
 **Build**:
-One installable version of the game, such as `2.1.23`, on the line its first two parts name. A
-measurement of the game is made on a build and names it.
+One installable version of the game, such as `2.1.23`, on the line its first two parts name. It is
+what `Factorio.exe --version` prints after `Version:`, not the number it prints after `build`,
+such as `87750`. A measurement of the game is made on a build and names it.
 _Avoid_: game version, release, patch
