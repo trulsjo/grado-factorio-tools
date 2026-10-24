@@ -146,7 +146,9 @@ if ($SelfTest) {
 data:extend({ $($item.Replace('NAME', 'vf-plasma-widget')),
   { type = "technology", name = "vf-planted-tech", icon = "__base__/graphics/icons/iron-plate.png", icon_size = 64,
     prerequisites = { "automation" }, effects = {},
-    unit = { count = 7, time = 5, ingredients = { { "automation-science-pack", 1 } } } } })
+    unit = { count = 7, time = 5, ingredients = { { "automation-science-pack", 1 } } } },
+  { type = "technology", name = "vf-mined-tech", icon = "__base__/graphics/icons/iron-plate.png", icon_size = 64,
+    effects = {}, research_trigger = { type = "mine-entity", entities = { "crude-oil", "iron-ore" } } } })
 "@ "[item-name]`nvf-plasma-widget=Plasma widget`n[technology-name]`nvf-planted-tech=Planted technology"
         $other = & $newMod 'viewer-other' "data:extend({ $($item.Replace('NAME', 'vo-plasma-widget')) })" "[item-name]`nvo-plasma-widget=Plasma widget"
 
@@ -169,6 +171,11 @@ data:extend({ $($item.Replace('NAME', 'vf-plasma-widget')),
                 if ($m.Groups[2].Value -notmatch '"automation"') { throw "vf-planted-tech lost its prerequisite: $($m.Groups[2].Value)" }
                 if ((Get-Content -LiteralPath $page -Raw) -notmatch '"label":"Planted technology"') { throw 'its localised name is not on the page.' }
                 'a planted technology reaches the dataset with its name, its prerequisite and the mod that created it' } }
+            @{ Name = 'mine-entity-trigger-named'; Body = {
+                $m = [regex]::Match((Get-Content -LiteralPath $page -Raw), '\{"id":"vf-mined-tech".*?"trigger":"([^"]*)"')
+                if (-not $m.Success) { throw 'vf-mined-tech has no trigger in the page''s dataset.' }
+                if ($m.Groups[1].Value -cne 'mine-entity crude-oil iron-ore') { throw "its trigger reads '$($m.Groups[1].Value)', not 'mine-entity crude-oil iron-ore'." }
+                'a mine-entity trigger names each of its entities' } }
             @{ Name = 'focus-overlap-paired'; Body = {
                 if ((Get-Content -LiteralPath $page -Raw) -notmatch '"a":"vf-plasma-widget"[^}]*"b":"vo-plasma-widget"[^}]*"tier":1') {
                     throw 'the focus mod''s item was not paired with the other mod''s item of the same name.'
@@ -335,16 +342,17 @@ end)
         return [bool]$Value
     }
 
-    # Two of a trigger's six ID-bearing fields are FILTER unions at 2.0.77 -- a bare ID *or* a
-    # {name, quality, comparator} table: craft-item's `item` (ItemIDFilter) and build-entity's
-    # `entity` (EntityIDFilter). The rest are plain IDs: mine-entity's and capture-spawner's
-    # `entity` are EntityID, send-item-to-orbit's `item` is ItemID, craft-fluid's `fluid` is
-    # FluidID. Joining a table form into the label would print "System.Collections.Hashtable" --
-    # the same leak of .NET metadata into node text this fixes -- so the two filter fields go
+    # Three of a trigger's ID-bearing fields are FILTER unions at 2.1.23 -- a bare ID *or* a
+    # {name, quality, comparator} table: craft-item's and send-item-to-orbit's `item`
+    # (ItemIDFilter) and build-entity's `entity` (EntityIDFilter). The rest are plain IDs:
+    # capture-spawner's `entity` is EntityID, craft-fluid's `fluid` is FluidID, and mine-entity's
+    # `entities` is a list of EntityID (2.0.77's `entity`, one EntityID, renamed in 2.1.7).
+    # Joining a table form into the label would print "System.Collections.Hashtable" --
+    # the same leak of .NET metadata into node text this fixes -- so the filter fields go
     # through here. A bare ID passes straight back, which is why the caller can apply it to both
     # `item` and `entity` without caring which variant it holds.
-    # <https://lua-api.factorio.com/2.0.77/types/ItemIDFilter.html>
-    # <https://lua-api.factorio.com/2.0.77/types/EntityIDFilter.html>
+    # <https://lua-api.factorio.com/2.1.23/types/ItemIDFilter.html>
+    # <https://lua-api.factorio.com/2.1.23/types/EntityIDFilter.html>
     function Get-FilterName($Value) {
         if ($Value -is [System.Collections.IDictionary]) { return $Value['name'] }
         return $Value
@@ -452,18 +460,19 @@ end)
             $packs = @($u['ingredients'] | ForEach-Object { ,@($_[0], $_[1]) })
         }
         elseif ($t['research_trigger']) {
-            # The data-bearing field of every TechnologyTrigger variant at 2.0.77: craft-item
-            # (item, count, default 1), craft-fluid (fluid, amount, default 0), mine-entity and
-            # build-entity (entity), send-item-to-orbit (item), capture-spawner (entity,
-            # optional), create-space-platform (type alone). Absent keys -- which is how the dump
-            # writes a field left at its default -- just drop out of the join.
+            # The data-bearing field of every TechnologyTrigger variant at 2.1.23: craft-item
+            # (item, count, default 1), craft-fluid (fluid, amount, default 0), mine-entity
+            # (entities, a list, each named), build-entity (entity), send-item-to-orbit (item),
+            # capture-spawner (entity, optional), create-space-platform (type alone). A 2.0
+            # dump's mine-entity gives one `entity`, read with build-entity's. Absent keys --
+            # which is how the dump writes a field left at its default -- drop out of the join.
             # Not rendered: scripted's trigger_description and icon fields, which describe how the
             # trigger PRESENTS itself rather than what satisfies it, and so say nothing about the
             # tree. Read the variant pages, not the union page: it lists the variants without
-            # their fields. <https://lua-api.factorio.com/2.0.77/types/TechnologyTrigger.html>
+            # their fields. <https://lua-api.factorio.com/2.1.23/types/TechnologyTrigger.html>
             $rt = $t['research_trigger']
-            $trigger = (@($rt['type'], (Get-FilterName $rt['item']), (Get-FilterName $rt['entity']),
-                          $rt['fluid'], $rt['count'], $rt['amount']) | Where-Object { $_ }) -join ' '
+            $trigger = (@($rt['type'], (Get-FilterName $rt['item']), (Get-FilterName $rt['entity'])) + (Get-DumpList $rt['entities']) +
+                        @($rt['fluid'], $rt['count'], $rt['amount']) | Where-Object { $_ }) -join ' '
         }
         $unlocks = [System.Collections.Generic.List[object]]::new()
         $bonuses = [System.Collections.Generic.List[string]]::new()
