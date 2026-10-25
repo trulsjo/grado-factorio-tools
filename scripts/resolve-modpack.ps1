@@ -30,12 +30,12 @@
                quality, elevated-rails, recycler -- are left out: they come with the build, not the
                portal. Every mod name is matched in exact case, as the game does -- Factorio 2.0.77
                (build 84539), measured headless in grado-factorio-tools 607ceef, fails a dependency
-               on `Alpha` when only `alpha` is present -- and as the portal does: on 2026-10-01,
-               /api/mods/Krastorio2 answered 200 and /api/mods/krastorio2 404. The game's own mods
-               are matched the same way: on the same build, a dependency on `Space-Age`, `Base`,
-               `Quality` or `Elevated-Rails` is refused (grado-factorio-tools#46), and on 2.1.23 one
-               on `Recycler` (#209), on each of those four, and on `Alpha` (#200); the runs are in
-               docs/measurements.md. So a mandatory
+               on `Alpha` when only `alpha` is present, and 2.1.23 (build 87750) does the same
+               (#200) -- and as the portal does: on 2026-10-01, /api/mods/Krastorio2 answered 200
+               and /api/mods/krastorio2 404. The game's own mods are matched the same way: on the
+               same build, a dependency on `Space-Age`, `Base`, `Quality` or `Elevated-Rails` is
+               refused (grado-factorio-tools#46), and on 2.1.23 one on `Recycler` (#209) and on
+               each of those four (#200); the runs are in docs/measurements.md. So a mandatory
                `Space-Age` is not taken as bundled, `krastorio2` is not satisfied by a `Krastorio2`
                already picked, and `mypack` is not the local pack `MyPack`. Each is looked up under
                its own spelling.
