@@ -106,12 +106,15 @@
     differ under an expansion, so this is worth running both ways before a release.
 
 .PARAMETER SelfTest
-    Verify the check can fail. Runs twice: once as normal, which must pass, and once with a mod
-    carrying four planted prototypes -- one with no locale entry, one whose name resolves to an
+    Verify the check can fail. Runs in three halves. Once as normal, which must pass. Once with a
+    mod carrying four planted prototypes -- one with no locale entry, one whose name resolves to an
     engine error, one whose description does, and a tool with no locale entry, a type the game
-    has none of on 2.1 -- every one of which must be caught, and caught as the right kind. Both
-    halves are required: a check that never fires proves nothing, and one
-    that reported an unresolved name as a missing one would send the fix to the wrong place.
+    has none of on 2.1 -- every one of which must be caught, and caught as the right kind. And
+    once on a synthetic dump holding a mod-data of the prefix's, a type the game has none of and
+    no item, which must be refused rather than matched through the item group. All three are
+    required: a check that never fires proves nothing, one that reported an unresolved name as a
+    missing one would send the fix to the wrong place, and one that matched any type through the
+    item group would send a non-item's fix there.
     With mods and a prefix it runs on those, which must pass first; with neither it builds a small
     mod of its own. Needs Factorio.
 
@@ -444,6 +447,27 @@ data:extend({
                     exit 1
                 }
                 'all four planted prototypes were caught, each as its own kind.'
+            } }
+
+            @{ Name = 'non-item-refused'; Body = {
+                # A type the game has none of and that is no item is refused, not matched through
+                # the item group. The throw needs no game, so the dump is synthetic: one prefixed
+                # mod-data, and one game item the fallback would match it against if it took it.
+                $synthetic = @{
+                    Raw = [pscustomobject]@{
+                        'item'     = [pscustomobject]@{ 'iron-plate' = [pscustomobject]@{ stack_size = 100 } }
+                        'mod-data' = [pscustomobject]@{ "${Prefix}localecheck-data" = [pscustomobject]@{ data = @{} } }
+                    }
+                    Locale = [ordered]@{}
+                }
+                try { Test-Locale -Dumps $synthetic | Out-Null }
+                catch {
+                    if ($_.Exception.Message -notlike "*none of the game's*") { throw }
+                    return "a mod-data with none of the game's was refused, not matched through the item group."
+                }
+                Write-Host ''
+                Write-Host "FAILED - self-test: a mod-data with none of the game's was NOT refused."
+                exit 1
             } }
         )
 
