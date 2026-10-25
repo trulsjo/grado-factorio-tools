@@ -13,7 +13,7 @@ On top of the `/code-review` plugin. The evidence is in
   [code-review-prose.md](code-review-prose.md), which that lane loads and the bug scan does
   not. The prose lane takes in the plugin's `CLAUDE.md` and code-comment lanes.
 - **The bug scan runs `scripts/check.ps1` unless CI's check passes on the commit the review
-  reads.** It waits on a run in progress with `gh run watch <id> --exit-status`, and names a
+  reads.** It waits on a run not yet finished with `gh run watch <id> --exit-status`, and names a
   run that passed instead of running the check. The session looks before the lane starts, with
   `gh run list --workflow check.yml --commit <full SHA> --json databaseId,headSha,status,conclusion`.
   Either way the bug scan runs each self-test that script's header says the change calls for

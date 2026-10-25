@@ -114,14 +114,14 @@ It printed one run, 38217674510, `completed` and `success`, with a `headSha` beg
 asks for the full one. With the rule the rules page is 2,556 bytes of its 3,000.
 
 **A run in progress is waited on, not run again** (Truls, 2026-10-25, settling
-[#230](https://github.com/trulsjo/grado-factorio-tools/issues/230)). PR #228's bug scan was
-briefed while CI's run 40198350111 was `in_progress`, and so ran the check itself; CI finished
-in 78 seconds, by that ticket's figures. The lane now runs `gh run watch <id> --exit-status`,
-which waits and exits non-zero on a run that fails. With gh 2.103.1 on 2026-10-25, on runs
+[#230](https://github.com/trulsjo/grado-factorio-tools/issues/230)). PR #228's bug scan was briefed
+while CI's run 40198350111 was `in_progress`, and so ran the check itself; CI finished in 78
+seconds, by that ticket's figures. The lane now runs `gh run watch <id> --exit-status`, which waits,
+and by `gh run watch --help` exits non-zero if the run fails. With gh 2.103.1 on 2026-10-25, on runs
 already finished, `gh run watch 40198350111 --exit-status` printed `Run check (40198350111) has
-already completed with 'success'` and exited 0, and `gh run watch 40176673959 --exit-status`
-printed the same with `'failure'` and exited 1. A run in progress is on the pull request that
-made the change, PR #231.
+already completed with 'success'` and exited 0, and `gh run watch 40176673959 --exit-status` printed
+the same with `'failure'` and exited 1. What it printed on a run in progress, 40239476582, which
+passed, is in PR #231's body; a run that fails while watched was not seen.
 
 **A change that touches no script is reviewed by one agent.** Ruled by Truls on 2026-10-11,
 settling [#109](https://github.com/trulsjo/grado-factorio-tools/issues/109): such a change gets
