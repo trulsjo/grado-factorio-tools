@@ -53,9 +53,14 @@
     nowhere -- recipe categories, fuel categories, anything with no player-visible name -- are
     skipped on that evidence rather than by assumption.
 
-    A type with no other members at all is an error, not a skip. That is the case where this check
-    would otherwise go quiet exactly when something new arrives. -Nameless is the answer to it: a
-    type named there is declared to have no visible name, and is skipped and reported as declared.
+    A type with no other members at all is an error, not a skip, unless it is an item type. That is
+    the case where this check would otherwise go quiet exactly when something new arrives. An item
+    type is one whose prototypes carry stack_size, as dump-walk.ps1 finds items: 2.1 defines no
+    `tool` of its own, its science packs being plain items, and a mod's own `tool` is compared
+    against the game's prototypes of every item type instead, the item group, and its mapping
+    line says so. Any other type with no other members, such as an entity type the game stops
+    defining, is still the error. -Nameless is the answer to it: a type named there is declared to
+    have no visible name, and is skipped and reported as declared.
     `animation` and `custom-input` are declared already; why the second, below.
 
     Descriptions are reported but not required: the count of prototypes carrying one is printed,
@@ -102,9 +107,10 @@
 
 .PARAMETER SelfTest
     Verify the check can fail. Runs twice: once as normal, which must pass, and once with a mod
-    carrying three planted prototypes -- one with no locale entry, one whose name resolves to an
-    engine error, and one whose description does -- every one of which must be caught, and caught
-    as the right kind. Both halves are required: a check that never fires proves nothing, and one
+    carrying four planted prototypes -- one with no locale entry, one whose name resolves to an
+    engine error, one whose description does, and a tool with no locale entry, a type the game
+    has none of on 2.1 -- every one of which must be caught, and caught as the right kind. Both
+    halves are required: a check that never fires proves nothing, and one
     that reported an unresolved name as a missing one would send the fix to the wrong place.
     With mods and a prefix it runs on those, which must pass first; with neither it builds a small
     mod of its own. Needs Factorio.
@@ -163,9 +169,14 @@ if ($SelfTest -and -not $Mods -and -not $Prefix) {
     @{ name = 'localecheck-good'; version = '0.0.1'; title = 'Locale-check fixture'
        author = 'locale-check.ps1'; factorio_version = '2.1'; dependencies = @('base') } |
         ConvertTo-Json | Set-Content -Path (Join-Path $good 'info.json') -Encoding utf8
-    'data:extend({ { type = "item", name = "lc-named-item", stack_size = 1, icon = "__base__/graphics/icons/pipe.png", icon_size = 64 } })' |
-        Set-Content -Path (Join-Path $good 'data.lua') -Encoding utf8
-    "[item-name]`nlc-named-item=Named item`n[item-description]`nlc-named-item=An item with a name." |
+    # The tool is a type the game defines none of on 2.1, so its file comes through the item group.
+    @'
+data:extend({
+  { type = "item", name = "lc-named-item", stack_size = 1, icon = "__base__/graphics/icons/pipe.png", icon_size = 64 },
+  { type = "tool", name = "lc-named-pack", stack_size = 1, durability = 1, icon = "__base__/graphics/icons/pipe.png", icon_size = 64 },
+})
+'@ | Set-Content -Path (Join-Path $good 'data.lua') -Encoding utf8
+    "[item-name]`nlc-named-item=Named item`nlc-named-pack=Named pack`n[item-description]`nlc-named-item=An item with a name." |
         Set-Content -Path (Join-Path $good 'locale/en/good.cfg') -Encoding utf8
     $Mods = @($good); $Prefix = 'lc-'
 }
@@ -231,6 +242,11 @@ function Invoke-Dumps {
     return @{ Raw = $raw; Locale = $locale }
 }
 
+function Test-Stackable($Prototypes) {
+    <#  Whether some prototype of a type in the data dump carries stack_size: an item type.  #>
+    [bool] @($Prototypes.PSObject.Properties.Value | Where-Object { $_.PSObject.Properties['stack_size'] }).Count
+}
+
 function Test-Locale {
     <#  Compare the expected set against the resolved set. Returns findings; empty means clean.  #>
     param([Parameter(Mandatory)] [hashtable] $Dumps)
@@ -253,6 +269,20 @@ function Test-Locale {
         }
 
         $vanilla = @($names | Where-Object { -not $_.StartsWith($Prefix, [StringComparison]::Ordinal) })
+
+        # An item type the game has stopped defining, as `tool` on 2.1, is compared against the
+        # game's items of every type instead. An item is what carries stack_size, as dump-walk.ps1
+        # finds one.
+        $through = ''
+        if ($vanilla.Count -eq 0 -and (Test-Stackable $type.Value)) {
+            $through = ', through the item group'
+            $vanilla = @(foreach ($other in $Dumps.Raw.PSObject.Properties) {
+                if (Test-Stackable $other.Value) {
+                    $other.Value.PSObject.Properties.Name |
+                        Where-Object { -not $_.StartsWith($Prefix, [StringComparison]::Ordinal) }
+                }
+            })
+        }
         if ($vanilla.Count -eq 0) {
             # Parenthesised as one string before -f, which binds tighter than +: without them the
             # format applies to the second half only and the message prints its own placeholders.
@@ -280,7 +310,7 @@ function Test-Locale {
             $source = $null
             continue
         }
-        $mapping += "{0} -> {1} ({2:P0} of the game's own)" -f $type.Name, $source.Key, $bestShare
+        $mapping += "{0} -> {1} ({2:P0} of the game's own{3})" -f $type.Name, $source.Key, $bestShare, $through
 
         foreach ($name in $ours) {
             $checked++
@@ -342,8 +372,9 @@ try {
             } }
 
             @{ Name = 'planted-prototypes'; Body = {
-                # Three planted prototypes, one per failure this check claims to see, named with the
-                # prefix so they count. They live in the temp directory, never beside the mods.
+                # Four planted prototypes, named with the prefix so they count: one per failure this
+                # check claims to see, and a tool with no entry, whose file comes through the item
+                # group on 2.1. They live in the temp directory, never beside the mods.
                 #
                 # The two unresolved ones lean on __ITEM__...__ naming an item that does not exist,
                 # because that is the shape the engine answers with text rather than by refusing: a
@@ -376,6 +407,8 @@ data:extend({
   canary("$stem-item"),
   canary("$stem-unresolved-name"),
   canary("$stem-unresolved-desc"),
+  { type = "tool", name = "$stem-pack", stack_size = 1, durability = 1,
+    icon = "__base__/graphics/icons/pipe.png", icon_size = 64 },
 })
 "@ | Set-Content -Path (Join-Path $canary 'data.lua') -Encoding utf8
 
@@ -387,6 +420,9 @@ data:extend({
                 $wanted = @(
                     @{ Name = "$stem-item";             In = 'Missing';    Field = $null
                        What = 'a prototype with no locale entry' }
+                    @{ Name = "$stem-pack";             In = 'Missing';    Field = $null
+                       Expected = 'item-locale.json'
+                       What = 'a tool with no locale entry, expected among the items' }
                     @{ Name = "$stem-unresolved-name";  In = 'Unresolved'; Field = 'name'
                        What = 'a name that does not resolve' }
                     @{ Name = "$stem-unresolved-desc";  In = 'Unresolved'; Field = 'description'
@@ -395,7 +431,8 @@ data:extend({
                 $failed = $false
                 foreach ($w in $wanted) {
                     $caught = @($canaryReport[$w.In] | Where-Object {
-                        $_.Name -eq $w.Name -and (-not $w.Field -or $_.Field -eq $w.Field) })
+                        $_.Name -eq $w.Name -and (-not $w.Field -or $_.Field -eq $w.Field) -and
+                        (-not $w.Expected -or $_.Expected -eq $w.Expected) })
                     if ($caught.Count -eq 0) {
                         Write-Host ''
                         Write-Host ("FAILED - self-test: {0} was NOT caught as {1}." -f $w.What, $w.In.ToLower())
@@ -406,7 +443,7 @@ data:extend({
                     Write-Host '         This check is not proving anything; fix it before trusting a pass.'
                     exit 1
                 }
-                'all three planted prototypes were caught, each as its own kind.'
+                'all four planted prototypes were caught, each as its own kind.'
             } }
         )
 
