@@ -97,11 +97,12 @@ naming each. A control declaring `space-age` in lower case, run the same way, lo
 
 On 2.1.23, 2026-10-25, at grado-factorio-tools c3c3820: `probe-recycler`, with `factorio_version`
 `2.1` and the one dependency `Recycler`, loaded alone through `load-harness.ps1 -With recycler`.
-The game logs
+Run again at e80df2f through load-harness-lib.ps1's New-LoadHarness and Invoke-HarnessLoad, the game
+wrote to its stdout, byte for byte but for the indent,
 
-    Error Util.cpp:81: Failed to load mod "probe-recycler":
-     probe-recycler
-         Missing required dependency Recycler
+       0.132 Error Util.cpp:81: Failed to load mod "probe-recycler": 
+    • probe-recycler
+        • Missing required dependency Recycler
 
 and a control declaring `recycler`, run the same way, loads.
 

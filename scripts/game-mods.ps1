@@ -2,9 +2,9 @@
     matched against them. Dot-sourced by resolve-modpack.ps1 and by grado-factorio-modpack's
     stage-pack.ps1, so the list and its case rule have one home (grado-factorio-modpack#99).
 
-    Five game mods on 2.1. `recycler` is new in 2.1.0, which moved the `recycling` recipe category
-    into it, and space-age depends on it (data/space-age/info.json, 2.1.23). A 2.0 build has no
-    `recycler`; main supports 2.1 only (#209).
+    Five game mods on 2.1. `recycler` is new in 2.1.7, the changelog's first 2.1 section, which
+    moved the `recycling` recipe category into it. space-age and quality each depend on it (their
+    info.json, 2.1.23). A 2.0 build has no `recycler`; main supports 2.1 only (#209).
 
     Matched in exact case, measured for all five game mods as well as for an ordinary one. Factorio
     2.0.77 (build 84539), headless, fails a dependency on `Alpha` when only `alpha` is present
