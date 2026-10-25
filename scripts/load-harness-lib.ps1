@@ -205,10 +205,10 @@ function Remove-TempDirectory {
 }
 
 function Get-BundledMods {
-    <#  Mods shipped inside the game's data/ directory -- space-age, elevated-rails, quality and
-        anything a future version adds. They are present whatever --mod-directory points at, so
-        they load unless explicitly disabled. Discovered rather than hardcoded, so the list
-        cannot go stale. base and core are not optional and are excluded.
+    <#  Mods shipped inside the game's data/ directory -- space-age, elevated-rails, quality,
+        recycler and anything a future version adds. They are present whatever --mod-directory
+        points at, so they load unless explicitly disabled. Discovered rather than hardcoded, so
+        the list cannot go stale. base and core are not optional and are excluded.
 
         Returns a hashtable of mod name -> parsed info.json.  #>
     param([Parameter(Mandatory)] [string] $FactorioExe)
@@ -225,9 +225,10 @@ function Get-BundledMods {
 function Resolve-BundledSelection {
     <#  Canonicalise the requested names and close over their hard dependencies.
 
-        Both halves matter. space-age hard-depends on elevated-rails and quality, so enabling it
-        alone writes a mod-list whose dependencies are explicitly disabled -- Factorio then fails
-        on the missing dependency and it reads as the mods under test being broken. And an unknown
+        Both halves matter. space-age hard-depends on elevated-rails and recycler (2.1.23), so
+        enabling it alone writes a mod-list whose dependencies are explicitly disabled --
+        Factorio then fails on the missing dependency and it reads as the mods under test being
+        broken. And an unknown
         name must be rejected rather than ignored, or a typo produces a base-only run that gets
         reported as an expansion pass.
 

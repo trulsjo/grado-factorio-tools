@@ -78,9 +78,11 @@ alone and rewrite the junctioned info.json, as for a lone wrong-case key.
 
 ### The game's own mods are matched in exact case
 
-Measured for all four game mods as well as for an ordinary one. Factorio 2.0.77 (build 84539),
+Measured for all five game mods as well as for an ordinary one. Factorio 2.0.77 (build 84539),
 headless, fails a dependency on `Alpha` when only `alpha` is present (grado-factorio-tools
-607ceef), and on each game mod in another case (grado-factorio-tools#46, for #44).
+607ceef), and on each of the four 2.0 game mods in another case (grado-factorio-tools#46, for
+#44). Factorio 2.1.23 (build 87750) fails one on `Recycler`, the fifth, which 2.0 does not have
+(grado-factorio-tools#209).
 
 To repeat it: a throwaway mod `probe-spaceage` whose info.json declares the one dependency
 `Space-Age`, loaded alone through `load-harness.ps1 -With space-age`, which keeps it from the
@@ -92,6 +94,16 @@ player's mods. The game logs
 
 and refuses `Base`, `Quality` and `Elevated-Rails`, declared the same way, with the same line
 naming each. A control declaring `space-age` in lower case, run the same way, loads.
+
+On 2.1.23, 2026-10-25, at grado-factorio-tools c3c3820: `probe-recycler`, with `factorio_version`
+`2.1` and the one dependency `Recycler`, loaded alone through `load-harness.ps1 -With recycler`.
+The game logs
+
+    Error Util.cpp:81: Failed to load mod "probe-recycler":
+     probe-recycler
+         Missing required dependency Recycler
+
+and a control declaring `recycler`, run the same way, loads.
 
 ## `get-dump.ps1`
 
