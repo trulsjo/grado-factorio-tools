@@ -24,6 +24,9 @@
     source. A name both sets change that -Base already has. And a name one set defines only
     when the other is loaded.
 
+    CHECKED ON 2.1.23 (#219, 2026-10-25): what it reads, against the `Modding:` changes of 2.1.7,
+    and a run on a dump of Space Age with Quality.
+
 .PARAMETER SelfTest
     Compare four fixture dumps in a temp directory and check what is printed. No game.
 

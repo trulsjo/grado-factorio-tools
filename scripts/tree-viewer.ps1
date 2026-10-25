@@ -74,6 +74,9 @@
     directory's info.json is read for a title. And -SelfTest reads the dataset in the page it
     wrote; it draws nothing.
 
+    CHECKED ON 2.1.23 (#219, 2026-10-25): what it reads, against the `Modding:` changes of 2.1.7,
+    and a run on a dump of Space Age with Quality. An effect's `hidden` is #218's.
+
 .PARAMETER Mods
     The mods to load: mod directories, mod zips, or directories of them.
 

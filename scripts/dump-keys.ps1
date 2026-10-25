@@ -26,6 +26,9 @@
     Gamepad bindings. With -Mods, an input a mod names by building the string, and a mod that is
     a zip; a name two mods quote is given both.
 
+    CHECKED ON 2.1.23 (#219, 2026-10-25): what it reads, against the `Modding:` changes of 2.1.7,
+    and a run on a dump of Space Age with Quality.
+
 .PARAMETER Dump
     The dump whose custom inputs are read.
 

@@ -17,6 +17,9 @@
     or anything that reacts to it. What a mod does at run time. And time: the data stage's
     seconds are in the dump's log, which get-dump.ps1 keeps beside it.
 
+    CHECKED ON 2.1.23 (#219, 2026-10-25): what it reads, against the `Modding:` changes of 2.1.7,
+    and a run on a dump of Space Age with Quality.
+
 .PARAMETER With
     The first dump.
 

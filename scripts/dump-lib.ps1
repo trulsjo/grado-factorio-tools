@@ -11,6 +11,9 @@
 
     WHAT IT CANNOT SEE. Anything the dump does not hold: which mod made a prototype, and
     anything a mod does at run time. A dump is data.raw after the last data stage.
+
+    CHECKED ON 2.1.23 (#219, 2026-10-25) against the `Modding:` changes of 2.1.7: it reads no
+    field by name, so none of them reaches it. What its callers read is checked in each.
 #>
 
 Set-StrictMode -Version Latest
