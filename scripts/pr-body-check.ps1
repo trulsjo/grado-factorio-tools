@@ -79,7 +79,11 @@
     one, in capitals (Truls, 2026-10-25, #229): PR #228's first body said "The modpack's staged
     sets all declare `2.0`" with no commit and no date. A letter, digit, - or _ on either side
     makes either part of another word, as in resolve-modpack. So "a modpack", about modpacks in
-    general, is held too: it needs a commit and a date, or a rewording. A bare reference to a
+    general, is held too: it needs a commit and a date, or a rewording. Neither short spelling
+    is read in a code span, a run of backticks to the next run of the same length (Truls,
+    2026-10-26, #234): PR #231's body, about this check, could not name the two spellings
+    without a commit it had no source for. The full names and "sibling" are read in a code
+    span too, so a sibling named only there is still seen. A bare reference to a
     sibling's ticket or pull request, `grado-factorio-modpack#337` with or without `trulsjo/`
     before it, is taken out first, so a sentence holding only that is none. A statement carries
     a commit and an ISO date: a word of 7 to 40 hexadecimal characters with a digit among them,
@@ -126,10 +130,16 @@
     sentence is cut where a . ! or ? is followed by a space and anything but a lower-case letter,
     so "e.g. A" ends one, and a commit cited in the next part is not counted; a paragraph's lines
     are joined, and a list item, a heading or a table row stands alone. A line in a fenced block
-    is not read, by the fence rule above. A sibling named by an address that holds its name is
-    read as a statement. One named by its title is seen only through "modpack" in it, so
-    "Realistic Fusion Refreshed" is not, nor is one named by any spelling but its name, the word,
-    "modpack" and "RFR". A run id of 7 or more digits counts as a commit.
+    is not read, by the fence rule above. Nor is an indented code block (#233): a line of four
+    spaces or a tab and then text, after a blank line or at the start, with the indented and
+    blank lines after it, a fence line among them. After a list item, an indented line is the
+    item's and read, until a block starts at the margin; CommonMark asks instead whether the
+    indent reaches the item's content, so a block indented under an item eight spaces or more,
+    which GitHub shows as code, is read, and so is one in a block quote. A sibling named by an
+    address that holds its name is read as a statement. One named by its title is seen only
+    through "modpack" in it, so "Realistic Fusion Refreshed" is not, nor is one named by any
+    spelling but its name, the word, "modpack" and "RFR". A run id of 7 or more digits counts as
+    a commit.
 
 .PARAMETER Path
     The file holding the body, as handed to `gh pr create --body-file`.
@@ -264,15 +274,24 @@ function Get-SiblingProblem {
         or an ISO date, as @{ Line; Missing; Sentence }: the line its block starts on, what it
         lacks, and the sentence.  #>
     param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text)
-    # Blocks: a paragraph's lines joined, a list item, a heading or a table row; nothing fenced.
+    # Blocks: a paragraph's lines joined, a list item, a heading or a table row; nothing fenced,
+    # and no indented code block: a line indented four spaces or a tab after a blank line or the
+    # start, outside a list item, and the indented and blank lines after it (#233).
     $blocks = [System.Collections.Generic.List[hashtable]]::new()
-    $current = $null; $fenced = $false; $n = 0
+    $current = $null; $fenced = $false; $code = $false; $blank = $true; $inList = $false; $n = 0
     foreach ($line in $Text -split '\r?\n') {
         $n++
-        if ($line -match '^\s*(```|~~~)') { $fenced = -not $fenced; $current = $null; continue }
-        if ($fenced -or $line -match '^\s*$') { $current = $null; continue }
+        if (-not $fenced -and ($code -or ($blank -and -not $inList)) -and $line -match '^(?: {4}|\t)\s*\S') { $code = $true; $current = $null; continue }
+        if ($code -and $line -match '^\s*$') { continue }
+        $code = $false
+        if ($line -match '^\s*(```|~~~)') { $fenced = -not $fenced; $current = $null; $blank = $false; continue }
+        if ($fenced) { continue }
+        if ($line -match '^\s*$') { $current = $null; $blank = $true; continue }
+        $blank = $false
         if ($null -eq $current -or $line -match '^\s*(?:[-*+]|\d+[.)]|#{1,6})\s|^\s*\|') {
             $current = @{ Line = $n; Text = $line.Trim() }; $blocks.Add($current)
+            # An indented block after a list item is the item's, until a block at the margin.
+            $inList = $line -match '^\s*(?:[-*+]|\d+[.)])\s' -or ($inList -and $line -match '^\s')
         }
         else { $current.Text += ' ' + $line.Trim() }
     }
@@ -280,7 +299,10 @@ function Get-SiblingProblem {
         # A sentence ends at . ! or ? before a space and anything but a lower-case letter.
         foreach ($sentence in [regex]::Split($b.Text, '(?<=[.!?])\s+(?=[^a-z\s])')) {
             $plain = $sentence -replace '(?<![\w.-])(?:trulsjo/)?(?:grado-factorio-modpack|realistic-fusion-refreshed)#\d+', ''
-            if ($plain -notmatch 'grado-factorio-modpack|realistic-fusion-refreshed|\bsiblings?\b|(?<![\w-])(?:modpack|(?-i:RFR))(?![\w-])') { continue }
+            # The two short spellings are not read in a code span; the full names are (#234).
+            $spanless = $plain -replace '(?<!`)(`+)(?!`).*?(?<!`)\1(?!`)', ''
+            if ($plain -notmatch 'grado-factorio-modpack|realistic-fusion-refreshed|\bsiblings?\b' -and
+                $spanless -notmatch '(?<![\w-])(?:modpack|(?-i:RFR))(?![\w-])') { continue }
             $missing = @()
             if ($sentence -notmatch '(?<![0-9A-Za-z_])(?=[a-fA-F]*\d)[0-9a-fA-F]{7,40}(?![0-9A-Za-z_])') { $missing += 'a commit' }
             if ($sentence -notmatch '(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)') { $missing += 'an ISO date' }
@@ -436,6 +458,18 @@ function Invoke-SelfTest {
             $modpack.Count -eq 1 -and $modpack[0].Missing -eq 'a commit and an ISO date' -and $modpackCited.Count -eq 0 -and
                 $rfr.Count -eq 1 -and $rfr[0].Missing -eq 'a commit and an ISO date' -and $rfrCited.Count -eq 0 -and
                 $modpackTitle.Count -eq 1 -and $inWord.Count -eq 0 -and $after.Count -eq 0 -and $lower.Count -eq 0 } }
+        @{ Name = 'an indented code block after a blank line is not read; the same line under a list item, or a paragraph''s indented continuation, is (#233)'; Test = {
+            $code = @(Get-SiblingProblem "Intro.`n`n    pr-body-check: line 9 says the modpack is old.`n`n    It still is.`nAfter.")
+            $start = @(Get-SiblingProblem "`tThe sibling is old.")
+            $item = @(Get-SiblingProblem "- An item.`n`n    pr-body-check: line 9 says the modpack is old.")
+            $joined = @(Get-SiblingProblem "Intro says`n    the modpack is old.")
+            $code.Count -eq 0 -and $start.Count -eq 0 -and $item.Count -eq 1 -and $item[0].Line -eq 3 -and
+                $joined.Count -eq 1 -and $joined[0].Sentence -eq 'Intro says the modpack is old.' } }
+        @{ Name = 'the modpack and RFR in a code span are not read; a full name in one is, and so is a short spelling outside the span (#234)'; Test = {
+            $spanned = @(Get-SiblingProblem 'Case 17 holds `modpack` as a word. `RFR` is a spelling. ``modpack`` too.')
+            $fullName = @(Get-SiblingProblem '`grado-factorio-modpack` pins its pin.')
+            $outside = @(Get-SiblingProblem 'The modpack pins `x`.')
+            $spanned.Count -eq 0 -and $fullName.Count -eq 1 -and $outside.Count -eq 1 } }
         @{ Name = 'run with -CiteSiblings on such a body it exits 1 naming the line; without it, as a sibling''s CI runs it, the same body passes'; Test = {
             $file = Join-Path $temp 'body.md'
             Set-Content -LiteralPath $file -Value "## Summary`n`nNo sibling calls it until its pin moves.`n`n$marked"
