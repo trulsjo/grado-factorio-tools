@@ -53,15 +53,19 @@
     nowhere -- recipe categories, fuel categories, anything with no player-visible name -- are
     skipped on that evidence rather than by assumption.
 
-    A type with no other members at all is an error, not a skip, unless it is an item type. That is
-    the case where this check would otherwise go quiet exactly when something new arrives. An item
-    type is one whose prototypes carry stack_size, as dump-walk.ps1 finds items: 2.1 defines no
-    `tool` of its own, its science packs being plain items, and a mod's own `tool` is compared
-    against the game's prototypes of every item type instead, the item group, and its mapping
-    line says so. Any other type with no other members, such as an entity type the game stops
-    defining, is still the error. -Nameless is the answer to it: a type named there is declared to
-    have no visible name, and is skipped and reported as declared.
-    `animation` and `custom-input` are declared already; why the second, below.
+    A type with no other members at all is an error, not a skip. That is the case where this check
+    would otherwise go quiet exactly when something new arrives.
+
+    An item type is the exception. A type is an item type when some prototype of it carries
+    stack_size, as dump-walk.ps1 finds items. An item type with no other members is compared
+    against the game's prototypes of every item type, the item group, and its mapping line says
+    it came through the item group. The case it is for: 2.1 defines no `tool` of its own, its
+    science packs being plain items, so a mod's own `tool` has no other members.
+
+    Any other type with no other members, such as an entity type the game stops defining, is
+    still the error. -Nameless is the answer to it: a type named there is declared to have no
+    visible name, and is skipped and reported as declared. `animation` and `custom-input` are
+    declared already; why the second, below.
 
     Descriptions are reported but not required: the count of prototypes carrying one is printed,
     and any that fails to resolve fails the run. Factorio treats a description as optional, so an
