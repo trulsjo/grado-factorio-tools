@@ -91,6 +91,9 @@
     the Space Age dump cannot show is named in the self-test's output, and is not proven. It
     needs the game, unless -Dump names a dump of Space Age with Quality.
 
+    CHECKED ON 2.1.23 (#219, 2026-10-25): what it reads, against the `Modding:` changes of 2.1.7,
+    and a run on a dump of Space Age with Quality.
+
 .PARAMETER Dump
     The dump to walk.
 

@@ -23,6 +23,9 @@
     autoplace control are not compared. What a property expression's value names, since a value
     may be an expression and not a name. Asteroids and routes.
 
+    CHECKED ON 2.1.23 (#219, 2026-10-25): what it reads, against the `Modding:` changes of 2.1.7,
+    and a run on a dump of Space Age with Quality.
+
 .PARAMETER Dump
     The dump to read.
 
