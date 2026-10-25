@@ -24,6 +24,38 @@ and a dependency on `Alpha` with only `alpha` present fails as "Missing required
 Alpha". The mod portal agrees: /api/mods/Krastorio2 answers and /api/mods/krastorio2 is "Mod not
 found". So `Alpha` and `alpha` are two mods.
 
+On 2.1.23 (build 87750), 2026-10-25, at grado-factorio-tools 81ea797 (#200), the same three
+runs, headless and isolated, with each mod declaring `factorio_version` `2.1`. A zip
+`Alpha_1.0.0.zip` holding a mod named `alpha` logs
+
+    Error Util.cpp:81: Failed to load mod "Alpha": Filename of mod <mods>\Alpha_1.0.0.zip doesn't match the expected alpha_1.0.0.zip (case sensitive!)
+
+a directory `Alpha` holding it logs
+
+    Error Util.cpp:81: Failed to load mod "Alpha": Directory name of mod <mods>\Alpha doesn't match the expected alpha or alpha_1.0.0 (case sensitive!)
+
+and a mod `probe-dep` declaring `Alpha` beside `alpha` logs
+
+    Error Util.cpp:81: Failed to load mod "probe-dep":
+    • probe-dep
+        • Missing required dependency Alpha
+
+while the same mod declaring `alpha` loads. The portal still agrees: on the same day
+`curl -s -o /dev/null -w "%{http_code}" https://mods.factorio.com/api/mods/Krastorio2` printed
+`200`, and the same for `krastorio2` printed `404`. The 2.1.23 mod-structure page,
+<https://lua-api.factorio.com/2.1.23/auxiliary/mod-structure.html> (read 2026-10-25), gives the
+2.0.77 zip rule in the same words, adds that a mod folder not in a zip is named `{mod-name}` or
+`{mod-name}_{version-number}`, and says nothing about case beyond "the restrictions of the file
+system apply" to a name in a file name.
+
+To repeat it: write `alpha` and a control mod, each a directory with an info.json and a data.lua
+holding only a comment. Dot-source load-harness-lib.ps1 and build the harness with
+New-LoadHarness from the control. Into its ModDirectory, copy a zip `Alpha_1.0.0.zip` of `alpha`
+or a copy of the `alpha` directory named `Alpha`, add a row named `alpha` to the harness's Mods,
+so that the mod list enables it, and call Invoke-HarnessLoad. The harness itself names a zip and
+a junction from info.json, so it cannot be given the wrong case. The dependency is two mods given
+to New-LoadHarness as they are.
+
 ### A wrong-case `name` or `version` key is refused by the game
 
 Measured against Factorio 2.0.77 (build 84539), headless, isolated from the player's mods
@@ -42,6 +74,14 @@ To repeat it: dot-source load-harness-lib.ps1, build the harness with New-LoadHa
 info.json, then rewrite the junctioned info.json with the wrong-case key and call
 Invoke-HarnessLoad. The rewrite comes after New-LoadHarness because the harness refuses such an
 info.json itself, before the game is run.
+
+On 2.1.23 (build 87750), 2026-10-25, at grado-factorio-tools 81ea797 (#201), run as above with
+`factorio_version` `2.1`, the game logs the same two lines:
+
+    Error Util.cpp:81: Failed to load mod "probe-name": Key "name" not found in property tree at ROOT
+    Error Util.cpp:81: Failed to load mod "probe-version": Key "version" not found in property tree at ROOT
+
+and the lower-case control `probe-control` loads.
 
 ### A `"Name"` beside `name`, or a `"Version"` beside `version`, is read from the lower-case key
 
@@ -74,6 +114,15 @@ rewritten, because the harness reads the lower-case key too. The exception is `p
 harness would junction it in as `probe-other`, so build the harness from `"name":"probe-swap"`
 alone and rewrite the junctioned info.json, as for a lone wrong-case key.
 
+On 2.1.23 (build 87750), 2026-10-25, at grado-factorio-tools 81ea797 (#202), run as above with
+`factorio_version` `2.1`: `probe-pair-name`, `probe-pair-version`, `probe-pair-name-rev` and
+`probe-pair-version-rev` each log `Loading mod <name> 1.0.0 (data.lua)` under their own name and
+create a map, as `probe-control` does, and `probe-swap` logs
+
+    Error Util.cpp:81: Failed to load mod "probe-swap": Directory name of mod <mods>\probe-swap doesn't match the expected probe-other or probe-other_1.0.0 (case sensitive!)
+
+So 2.1.23 reads the lower-case key too.
+
 ## `game-mods.ps1`
 
 ### The game's own mods are matched in exact case
@@ -82,7 +131,7 @@ Measured for all five game mods as well as for an ordinary one. Factorio 2.0.77 
 headless, fails a dependency on `Alpha` when only `alpha` is present (grado-factorio-tools
 607ceef), and on each of the four 2.0 game mods in another case (grado-factorio-tools#46, for
 #44). Factorio 2.1.23 (build 87750) fails one on `Recycler`, the fifth, which 2.0 does not have
-(grado-factorio-tools#209).
+(grado-factorio-tools#209), and on each of the other four (#200).
 
 To repeat it: a throwaway mod `probe-spaceage` whose info.json declares the one dependency
 `Space-Age`, loaded alone through `load-harness.ps1 -With space-age`, which keeps it from the
@@ -105,6 +154,12 @@ wrote to its stdout, byte for byte but for the indent,
         • Missing required dependency Recycler
 
 and a control declaring `recycler`, run the same way, loads.
+
+On 2.1.23, 2026-10-25, at grado-factorio-tools 81ea797 (#200): `probe-spaceage`, with
+`factorio_version` `2.1`, loaded through New-LoadHarness with `-With space-age` and
+Invoke-HarnessLoad, logs `Missing required dependency Space-Age` in the lines above when it
+declares `Space-Age`, and the same line naming `Base`, `Quality` and `Elevated-Rails` when it
+declares each of those. Declaring `space-age`, it loads.
 
 ## `get-dump.ps1`
 
@@ -131,6 +186,129 @@ printed `served from the cache, nothing run`. So the script here and the one it 
 the same set by the same key.
 
 Not measured: a dump with `-With` or `-Disabled`, and any build but 2.0.77.
+
+### A real dump on 2.1.23, and a second request
+
+Measured 2026-10-25 against Factorio 2.1.23 (build 87750), at grado-factorio-tools 81ea797, for
+#207. The modpack's staged sets all declare `factorio_version` `2.0` (read that day from each
+info.json under its `.mod-cache/Grado_NonChanging`), so the mods were a scratch directory
+`probe-set` of three mods, `probe-a`, `probe-b` and `probe-c`, each declaring `2.1` and holding
+an info.json and a data.lua with only a comment: 6 files. The cache was an empty scratch
+directory.
+
+    pwsh -File scripts/get-dump.ps1 <scratch>/probe-set -With space-age -CacheDirectory <cache>
+
+The first request printed `get-dump: made, no dump of this set was in the cache` and took 14
+seconds; the game's log gives `Prototype list checksum: 2813777327`, and the dump is
+`probe-set+elevated-rails+recycler+space-age-2813777327-98bbbeab9a55.json`, 29,499,412 bytes.
+The same command again printed `get-dump: served from the cache, nothing run` and the same path.
+A count of the files under the mod directory was 6 before the first request and after the second.
+
+Not measured: a dump with `-Disabled`, and a set of real mods on 2.1.
+
+## `resolve-modpack.ps1`
+
+### A wrong-case optional or conflict line does not match the mod
+
+Measured 2026-10-25 against Factorio 2.1.23 (build 87750), headless and isolated, at
+grado-factorio-tools 81ea797 (#203). The 2.0.77 run of 2026-10-02 is recorded in the script's
+header only. Beside a mod `lib` 1.0.0, a mod `probe-opt` declaring `base` and one of six lines
+loads with `! Lib`, `? Lib >= 2.0.0` or `(?) Lib >= 2.0.0`, each logging
+
+    Loading mod lib 1.0.0 (data.lua)
+    Loading mod probe-opt 1.0.0 (data.lua)
+
+and is refused with each spelled `lib`. `! lib` logs
+
+    Error Util.cpp:81: Failed to load mod "probe-opt":
+    • probe-opt
+        • Incompatible with lib
+
+and `? lib >= 2.0.0` and `(?) lib >= 2.0.0` each log
+
+    Error Util.cpp:81: Failed to load mod "probe-opt":
+    • probe-opt
+        • Dependency lib >= 2.0.0 is not satisfied (active: lib 1.0.0)
+
+To repeat it: write `lib` and `probe-opt` as mod directories, each with an info.json declaring
+`factorio_version` `2.1` and a data.lua holding only a comment. Dot-source load-harness-lib.ps1,
+call New-LoadHarness on the two and then Invoke-HarnessLoad, once for each line in `probe-opt`'s
+dependencies.
+
+### A 2.1 game refuses a mod declaring line 2.0
+
+Measured 2026-10-25 against Factorio 2.1.23 (build 87750), headless and isolated, at
+grado-factorio-tools 81ea797 (#204). A mod `probe-line20` declaring `factorio_version` `2.0`
+logs
+
+    Error Util.cpp:81: Failed to load mod "probe-line20":
+    • probe-line20
+        • Incompatible Factorio version (current: 2.1, required: 2.0)
+
+and a control `probe-line21` declaring `2.1` loads. The other direction, an older build loading
+a mod on a newer line, needs a second build installed and was not measured.
+
+To repeat it: as for the case of an optional line, with one mod at a time and no `lib`.
+
+## `load-harness-lib.ps1`
+
+### What the locale dump holds for a name the engine could not resolve
+
+Measured 2026-10-25 against Factorio 2.1.23 (build 87750), headless and isolated, at
+grado-factorio-tools 81ea797 (#205). The 2.0.77 measurement, in realistic-fusion-refreshed, is
+recorded in the comment above `$script:LocaleEngineErrors` only. A mod `probe-locale` declaring
+six items, with these entries under `[item-name]`:
+
+    probe-ok=Probe ok
+    probe-unknown-item=Probe __ITEM__probe-no-such-item__
+    probe-unknown-control=Probe __CONTROL__probe-no-such-control__
+    probe-has-param=Probe __1__
+
+dumps through `--dump-prototype-locale` these three names in `item-locale.json`, and no other
+line naming a `probe-` prototype in any file:
+
+    "probe-ok": "Probe ok",
+    "probe-unknown-control": "Probe Unknown control sequence: \"probe-no-such-control\"",
+    "probe-unknown-item": "Probe Unknown key: \"item-name.probe-no-such-item\"",
+
+The three absent are `probe-no-entry`, with no entry; `probe-missing-key`, whose
+`localised_name` is `{"probe-no-section.probe-no-key"}`; and `probe-nested-missing`, whose
+`localised_name` is `{"item-name.probe-has-param", {"probe-no-section.probe-no-key"}}`.
+
+A localised string nested 31 deep stops the data stage, logging
+
+    Error Util.cpp:81: Error while loading item prototype "probe-deep" (item): Too deep recursion for localised string: 21 > 20 (limit). in property tree at ROOT.item.probe-deep.localised_name[1]...[1]
+
+with twenty `[1]`, and one of thirty parameters logs
+
+    Error Util.cpp:81: Error while loading item prototype "probe-many" (item): Too many parameters for localised string: 30 > 20 (limit). in property tree at ROOT.item.probe-many.localised_name
+
+So 2.1.23 does what the comment records of 2.0.77, in the same wording.
+
+To repeat it: a mod declaring `factorio_version` `2.1` whose data.lua declares the items with
+the `localised_name` above, and a `locale/en/*.cfg` holding the entries. Dot-source
+load-harness-lib.ps1, call New-LoadHarness and Invoke-HarnessLoad, then Invoke-Factorio on the
+harness's ModDirectory with `--dump-prototype-locale`, and read the `*-locale.json` files under
+the harness's `write-data/script-output`. The two that stop the data stage are a mod each, with
+the string built in Lua: `local s = "x"; for i = 1, 30 do s = {"", s} end`, and
+`local s = {""}; for i = 1, 30 do s[#s + 1] = "x" end`.
+
+## `locale-check.ps1`
+
+### A custom input's name is not dumped
+
+Measured 2026-10-25 against Factorio 2.1.23 (build 87750), headless and isolated, at
+grado-factorio-tools 81ea797 (#206). The 2.0.77 measurement, in the review of #102, is recorded
+in the script's header only. A mod `probe-input` declaring a custom input `probe-input-key`, with
+`probe-input-key=Probe input` under `[controls]`, loads, and `--dump-prototype-locale` exits 0
+having written 21 files, none of which names the input: `achievement`, `airborne-pollutant`,
+`ammo-category`, `autoplace-control`, `damage-type`, `decorative`, `entity`, `equipment`,
+`fluid`, `fuel-category`, `item-group`, `item`, `noise-expression`, `quality`, `recipe`,
+`shortcut`, `space-location`, `surface-property`, `technology`, `tile` and `virtual-signal`,
+each `<category>-locale.json`. No file is written for `[controls]`.
+
+To repeat it: as for the locale dump under `load-harness-lib.ps1`, with the one mod, and search
+every file under `write-data/script-output` for the input's name.
 
 ## `commit-check.ps1`
 

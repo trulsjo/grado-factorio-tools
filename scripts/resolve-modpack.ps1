@@ -15,7 +15,9 @@
     grado-factorio-modpack's stage-pack.ps1's, and so is its reason, "A 2.1 game does not load a
     mod declaring 2.0" (read at its 7a0bec5, 2026-10-14). The reason covers a newer build on an
     older line; the test refuses every pair off the line, an older build on a newer line too.
-    Neither direction was measured here.
+    The first direction was measured on Factorio 2.1.23 (build 87750) on 2026-10-25 (#204): a mod
+    declaring 2.0 is refused, "Incompatible Factorio version (current: 2.1, required: 2.0)". The
+    other needs a second build installed and was not measured.
 
     THE METHOD is grado-factorio-modpack's docs/porting-notes.md, "Resolves on stable 2.0.77":
 
@@ -32,7 +34,8 @@
                /api/mods/Krastorio2 answered 200 and /api/mods/krastorio2 404. The game's own mods
                are matched the same way: on the same build, a dependency on `Space-Age`, `Base`,
                `Quality` or `Elevated-Rails` is refused (grado-factorio-tools#46), and on 2.1.23 one
-               on `Recycler` (#209); the runs are in docs/measurements.md. So a mandatory
+               on `Recycler` (#209), on each of those four, and on `Alpha` (#200); the runs are in
+               docs/measurements.md. So a mandatory
                `Space-Age` is not taken as bundled, `krastorio2` is not satisfied by a `Krastorio2`
                already picked, and `mypack` is not the local pack `MyPack`. Each is looked up under
                its own spelling.
@@ -66,7 +69,8 @@
     agrees -- Factorio 2.0.77 (build 84539), measured headless on 2026-10-02 with load-harness.ps1
     at grado-factorio-tools 499bf8d, loads a mod declaring `! Lib` beside `lib`, and one declaring
     `? Lib >= 2.0.0` or `(?) Lib >= 2.0.0` beside `lib` 1.0.0, while it refuses each of those
-    lines spelled `lib`.
+    lines spelled `lib`. Factorio 2.1.23 (build 87750) does the same, measured 2026-10-25 (#203);
+    that run, and how to repeat it, is in docs/measurements.md.
 
 .PARAMETER InfoJson
     One or more pack info.json paths: a pack plus the packs it depends on. Each is reported. The

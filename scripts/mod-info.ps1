@@ -20,8 +20,9 @@
                         `name` to read, and PowerShell would otherwise unroll a one-element array
                         holding an object and read that object as the info.json.
       a missing key     No `name` or no `version` key in exact case. The game's rule: Factorio
-                        2.0.77 (build 84539) refuses a lone `"Name"` or `"Version"`. The run, and
-                        how to repeat it, is in docs/measurements.md.
+                        2.0.77 (build 84539) refuses a lone `"Name"` or `"Version"`, and so does
+                        2.1.23 (build 87750), grado-factorio-tools#201. The runs, and how to
+                        repeat them, are in docs/measurements.md.
       a bad value       A `name` or `version` that is not a non-empty string: `null`, a number,
                         an object, `""`. This reader's rule, not a measured game rule: both go
                         into the name of a zip or a junction, and a blank or a number there names
