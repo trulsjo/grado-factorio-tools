@@ -415,10 +415,12 @@ function init(stage) {
   }
   /* dagre.layout() is the whole cost of a toggle and then some: 4459 ms over the 406 live techs
      and 5766 ms over all 478, against 3 ms to rebuild the card HTML and 9 ms to put it in the DOM
-     (realistic-fusion-refreshed#175). Only FOUR layouts exist, though -- two node sets by two orientations -- and no other
-     control moves a node: a card's height reads t.unlocks and t.bonuses alone, as the
-     unresearchable toggle shows them (#218), so the overlap toggle cannot change one. So each is laid out once and kept, and every later render of a
-     state already seen is the ~12 ms of rebuilding the cards. */
+     (realistic-fusion-refreshed#175). Only FOUR layouts exist, though -- two states of the
+     unresearchable toggle by two orientations -- and no other control moves a node. The toggle
+     sets the node set and, as it shows or hides effects (#218), each card's height; a height
+     reads t.unlocks and t.bonuses alone, so the overlap toggle cannot change one. So each is
+     laid out once and kept, and every later render of a state already seen is the ~12 ms of
+     rebuilding the cards. */
   const layouts = new Map();
   function layoutFor() {
     const key = `${rankdir}|${deadShown}`;
