@@ -77,11 +77,11 @@
     realistic-fusion-refreshed, or holds the word "sibling" or "siblings" as a word of its own,
     in any case. So does one holding "modpack" as a word of its own, in any case, or "RFR" as
     one, in capitals (Truls, 2026-10-25, #229): PR #228's first body said "The modpack's staged
-    sets all declare `2.0`" with neither. A letter, digit, - or _ on either side makes either
-    part of another word, as in resolve-modpack. So "a modpack", about modpacks in general, is
-    held too: it needs a commit and a date, or a rewording. A bare reference to a sibling's
-    ticket or pull request, `grado-factorio-modpack#337` with or without `trulsjo/` before it,
-    is taken out first, so a sentence holding only that is none. A statement carries
+    sets all declare `2.0`" with no commit and no date. A letter, digit, - or _ on either side
+    makes either part of another word, as in resolve-modpack. So "a modpack", about modpacks in
+    general, is held too: it needs a commit and a date, or a rewording. A bare reference to a
+    sibling's ticket or pull request, `grado-factorio-modpack#337` with or without `trulsjo/`
+    before it, is taken out first, so a sentence holding only that is none. A statement carries
     a commit and an ISO date: a word of 7 to 40 hexadecimal characters with a digit among them,
     and a YYYY-MM-DD. The rule is this repository's, so it is asked for: both siblings run this
     script on their pull request bodies, from their pin (grado-factorio-modpack's check.yml at
@@ -127,8 +127,8 @@
     so "e.g. A" ends one, and a commit cited in the next part is not counted; a paragraph's lines
     are joined, and a list item, a heading or a table row stands alone. A line in a fenced block
     is not read, by the fence rule above. A sibling named by an address that holds its name is
-    read as a statement. One named by its title is seen only through "modpack" in it, so "the
-    Realistic Fusion Refreshed" is not, nor is one named by any spelling but its name, the word,
+    read as a statement. One named by its title is seen only through "modpack" in it, so
+    "Realistic Fusion Refreshed" is not, nor is one named by any spelling but its name, the word,
     "modpack" and "RFR". A run id of 7 or more digits counts as a commit.
 
 .PARAMETER Path
@@ -413,27 +413,29 @@ function Invoke-SelfTest {
             $capital = @(Get-SiblingProblem 'Siblings are untouched, read 2026-10-20.')
             $commitOnly.Count -eq 1 -and $commitOnly[0].Line -eq 3 -and $commitOnly[0].Missing -eq 'an ISO date' -and $commitOnly[0].Sentence -eq 'grado-factorio-modpack pins a882314.' -and
                 $dateOnly.Count -eq 1 -and $dateOnly[0].Missing -eq 'a commit' -and $capital.Count -eq 1 } }
-        @{ Name = 'a bare reference to a sibling''s ticket or pull request is no statement, nor is the word inside a longer one or a title; an address is read; a sentence in a fenced block is not read, and a hex word with no digit is no commit'; Test = {
+        @{ Name = 'a bare reference to a sibling''s ticket or pull request is no statement, nor is the word inside a longer one or a title without modpack; an address is read; a sentence in a fenced block is not read, and a hex word with no digit is no commit'; Test = {
             $refs = @(Get-SiblingProblem "Filed as grado-factorio-modpack#337, after trulsjo/realistic-fusion-refreshed#12.`n- Unblocks grado-factorio-modpack#331.")
             $fenced = @(Get-SiblingProblem "``````text`nThe sibling is grado-factorio-modpack.`n```````n")
             $word = @(Get-SiblingProblem 'The sibling defaced nothing on 2026-10-20.')
             $inName = @(Get-SiblingProblem 'Get-SiblingProblem and -CiteSiblings are new.')
-            # Held to what the header says is not seen: a title. An address holding the name is
-            # read.
+            # Held to what the header says is not seen: a title without modpack. An address
+            # holding the name is read.
             $title = @(Get-SiblingProblem 'The Realistic Fusion Refreshed pins this.')
             $address = @(Get-SiblingProblem 'See https://github.com/trulsjo/grado-factorio-modpack for it.')
             $refs.Count -eq 0 -and $fenced.Count -eq 0 -and $word.Count -eq 1 -and $word[0].Missing -eq 'a commit' -and $inName.Count -eq 0 -and
                 $title.Count -eq 0 -and $address.Count -eq 1 } }
-        @{ Name = 'the modpack and RFR, each a word of its own, are refused and pass with a commit and an ISO date; inside a longer word, or rfr in lower case, they are none (#229)'; Test = {
+        @{ Name = 'the modpack and RFR, each a word of its own, are refused and pass with a commit and an ISO date, and so is the modpack''s title; inside a longer word on either side, or rfr in lower case, they are none (#229)'; Test = {
             $modpack = @(Get-SiblingProblem 'The modpack is at its pin.')
             $modpackCited = @(Get-SiblingProblem 'The modpack is at its pin, 6be6609, read 2026-10-25.')
             $rfr = @(Get-SiblingProblem 'RFR''s gate runs it.')
             $rfrCited = @(Get-SiblingProblem 'RFR''s gate runs it at ff59e79, read 2026-10-25.')
+            $modpackTitle = @(Get-SiblingProblem 'The Grado Factorio Modpack pins this.')
             $inWord = @(Get-SiblingProblem '`resolve-modpack.ps1` reads it.')
+            $after = @(Get-SiblingProblem 'modpack-check and RFRs read it.')
             $lower = @(Get-SiblingProblem 'rfr is a prefix.')
             $modpack.Count -eq 1 -and $modpack[0].Missing -eq 'a commit and an ISO date' -and $modpackCited.Count -eq 0 -and
                 $rfr.Count -eq 1 -and $rfr[0].Missing -eq 'a commit and an ISO date' -and $rfrCited.Count -eq 0 -and
-                $inWord.Count -eq 0 -and $lower.Count -eq 0 } }
+                $modpackTitle.Count -eq 1 -and $inWord.Count -eq 0 -and $after.Count -eq 0 -and $lower.Count -eq 0 } }
         @{ Name = 'run with -CiteSiblings on such a body it exits 1 naming the line; without it, as a sibling''s CI runs it, the same body passes'; Test = {
             $file = Join-Path $temp 'body.md'
             Set-Content -LiteralPath $file -Value "## Summary`n`nNo sibling calls it until its pin moves.`n`n$marked"
