@@ -24,18 +24,18 @@
                mod manager installs. Only an exact `base` counts: a release declaring `Base` is
                picked, and the walk reports that line.
       walk     The mandatory closure from those picks: every dependency with no prefix or a `~`
-               prefix. `?`, `(?)` and `!` are not followed. The game's own mods -- base,
-               space-age, quality, elevated-rails -- are left out: they come with the build, not
-               the portal. Every mod name is matched in exact case, as the game does -- Factorio
-               2.0.77 (build 84539), measured headless in grado-factorio-tools 607ceef, fails a
-               dependency on `Alpha` when only `alpha` is present -- and as the portal does:
-               on 2026-10-01, /api/mods/Krastorio2 answered 200 and /api/mods/krastorio2 404.
-               The game's own mods are matched the same way: on the same build, a dependency on
-               `Space-Age`, `Base`, `Quality` or `Elevated-Rails` is refused
-               (grado-factorio-tools#46; the run is in docs/measurements.md). So a mandatory
-               `Space-Age` is not taken as bundled, `krastorio2` is not satisfied by a
-               `Krastorio2` already picked, and `mypack` is not the local pack `MyPack`. Each is
-               looked up under its own spelling.
+               prefix. `?`, `(?)` and `!` are not followed. The game's own mods -- base, space-age,
+               quality, elevated-rails, recycler -- are left out: they come with the build, not the
+               portal. Every mod name is matched in exact case, as the game does -- Factorio 2.0.77
+               (build 84539), measured headless in grado-factorio-tools 607ceef, fails a dependency
+               on `Alpha` when only `alpha` is present -- and as the portal does: on 2026-10-01,
+               /api/mods/Krastorio2 answered 200 and /api/mods/krastorio2 404. The game's own mods
+               are matched the same way: on the same build, a dependency on `Space-Age`, `Base`,
+               `Quality` or `Elevated-Rails` is refused (grado-factorio-tools#46), and on 2.1.23 one
+               on `Recycler` (#209); the runs are in docs/measurements.md. So a mandatory
+               `Space-Age` is not taken as bundled, `krastorio2` is not satisfied by a `Krastorio2`
+               already picked, and `mypack` is not the local pack `MyPack`. Each is looked up under
+               its own spelling.
       check    Every dependency line of every member of a pack's closure, against the other
                members: a mandatory version constraint, a `!` incompatibility, and a version range
                on an optional dependency whose mod is in the closure.
@@ -376,7 +376,7 @@ function Invoke-SelfTest {
             @{ version = '2.5.0'; info_json = @{ factorio_version = '2.0'; dependencies = @('base >= 2.0.80') } }
             @{ version = '3.0.0'; info_json = @{ factorio_version = '2.1'; dependencies = @('base >= 2.1.0') } })
         'content'  = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0'; dependencies = @(
-            'base >= 2.0.20', '~ lib >= 2.0.0', '? not-installed', '(?) hidden-opt', '! enemy-of-content', 'space-age >= 2.0.0', 'mod with spaces') } })
+            'base >= 2.0.20', '~ lib >= 2.0.0', '? not-installed', '(?) hidden-opt', '! enemy-of-content', 'space-age >= 2.0.0', 'recycler', 'mod with spaces') } })
         'mod with spaces' = @(@{ version = '0.1.0'; info_json = @{ factorio_version = '2.0'; dependencies = @() } })
         'too-new'  = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0'; dependencies = @('lib >= 2.5.0') } })
         'hater'    = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0'; dependencies = @('! lib') } })

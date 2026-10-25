@@ -92,9 +92,9 @@ violation or unresolvable member, and exits non-zero on either. A `-Build` off i
 `2.1.20` with `2.0`, is refused before the portal is asked. `-PinFile` writes the picks as one set
 per pack. `-SelfTest` proves it can fail, with no network. What it cannot see is in its header.
 
-The game's own mods (`base`, `space-age`, `quality`, `elevated-rails`) and the exact-case rule they
-are matched by live in `scripts/game-mods.ps1`. The resolver dot-sources it, and so does a
-consumer that has to agree with the resolver on which names are the game's.
+The game's own mods (`base`, `space-age`, `quality`, `elevated-rails`, `recycler`) and the
+exact-case rule they are matched by live in `scripts/game-mods.ps1`. The resolver dot-sources it,
+and so does a consumer that has to agree with the resolver on which names are the game's.
 
 ## Checking that mods coexist
 

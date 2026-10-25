@@ -41,9 +41,9 @@
     and Factorio runs with a write-data directory of its own there, so the player's mods,
     mod-list.json, saves and player-data.json are neither read nor written. -SelfTest asserts it.
 
-    Bundled mods (space-age, elevated-rails, quality) live in the game's data/ directory, so they
-    load unless explicitly disabled. They are disabled unless -With names them, for a base-only
-    load.
+    Bundled mods (space-age, elevated-rails, quality, recycler) live in the game's data/
+    directory, so they load unless explicitly disabled. They are disabled unless -With names them,
+    for a base-only load.
 
 .PARAMETER Mods
     What to load: mod directories, mod zips, or directories of those -- a fetch-mods.ps1 cache is
