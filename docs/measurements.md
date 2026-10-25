@@ -44,9 +44,9 @@ while the same mod declaring `alpha` loads. The portal still agrees: on the same
 `curl -s -o /dev/null -w "%{http_code}" https://mods.factorio.com/api/mods/Krastorio2` printed
 `200`, and the same for `krastorio2` printed `404`. The 2.1.23 mod-structure page,
 <https://lua-api.factorio.com/2.1.23/auxiliary/mod-structure.html> (read 2026-10-25), gives the
-2.0.77 zip rule in the same words, adds that a mod folder not in a zip is named `{mod-name}` or
-`{mod-name}_{version-number}`, and says nothing about case beyond "the restrictions of the file
-system apply" to a name in a file name.
+2.0.77 page's rules in the same words: the zip is named `{mod-name}_{version-number}`, and a mod
+folder not in a zip `{mod-name}` or `{mod-name}_{version-number}`. Neither page says anything
+about case beyond "the restrictions of the file system apply" to a name in a file name.
 
 To repeat it: write `alpha` and a control mod, each a directory with an info.json and a data.lua
 holding only a comment. Dot-source load-harness-lib.ps1 and build the harness with
@@ -190,8 +190,10 @@ Not measured: a dump with `-With` or `-Disabled`, and any build but 2.0.77.
 ### A real dump on 2.1.23, and a second request
 
 Measured 2026-10-25 against Factorio 2.1.23 (build 87750), at grado-factorio-tools 81ea797, for
-#207. The modpack's staged sets all declare `factorio_version` `2.0` (read that day from each
-info.json under its `.mod-cache/Grado_NonChanging`), so the mods were a scratch directory
+#207. The modpack's staged mod directories all declare `factorio_version` `2.0`: 379 info.json
+files under its `.mod-cache/*/`, read that day with its checkout at grado-factorio-modpack
+0ddef61 (the cache is untracked, so the commit dates the read; its 40 zips were not read). So the
+mods were a scratch directory
 `probe-set` of three mods, `probe-a`, `probe-b` and `probe-c`, each declaring `2.1` and holding
 an info.json and a data.lua with only a comment: 6 files. The cache was an empty scratch
 directory.
@@ -275,7 +277,7 @@ The three absent are `probe-no-entry`, with no entry; `probe-missing-key`, whose
 `localised_name` is `{"probe-no-section.probe-no-key"}`; and `probe-nested-missing`, whose
 `localised_name` is `{"item-name.probe-has-param", {"probe-no-section.probe-no-key"}}`.
 
-A localised string nested 31 deep stops the data stage, logging
+A localised string of 30 nested tables stops the data stage, logging
 
     Error Util.cpp:81: Error while loading item prototype "probe-deep" (item): Too deep recursion for localised string: 21 > 20 (limit). in property tree at ROOT.item.probe-deep.localised_name[1]...[1]
 
@@ -286,10 +288,11 @@ with twenty `[1]`, and one of thirty parameters logs
 So 2.1.23 does what the comment records of 2.0.77, in the same wording.
 
 To repeat it: a mod declaring `factorio_version` `2.1` whose data.lua declares the items with
-the `localised_name` above, and a `locale/en/*.cfg` holding the entries. Dot-source
-load-harness-lib.ps1, call New-LoadHarness and Invoke-HarnessLoad, then Invoke-Factorio on the
-harness's ModDirectory with `--dump-prototype-locale`, and read the `*-locale.json` files under
-the harness's `write-data/script-output`. The two that stop the data stage are a mod each, with
+the `localised_name` above, each with `stack_size` 1 and the base game's pipe icon, and a
+`locale/en/*.cfg` holding the entries. Dot-source load-harness-lib.ps1, call New-LoadHarness
+and Invoke-HarnessLoad, then Invoke-Factorio on the harness's ModDirectory with
+`--dump-prototype-locale`, and read the `*-locale.json` files under the harness's
+`write-data/script-output`. The two that stop the data stage are a mod each, with
 the string built in Lua: `local s = "x"; for i = 1, 30 do s = {"", s} end`, and
 `local s = {""}; for i = 1, 30 do s[#s + 1] = "x" end`.
 
