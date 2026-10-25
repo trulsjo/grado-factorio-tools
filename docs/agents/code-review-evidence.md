@@ -101,7 +101,8 @@ whose one job ran from 06:53:44Z to 06:54:34Z
 review comment there, none of the bug scan's five findings came from `scripts/check.ps1`, which
 passed: they came from inputs of its own and from mutants of the two scripts, which CI does not
 run. So the rule takes from the lane only what CI has already done on that commit. It still
-runs the check where CI's run failed or has not finished, and it still runs each self-test the
+runs the check where CI's run failed, ~~or has not finished~~ and waits on one that has not
+finished (2026-10-25, below), and it still runs each self-test the
 change calls for that CI does not, the ones that need the game among them. The rule had been
 half of the sentence on the two lanes and is a bullet of its own on the rules page, which the
 split of #116 made room for. How the session knows, run 2026-10-12 for `main`'s tip:
@@ -111,6 +112,16 @@ split of #116 made room for. How the session knows, run 2026-10-12 for `main`'s 
 It printed one run, 38217674510, `completed` and `success`, with a `headSha` beginning
 `e4e255f`. Given the short SHA, `--commit e4e255f`, the same command printed `[]`, so the rule
 asks for the full one. With the rule the rules page is 2,556 bytes of its 3,000.
+
+**A run in progress is waited on, not run again** (Truls, 2026-10-25, settling
+[#230](https://github.com/trulsjo/grado-factorio-tools/issues/230)). PR #228's bug scan was
+briefed while CI's run 40198350111 was `in_progress`, and so ran the check itself; CI finished
+in 78 seconds, by that ticket's figures. The lane now runs `gh run watch <id> --exit-status`,
+which waits and exits non-zero on a run that fails. With gh 2.103.1 on 2026-10-25, on runs
+already finished, `gh run watch 40198350111 --exit-status` printed `Run check (40198350111) has
+already completed with 'success'` and exited 0, and `gh run watch 40176673959 --exit-status`
+printed the same with `'failure'` and exited 1. A run in progress is on the pull request that
+made the change, PR #231.
 
 **A change that touches no script is reviewed by one agent.** Ruled by Truls on 2026-10-11,
 settling [#109](https://github.com/trulsjo/grado-factorio-tools/issues/109): such a change gets

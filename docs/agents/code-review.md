@@ -12,9 +12,9 @@ On top of the `/code-review` plugin. The evidence is in
 - **Two lanes.** A bug scan; and a prose lane applying the rules in
   [code-review-prose.md](code-review-prose.md), which that lane loads and the bug scan does
   not. The prose lane takes in the plugin's `CLAUDE.md` and code-comment lanes.
-- **The bug scan runs `scripts/check.ps1` unless CI's check has passed on the commit the
-  review reads.** Then it names that run and does not run the check again; where the run has
-  failed or not finished, it runs it. The session looks before the lane starts, with
+- **The bug scan runs `scripts/check.ps1` unless CI's check passes on the commit the review
+  reads.** It waits on a run in progress with `gh run watch <id> --exit-status`, and names a
+  run that passed instead of running the check. The session looks before the lane starts, with
   `gh run list --workflow check.yml --commit <full SHA> --json databaseId,headSha,status,conclusion`.
   Either way the bug scan runs each self-test that script's header says the change calls for
   and CI does not run, those that need the game among them. It reverts each claim of a script
