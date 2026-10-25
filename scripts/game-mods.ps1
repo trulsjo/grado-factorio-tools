@@ -10,7 +10,8 @@
     2.0.77 (build 84539), headless, fails a dependency on `Alpha` when only `alpha` is present
     (grado-factorio-tools 607ceef), and on each of the four 2.0 game mods in another case
     (grado-factorio-tools#46, for #44). Factorio 2.1.23 (build 87750) fails one on `Recycler`
-    (#209). What the game logged, and how to repeat the run, is in docs/measurements.md.  #>
+    (#209), and on `Alpha` and each of the other four (#200). What the game logged, and how to
+    repeat the run, is in docs/measurements.md.  #>
 
 $GAME_MODS = @('base', 'space-age', 'quality', 'elevated-rails', 'recycler')
 

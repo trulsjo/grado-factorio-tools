@@ -86,7 +86,8 @@
     writes no file for those. Left to the method above, the type was matched to the shortcuts'
     file, because 86% of the game's custom inputs share a name with a shortcut, and every custom
     input of the mods' own was reported missing whether or not it had its entry. Measured on
-    2.0.77 on 2026-10-11, in the review of grado-factorio-tools#102. So `custom-input` is
+    2.0.77 on 2026-10-11, in the review of grado-factorio-tools#102, and on 2.1.23 (build 87750)
+    on 2026-10-25 (#206), whose run is in docs/measurements.md. So `custom-input` is
     declared beside `animation`, and a custom input with no [controls] entry is not found here.
 
 .PARAMETER Mods
@@ -388,7 +389,7 @@ try {
                 # localised string that is structurally wrong -- too deep, too many parameters --
                 # stops the data stage and never reaches a dump, and a localised_name pointing
                 # straight at a missing key is dropped from the dump entirely, which is the FIRST
-                # canary's case, not this one. Measured on 2.0.77.
+                # canary's case, not this one. Measured on 2.0.77 and on 2.1.23 (#205).
                 $stem   = "${Prefix}localecheck-canary"
                 $canary = Join-Path $modDir 'localecheck-canary'
                 New-Item -ItemType Directory -Path (Join-Path $canary 'locale/en') -Force | Out-Null

@@ -27,9 +27,10 @@
     as a warning rather than dropped in silence.
 
     THE ZIP NAME IS THE STRICT PART, NOT THE FOLDER. Verified against the 2.0.77 mod-structure
-    documentation: the zip must be named `{mod-name}_{version-number}` -- the example given is
-    `better-armor_0.3.6` -- while "the folder inside the zip file does not have any naming
-    restrictions". info.json must sit in that top-level folder. The name is computed from
+    documentation, and again against 2.1.23's on 2026-10-25 (#200), which says the same: the zip
+    must be named `{mod-name}_{version-number}` -- the example given is `better-armor_0.3.6` --
+    while "the folder inside the zip file does not have any naming restrictions". info.json must
+    sit in that top-level folder. The name is computed from
     info.json rather than passed in, and the mod directory's own name must equal info.json's
     `name`: the zip and its folder are named from info.json while the files come from the
     directory, and a zip named after one mod and filled from another is one the portal would
@@ -37,13 +38,14 @@
 
     NAMES ARE CASE-SENSITIVE. The 2.0.77 mod-structure documentation says nothing about case, so
     it was measured on 2026-09-26 against Factorio 2.0.77 (build 84539): a zip, a directory or a
-    dependency whose name differs from the mod's only in case is refused. The mod portal agrees,
-    answering for a name in one case only. So `Alpha` and `alpha` are two mods. The name check
-    refuses a case-only mismatch, and the one-copy rule leaves the other case's zips alone --
-    whatever the check accepts, the rule cleans up after. Two places cannot follow that, because
-    at one version the two mods' zips are one file on a case-insensitive file system: packing
-    `alpha` 1.0.0 replaces an `Alpha_1.0.0.zip` already there, and giving both in one run is
-    refused as the same mod twice.
+    dependency whose name differs from the mod's only in case is refused. Factorio 2.1.23 (build
+    87750) refuses each the same way, measured 2026-10-25 (#200), and its documentation says
+    nothing about case either. The mod portal agrees, answering for a name in one case only. So
+    `Alpha` and `alpha` are two mods. The name check refuses a case-only mismatch, and the
+    one-copy rule leaves the other case's zips alone -- whatever the check accepts, the rule
+    cleans up after. Two places cannot follow that, because at one version the two mods' zips are
+    one file on a case-insensitive file system: packing `alpha` 1.0.0 replaces an
+    `Alpha_1.0.0.zip` already there, and giving both in one run is refused as the same mod twice.
 
     THE VERSION BOUNDS are the portal's: major.minor.sub, each 0-65535, and 0.0.0 invalid. A regex
     of three digit-runs accepts 0.0.0 and 1.0.99999, which the portal rejects at upload, so the
@@ -58,12 +60,14 @@
     only name key is spelled `"Name"`, or whose only version key is `"Version"`, is refused as
     having no `name` or `version` key. Measured against Factorio 2.0.77 (build 84539)
     (grado-factorio-tools#49, for grado-factorio-tools#47): the game refuses each as a key not
-    found. Only those two keys were measured, and only with the lower-case key absent.
+    found. Factorio 2.1.23 (build 87750) does the same (#201). Only those two keys were measured,
+    and only with the lower-case key absent.
 
     A `"Name"` BESIDE `name`, OR A `"Version"` BESIDE `version`, IS PACKED, AND THE GAME READS IT
     THE SAME WAY. The mod is read from the lower-case key and the other is ignored, in either key
     order. Measured against Factorio 2.0.77 (build 84539) (grado-factorio-tools#53, for
-    grado-factorio-tools#51). Only those two pairs were measured.
+    grado-factorio-tools#51), and against 2.1.23 (build 87750), which reads the lower-case key
+    too (#202). Only those two pairs were measured.
 
     WHAT THE GAME LOGGED in each of those runs, and how to repeat one, is in
     docs/measurements.md, beside this script's directory.

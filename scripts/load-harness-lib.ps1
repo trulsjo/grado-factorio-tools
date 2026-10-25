@@ -383,10 +383,13 @@ function Remove-ModJunctions {
 # missing key, and one whose nested parameter names a missing key are all simply ABSENT from the
 # dump; a localised string that is too deep or has too many parameters stops the data stage
 # outright and the game never starts. So every failure visible in a dumped value is one that
-# resolved to text.
+# resolved to text. Factorio 2.1.23 (build 87750) does all of this the same way, measured on
+# 2026-10-25 (grado-factorio-tools#205); that run, and how to repeat it, is in
+# docs/measurements.md.
 #
-# Pinned to 2.0.77. Matching engine wording literally is fragile, and a later engine phrasing it
-# differently puts the text back on the labels -- where it is at least visible to a human.
+# Pinned to 2.0.77 and 2.1.23, which write both markers in the same words. Matching engine wording
+# literally is fragile, and a later engine phrasing it differently puts the text back on the
+# labels -- where it is at least visible to a human.
 $script:LocaleEngineErrors = @(
     'Unknown key:',
     'Unknown control sequence:'

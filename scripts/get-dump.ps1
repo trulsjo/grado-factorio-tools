@@ -37,6 +37,11 @@
     measured: the mods are junctioned or copied into a temp directory, and the game writes there.
     Keep the cache outside the mod directory, and out of git.
 
+    A REAL RUN WAS MEASURED on Factorio 2.0.77 (build 84539), grado-factorio-tools#75, and on
+    2.1.23 (build 87750) with -With space-age, #207: the first request made a dump named by the
+    game's prototype list checksum, and the second was served it with nothing run. The runs are
+    in docs/measurements.md.
+
     TO CLEAR IT, delete the cache directory, or the three files of one dump.
 
 .PARAMETER Mods
