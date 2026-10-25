@@ -75,9 +75,13 @@
     calls it until its pin moves", which that lane found. Truls ruled on 2026-10-20, on #177,
     what is read. A sentence is a statement when it names grado-factorio-modpack or
     realistic-fusion-refreshed, or holds the word "sibling" or "siblings" as a word of its own,
-    in any case. A bare reference to a sibling's ticket or pull request,
-    `grado-factorio-modpack#337` with or without `trulsjo/` before it, is taken out first, so a
-    sentence holding only that is none. A statement carries
+    in any case. So does one holding "modpack" as a word of its own, in any case, or "RFR" as
+    one, in capitals (Truls, 2026-10-25, #229): PR #228's first body said "The modpack's staged
+    sets all declare `2.0`" with neither. A letter, digit, - or _ on either side makes either
+    part of another word, as in resolve-modpack. So "a modpack", about modpacks in general, is
+    held too: it needs a commit and a date, or a rewording. A bare reference to a sibling's
+    ticket or pull request, `grado-factorio-modpack#337` with or without `trulsjo/` before it,
+    is taken out first, so a sentence holding only that is none. A statement carries
     a commit and an ISO date: a word of 7 to 40 hexadecimal characters with a digit among them,
     and a YYYY-MM-DD. The rule is this repository's, so it is asked for: both siblings run this
     script on their pull request bodies, from their pin (grado-factorio-modpack's check.yml at
@@ -123,9 +127,9 @@
     so "e.g. A" ends one, and a commit cited in the next part is not counted; a paragraph's lines
     are joined, and a list item, a heading or a table row stands alone. A line in a fenced block
     is not read, by the fence rule above. A sibling named by an address that holds its name is
-    read as a statement. One named by its title, "the Grado Factorio Modpack", or any way that
-    holds neither its name nor the word, is not seen. A run id of 7 or more digits counts as a
-    commit.
+    read as a statement. One named by its title is seen only through "modpack" in it, so "the
+    Realistic Fusion Refreshed" is not, nor is one named by any spelling but its name, the word,
+    "modpack" and "RFR". A run id of 7 or more digits counts as a commit.
 
 .PARAMETER Path
     The file holding the body, as handed to `gh pr create --body-file`.
@@ -276,7 +280,7 @@ function Get-SiblingProblem {
         # A sentence ends at . ! or ? before a space and anything but a lower-case letter.
         foreach ($sentence in [regex]::Split($b.Text, '(?<=[.!?])\s+(?=[^a-z\s])')) {
             $plain = $sentence -replace '(?<![\w.-])(?:trulsjo/)?(?:grado-factorio-modpack|realistic-fusion-refreshed)#\d+', ''
-            if ($plain -notmatch 'grado-factorio-modpack|realistic-fusion-refreshed|\bsiblings?\b') { continue }
+            if ($plain -notmatch 'grado-factorio-modpack|realistic-fusion-refreshed|\bsiblings?\b|(?<![\w-])(?:modpack|(?-i:RFR))(?![\w-])') { continue }
             $missing = @()
             if ($sentence -notmatch '(?<![0-9A-Za-z_])(?=[a-fA-F]*\d)[0-9a-fA-F]{7,40}(?![0-9A-Za-z_])') { $missing += 'a commit' }
             if ($sentence -notmatch '(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)') { $missing += 'an ISO date' }
@@ -416,10 +420,20 @@ function Invoke-SelfTest {
             $inName = @(Get-SiblingProblem 'Get-SiblingProblem and -CiteSiblings are new.')
             # Held to what the header says is not seen: a title. An address holding the name is
             # read.
-            $title = @(Get-SiblingProblem 'The Grado Factorio Modpack pins this.')
+            $title = @(Get-SiblingProblem 'The Realistic Fusion Refreshed pins this.')
             $address = @(Get-SiblingProblem 'See https://github.com/trulsjo/grado-factorio-modpack for it.')
             $refs.Count -eq 0 -and $fenced.Count -eq 0 -and $word.Count -eq 1 -and $word[0].Missing -eq 'a commit' -and $inName.Count -eq 0 -and
                 $title.Count -eq 0 -and $address.Count -eq 1 } }
+        @{ Name = 'the modpack and RFR, each a word of its own, are refused and pass with a commit and an ISO date; inside a longer word, or rfr in lower case, they are none (#229)'; Test = {
+            $modpack = @(Get-SiblingProblem 'The modpack is at its pin.')
+            $modpackCited = @(Get-SiblingProblem 'The modpack is at its pin, 6be6609, read 2026-10-25.')
+            $rfr = @(Get-SiblingProblem 'RFR''s gate runs it.')
+            $rfrCited = @(Get-SiblingProblem 'RFR''s gate runs it at ff59e79, read 2026-10-25.')
+            $inWord = @(Get-SiblingProblem '`resolve-modpack.ps1` reads it.')
+            $lower = @(Get-SiblingProblem 'rfr is a prefix.')
+            $modpack.Count -eq 1 -and $modpack[0].Missing -eq 'a commit and an ISO date' -and $modpackCited.Count -eq 0 -and
+                $rfr.Count -eq 1 -and $rfr[0].Missing -eq 'a commit and an ISO date' -and $rfrCited.Count -eq 0 -and
+                $inWord.Count -eq 0 -and $lower.Count -eq 0 } }
         @{ Name = 'run with -CiteSiblings on such a body it exits 1 naming the line; without it, as a sibling''s CI runs it, the same body passes'; Test = {
             $file = Join-Path $temp 'body.md'
             Set-Content -LiteralPath $file -Value "## Summary`n`nNo sibling calls it until its pin moves.`n`n$marked"
