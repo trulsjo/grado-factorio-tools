@@ -58,7 +58,8 @@
     Researchability rides along the same way: each technology carries its `enabled`, `hidden` and
     `visible_when_disabled` state, and the ones no player can research are kept off the canvas
     until a toggle reveals them, dashed and dimmed. They are flagged, never dropped -- a dead base
-    tech another mod left standing is a finding about how the set interleaves.
+    tech another mod left standing is a finding about how the set interleaves. An unlock or bonus
+    whose effect is `hidden` rides along the same way, behind the same toggle (#218).
 
     The viewer itself is tree-viewer.template.html: dagre layered cards, top-down, d3 pan/zoom,
     detail on the card near and counter-scaled badges far, click for a side panel with
@@ -150,7 +151,11 @@ data:extend({ $($item.Replace('NAME', 'vf-plasma-widget')),
   { type = "technology", name = "vf-mined-tech", icon = "__base__/graphics/icons/iron-plate.png", icon_size = 64,
     effects = {}, research_trigger = { type = "mine-entity", entities = { "crude-oil", "iron-ore" } } },
   { type = "technology", name = "vf-built-tech", icon = "__base__/graphics/icons/iron-plate.png", icon_size = 64,
-    effects = {}, research_trigger = { type = "build-entity", entity = "stone-furnace" } } })
+    effects = {}, research_trigger = { type = "build-entity", entity = "stone-furnace" } },
+  { type = "technology", name = "vf-hiding-tech", icon = "__base__/graphics/icons/iron-plate.png", icon_size = 64,
+    effects = { { type = "unlock-recipe", recipe = "iron-gear-wheel" }, { type = "unlock-recipe", recipe = "pipe", hidden = true },
+                { type = "inserter-stack-size-bonus", modifier = 1, hidden = true } },
+    research_trigger = { type = "build-entity", entity = "stone-furnace" } } })
 "@ "[item-name]`nvf-plasma-widget=Plasma widget`n[technology-name]`nvf-planted-tech=Planted technology"
         $other = & $newMod 'viewer-other' "data:extend({ $($item.Replace('NAME', 'vo-plasma-widget')) })" "[item-name]`nvo-plasma-widget=Plasma widget"
 
@@ -181,6 +186,16 @@ data:extend({ $($item.Replace('NAME', 'vf-plasma-widget')),
                 if (-not $m.Success) { throw 'vf-built-tech has no trigger in the page''s dataset.' }
                 if ($m.Groups[1].Value -cne 'build-entity stone-furnace') { throw "its trigger reads '$($m.Groups[1].Value)', not 'build-entity stone-furnace'." }
                 'a mine-entity trigger names each of its entities, and a build-entity trigger its one entity' } }
+            @{ Name = 'hidden-effects-marked'; Body = {
+                $json = [regex]::Match((Get-Content -LiteralPath $page -Raw), '(?m)^const DATA = (.*);\r?$').Groups[1].Value
+                $t = @(($json | ConvertFrom-Json -AsHashtable)['techs'] | Where-Object { $_['id'] -ceq 'vf-hiding-tech' })
+                if ($t.Count -ne 1) { throw 'vf-hiding-tech is not in the page''s dataset.' }
+                $read = (@($t[0]['unlocks'] | ForEach-Object { "$($_['name'])=$($_['hidden'])" }) +
+                         @($t[0]['bonuses'] | ForEach-Object { "$($_['text'])=$($_['hidden'])" })) -join ', '
+                if ($read -cne 'iron-gear-wheel=False, pipe=True, inserter-stack-size-bonus 1=True') {
+                    throw "its effects read '$read', not 'iron-gear-wheel=False, pipe=True, inserter-stack-size-bonus 1=True'."
+                }
+                'a hidden unlock and a hidden bonus are marked hidden, and a visible unlock is not' } }
             @{ Name = 'focus-overlap-paired'; Body = {
                 if ((Get-Content -LiteralPath $page -Raw) -notmatch '"a":"vf-plasma-widget"[^}]*"b":"vo-plasma-widget"[^}]*"tier":1') {
                     throw 'the focus mod''s item was not paired with the other mod''s item of the same name.'
@@ -480,11 +495,16 @@ end)
                         @($rt['fluid'], $rt['count'], $rt['amount']) | Where-Object { $_ }) -join ' '
         }
         $unlocks = [System.Collections.Generic.List[object]]::new()
-        $bonuses = [System.Collections.Generic.List[string]]::new()
+        $bonuses = [System.Collections.Generic.List[object]]::new()
         # `effects = {}` dumps as an empty OBJECT, which survives the per-effect guard as one truthy
         # element and adds a blank bonus -- 66 techs in the set this was found on.
         foreach ($e in (Get-DumpList $t['effects'])) {
             if (-not $e) { continue }
+            # An effect's `hidden` (BaseModifier, default false) is shipped, never dropped, as a
+            # technology's is: the viewer keeps a hidden one behind the same toggle. 2.1.23's Space
+            # Age with Quality hides 315, 312 of them the recycling technology's recycling unlocks
+            # (#218). <https://lua-api.factorio.com/2.1.23/types/BaseModifier.html>
+            $hidden = Get-DumpFlag $e['hidden'] $false
             if ($e['type'] -eq 'unlock-recipe') {
                 $recipeName = $e['recipe']
                 $r = $raw['recipe'][$recipeName]
@@ -499,13 +519,13 @@ end)
                 if (-not $label -and $first) { $label = Get-LocaleName $itemLocale  $first }
                 if (-not $label -and $first) { $label = Get-LocaleName $fluidLocale $first }
                 if (-not $label) { $label = $recipeName }
-                $unlocks.Add(@{ name = $recipeName; label = $label; results = @($results) })
+                $unlocks.Add(@{ name = $recipeName; label = $label; results = @($results); hidden = $hidden })
             }
             else {
                 $desc = $e['type']
                 $modifier = $e['modifier']
                 if ($null -ne $modifier -and $modifier -isnot [bool]) { $desc += " $modifier" }
-                $bonuses.Add($desc)
+                $bonuses.Add(@{ text = $desc; hidden = $hidden })
             }
         }
         # The changed chain, order kept, deduplicated, without the creator's own later edits

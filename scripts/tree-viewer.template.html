@@ -131,6 +131,9 @@
   .card.dead { border-style: dashed; opacity: .5; }
   .deadb  { color: #e5534b; font-weight: 700; }
   .blockb { color: #d98a8a; font-weight: 700; }
+  /* an unlock or bonus the mod marked hidden (#218), listed after the ordinary ones */
+  .hidb   { color: #9aa0a6; font-weight: 700; }
+  .card .u.hid { color: #7d8288; }
   .card.faded { opacity: .18; }
   .card.boost { transform: scale(1.12); transform-origin: center; box-shadow: 0 0 0 2px #fff;
                 z-index: 5; }
@@ -212,6 +215,17 @@ function setShowDead(on) {
 }
 setShowDead(false);
 
+/* an effect the mod marked hidden (#218): shipped, like an unresearchable tech, and revealed by
+   the same toggle, after the ordinary effects and marked. 2.1.23's Space Age with Quality hides
+   312 of the recycling technology's 314 unlocks. Read through these, never t.unlocks or
+   t.bonuses directly, so that nothing counts a hidden effect while the toggle is off. */
+const ordinary = es => es.filter(e => !e.hidden);
+const shownEffects = es => [...ordinary(es), ...(deadShown ? es.filter(e => e.hidden) : [])];
+const hiddenCount = t => t.unlocks.filter(u => u.hidden).length + t.bonuses.filter(b => b.hidden).length;
+const hiddenTotal = DATA.techs.reduce((n, t) => n + hiddenCount(t), 0);
+const hidMark = e => e.hidden ? '<span class="hidb" title="hidden = true">◌</span> ' : '';
+const hiddenLine = n => `<span class="hidb">◌</span> ${n} hidden effect${n > 1 ? 's' : ''}`;
+
 /* the active overlap set is dynamic: base-game pairs ship flagged (o.base) and stay filtered out
    until the "include base-game overlaps" toggle turns them on (realistic-fusion-refreshed#160) */
 const overlapFocus = DATA.meta.focusMods || [];
@@ -222,7 +236,7 @@ function setBaseOverlaps(on) {
   for (const o of activeOv) { overlapNames.add(o.a); overlapNames.add(o.b); }
 }
 setBaseOverlaps(false);
-const techResults = t => new Set(t.unlocks.flatMap(u => u.results || []));
+const techResults = t => new Set(shownEffects(t.unlocks).flatMap(u => u.results || []));
 const isOverlap = t => { for (const r of techResults(t)) if (overlapNames.has(r)) return true; return false; };
 const overlapPairsFor = t => {
   const rs = techResults(t);
@@ -278,9 +292,11 @@ function detailHtml(t) {
     <h3>Cost</h3>
     <div>${costHtml(t)}</div>
     <div style="margin-top:4px">${packChips(t)}</div>
-    <h3>Unlocks (${t.unlocks.length})</h3>
-    <ul>${t.unlocks.map(u => `<li class="${(u.results||[]).some(r => overlapNames.has(r)) ? 'ovbadge' : ''}">${esc(u.label)}</li>`).join('') || '<li class="muted">none</li>'}</ul>
-    ${t.bonuses.length ? `<h3>Bonuses</h3><ul>${t.bonuses.map(b => `<li>${esc(b)}</li>`).join('')}</ul>` : ''}
+    <h3>Unlocks (${shownEffects(t.unlocks).length})</h3>
+    <ul>${shownEffects(t.unlocks).map(u => `<li class="${(u.results||[]).some(r => overlapNames.has(r)) ? 'ovbadge' : ''}">${hidMark(u)}${esc(u.label)}</li>`).join('') || '<li class="muted">none</li>'}</ul>
+    ${shownEffects(t.bonuses).length ? `<h3>Bonuses</h3><ul>${shownEffects(t.bonuses).map(b => `<li>${hidMark(b)}${esc(b.text)}</li>`).join('')}</ul>` : ''}
+    ${hiddenCount(t) ? `<div style="margin-top:4px" class="muted">${hiddenLine(hiddenCount(t))}${deadShown
+      ? ', marked above' : ', shown by the toggle under <i>Unresearchable and hidden</i>'}</div>` : ''}
     ${pairs.length ? `<h3>Overlap candidates touching this tech</h3>
       <ul>${pairs.map(o => `<li class="pair">[${o.score}] ${esc(o.aLabel)} <span class="muted">(${o.aCat}, ${esc(modName(o.aMod))})</span>
         ~ ${esc(o.bLabel)} <span class="muted">(${o.bCat}, ${esc(modName(o.bMod))})</span></li>`).join('')}</ul>` : ''}`;
@@ -316,13 +332,17 @@ function init(stage) {
       <div class="pk"><span class="chbadge">✎</span> changed by another mod</div>
       <div class="pk"><span class="deadb">⊘</span> not researchable in this set</div>
       <div class="pk"><span class="blockb">⊝</span> gated behind a hidden technology</div>
-      <h4>Unresearchable</h4>
-      ${deadCount
+      <div class="pk"><span class="hidb">◌</span> a hidden unlock or bonus</div>
+      <h4>Unresearchable and hidden</h4>
+      ${deadCount || hiddenTotal
         ? `<label class="pk" style="cursor:pointer"><input type="checkbox" id="show-dead">
-             show ${deadCount} unresearchable tech${deadCount > 1 ? 's' : ''}</label>
-           <div class="pk muted">another mod disabled them at game start, or hid them from the
-             tech screen — drawn dashed and dimmed</div>`
-        : `<div class="pk muted">none — every tech in this set is researchable</div>`}
+             show ${[deadCount ? `${deadCount} unresearchable tech${deadCount > 1 ? 's' : ''}` : '',
+                     hiddenTotal ? `${hiddenTotal} hidden effect${hiddenTotal > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')}</label>
+           ${deadCount ? `<div class="pk muted">another mod disabled the techs at game start, or hid them
+             from the tech screen — drawn dashed and dimmed</div>` : ''}
+           ${hiddenTotal ? `<div class="pk muted">a mod marked the effects hidden — listed after the
+             ordinary ones, marked ◌</div>` : ''}`
+        : `<div class="pk muted">none — every tech in this set is researchable, and no effect hidden</div>`}
       <h4>Overlaps</h4>
       ${overlapFocus.length
         ? `<div class="pk muted">left side of every pair: ${(DATA.meta.focusLabels || overlapFocus).map(esc).join(', ')}</div>
@@ -396,8 +416,8 @@ function init(stage) {
   /* dagre.layout() is the whole cost of a toggle and then some: 4459 ms over the 406 live techs
      and 5766 ms over all 478, against 3 ms to rebuild the card HTML and 9 ms to put it in the DOM
      (realistic-fusion-refreshed#175). Only FOUR layouts exist, though -- two node sets by two orientations -- and no other
-     control moves a node: a card's height reads t.unlocks and t.bonuses alone, so the overlap
-     toggle cannot change one. So each is laid out once and kept, and every later render of a
+     control moves a node: a card's height reads t.unlocks and t.bonuses alone, as the
+     unresearchable toggle shows them (#218), so the overlap toggle cannot change one. So each is laid out once and kept, and every later render of a
      state already seen is the ~12 ms of rebuilding the cards. */
   const layouts = new Map();
   function layoutFor() {
@@ -421,7 +441,8 @@ function init(stage) {
     const g = new dagre.graphlib.Graph().setGraph({ rankdir, nodesep: 16, ranksep: 90, edgesep: 6, marginx: 40, marginy: 40 });
     g.setDefaultEdgeLabel(() => ({}));
     for (const t of techs) {
-      const lines = Math.min(t.unlocks.length, SHOW) + (t.unlocks.length > SHOW ? 1 : 0) + (t.bonuses.length ? 1 : 0);
+      const us = shownEffects(t.unlocks);
+      const lines = Math.min(us.length, SHOW) + (us.length > SHOW ? 1 : 0) + (ordinary(t.bonuses).length ? 1 : 0) + (hiddenCount(t) ? 1 : 0);
       g.setNode(t.id, { width: CARDW, height: 52 + lines * 15 + headExtra(t) });
     }
     for (const [a, b] of edges) g.setEdge(a, b);
@@ -445,16 +466,17 @@ function init(stage) {
     html.push('</svg>');
     for (const t of techs) {
       const n = g.node(t.id), color = modColor(t.mod);
-      const shown = t.unlocks.slice(0, SHOW);
+      const us = shownEffects(t.unlocks), shown = us.slice(0, SHOW), bs = ordinary(t.bonuses).length;
       html.push(`<div class="card${isDead(t) ? ' dead' : ''}" data-mod="${esc(t.mod)}" data-id="${t.id}" style="left:${n.x - n.width / 2}px;top:${n.y - n.height / 2}px;width:${n.width}px;height:${n.height}px;--modc:${color}">
         ${isOverlap(t) ? '<div class="ovb">⚠</div>' : ''}
         ${t.changedBy.length ? '<div class="chb">✎</div>' : ''}
         <div class="head" style="border-left-color:${color}">${headHtml(t)}</div>
         <div class="body">
           <div class="packs">${packChips(t)} <span class="n">${t.formula ? esc(t.formula) : (t.count ? t.count + '×' : (t.trigger ? 'trigger' : ''))}</span></div>
-          ${shown.map(u => `<div class="u ${(u.results||[]).some(r => overlapNames.has(r)) ? 'ov' : ''}">▸ ${esc(u.label)}</div>`).join('')}
-          ${t.unlocks.length > SHOW ? `<div class="u muted">… ${t.unlocks.length - SHOW} more</div>` : ''}
-          ${t.bonuses.length ? `<div class="bonus">+ ${t.bonuses.length} bonus effect${t.bonuses.length > 1 ? 's' : ''}</div>` : ''}
+          ${shown.map(u => `<div class="u ${(u.results||[]).some(r => overlapNames.has(r)) ? 'ov' : ''}${u.hidden ? ' hid' : ''}">${u.hidden ? '<span class="hidb">◌</span>' : '▸'} ${esc(u.label)}</div>`).join('')}
+          ${us.length > SHOW ? `<div class="u muted">… ${us.length - SHOW} more</div>` : ''}
+          ${bs ? `<div class="bonus">+ ${bs} bonus effect${bs > 1 ? 's' : ''}</div>` : ''}
+          ${hiddenCount(t) ? `<div class="u muted">${hiddenLine(hiddenCount(t))}</div>` : ''}
         </div></div>`);
     }
     world.innerHTML = html.join('');
