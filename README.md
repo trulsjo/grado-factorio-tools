@@ -394,6 +394,18 @@ on length. `scripts/check.ps1` hands it 100 here. Neither sibling is asked to: c
 2026-10-09 by a throwaway script, `grado-factorio-modpack` had 326 such lines and
 `realistic-fusion-refreshed` 3,091.
 
+    pwsh -File scripts/markdown-rewrap.ps1 -MaxLineLength 100
+    pwsh -File scripts/markdown-rewrap.ps1 -Comment -Path .github/workflows/check.yml -MaxLineLength 100
+
+`scripts/markdown-rewrap.ps1` repairs what that reports (#215): each paragraph holding a line
+over the limit is rewrapped from that line to its end, never inside a code span, a link or an
+HTML comment, and never into a line that starts a list item, a heading or another block. It takes
+the check's `-Range`, `-All` and `-Path`, and with none the staged files; it writes the working
+tree only, and never stages. Which lines are prose and which are over is the check's own reading,
+through `scripts/markdown-lib.ps1`, which both load. `-Comment` does the same for a script's or a
+workflow's comment lines over the limit, a `#` block or a paragraph of a block comment, found by
+length. `-SelfTest` needs no git and no game.
+
 ## Checking a pull request body
 
 `scripts/pr-body-check.ps1` reads a pull request body for commits it cites, and fails on one that
@@ -460,6 +472,7 @@ prototype name is that mod's business. If a script needs to know `rf-`, it stays
 ```
 scripts/     PowerShell entry points, one job each, and the libraries they
              dot-source: load-harness-lib.ps1, dump-lib.ps1, game-mods.ps1, mod-info.ps1,
+             markdown-lib.ps1, the reading markdown-check.ps1 and markdown-rewrap.ps1 share,
              which reads a mod's info.json for four of them,
              self-test-halves.ps1, the runner a -SelfTest hands its halves to,
              and hook-matcher.ps1, which reads a session hook's matcher;
