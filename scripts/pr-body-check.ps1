@@ -99,14 +99,14 @@
     the skill's examples is a code block. The Summaries of PRs #249 to #252 and #257 held none,
     251 to 438 words of prose each (2026-10-26). A visual is a fence that opens under the
     heading, by the fence rule below, or an indented code block there, by the rule the sibling
-    statements are read by: a code span in a sentence is none, nor is a line indented under a
-    list item, nor a block under another heading. A missing `## Summary` is the headings' job and
-    is not reported again here. The rule is asked for, at Truls's word (2026-10-26, #264): of
-    the last merged pull requests read that day, a fenced block stood in the Summary of 25 of 25
-    in grado-factorio-modpack and 16 of 20 in realistic-fusion-refreshed, so on by default it
-    would fail a body either sibling writes. This repository's CI asks, and so does the command
-    before `gh pr create` in docs/agents/issue-tracker.md. Whether the visual is the smallest one
-    that makes the point is a reader's call.
+    statements are read by: a code span in a sentence is none, unless the line opens with one,
+    which the fence rule takes for a fence; nor is a line indented under a list item, nor a
+    block under another heading. A missing `## Summary` is the headings' job and is not
+    reported again here. The rule is asked for, at Truls's word (2026-10-26, #264): on by
+    default it would fail a consuming repository's body whose Summary holds no code block, a
+    breaking change to that repository's interface. This repository's CI asks, and so does the
+    command before `gh pr create` in docs/agents/issue-tracker.md. Whether the visual is the
+    smallest one that makes the point is a reader's call.
 
     A SHALLOW CLONE IS REFUSED, and nothing is checked: there an ancestor cannot be told from a
     commit whose history was cut off. CI therefore fetches the whole history for this. Whatever
