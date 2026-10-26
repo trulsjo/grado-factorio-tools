@@ -364,7 +364,9 @@ tree it runs against, by Truls's rulings on that ticket. On a tree where a track
 changed, staged or not, it refuses `git checkout <rev>` and `git checkout -- <path>`,
 `git switch <branch>`, `git reset --hard`, `--merge` and `--keep`, `git restore` without
 `--staged`, and `git stash`; `git switch -c`, `git checkout -b`, `git reset --soft`, a mixed
-`git reset` and `git restore --staged` pass. `git clean` is refused wherever a file is untracked.
+`git reset` and `git restore --staged` pass. `git clean` is refused wherever a file is untracked,
+and with `-x` or `-X` wherever one is ignored. A redirection, as in `git stash 2>&1`, is not read
+as an argument.
 The refusal says to commit first, or to read another revision with `git show`, `git log -p` or
 `git blame`; not `git worktree add`, which a hook on the development machine blocks (Truls, on
 #224). It reads the tree in the call's `cwd`, moved by a `cd` and
