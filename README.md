@@ -330,12 +330,13 @@ through the environment are two of them.
 
 ## Keeping an agent session from running Python from a heredoc
 
-A Python edit script fed through a heredoc, `python - <<'EOF'`, changes a backslash escape in
-any string that is not raw, so a regex or a PowerShell path comes out changed (#240).
-`scripts/refuse-python-heredoc.ps1` is a hook that refuses a shell command running `python`,
-`python3` or `py` with its script read from a heredoc, and says to write the script to a file
-with the Write tool and run `python -I <file>`, or to use the Edit tool. `python -c`,
-`python -m`, a script file given a heredoc as its input, and a here-string, `<<<`, pass.
+A Python edit script fed through a heredoc, `python - <<'EOF'`, cannot be read back or run
+again, and one with a string that is not raw changes a regex's or a path's backslash escapes
+unseen (#240). `scripts/refuse-python-heredoc.ps1` is a hook that refuses a shell command
+running `python`, `python3`, `py` or another Python with its script read from a heredoc. It
+says to write the script to a file with the Write tool, with raw strings, and run
+`python -I <file>`, or to use the Edit tool. `python -c`, `python -m`, a script file given a
+heredoc as its input, `python - < edit.py`, and a here-string, `<<<`, pass.
 
 This repository wires it for its own sessions in its tracked `.claude/settings.json`, beside the
 hook-skip hook. A consumer adds it to its own:

@@ -2,15 +2,19 @@
 .SYNOPSIS
     A hook for agent sessions: refuses a shell command that runs Python with its script read
     from a heredoc. Exit 2 refuses the command before it runs and says to write the script to a
-    file and run that, or to use the Edit tool; exit 0 lets it run, and means only that this saw
-    no such command.
+    file, with raw strings, and run that, or to use the Edit tool; exit 0 lets it run, and means
+    only that this saw no such command. Exit 1 says on stderr that the tool call could not be
+    read and was not checked; the command still runs.
 
 .DESCRIPTION
     WHY (grado-factorio-tools#240). In the session of PRs #235 to #238, 51 shell calls ran
     `python - <<'PYEOF'`, and 16 of them printed `SyntaxWarning: invalid escape sequence`: a
     Python string, not raw, holding a PowerShell or regex backslash. One such edit halved a
-    regex's backslashes, by that session's account. A script in a file, written with the Write
-    tool, is read as written, and the Edit tool needs no script at all.
+    regex's backslashes, by that session's account. Python reads a string that is not raw the
+    same way from a file, so the refusal asks for raw strings too. What a file adds: it can be
+    read back, grepped and run again, which a heredoc's script cannot. And under the Bash tool a
+    heredoc holding quotes has failed to parse, and `python -` reading one has hung, by Truls's
+    agent memory (2026-10-08 to 2026-10-18). The Edit tool needs no script at all.
 
     HOW IT IS WIRED. In .claude/settings.json, a PreToolUse hook on the two shell tools, matcher
     `Bash|PowerShell`, as refuse-git-hook-skip.ps1 is. This repository's own tracked settings
@@ -19,25 +23,29 @@
     stdin: this reads `tool_input.command`. The `case` keeps PowerShell from starting before
     every shell command: whatever is refused holds `py` and `<<`.
 
-    WHAT IT REFUSES. A command in which the word `python`, `python3` or `py`, alone or at the
-    end of a path, with or without `.exe`, is followed by a heredoc, `<<` or `<<-`, before the
-    command ends, and by no script before it: its other words are options, or `-`. An option
-    that takes the next word as its value, -W, -X or -Q, is read with it.
+    WHAT IT REFUSES. A command in which the word `python`, with a version as `python3.12` or
+    none, `pythonw` or `py`, alone or at the end of a path, with or without `.exe`, is followed
+    by a heredoc, `<<` or `<<-`, before the command ends, and by no script before it: its other
+    words are options, `-`, or an output redirection, as `2>&1` or `> out.txt`. An option that takes
+    the next word as its value, -W, -X or -Q, is read with it. Every word of a command is read, so a
+    word before Python, as `env`, `exec`, `sudo` or a variable set for it, does not hide it.
 
     WHAT IT LETS THROUGH. `python -c` and `python -m`, alone or after switches that take no
-    value, as -Imjson.tool, whose code is their argument and not the heredoc; `python <file>`, with
-    or without a heredoc, which is then the script's input; a here-string, `<<<`, which holds one
-    line; and every command with no Python in it.
+    value, as -Imjson.tool, whose code is their argument and not the heredoc; `python <file>`,
+    with or without a heredoc, which is then the script's input; a script on stdin from a file,
+    `python - < edit.py`; a here-string, `<<<`, which holds one line; and every command with no
+    Python in it.
 
     WHAT IT CANNOT SEE. A heredoc piped into Python, as `cat <<EOF | python -`, and Python
-    started from a script, an alias, a variable, `sh -c`, `env` or `exec`. A here-string piped
-    to Python under the PowerShell tool, @' '@ | python -. Python given its script on stdin
-    from a file, `python - < edit.py`, which is read as written and is not refused. Other
-    interpreters reading a heredoc, as `node` and `perl` do. A person's own terminal: this is a
-    session's hook. And whether the settings still reach it, unless -SelfTest is run, which
-    reads the wired command and the matcher of its entry, and nothing else of the settings.
-    It reads the command as text and does not parse the shell, so it errs towards refusing: a
-    line of a heredoc's body that reads `python - <<EOF` is refused too.
+    started from a script, an alias, a variable or inside a quoted string, as `sh -c`. A
+    here-string piped to Python under the PowerShell tool, @' '@ | python -. Other interpreters
+    reading a heredoc, as `node` and `perl` do. A person's own terminal: this is a session's
+    hook. And whether the settings still reach it, unless -SelfTest is run, which reads the
+    wired command and the matcher of its entry, and nothing else of the settings. It reads the
+    command as text and does not parse the shell, and so does not skip a heredoc's body. That
+    errs towards refusing where a body's line reads `python - <<EOF`, and the other way where a
+    body holds a lone apostrophe, as `it's`: the quote it opens runs to the next one, and a
+    Python heredoc after it is read as quoted text and let through.
 
     TO CHECK IT, run the second example below.
 
@@ -80,8 +88,11 @@ function Test-PythonHeredoc {
     param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Command)
 
     # Words and the marks that end a command, as refuse-git-hook-skip.ps1's Test-SkipsHooks reads
-    # them, with a heredoc's `<<` made a word of its own first, so `python -<<EOF` is read too.
-    $text = ($Command -replace '[\\`]\r?\n', ' ') -replace '(?<!<)<<(?!<)', ' << '
+    # them, with a heredoc's `<<` made a word of its own first, so `python -<<EOF` is read too,
+    # and each output redirection taken out with its target, so `2>&1` neither ends the command
+    # at its `&` nor reads as a script.
+    $text = ($Command -replace '[\\`]\r?\n', ' ') -replace '(?<!<)<<(?!<)', ' << ' -replace
+        '(?:\d*|&)>>?\s*(?:&[\d-]|[^\s''"`;&|()<>]+)', ' '
     $tokens = [regex]::Matches($text,
         '(?<word>(?:"(?:[\\`].|[^"\\`])*"|''[^'']*''|[^\s;&|(){}`"''])+)|(?<end>[;&|(){}`\n])')
     $commands = @(, [System.Collections.Generic.List[string]]::new())
@@ -92,7 +103,7 @@ function Test-PythonHeredoc {
 
     foreach ($words in $commands) {
         for ($i = 0; $i -lt $words.Count; $i++) {
-            if ($words[$i] -notmatch '^(?:.*[\\/])?(?:python3?|py)(?:\.exe)?$') { continue }
+            if ($words[$i] -notmatch '^(?:.*[\\/])?(?:python[\d.]*w?|py)(?:\.exe)?$') { continue }
             for ($j = $i + 1; $j -lt $words.Count; $j++) {
                 $w = $words[$j]
                 if ($w -match '^<<(?!<)') { return $true }
@@ -124,6 +135,12 @@ if ($SelfTest) {
         @("git add a && python3 - <<'EOF' && git status`nprint(1)`nEOF", $true),
         @("out=`$(python - <<'EOF'`nprint(1)`nEOF`n)", $true),
         @("echo hi; python <<EOF`nprint(1)`nEOF", $true),
+        @("python - 2>&1 <<'EOF'`nprint(1)`nEOF", $true),
+        @("python3 - 2>/dev/null <<'EOF'`nprint(1)`nEOF", $true),
+        @("python - > out.txt <<'EOF'`nprint(1)`nEOF", $true),
+        @("python3.12 - <<'EOF'`nprint(1)`nEOF", $true),
+        @("env PYTHONIOENCODING=utf-8 python - <<'EOF'`nprint(1)`nEOF", $true),
+        @("exec python3 - <<'EOF'`nprint(1)`nEOF", $true),
         @('python -I edit.py', $false),
         @('python3 -I C:/scratch/edit.py arg', $false),
         @("python edit.py <<EOF`ninput`nEOF", $false),
@@ -143,7 +160,7 @@ if ($SelfTest) {
     )
     $failures = 0
     $n = 0
-    $total = $cases.Count + 2
+    $total = $cases.Count + 3
     foreach ($c in $cases) {
         $n++
         $ok = (Test-PythonHeredoc -Command $c[0]) -eq $c[1]
@@ -179,6 +196,13 @@ if ($SelfTest) {
     }
     Write-Host ("self-test {0}/{1}: the wired hook refuses Python from a heredoc with exit 2 and a reason, and passes a script file and a plain command -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++ }
+    # A tool call it cannot read: exit 1 and a line on stderr, not a refusal.
+    $n++
+    $unread = 'not json' | pwsh -NoProfile -File $PSCommandPath 2>&1 | Out-String
+    $ok = $LASTEXITCODE -eq 1 -and $unread -match 'NOT checked'
+    if (-not $ok) { Write-Host "    $LASTEXITCODE $unread" }
+    Write-Host ("self-test {0}/{1}: a tool call it cannot read exits 1 and says it was not checked -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
+    if (-not $ok) { $failures++ }
     # Which tools the session starts that command for: the matcher of the entry it was read from.
     $n++
     . "$PSScriptRoot/hook-matcher.ps1"
@@ -203,10 +227,10 @@ catch {
 }
 if ($refuse) {
     [Console]::Error.WriteLine(@"
-Refused: this command runs Python with its script read from a heredoc. A string in it that is
-not raw turns each backslash escape into something else, and a regex or a PowerShell path comes
-out changed. Write the script to a file with the Write tool and run python -I <file>, or make
-the change with the Edit tool.
+Refused: this command runs Python with its script read from a heredoc, which cannot be read
+back or run again. Write the script to a file with the Write tool and run python -I <file>, or
+make the change with the Edit tool. Write each regex and path as a raw string, r'...': in a
+string that is not raw, Python changes a backslash escape, from a file as from a heredoc.
 "@)
     exit 2
 }
