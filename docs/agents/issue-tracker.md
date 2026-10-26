@@ -99,7 +99,8 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
   The three headings stand once each and in that order (Truls, 2026-10-19,
   grado-factorio-modpack#320; for this repository, 2026-10-20, #171). `scripts/pr-body-check.ps1`
   holds a body to the three, and to the template's **Before:** and **After:** under
-  `## Evidence` and **Door:** and **Blast Radius:** under `## Merge Danger`; a change with
+  `## Evidence` and **Door:** and **Blast Radius:** under `## Merge Danger`, and with
+  `-RequireSummaryVisual` `## Summary` to a fenced or indented code block (#264); a change with
   nothing to show says none after **Before:** and **After:** (Truls, 2026-10-21, #185), this
   repository's one departure from the template, which asks for a before and after.
   Among what this repository adds to the template: above it, the `Closes` lines of the rule
