@@ -42,6 +42,9 @@ On top of the `/code-review` plugin. The evidence is in
   CI's run, by its id, or a local run. The comment is not edited once posted, and the
   plugin's own comment format is not used.
 - **A finding at 80 or more must be fixed; the rest are recorded.**
+- **A change that does other than an acceptance criterion, or a ruling of Truls's, on a ticket
+  it closes asks is a finding scored 80**, in either lane, shown by a read of the change or an
+  input that was run, unless the pull request cites Truls's comment on the ticket allowing it.
 - **A pushed commit is not rewritten, with one exception**: a finding about the tip commit's
   body may be fixed by one amend and one force-push, on the session's own branch, its pull
   request unmerged, before any fix commit makes it no longer the tip. The outcome names the
