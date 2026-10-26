@@ -158,8 +158,12 @@ grado-factorio-modpack's PR #387 (2026-10-26) the first run had three bugs and w
 **What is run** is the sibling's forms file, which it keeps and extends. A script the range
 changes counts with every script here that dot-sources or loads it, as the harness's scripts load
 `load-harness-lib.ps1`; `git grep -l <changed file> <new> -- scripts` in this repository names
-them. The forms are read from the whole sibling, not from its gate files alone: a sibling's gate
-scripts run ours too, as realistic-fusion-refreshed's `scripts/ship-check.ps1` runs
+them. The forms file lists the `-SelfTest` of each script the range changes, and of each script
+here that loads one, as a form run from the pin's copy, so each runs at both pins and its two
+outputs are compared like any form's: the measurement made by hand ran each copy's `-SelfTest`,
+and PR #251's rewrite dropped that step without saying so (its review, prose finding 6,
+2026-10-26). The forms are read from the whole sibling, not from its gate files alone: a
+sibling's gate scripts run ours too, as realistic-fusion-refreshed's `scripts/ship-check.ps1` runs
 `markdown-check.ps1` and its `scripts/factorio-lib.ps1` dot-sources `load-harness-lib.ps1` (both
 at `34f5ebe`, read 2026-10-23; PR #197's review). The script lists, under its table, each place
 the sibling names `vendor/grado-factorio-tools/scripts` that no form runs; a hit in a sibling
