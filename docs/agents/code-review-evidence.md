@@ -142,7 +142,10 @@ highest 75, and none of them named the departure. Its finding 5 found the body's
 and had it fixed to match the diff, not raised as a departure. A side agent raised it after the
 comment was posted, and Truls ruled on #232 that day. The lanes read the closed tickets, but no rule
 asked them to hold the change to the criteria. The rule sets the score, not the rubric, so that a
-departure always stops for Truls's answer.
+departure always stops for Truls's answer. `code-review.md` did not say so, and PR #241's own
+review scored the gap 40 and recorded it; since
+[#243](https://github.com/trulsjo/grado-factorio-tools/issues/243) it says that a score a rule
+sets is the score the session gives, and that this is not re-scoring.
 
 **A change that touches no script is reviewed by one agent.** Ruled by Truls on 2026-10-11,
 settling [#109](https://github.com/trulsjo/grado-factorio-tools/issues/109): such a change gets
