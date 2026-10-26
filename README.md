@@ -355,6 +355,38 @@ settings wire; `-SelfTest -Settings .claude/settings.json` runs a consumer's, an
 whose `matcher` would not start the hook for both shell tools. What the hook cannot see is in
 its header: a heredoc piped into Python, `cat <<EOF | python -`, is one.
 
+## Keeping an agent session from discarding uncommitted work
+
+A subagent once ran `git checkout --detach` in its session's working tree; the tree was clean, so
+nothing was lost (#224, from grado-factorio-modpack#366). `scripts/refuse-git-discard.ps1` is a
+hook that refuses a git command which would discard, overwrite or hide uncommitted work in the
+tree it runs against, by Truls's rulings on that ticket. On a tree where a tracked file has
+changed, staged or not, it refuses `git checkout <rev>` and `git checkout -- <path>`,
+`git switch <branch>`, `git reset --hard`, `--merge` and `--keep`, `git restore` without
+`--staged`, and `git stash`; `git switch -c`, `git checkout -b`, `git reset --soft`, a mixed
+`git reset` and `git restore --staged` pass. `git clean` is refused wherever a file is untracked.
+The refusal says to commit first, or to read another revision with `git show`, `git log -p`,
+`git blame` or a `git worktree add`. It reads the tree in the call's `cwd`, moved by a `cd` and
+by `git -C`, and finds a git call inside a compound command.
+
+A consumer wires it in its own `.claude/settings.json`, beside the mod-cache hook where it has
+that one:
+
+```json
+{
+  "type": "command",
+  "command": "i=$(cat); case $i in *checkout*|*switch*|*reset*|*restore*|*stash*|*clean*) h=\"$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-git-discard.ps1\"; if [ -f \"$h\" ]; then printf '%s' \"$i\" | pwsh -NoProfile -File \"$h\"; else printf '%s' '{\"systemMessage\":\"refuse-git-discard: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.\",\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"refuse-git-discard: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.\"}}'; fi;; esac"
+}
+```
+
+The `case` keeps PowerShell from starting unless the call names one of the six subcommands.
+Exit 2 refuses. Where it cannot tell, it fails open and loudly: with no command, outside a
+repository, with `--git-dir` or `--work-tree`, or with quotes it cannot pair, it lets the
+command run and prints JSON whose `additionalContext` tells the agent it was NOT checked, as the
+wiring does where the script is not there. `-SelfTest` proves each form on a dirty and a clean
+tree in a scratch repository, and runs both branches of the command above. What it cannot see is
+in its header: an alias, a script that runs git itself, and both shells' quoting, read roughly.
+
 ## Packing mods
 
 `scripts/pack-mods.ps1` builds one zip per mod directory, named `<name>_<version>.zip` from the

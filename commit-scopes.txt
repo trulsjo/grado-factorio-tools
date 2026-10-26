@@ -16,5 +16,6 @@ cd-hook
 hook-skip
 heredoc-hook
 pin-measure
+discard-hook
 docs
 repo
