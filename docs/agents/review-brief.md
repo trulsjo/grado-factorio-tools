@@ -4,9 +4,10 @@ The words a review's session hands each lane, written once so that every lane is
 (#140). How a review is run is in [code-review.md](code-review.md), and the prose rules in
 [code-review-prose.md](code-review-prose.md). This page carries two of `code-review.md`'s rules to
 the lane, what the bug scan does not load and when the check is not run again, and adds none of
-its own: a rule is changed there. The session fills the
-blanks, written `<like this>`, with what is particular to the change, and sends the rest as it
-stands. A lane that runs both reviews is sent both *Reads first* lines.
+its own: a rule is changed there. How a lane runs a command a rule names, and what of its output
+it reports, is the brief's (Truls, 2026-10-26, #232). The session fills the blanks, written
+`<like this>`, with what is particular to the change, and sends the rest as it stands. A lane
+that runs both reviews is sent both *Reads first* lines.
 
 ---
 
@@ -24,9 +25,10 @@ each with
   (`git log origin/main..<full SHA>`) and the pull request body (`gh pr view <number>`).
 
 **The check.** `<CI's run <id> passed on this commit: name it and do not run the check again |
-CI's run <id> has not finished on this commit: run gh run watch <id> --exit-status >
-<your scratch folder>/watch.txt 2>&1, then report its exit code and the run's closing line,
-grep '<id>$' watch.txt | tail -1, not the whole file; if it exits 0, name the run and do not
+CI's run <id> has not finished on this commit: in the Bash tool, run gh run watch <id>
+--exit-status > <your scratch folder>/watch.txt 2>&1 and keep the watch's exit code, then report
+that code and the run's closing line, grep -E '<id>$|\(<id>\) has already completed' <your scratch
+folder>/watch.txt | tail -1, not the whole file; if the watch exited 0, name the run and do not
 run the check, and if not, run pwsh -File scripts/check.ps1 and report what it printed | CI
 has not passed on this commit: run pwsh -File scripts/check.ps1 and report what it printed>`.
 
