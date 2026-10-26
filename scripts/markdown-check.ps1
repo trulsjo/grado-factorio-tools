@@ -78,10 +78,12 @@
     limit below 1 is refused.
     WHICH LINES ARE AN INDENTED CODE BLOCK IS ASKED OF POWERSHELL'S PARSER, ConvertFrom-Markdown
     (grado-factorio-tools#95), for every rule and with or without a limit, and of nothing here:
-    the script follows no list, blank line or rule to work it out. Fences, tables and headings
-    are read by this script. The parser is not GitHub's renderer, and where the two disagree the
-    check follows the parser. Where they were found to, each time over an indented line, is recorded
-    in docs/measurements.md (2026-10-10). Code to the parser and prose to GitHub: after a rule
+    the script follows no list, blank line or rule to work it out. A page with no line indented
+    four spaces or a tab, past any quote marks, can hold no such block and is not handed to it.
+    Fences, tables and headings are read by this script.
+    The parser is not GitHub's renderer, and where the two disagree the check follows the
+    parser. Where they were found to, each time over an indented line, is recorded in
+    docs/measurements.md (2026-10-10). Code to the parser and prose to GitHub: after a rule
     that is itself indented into a list item, and straight after a `^^^` or a `:::` line. Prose
     to the parser and code to GitHub: after a `term` line and a `:   definition` line, and on a
     first line that follows a byte-order mark.
@@ -522,6 +524,15 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             $deep = (0..89 | ForEach-Object { ('  ' * $_) + '- x' }) -join "`n"
             $f = @(& $long "$deep`n`ntext`n`n    $wide" 40)
             $f.Count -eq 1 -and $f[0] -match '^94: the line is 63 characters' } }
+        @{ Name = 'a page with no line indented four spaces or a tab is not handed to the parser; one with such a line is'; Test = {
+            # 200 nested quotes, with no indent, is past the parser's depth limit in pwsh 7.6.6, so
+            # whether it was asked shows in the message it prints when it gives up.
+            $quotes = "$('>' * 200) x"
+            $plain = @(& { Test-Markdown -Lines $quotes -Path 'docs/note.md' -Exists $exists -Anchors $anchors } 6>&1 | ForEach-Object { "$_" })
+            $indented = @(& { Test-Markdown -Lines $quotes, '', '    code' -Path 'docs/note.md' -Exists $exists -Anchors $anchors } 6>&1 | ForEach-Object { "$_" })
+            $tab = @(& { Test-Markdown -Lines $quotes, '', "`tcode" -Path 'docs/note.md' -Exists $exists -Anchors $anchors } 6>&1 | ForEach-Object { "$_" })
+            $asked = 'parser could not read it'
+            -not ($plain -match $asked) -and ($indented -match $asked) -and ($tab -match $asked) } }
         @{ Name = 'a heading underlined with === is held to the limit as prose'; Test = {
             @(& $long "$('word ' * 12)`n===" 40).Count -eq 1 } }
         @{ Name = 'a <placeholder> is counted, where an <https:> address is not'; Test = {
