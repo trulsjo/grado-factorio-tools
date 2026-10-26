@@ -138,11 +138,11 @@ has already completed with 'success'`, too.
 [#239](https://github.com/trulsjo/grado-factorio-tools/issues/239)). #232's brief asked a lane to
 report "the file's last lines", and PR #236 had it grep for the closing line instead, without
 asking Truls first, as `issue-tracker.md` requires. The review of `3ea6d2f` posted 8 findings, the
-highest 75, and none of them named the departure. Its finding 5 fixed the body's "last lines" to
-match the diff. A side agent raised it after the comment was posted, and Truls ruled on #232 that
-day. The lanes read the closed tickets, but no rule asked them to hold the change to the
-criteria. The rule sets the score, not the rubric, so that a departure always stops for Truls's
-answer.
+highest 75, and none of them named the departure. Its finding 5 found the body's "last lines"
+and had it fixed to match the diff, not raised as a departure. A side agent raised it after the
+comment was posted, and Truls ruled on #232 that day. The lanes read the closed tickets, but no rule
+asked them to hold the change to the criteria. The rule sets the score, not the rubric, so that a
+departure always stops for Truls's answer.
 
 **A change that touches no script is reviewed by one agent.** Ruled by Truls on 2026-10-11,
 settling [#109](https://github.com/trulsjo/grado-factorio-tools/issues/109): such a change gets
