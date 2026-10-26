@@ -89,15 +89,20 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
   keyword before an issue reference: GitHub closes on "closed: #103" in a sentence too, as on
   PR #105 (2026-10-11), and `scripts/pr-body-check.ps1` fails such a line. Its title is checked;
   see *Pull request titles* in [`docs/commit-convention.md`](../commit-convention.md).
-- **Pull request body**: the `mattpocock-skills:pr` template's `## Summary`, `## Evidence` and
-  `## Merge Danger`, once each and in that order (Truls, 2026-10-19,
-  grado-factorio-modpack#320; for this repository, 2026-10-20, #171), filled with that skill
-  where it is installed and by hand where not. `scripts/pr-body-check.ps1` holds a body to the
-  three, and to the template's **Before:** and **After:** under `## Evidence` and **Door:** and
-  **Blast Radius:** under `## Merge Danger`; a change with nothing to show says none after
-  **Before:** and **After:** (Truls, 2026-10-21, #185). This repository adds to the template:
-  above it, the `Closes` lines of the rule above, where the branch closes any ticket; below it,
-  nothing.
+- **Pull request body: load the `mattpocock-skills:pr` skill with the Skill tool, then draft the
+  body by its template**, before the create command above runs. The skill fills `## Summary`
+  with the smallest visual that makes the point, a diagram, a diff sketch, a tree or pseudocode,
+  and brief prose beside it; `## Evidence` with a run before and after; and `## Merge Danger`.
+  Where the plugin is not installed, the template is filled by hand. The session of PRs #249 to
+  #252 and #257 drafted without loading it, and their Summaries held no visual (#263).
+  The three headings stand once each and in that order (Truls, 2026-10-19,
+  grado-factorio-modpack#320; for this repository, 2026-10-20, #171). `scripts/pr-body-check.ps1`
+  holds a body to the three, and to the template's **Before:** and **After:** under
+  `## Evidence` and **Door:** and **Blast Radius:** under `## Merge Danger`; a change with
+  nothing to show says none after **Before:** and **After:** (Truls, 2026-10-21, #185).
+  This repository adds to the template and replaces none of it: above it, the `Closes` lines of
+  the rule above, where the branch closes any ticket; inside it, what `-CiteSiblings` and the
+  *Blast Radius* rule below ask of its prose; below it, nothing.
   The body does not recount the review: each review posts its findings as one comment on the
   pull request, by the rule in [`code-review.md`](code-review.md).
 - **The Blast Radius of a change to a script names each place a sibling uses it**, found by two
