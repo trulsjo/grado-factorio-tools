@@ -478,6 +478,23 @@ statement of its script. A function's param block is not read.
 `scripts/check.ps1` runs it on `scripts/`. It reads that a split exists, not that it runs before
 the parameter is used; the rest it cannot see is in its header. `-SelfTest` proves it can fail.
 
+## Measuring a sibling's pin move
+
+`scripts/pin-measure.ps1` measures what moving a sibling's `vendor/grado-factorio-tools` pin
+changes (#247), as [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md)'s *Pin tickets*
+asks. Run from the sibling's root, with the submodule checked out at the new pin:
+
+    pwsh -File vendor/grado-factorio-tools/scripts/pin-measure.ps1 -Old 8189e45 -New 2c13393 -Out ../pin-move
+
+It clones the sibling twice at GitHub's `main`, one clone per pin, each with that pin's
+`scripts/` in its `vendor/`, and runs each form the sibling lists in its forms file, `-Forms`,
+`scripts/pin-forms.psd1` unless said, at both. `-Out`, empty or new, gets each form's output and
+exit code at both pins, `ls-remote.txt`, `breaking.txt` with each `BREAKING CHANGE:` footer in
+the range, and `table.md`, which compares the two runs of each form and lists each place the
+sibling names a script here that no form runs. It reports and does not judge: exit 0 whatever the
+forms did, exit 1 only when it could not measure. The forms file's shape and its four
+placeholders are in the header. `-SelfTest` builds both repositories offline and needs no game.
+
 ## Checking this repository
 
 `scripts/check.ps1` is the one command before a push. It parses every script here, runs each

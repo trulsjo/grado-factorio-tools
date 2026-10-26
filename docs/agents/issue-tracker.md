@@ -109,38 +109,54 @@ move changes for the sibling's gates. **The measurement is made in a copy of the
 GitHub's `main` that no other session uses, never in the sibling's checkout**: on 2026-10-23 the
 modpack's checkout was on another session's branch, whose staging changed a run between two
 reads (#195, from grado-factorio-modpack#353). A `git worktree` is not an option: a hook blocks
-it. In a fresh scratch directory, with `<s>` the sibling's name and `<old>` and `<new>` the pin
-and the commit it moves to:
+it.
 
-    git clone --quiet --no-checkout <the sibling's checkout> s
-    git -C s fetch --quiet https://github.com/trulsjo/<s>.git main
-    git -C s switch --quiet --detach FETCH_HEAD
-    git -C s update-ref refs/remotes/origin/main FETCH_HEAD
-    git ls-remote https://github.com/trulsjo/<s>.git refs/heads/main
-    for c in <old> <new>; do
-        mkdir $c && git -C <this repository> archive $c scripts | tar -x -C $c
-    done
+**`scripts/pin-measure.ps1` makes the measurement**, in one command run from the sibling's
+`vendor/grado-factorio-tools/scripts/` with the submodule at the new pin (#247). It clones the
+sibling twice at GitHub's `main`, fills each clone's `vendor/` with one pin's copy of `scripts/`,
+runs each form the sibling's forms file lists at both pins, and writes each output and exit code,
+a table that compares them and the range's breaking changes to the directory it is given. Its
+header holds the commands, the forms file's shape and what each output file is. Each sibling
+hand-wrote this from the prose that stood here, and got it wrong first: on
+grado-factorio-modpack's PR #387 (2026-10-26) the first run had three bugs and was discarded.
 
-The clone's own `origin/main` is the checkout's `main`, which may be behind GitHub's, so the fetch
-and `update-ref` set it to GitHub's; `ls-remote` shows that `git -C s rev-parse HEAD` is GitHub's
-`main`.
+**What is run** is the sibling's forms file, which it keeps and extends. A script the range
+changes counts with every script here that dot-sources or loads it, as the harness's scripts load
+`load-harness-lib.ps1`; `git grep -l <changed file> <new> -- scripts` in this repository names
+them. The forms are read from the whole sibling, not from its gate files alone: a sibling's gate
+scripts run ours too, as realistic-fusion-refreshed's `scripts/ship-check.ps1` runs
+`markdown-check.ps1` and its `scripts/factorio-lib.ps1` dot-sources `load-harness-lib.ps1` (both
+at `34f5ebe`, read 2026-10-23; PR #197's review). The script lists, under its table, each place
+the sibling names `vendor/grado-factorio-tools/scripts` that no form runs; a hit in a sibling
+script counts where a gate runs that script, which its `.github/workflows/`, `.githooks/` or
+`.claude/settings.json` says, and is then added as a form. The ticket records the sibling commit,
+and each command with what it printed, as *Conventions* asks.
 
-**What is run.** A script the range changes counts with every script here that dot-sources or loads
-it, as the harness's scripts load `load-harness-lib.ps1`; `git grep -l <changed file> <new> --
-scripts` in this repository names them. The forms are read from the whole sibling, not from its gate
-files alone: a sibling's gate scripts run ours too, as realistic-fusion-refreshed's
-`scripts/ship-check.ps1` runs `markdown-check.ps1` and its `scripts/factorio-lib.ps1` dot-sources
-`load-harness-lib.ps1` (both at `34f5ebe`, read 2026-10-23; PR #197's review). `git -C s grep -n
-vendor/grado-factorio-tools/scripts` lists each place; a hit in a sibling script counts where a gate
-runs that script, which its `.github/workflows/`, `.githooks/` or `.claude/settings.json` says. From
-inside `s`, each form is run from `../<old>` and `../<new>` and cited by file, and each copy's
-`-SelfTest` of the script is run. The two outputs of each form are compared with `cmp`. The ticket
-records the sibling commit, and each command with what it printed, as *Conventions* asks.
+**Each form that differs is named in the sibling's pull request**, with what the difference is:
+the script reports and does not judge, and exits 0 whatever it found. Its table goes in
+*Evidence*.
 
-What the copy cannot see: the sibling's submodule is not initialised, so a link into `vendor/` is
-reported as not checked; its index matches `HEAD`, so a no-argument form reads no staged file; and
-a form over `origin/main...HEAD` reads nothing at `main`, so a range of the sibling's own history,
-as `HEAD~20...HEAD`, stands in for a pull request's and is named as such.
+**Each breaking change in the range is named too** (#244). Run in this repository, this lists
+each commit in the range whose message holds a `BREAKING CHANGE:` footer, with the footer, and
+nothing for a range with none; the script writes the same list to its `breaking.txt`:
+
+```sh
+git log --format='== %h%n%b' -E --grep='^BREAKING CHANGE: ' <old>..<new> | awk '/^== / {print; next} /^BREAKING CHANGE: / {f=1} f && (/^$/ || /^[A-Za-z][A-Za-z0-9-]*: / && !/^BREAKING CHANGE: /) {f=0} f'
+```
+
+The sibling's pull request names each, under *Merge Danger*, with what it changes for the
+sibling, or that it changes nothing there and why; and the list goes to the sibling's pre-PR
+reviewer with the rest of the measurement. On grado-factorio-modpack's PR #387 (2026-10-26),
+moving the pin from `8189e45` to `2c13393`, the range's one breaking commit, `67c7e60`, made
+`-With space-age` enable `quality` too. No gate runs the harness, so the measurement, the pre-PR
+review and the first body all missed it; the plugin pass found it (PR #387's comment
+`issuecomment-6413089659`, finding 2, read 2026-10-26).
+
+What the copy cannot see: the sibling's own submodule is not initialised, so `vendor/` holds
+only the pin's `scripts/`, and a link to anything else there is reported as not checked; its
+index matches `HEAD`, so a no-argument form reads no staged file; and a form over
+`origin/main...HEAD` reads nothing at `main`, so a range of the sibling's own history, as
+`HEAD~20...HEAD`, stands in for a pull request's and is named as such.
 
 ## Pull requests as a triage surface
 
