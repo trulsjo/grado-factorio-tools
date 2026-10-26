@@ -291,10 +291,14 @@ function Test-Markdown {
     # block has a type of its own.
     $codeLines = [System.Collections.Generic.HashSet[int]]::new()
     $pending = [System.Collections.Generic.Stack[object]]::new()
+    # A page with no line indented four spaces or a tab, past any quote marks, holds no indented
+    # code block, and is not handed to the parser, nor its tokens walked (#261, PR #265).
     # The parser has a depth limit and throws past it. That must not end the run with no file
     # named, nor pass the page: it is read with no line of it taken for code.
-    try { $pending.Push((ConvertFrom-Markdown -InputObject ($Lines -join "`n")).Tokens) }
-    catch { Write-Host "markdown-check: ${Path}: PowerShell's parser could not read it, so no line of it was taken for code: $($_.Exception.Message)" }
+    if ($Lines -match '^(?:\s*>)*(?: {0,3}\t| {4})') {
+        try { $pending.Push((ConvertFrom-Markdown -InputObject ($Lines -join "`n")).Tokens) }
+        catch { Write-Host "markdown-check: ${Path}: PowerShell's parser could not read it, so no line of it was taken for code: $($_.Exception.Message)" }
+    }
     while ($pending.Count) {
         $block = $pending.Pop()
         if ($block.GetType().Name -eq 'CodeBlock') { for ($l = 0; $l -lt $block.Lines.Count; $l++) { $null = $codeLines.Add($block.Line + $l) } }
