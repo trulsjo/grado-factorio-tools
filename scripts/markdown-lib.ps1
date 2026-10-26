@@ -4,9 +4,9 @@
     the table rows, the links, and Test-Markdown, which classifies each line and reports what the
     check reports. Moved out of markdown-check.ps1 unchanged (grado-factorio-tools#215), so the
     rewrap cannot read a line as prose that the check reads as a table row, code or a heading.
-    Get-CountedLine is the length rule's count, shared the same way. Dot-source it; it has no
-    -SelfTest of its own: markdown-check.ps1's holds Test-Markdown, and markdown-rewrap.ps1's
-    the count.
+    Get-CountedLine, the length rule's count, was taken out of Test-Markdown in the same change,
+    so the rewrap measures a line as the check does. Dot-source it; it has no -SelfTest of its
+    own: markdown-check.ps1's holds Test-Markdown and the count.
 #>
 
 Set-StrictMode -Version Latest
