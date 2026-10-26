@@ -38,14 +38,20 @@
     a blank line, a line such as `.SYNOPSIS`, or a change of indent. The indent is kept on each line
     written, and lines under `.EXAMPLE` are left as they are. A shebang and code are never touched.
 
-    WHAT IT LEAVES, and names: a line that cannot be brought under the limit, as one holding a
-    single token longer than it. What the check exempts is never flagged, so never touched.
+    WHAT IT LEAVES, and names: a line the check still reports once it is rewrapped, as one
+    holding a word and a token too long to share a line. A line of one token longer than the
+    limit is not named: the check passes it, having no space to break at. What the check exempts
+    is never flagged, so never touched.
 
-    WHAT IT CANNOT SEE. Whether the wrap reads well: it is greedy, not balanced. A paragraph that
+    WHAT IT CANNOT SEE. Whether the wrap reads well: it is greedy, not balanced. A flagged line
+    that starts inside a code span opened on the line before, whose backticks it then pairs
+    wrongly: grado-factorio-modpack at 6d7a119 had one, a line starting `>= 4.17.10`, which
+    GitHub reads as a block quote. A paragraph that
     continues lazily into a line the check reads as something else. In -Comment mode, a block
     comment's opening or closing mark inside a string, which is taken as the block's edge, and a
     hanging indent such as a help paragraph's term and its text, whose flagged line is rewrapped to
-    its own indent.
+    its own indent. And a line starting `# ` inside a here-string or a YAML block scalar, which
+    is taken for a comment and rewrapped.
 
 .PARAMETER Range
     Rewrap the Markdown files changed in this commit range, as markdown-check.ps1 takes it:
@@ -64,8 +70,9 @@
     Rewrap the comment lines of the -Path files instead of Markdown.
 
 .PARAMETER SelfTest
-    Run the cases that hold it to this header against text in memory, each against a naive
-    greedy wrap that makes the defect. Needs no git and no game.
+    Run the cases that hold it to this header, against text in memory and a scratch file; the
+    ticket's five defects each against a naive greedy wrap too, which makes it. Needs no git and
+    no game.
 
 .EXAMPLE
     pwsh -File scripts/markdown-rewrap.ps1 -MaxLineLength 100
@@ -93,7 +100,7 @@ $ErrorActionPreference = 'Stop'
 
 # A token is a run of text with no space outside a code span, a link, an autolink or an HTML
 # comment, which may hold spaces and are never broken.
-$TOKEN = '(?:(`+)(?:(?!\1).)*?\1|<!--.*?-->|\[[^\]]*\](?:\([^)]*\)|\[[^\]]*\])?|<[a-zA-Z][a-zA-Z0-9+.-]*:[^>\s]*>|[^\s`<\[]|[`<\[])+'
+$TOKEN = '(?:(`+)(?:(?!\1).)*?\1|<!--.*?-->|\[(?:\\.|[^\[\]\\]|\[[^\]]*\])*\](?:\([^)]*\)|\[[^\]]*\])?|<[a-zA-Z][a-zA-Z0-9+.-]*:[^>\s]*>|[^\s`<\[]|[`<\[])+'
 # What a line must not start with: it would begin a list item, a heading, a block quote, a table
 # row, a fence, a setext underline or an HTML block.
 $OPENS = '^(?:[-*+]|\d+[.)]|#{1,6}|=+|-+|>.*|\|.*|```.*|~~~.*|<[a-zA-Z/!].*)$'
@@ -143,28 +150,37 @@ function Invoke-MarkdownRewrap {
         for ($k = $next; $k -lt $f; $k++) { $out.Add($Lines[$k]) }
         $quote = [regex]::Match($Lines[$f], '^(?:\s*>)+\s?').Value
         $body = $Lines[$f].Substring($quote.Length)
+        # A later line's marks have a space after them, so no word is joined to a `>`.
+        $marks = if ($quote) { $quote.TrimEnd() + ' ' } else { '' }
         $item = [regex]::Match($body, '^(\s*)([-*+]|\d+[.)])(\s+)(?=\S)')
-        if ($item.Success) { $first = $quote + $item.Value; $rest = $quote + (' ' * $item.Length) }
-        else { $first = $quote + [regex]::Match($body, '^\s*').Value; $rest = $first }
+        if ($item.Success) { $first = $quote + $item.Value; $rest = $marks + (' ' * $item.Length) }
+        else { $first = $quote + [regex]::Match($body, '^\s*').Value; $rest = $marks + [regex]::Match($body, '^\s*').Value }
         # The paragraph runs on while a line holds more of it.
         $e = $f
         while ($e + 1 -lt $Lines.Count -and $Lines[$e] -notmatch '(  |\\)$') {
             $n = $Lines[$e + 1]
             if (-not $n.StartsWith($quote) -or ($quote -eq '' -and $n -match '^\s*>')) { break }
             $b = $n.Substring($quote.Length)
-            if ($b -notmatch '\S' -or $b -match '^\s*(?:[-*+]|\d+[.)])\s|^\s{0,3}#{1,6}(\s|$)|^\s*(```|~~~)|^\s*\||^\s{0,3}\[[^\]]+\]:|^\s*<|^\s*([-*_=])(\s*\1){2,}\s*$|^\s*>') { break }
+            if ($b -notmatch '\S' -or $b -match '^\s*(?:[-*+]|\d+[.)])\s|^\s{0,3}#{1,6}(\s|$)|^\s*(```|~~~)|^\s*\||^\s{0,3}\[[^\]]+\]:|^\s*<|^\s*(?<rule>[-*_=])(\s*\k<rule>){2,}\s*$|^\s*>') { break }
             $e++
         }
         # Each line trimmed, so that a link or an HTML comment the paragraph had broken across two
         # lines is one token with one space where the break was.
         $text = (@($Lines[$f].Substring($first.Length)) + @(for ($k = $f + 1; $k -le $e; $k++) { $Lines[$k].Substring($quote.Length).Trim() })) -join ' '
         $new = Join-Greedy -Tokens (Split-Token $text.Trim()) -First $first -Rest $rest -Max $Max -Measure { (Get-CountedLine $args[0]).Length } -Guard
+        # A hard line break of two spaces ends the paragraph here, and is kept.
+        if ($Lines[$e] -match '\S  +$') { $new[-1] += '  ' }
         $start = $out.Count + 1
-        foreach ($l in $new) { $out.Add($l); if ((Get-CountedLine $l).Length -gt $Max) { $left += $out.Count } }
+        foreach ($l in $new) { $out.Add($l) }
         $rewrapped += "$start-$($out.Count)"
         $next = $e + 1
     }
     for ($k = $next; $k -lt $Lines.Count; $k++) { $out.Add($Lines[$k]) }
+    # Left is what the check still reports, so the two cannot disagree on it.
+    if ($rewrapped) {
+        $left = @(Test-Markdown -Lines $out.ToArray() -Path 'rewrap.md' -Exists { $true } -Anchors { $null } -MaxLineLength $Max 6>$null |
+            Where-Object { $_.Message -like 'the line is *' } | ForEach-Object Line)
+    }
     @{ Lines = $out.ToArray(); Rewrapped = $rewrapped; Left = $left }
 }
 
@@ -210,8 +226,10 @@ function Invoke-CommentRewrap {
             $e = $f
             while ($e + 1 -lt $Lines.Count -and $Lines[$e + 1].StartsWith($first) -and $Lines[$e + 1].Substring($first.Length) -match '^\S') { $e++ }
         }
-        # Each line less its prefix: the `# ` of a block, or the `<#` that opens one.
-        $text = (@($Lines[$f..$e] | ForEach-Object { ($_ -replace '^\s*(<#|# )?').Trim() }) -join ' ')
+        # Each line less its prefix: the `# ` of a `#` block, or the `<#` that opens a block
+        # comment.
+        $strip = if ($inBlock[$f]) { '^\s*<#' } else { '^\s*# ' }
+        $text = (@($Lines[$f..$e] | ForEach-Object { ($_ -replace $strip).Trim() }) -join ' ')
         $close = [regex]::Match($text, '\s*#>$')
         if ($close.Success) { $text = $text.Substring(0, $close.Index) }
         for ($k = $next; $k -lt $f; $k++) { $out.Add($Lines[$k]) }
@@ -284,6 +302,15 @@ function Invoke-SelfTest {
         'a line before the flagged one is left, and a block quote keeps its >' = {
             $in = @('> Short first.', '> Then a quoted line well past the limit of forty.')
             (& $holds $in { param($l) $l[0] -ceq '> Short first.' -and -not @($l | Where-Object { -not $_.StartsWith('> ') }) }) }
+        'a thematic break, a setext underline and a hard break end the paragraph, and are kept' = {
+            $ok = foreach ($rule in '***', '---', '=====') {
+                & $holds @('A paragraph line that is long enough to pass forty.', $rule, 'After.') { param($l) $l -ccontains $rule }
+            }
+            $hard = Invoke-MarkdownRewrap -Lines @('A line that is long enough to go well past forty  ', 'next line kept on its own.') -Max $max
+            -not ($ok -contains $false) -and $hard.Lines[-2].EndsWith('forty  ') -and $hard.Lines[-1] -ceq 'next line kept on its own.' }
+        'a link whose text holds brackets is not broken' = {
+            $in = @('Some words first, [a link with [nested] text and more](https://example.com/x) after.')
+            (& $holds $in { param($l) @($l | Where-Object { $_.Contains('[a link with [nested] text and more](https://example.com/x)') }).Count -eq 1 }) }
         'a link broken across a list item''s lines is joined with one space, and left whole' = {
             $in = @('- An item that runs past the limit, [a link', '  text](https://example.com) and more words.')
             (& $holds $in { param($l) @($l | Where-Object { $_.Contains('[a link text](https://example.com)') }).Count -eq 1 }) }
@@ -296,6 +323,12 @@ function Invoke-SelfTest {
         'a <# #> paragraph is rewrapped to its end, its indent kept' = {
             $in = @('<#', '.SYNOPSIS', '    A help line that is well over the limit of forty.', '    And a line near it, close to the end.', '#>')
             $in[3].Length -gt $max - 8 -and (& $commentHolds $in '^\s' '    ') -and (Invoke-CommentRewrap -Lines $in -Max $max).Lines[-1] -ceq '#>' }
+        'a block-comment paragraph ends at a blank line, a help keyword or a change of indent; a # inside it is a word' = {
+            $in = @('<#', '.DESCRIPTION', '    A help line that is well over the limit of forty.', '', '    Second paragraph.',
+                '    Third, a long line well over the limit of forty,', '    # in it here.', '.NOTES', '    After.', '    Long again past the limit of forty chars.', '        Deeper.', '#>')
+            $r = (Invoke-CommentRewrap -Lines $in -Max $max).Lines
+            ($r -ccontains '    Second paragraph.') -and ($r -ccontains '.NOTES') -and ($r -ccontains '    After.') -and ($r -ccontains '        Deeper.') -and
+                ($r -join ' ') -match ' # in it' -and -not @($r | Where-Object { $_.Length -gt $max }) }
         'a doc comment opened and closed on its paragraph keeps <# and #>' = {
             $in = @('    <#  A doc comment that is well over the limit.  #>')
             $r = (Invoke-CommentRewrap -Lines $in -Max $max).Lines
@@ -304,12 +337,33 @@ function Invoke-SelfTest {
             $cmd = '    pwsh -File scripts/markdown-rewrap.ps1 -MaxLineLength 100'
             $r = Invoke-CommentRewrap -Lines @('<#', '.EXAMPLE', $cmd, '#>') -Max $max
             $r.Lines[2] -ceq $cmd -and -not $r.Rewrapped }
-        'a token longer than the limit is left on a line of its own and named' = {
+        'a token longer than the limit goes on a line of its own, not named; a line the check still reports is named' = {
             $r = Invoke-MarkdownRewrap -Lines @('A word then `a-code-span-much-longer-than-forty-characters` after.') -Max $max
-            $r.Left.Count -eq 1 -and $r.Lines[$r.Left[0] - 1] -ceq '`a-code-span-much-longer-than-forty-characters`' }
-        'no -MaxLineLength is refused' = {
+            $named = Invoke-MarkdownRewrap -Lines @('A word then a [link whose text runs well past forty characters](u) after.') -Max $max
+            -not $r.Left -and $r.Lines -ccontains '`a-code-span-much-longer-than-forty-characters`' -and $named.Left.Count -eq 1 }
+        'an autolink is not broken, and no line starts with # or |' = {
+            $in = @('Words, and words <https://example.com/a b> then # and | more words to wrap here.')
+            (& $holds $in { param($l) -not @($l | Where-Object { $_ -match '^[#|]' }) -and @($l | Where-Object { $_.Contains('<https://example.com/a') }) }) }
+        'a file is written back with its byte-order mark and CRLF line endings' = {
+            $file = Join-Path ([IO.Path]::GetTempPath()) "rewrap-selftest-$([guid]::NewGuid().ToString('N')).md"
+            try {
+                [IO.File]::WriteAllBytes($file, [byte[]] (0xEF, 0xBB, 0xBF) + [Text.Encoding]::UTF8.GetBytes("A line that is long enough to go well past forty.`r`nNext.`r`n"))
+                $null = & pwsh -NoProfile -File $PSCommandPath -Path $file -MaxLineLength $max
+                $bytes = [IO.File]::ReadAllBytes($file)
+                $text = [Text.Encoding]::UTF8.GetString($bytes, 3, $bytes.Length - 3)
+                $LASTEXITCODE -eq 0 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF -and
+                    ($text -split "`r`n").Count -eq 3 -and -not ($text -replace "`r`n" -match "`n")
+            }
+            finally { Remove-Item -LiteralPath $file -ErrorAction SilentlyContinue } }
+        'no -MaxLineLength is refused, and so is a script without -Comment, -Comment without -Path, -Path with -All, and a missing file' = {
             $said = & pwsh -NoProfile -File $PSCommandPath -Path 'x.md' 2>&1 | Out-String
-            $LASTEXITCODE -ne 0 -and $said -match '-MaxLineLength' }
+            $code = $LASTEXITCODE
+            $script = & pwsh -NoProfile -File $PSCommandPath -Path 'x.ps1' -MaxLineLength 40 2>&1 | Out-String
+            $scriptCode = $LASTEXITCODE
+            $refused = foreach ($a in @('-Comment', '-MaxLineLength', '40'), @('-All', '-Path', 'x.md', '-MaxLineLength', '40'), @('-Path', 'no-such.md', '-MaxLineLength', '40')) {
+                $null = & pwsh -NoProfile -File $PSCommandPath @a 2>&1; $LASTEXITCODE -ne 0
+            }
+            $code -ne 0 -and $said -match '-MaxLineLength' -and $scriptCode -ne 0 -and $script -match 'not a Markdown file' -and -not ($refused -contains $false) }
     }
     $failures = 0; $n = 0
     foreach ($name in $cases.Keys) {
@@ -329,6 +383,9 @@ if ($MaxLineLength -lt 1) { throw 'Give -MaxLineLength, 1 or more: the limit mar
 $Path = @($Path -split ',' | Where-Object { $_ })
 if ($Comment -and -not $Path) { throw '-Comment reads only the files -Path names.' }
 if ($Path -and ($All -or $Range)) { throw '-Path cannot be combined with -All or -Range: it names the files itself.' }
+# As markdown-check.ps1 refuses it: a script read as Markdown would have its code rewrapped.
+$notMarkdown = @($Path | Where-Object { $_ -notmatch '\.md$' })
+if ($notMarkdown -and -not $Comment) { throw "$($notMarkdown -join ', ') is not a Markdown file. Give -Comment to rewrap a script's comment lines." }
 
 if ($Path) { $files = $Path }
 else {
