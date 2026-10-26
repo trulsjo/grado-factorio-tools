@@ -159,10 +159,23 @@ grado-factorio-modpack's PR #387 (2026-10-26) the first run had three bugs and w
 changes counts with every script here that dot-sources or loads it, as the harness's scripts load
 `load-harness-lib.ps1`; `git grep -l <changed file> <new> -- scripts` in this repository names
 them. The forms file lists the `-SelfTest` of each script the range changes, and of each script
-here that loads one, as a form run from the pin's copy, so each runs at both pins and its two
-outputs are compared like any form's: the measurement made by hand ran each copy's `-SelfTest`,
-and PR #251's rewrite dropped that step without saying so (its review, prose finding 6,
-2026-10-26). The forms are read from the whole sibling, not from its gate files alone: a
+here that loads one, as a form run from the pin's copy, so each runs at both pins: the
+measurement made by hand ran each copy's `-SelfTest`, and PR #251's rewrite dropped that step
+without saying so (its review, prose finding 6, 2026-10-26). Three things hold for such a form
+(PR #257's review, findings 1 to 3, 2026-10-26):
+
+- **A self-test that reads outside `scripts/`** is given the argument its header names for it,
+  or is run in this repository at each pin instead: the pin's copy holds `scripts/` alone, so
+  `refuse-git-hook-skip.ps1 -SelfTest` and `refuse-python-heredoc.ps1 -SelfTest`, which default
+  `-Settings` to `.claude/settings.json` beside `scripts/`, exit 1 from it at both pins.
+- **Its exit codes are what is compared**, not its output: `param-check.ps1 -SelfTest` prints its
+  temp directory and `pr-body-check.ps1 -SelfTest` a scratch commit's hash, which differ on every
+  run, so the table can read a self-test as differing where nothing changed.
+- **A self-test that needs the game**, as one of `check.ps1`'s `$NEEDS_GAME` does, is the
+  sibling's to list or leave out; `trace-definitions.ps1 -SelfTest -NoGame` runs the cases of
+  that script that need none.
+
+The forms are read from the whole sibling, not from its gate files alone: a
 sibling's gate scripts run ours too, as realistic-fusion-refreshed's `scripts/ship-check.ps1` runs
 `markdown-check.ps1` and its `scripts/factorio-lib.ps1` dot-sources `load-harness-lib.ps1` (both
 at `34f5ebe`, read 2026-10-23; PR #197's review). The script lists, under its table, each place
