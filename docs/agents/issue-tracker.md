@@ -86,6 +86,11 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
 
   PR #104 was opened with a 76-character title, by the session's account of 2026-10-11: the
   check ran in a command joined with `;`, which does not stop on a failure.
+  `scripts/refuse-pr-body.ps1`, a session hook, refuses a `gh pr create` or `gh pr edit` whose
+  body the check fails, or whose body is not a file named in full (#259): PR #252 was opened
+  with a failing body, its check piped to `tail`, whose 0 let `&&` go on. The chain is still
+  written out, because the hook checks the body only, not the title, and a person's terminal and
+  a sibling without the hook have no hook.
 - **A pull request carries one `Closes #N` line per ticket it closes**, and no other closing
   keyword before an issue reference: GitHub closes on "closed: #103" in a sentence too, as on
   PR #105 (2026-10-11), and `scripts/pr-body-check.ps1` fails such a line. Its title is checked;

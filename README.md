@@ -390,6 +390,32 @@ wiring does where the script is not there. `-SelfTest` proves each form on a dir
 tree in a scratch repository, and runs both branches of the command above. What it cannot see is
 in its header: an alias, a script that runs git itself, and both shells' quoting, read roughly.
 
+## Keeping an agent session from opening a pull request with a failing body
+
+PR #252 was opened with a body `pr-body-check.ps1` failed: the check was piped to `tail`, whose
+exit code let `&&` go on (#259). `scripts/refuse-pr-body.ps1` is a hook that refuses a
+`gh pr create` or `gh pr edit` whose body the check fails, with its report. It refuses a body
+given inline, a `gh pr create` with no `--body-file`, and a body file it cannot read: `-`, a
+path through a variable, `$(…)` or `~`, or one that is not there; a relative path is taken
+against the call's `cwd`, where the check runs too. A `gh pr edit` that touches no body passes.
+The title is not checked.
+
+This repository wires it in its tracked `.claude/settings.json`, with the arguments CI hands the
+check. A consumer adds it to its own, with the arguments its own gate uses:
+
+```json
+{
+  "type": "command",
+  "command": "i=$(cat); case $i in *gh*pr*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-pr-body.ps1\" -CiteSiblings;; esac"
+}
+```
+
+Every argument after the script, `-CheckArgs`, goes to `pr-body-check.ps1` after the body
+file. Exit 2 refuses; a tool call it cannot read exits 1 and says on stderr that the command was
+not checked. `-SelfTest` proves each refusal and pass, and runs the command the settings wire;
+`-SelfTest -Settings .claude/settings.json` runs a consumer's. What it cannot see is in its
+header: a command inside `sh -c`, and a body written by `gh api`, are two.
+
 ## Packing mods
 
 `scripts/pack-mods.ps1` builds one zip per mod directory, named `<name>_<version>.zip` from the

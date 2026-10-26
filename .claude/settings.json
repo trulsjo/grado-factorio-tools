@@ -17,6 +17,10 @@
           {
             "type": "command",
             "command": "i=$(cat); case $i in *py*'<<'*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/scripts/refuse-python-heredoc.ps1\";; esac"
+          },
+          {
+            "type": "command",
+            "command": "i=$(cat); case $i in *gh*pr*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/scripts/refuse-pr-body.ps1\" -CiteSiblings -RequireSummaryVisual;; esac"
           }
         ]
       }
