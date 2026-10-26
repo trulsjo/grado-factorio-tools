@@ -121,7 +121,12 @@ and by `gh run watch --help` exits non-zero if the run fails. With gh 2.103.1 on
 already finished, `gh run watch 40198350111 --exit-status` printed `Run check (40198350111) has
 already completed with 'success'` and exited 0, and `gh run watch 40176673959 --exit-status` printed
 the same with `'failure'` and exited 1. What it printed on a run in progress, 40239476582, which
-passed, is in PR #231's body; a run that fails while watched was not seen.
+passed, is in PR #231's body; a run that fails while watched was not seen. The watch writes to a
+file in the lane's scratch folder, and the lane reports its exit code and last lines (Truls,
+2026-10-26, settling [#232](https://github.com/trulsjo/grado-factorio-tools/issues/232)): the
+watch redraws every 3 seconds, and `gh run watch 40239476582 --exit-status > watch.txt 2>&1`, 93
+seconds on 2026-10-25, wrote 557 lines and 21,417 bytes by `wc -l` and `wc -c`, all of which a
+lane would have taken into its context.
 
 **A change that touches no script is reviewed by one agent.** Ruled by Truls on 2026-10-11,
 settling [#109](https://github.com/trulsjo/grado-factorio-tools/issues/109): such a change gets
