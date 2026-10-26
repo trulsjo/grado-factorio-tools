@@ -14,5 +14,6 @@ param-check
 pr-body-check
 cd-hook
 hook-skip
+heredoc-hook
 docs
 repo
