@@ -24,7 +24,9 @@
     is still beside it. So a member at another release, a mod disabled, another bundled
     selection, another build, or a file added to or removed from a mod, is a different set and
     gets a dump of its own. A disabled mod is left out of the key, so a set with a mod disabled
-    and a set without that mod are one set. The directory's path and name are not in the key: the
+    and a set without that mod are one set. A bundled mod disabled is left out of the bundled
+    mods in the key and the name, so -With space-age -Disabled quality is the set of space-age,
+    elevated-rails and recycler (#208). The directory's path and name are not in the key: the
     same mods somewhere else are the same set.
 
     WHAT IT CANNOT SEE. A change inside a mod that leaves its version, file count and total bytes
@@ -48,12 +50,14 @@
     The directory of mods to dump, as load-harness.ps1 takes one: mod directories and zips.
 
 .PARAMETER With
-    Bundled mods to enable, comma-separated, e.g. -With space-age. Dependencies are pulled in.
+    Bundled mods to enable, comma-separated, e.g. -With space-age. Dependencies are pulled in,
+    `+` ones too, so on 2.1 space-age brings quality (#208); -Disabled quality leaves it out.
     Without it the dump is base only.
 
 .PARAMETER Disabled
-    Mods in the directory to load disabled, comma-separated, in exact case. A name that is not
-    there is refused.
+    Mods to load disabled, comma-separated, in exact case: mods in the directory, or mods bundled
+    with the game, as quality, which -With space-age enables through its `+ quality` (#208). A
+    name that is neither is refused.
 
 .PARAMETER FactorioExe
     Path to Factorio.exe. Defaults as load-harness.ps1 does.
@@ -101,14 +105,17 @@ function Get-CachedDump {
         [Parameter(Mandatory)] [string] $CacheDirectory,
         [Parameter(Mandatory)] [scriptblock] $Make,
         [string[]] $Bundled = @(),
-        [string[]] $Disabled = @()
+        [string[]] $Disabled = @(),
+        # Every mod bundled with the game, which -Disabled may name too.
+        [string[]] $Available = @()
     )
 
     $rows = @(Get-HarnessMods -Path $ModsDirectory)
     # Refused, because the set is keyed by what is enabled: a misspelt name would disable nothing
     # and be served the whole set's dump.
-    $unknown = @($Disabled | Where-Object { $_ -cnotin $rows.Name })
-    if ($unknown) { throw "Not in ${ModsDirectory}: $($unknown -join ', '). Names match case exactly." }
+    $unknown = @($Disabled | Where-Object { $_ -cnotin $rows.Name -and $_ -cnotin $Available })
+    if ($unknown) { throw "Not in ${ModsDirectory}, nor bundled with the game: $($unknown -join ', '). Names match case exactly." }
+    $Bundled = @($Bundled | Where-Object { $_ -cnotin $Disabled })
 
     $key = @(
         "factorio $Build"
@@ -202,8 +209,28 @@ function Invoke-SelfTest {
             $r.Made -and -not $again.Made -and $again.Path -eq $r.Path -and
                 (Get-Content ([IO.Path]::ChangeExtension($r.Path, '.key')) -Raw) -notmatch 'alpha' } }
         @{ Name = 'a disabled name that is not there, or is there in another case, is refused'; Test = {
-            $refused = foreach ($n in 'gamma', 'Alpha') { try { $null = & $ask @{ Disabled = $n }; $false } catch { $_.Exception.Message -match "Not in .*$n" } }
+            $refused = foreach ($n in 'gamma', 'Alpha', 'Quality') { try { $null = & $ask @{ Disabled = $n; Available = 'quality' }; $false } catch { $_.Exception.Message -match "Not in .*$n" } }
             -not ($refused -contains $false) } }
+        @{ Name = 'a bundled mod given to -Disabled is accepted and left out of the set''s bundled mods (#208)'; Test = {
+            $r = & $ask @{ Bundled = 'quality', 'space-age'; Available = 'quality', 'space-age'; Disabled = 'quality' }
+            $r.Made -and (Split-Path $r.Path -Leaf) -match '^Fixture\+space-age-4242-' -and
+                (Get-Content ([IO.Path]::ChangeExtension($r.Path, '.key')) -Raw) -match '(?m)^bundled space-age$' } }
+        @{ Name = 'the harness follows a + line among bundled mods, and a disabled bundled mod is written once, disabled (#208)'; Test = {
+            # A synthetic bundled table, as 2.1.23's space-age declares `+ quality >= 2.1.0`.
+            $table = @{
+                'space-age' = @{ dependencies = @('base >= 2.1.0', 'elevated-rails >= 2.1.0', '+ quality >= 2.1.0', '* recycler') }
+                'quality' = @{ dependencies = @('base') }; 'elevated-rails' = @{ dependencies = @('base') }; 'recycler' = @{ dependencies = @('base') }
+            }
+            $on = @(Resolve-BundledSelection -Requested 'space-age' -Bundled $table)
+            $dir = Join-Path $temp 'mod-list'
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            $h = [pscustomobject]@{ ModDirectory = $dir; Bundled = $table; EnabledBundled = $on; Mods = @([pscustomobject]@{ Name = 'alpha' }) }
+            Write-HarnessModList -Harness $h -Disabled 'quality'
+            $list = @((Get-Content (Join-Path $dir 'mod-list.json') -Raw | ConvertFrom-Json).mods)
+            $entry = { param($n) @($list | Where-Object { $_.name -ceq $n }) }
+            ($on -join ',') -ceq 'elevated-rails,quality,space-age' -and
+                (& $entry 'space-age').enabled -eq $true -and (& $entry 'quality').Count -eq 1 -and (& $entry 'quality')[0].enabled -eq $false -and
+                (& $entry 'alpha').enabled -eq $true -and (& $entry 'recycler')[0].enabled -eq $false } }
         @{ Name = 'another bundled selection is not served, and is in the name'; Test = {
             $r = & $ask @{ Bundled = 'space-age', 'quality' }
             $r.Made -and (Split-Path $r.Path -Leaf) -match '^Fixture\+quality\+space-age-4242-' } }
@@ -259,7 +286,8 @@ catch { throw "-With $($_.Exception.Message)" }
 $build = (Get-Content -LiteralPath (Join-Path (Get-FactorioDataDirectory -FactorioExe $exe) 'base/info.json') -Raw | ConvertFrom-Json).version
 $off = @($Disabled -split ',' | Where-Object { $_ })
 
-$path = Get-CachedDump -ModsDirectory $Mods -Name (Split-Path $Mods -Leaf) -Build $build -CacheDirectory $CacheDirectory -Bundled $bundled -Disabled $off -Make {
+$available = @((Get-BundledMods -FactorioExe $exe).Keys)
+$path = Get-CachedDump -ModsDirectory $Mods -Name (Split-Path $Mods -Leaf) -Build $build -CacheDirectory $CacheDirectory -Bundled $bundled -Disabled $off -Available $available -Make {
     param($dir)
     $h = New-LoadHarness -Mods $Mods -FactorioExe $exe -With $bundled
     try {

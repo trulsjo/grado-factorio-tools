@@ -237,6 +237,35 @@ To repeat it: write `lib` and `probe-opt` as mod directories, each with an info.
 call New-LoadHarness on the two and then Invoke-HarnessLoad, once for each line in `probe-opt`'s
 dependencies.
 
+### A recommended (`+`) dependency loads without its mod, and its range is checked
+
+Measured 2026-10-26 against Factorio 2.1.23 (build 87750), headless and isolated, at
+grado-factorio-tools 3dfc5e3 (#208). A mod `probe-plus` declaring `base` and one `+` line, with
+and without a mod `lib` 1.0.0 beside it:
+
+| line | `lib` | loaded |
+| --- | --- | --- |
+| `+ lib` | absent | yes |
+| `+ lib` | present | yes, `lib` loading first |
+| `+lib` | absent | yes |
+| `+lib` | present | yes, `lib` loading first |
+| `+ lib >= 2.0.0` | absent | yes |
+| `+ lib >= 2.0.0` | present | no |
+| `+lib >= 2.0.0` | present | no |
+
+So `+lib`, with no space, is read as the prefix and the name `lib`: read as a mod named `+lib`,
+the line would have been a missing required dependency. Each loaded run logs
+`Loading mod lib 1.0.0 (data.lua)` before `Loading mod probe-plus 1.0.0 (data.lua)` where `lib`
+is present, and each refused one logs, with each bullet written `•` as in the records above
+where the capture through `pwsh` gave a BEL character,
+
+    Error Util.cpp:81: Failed to load mod "probe-plus":
+    • probe-plus
+        • Dependency lib >= 2.0.0 is not satisfied (active: lib 1.0.0)
+
+To repeat it: as for the case of an optional line, with `probe-plus` in place of `probe-opt`.
+Not measured: whether the game or the portal downloads a `+` mod that is not installed.
+
 ### A 2.1 game refuses a mod declaring line 2.0
 
 Measured 2026-10-25 against Factorio 2.1.23 (build 87750), headless and isolated, at
