@@ -365,8 +365,9 @@ changed, staged or not, it refuses `git checkout <rev>` and `git checkout -- <pa
 `git switch <branch>`, `git reset --hard`, `--merge` and `--keep`, `git restore` without
 `--staged`, and `git stash`; `git switch -c`, `git checkout -b`, `git reset --soft`, a mixed
 `git reset` and `git restore --staged` pass. `git clean` is refused wherever a file is untracked.
-The refusal says to commit first, or to read another revision with `git show`, `git log -p`,
-`git blame` or a `git worktree add`. It reads the tree in the call's `cwd`, moved by a `cd` and
+The refusal says to commit first, or to read another revision with `git show`, `git log -p` or
+`git blame`; not `git worktree add`, which a hook on the development machine blocks (Truls, on
+#224). It reads the tree in the call's `cwd`, moved by a `cd` and
 by `git -C`, and finds a git call inside a compound command.
 
 A consumer wires it in its own `.claude/settings.json`, beside the mod-cache hook where it has
