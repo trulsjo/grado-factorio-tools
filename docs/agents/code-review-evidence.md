@@ -124,12 +124,15 @@ the same with `'failure'` and exited 1. What it printed on a run in progress, 40
 passed, is in PR #231's body; a run that fails while watched was not seen. The watch writes to
 a file in the lane's scratch folder, and the lane reports its exit code and the run's closing
 line (Truls, 2026-10-26, settling [#232](https://github.com/trulsjo/grado-factorio-tools/issues/232)):
-the watch redraws every 3 seconds, and `gh run watch 40239476582 --exit-status > watch.txt 2>&1`,
-93 seconds on 2026-10-25, wrote 557 lines and 21,417 bytes by `wc -l` and `wc -c`, all of which
+the watch redraws every 3 seconds, the `-i` default by `gh run watch --help`, and
+`gh run watch 40239476582 --exit-status > watch.txt 2>&1`, from 22:17:25Z to 22:18:58Z on
+2026-10-25 by #232's account, wrote 557 lines and 21,417 bytes by `wc -l` and `wc -c`, all of which
 a lane would have taken into its context. The closing line is not the file's last: on PR #236's
 run, 40247854855, on 2026-10-26, `grep -n '40247854855$' watch.txt` put
-`✓ 232-watch-to-file check trulsjo/grado-factorio-tools#236 · 40247854855` at line 343 of 373,
-with the jobs and the annotations after it, so the brief names that `grep`.
+`✓ 232-watch-to-file check trulsjo/grado-factorio-tools#236 · 40247854855` at line 343, and
+`wc -l` counted 373, with the jobs and the annotations after it; so the brief names a `grep`. Its
+pattern takes the one line gh prints for a run that finished before the watch, `Run check (<id>)
+has already completed with 'success'`, too.
 
 **A change that touches no script is reviewed by one agent.** Ruled by Truls on 2026-10-11,
 settling [#109](https://github.com/trulsjo/grado-factorio-tools/issues/109): such a change gets
