@@ -39,7 +39,8 @@
     grado-factorio-tools#181). Not read: a code line, and a # comment after code on one, however
     long; a block comment opened after code is read from its first line, code and all; and
     characters are counted as UTF-16 units, so a character outside the Basic Multilingual Plane
-    counts as two.
+    counts as two. The rule is in comment-line-lib.ps1, which the pre-commit hook loads too, to
+    hold the staged scripts to it before a commit (grado-factorio-tools#225).
 
     README.MD NAMES EVERY SCRIPT PARAMETER (grado-factorio-tools#194). CLAUDE.md says README says
     what each script does, and PR #192 added markdown-check.ps1 -Path with no line there. Each
@@ -198,32 +199,9 @@ function Complete-PassRecord {
     Set-Content -LiteralPath $Record -Value "$Tree $([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ', [cultureinfo]::InvariantCulture))"
 }
 
-# The numbers of a script's comment and header lines over $Limit characters: each line of a <# #>
-# block, and a line that begins with #. A help block's .EXAMPLE section is skipped, as an example
-# is copied whole. Read from the parser's comment tokens, so a # line in a here-string is not one.
-function Get-LongCommentLine {
-    param([Parameter(Mandatory)] [string] $Path, [Parameter(Mandatory)] [int] $Limit)
-    $tokens = $null
-    [void] [Management.Automation.Language.Parser]::ParseFile($Path, [ref] $tokens, [ref] $null)
-    $lines = [IO.File]::ReadAllLines($Path)
-    # One word after its indent and comment marker, as an address is, cannot be broken.
-    $over = { param($line) $line.Length -gt $Limit -and $line -notmatch '^\s*(#+\s*)?\S+\s*$' }
-    foreach ($comment in $tokens | Where-Object Kind -eq 'Comment') {
-        $first = $comment.Extent.StartLineNumber
-        if (-not $comment.Text.StartsWith('<#')) {
-            if ($lines[$first - 1] -match '^\s*#' -and (& $over $lines[$first - 1])) { $first }
-            continue
-        }
-        $section = ''
-        foreach ($n in $first..$comment.Extent.EndLineNumber) {
-            # A help keyword in upper case, as they are written here, with or without an argument:
-            # a line beginning `.githooks` or `.NET` is text.
-            $keyword = '^\s*\.(SYNOPSIS|DESCRIPTION|PARAMETER|EXAMPLE|INPUTS|OUTPUTS|NOTES|LINK|COMPONENT|ROLE|FUNCTIONALITY)(\s|$)'
-            if ($lines[$n - 1] -cmatch $keyword) { $section = $Matches[1] }
-            if ($section -ne 'EXAMPLE' -and (& $over $lines[$n - 1])) { $n }
-        }
-    }
-}
+# Get-LongCommentLine, the width rule, and Invoke-StagedCommentCheck, which the pre-commit hook
+# runs, live where the hook loads them too.
+. "$PSScriptRoot/comment-line-lib.ps1"
 
 # Whether a self-test's output says it ran no case: it never says `self-test`, or it passed
 # with 0 cases, all of them or 0 of some.
@@ -365,6 +343,18 @@ if ($SelfTest) {
                     '<#', '.EXAMPLE', "    $long", '.PARAMETER Name', "    $long", '.NET reads this', "    $long", '#>')
                 $got = @(Get-LongCommentLine -Path $script -Limit 100)
                 "$got" -eq '3 7 9 18 25 27' }
+            'the staged scripts are held to the rule as staged: a fix not staged still fails, a long line not staged passes, none staged says so' = {
+                $run = { $out = @(Invoke-StagedCommentCheck -Root $repo -Limit 100 6>&1); @{ Code = $out[-1]; Said = "$($out[0..($out.Count - 2)])" } }
+                $none = & $run
+                New-Item -ItemType Directory -Path (Join-Path $repo 'scripts') | Out-Null
+                $long = "# $('word ' * 20)x"
+                & $file 'scripts/b.ps1' @('$b = 1', $long); git -C $repo add scripts/b.ps1
+                & $file 'scripts/b.ps1' @('$b = 1', '# short'); $fixedUnstaged = & $run
+                git -C $repo add scripts/b.ps1; & $file 'scripts/b.ps1' @('$b = 1', $long); $longUnstaged = & $run
+                git -C $repo rm --cached --quiet -f scripts/b.ps1; Remove-Item -LiteralPath (Join-Path $repo 'scripts') -Recurse
+                $none.Code -eq 0 -and $none.Said -match 'no script is staged' -and
+                $fixedUnstaged.Code -eq 1 -and $fixedUnstaged.Said -match 'FAILED.*scripts/b\.ps1 has comment lines over 100 characters, line 2\.' -and
+                $longUnstaged.Code -eq 0 -and $longUnstaged.Said -match 'OK - comment-line check: 1 staged script' }
             'a self-test whose output says it ran no case is not a pass' = {
                 (Test-RanNoCase 'OK - self-test passed: all 0 cases.') -and (Test-RanNoCase 'nothing said') -and
                 (Test-RanNoCase 'OK - self-test passed: 0 of 2 cases; 2 skipped off Windows') -and

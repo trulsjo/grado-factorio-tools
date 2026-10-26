@@ -483,7 +483,9 @@ the parameter is used; the rest it cannot see is in its header. `-SelfTest` prov
 `scripts/check.ps1` is the one command before a push. It parses every script here, runs each
 self-test that needs neither the game nor the network, runs `param-check.ps1` and
 `markdown-check.ps1` over this repository, holds the agent pages to their size limits, and fails
-on a script parameter this README never names as `-<Name>` (#194). CI runs it, and so does the
+on a script parameter this README never names as `-<Name>` (#194), or a script's comment line over
+100 characters; the `pre-commit` hook holds the staged scripts to that rule too, loaded from
+`scripts/comment-line-lib.ps1` (#225). CI runs it, and so does the
 `pre-push` hook, with `-SkipIfPassed`, which runs nothing when a recorded run passed this same
 tree. What it cannot see is in its header.
 
@@ -500,13 +502,14 @@ prototype name is that mod's business. If a script needs to know `rf-`, it stays
 scripts/     PowerShell entry points, one job each, and the libraries they
              dot-source: load-harness-lib.ps1, dump-lib.ps1, game-mods.ps1, mod-info.ps1,
              markdown-lib.ps1, the reading markdown-check.ps1 and markdown-rewrap.ps1 share,
+             comment-line-lib.ps1, the comment-line rule check.ps1 and pre-commit share,
              which reads a mod's info.json for four of them,
              self-test-halves.ps1, the runner a -SelfTest hands its halves to,
              and hook-matcher.ps1, which reads a session hook's matcher;
              grado-count/, the counting mod count-resources.ps1 loads;
              commonmark-examples.json, CommonMark's examples, which
              markdown-check.ps1 -SelfTest reads (CC BY-SA 4.0)
-.githooks/   this repo's own pre-commit (the staged Markdown), commit-msg and
+.githooks/   this repo's own pre-commit (the staged Markdown and scripts), commit-msg and
              pre-push hooks, opted into once per clone
 .claude/     settings.json, which wires the session hooks: one refuses a commit
              or push skipping those, and one Python run from a heredoc
