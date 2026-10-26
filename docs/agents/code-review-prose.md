@@ -6,6 +6,8 @@ what it reports are in [code-review.md](code-review.md); the evidence is in
 
 ## Review the prose, not only the code
 
+- **A change that does other than an acceptance criterion of a ticket it closes is a finding
+  scored 80**, unless the pull request cites Truls's comment on the ticket allowing it.
 - **Check every number in prose, the pull request body included, against the diff, and do the
   arithmetic.**
 - **Treat a quantifier as an instruction to enumerate.** "All" and "none" are checked by walking
