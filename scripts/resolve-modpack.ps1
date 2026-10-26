@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Resolves a modpack's mandatory closure to the exact releases a given game build would install,
+    Resolves a modpack's closure to the exact releases a given game build would install,
     and checks that those releases satisfy each other. Exit 0 means every member resolved and no
     constraint between the picks is violated.
 
@@ -28,7 +28,7 @@
       walk     The closure from those picks: every dependency with no prefix, a `~` prefix or a
                `+` prefix. `?`, `(?)` and `!` are not followed. A `+` mod is "optional but
                recommended", and "gets enabled by default but can be turned off" (the 2.1.23
-               changelog, data/changelog.txt line 759, for 2.1.0), so a player who installs the
+               changelog, data/changelog.txt line 759, under 2.1.7), so a player who installs the
                pack and changes nothing has it: what a player gets by default is what the closure
                holds (Truls, 2026-10-26, #208). One that does not resolve is UNRESOLVED, as a
                bare line's is. The game's own mods -- base, space-age,
@@ -195,7 +195,7 @@ function Select-Release {
         $ok = $true
         foreach ($d in @($r.info_json.PSObject.Properties['dependencies']?.Value | Where-Object { $_ })) {
             $dep = ConvertFrom-Dependency $d
-            if ($dep.Name -ceq 'base' -and $dep.Kind -in 'required', 'unordered' -and -not (Test-Constraint $Build $dep.Op $dep.Version)) { $ok = $false }
+            if ($dep.Name -ceq 'base' -and $dep.Kind -in 'required', 'unordered', 'recommended' -and -not (Test-Constraint $Build $dep.Op $dep.Version)) { $ok = $false }
         }
         if ($ok) { $r }
     }
@@ -283,7 +283,7 @@ function Resolve-Packs {
             foreach ($d in $member.Dependencies) {
                 $dep = ConvertFrom-Dependency $d
                 if ($dep.Name -ceq 'base') {
-                    if (-not $member.Local -and $dep.Kind -in 'required', 'unordered' -and $dep.Op -in '>=', '>' -and (-not $floor -or (ConvertTo-Version $dep.Version) -gt (ConvertTo-Version $floor))) {
+                    if (-not $member.Local -and $dep.Kind -in 'required', 'unordered', 'recommended' -and $dep.Op -in '>=', '>' -and (-not $floor -or (ConvertTo-Version $dep.Version) -gt (ConvertTo-Version $floor))) {
                         $floor = $dep.Version; $floorBy = "$name $($member.Version)"
                     }
                     continue
@@ -301,7 +301,7 @@ function Resolve-Packs {
         }
 
         $declared = @($Packs[$packName].dependencies | ForEach-Object { ConvertFrom-Dependency $_ } |
-            Where-Object { $_.Name -ceq 'base' -and $_.Kind -in 'required', 'unordered' -and $_.Op }) | Select-Object -First 1
+            Where-Object { $_.Name -ceq 'base' -and $_.Kind -in 'required', 'unordered', 'recommended' -and $_.Op }) | Select-Object -First 1
         $picks = [System.Collections.Specialized.OrderedDictionary]::new([StringComparer]::Ordinal)
         foreach ($name in $closure.Keys) { if (-not $closure[$name].Local) { $picks[$name] = $closure[$name].Version } }
 
@@ -412,6 +412,8 @@ function Invoke-SelfTest {
         # declares `+FluidWagonColorMask`.
         'recommends' = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0'; dependencies = @('+ no-deps', '+mod with spaces', '+ quality') } })
         'recommends-ghost' = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0'; dependencies = @('+ghost') } })
+        # The game always has base, so a `+ base` range is a floor as a bare one is.
+        'recommends-base' = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0'; dependencies = @('+ base >= 2.0.99') } })
         'recommends-new' = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0'; dependencies = @('+ lib >= 2.5.0') } })
     }
     # Through JSON, so each release has the shape Invoke-RestMethod hands back rather than a
@@ -453,9 +455,11 @@ function Invoke-SelfTest {
         @{ Name = 'a + line whose mod does not resolve is UNRESOLVED, naming the line (#208)'; Test = {
             $r = & $resolve (& $pack 'P' @('recommends-ghost'))
             $r[0].Unresolved.Count -eq 1 -and $r[0].Unresolved[0] -ceq "recommends-ghost 1.0.0 declares '+ghost': the portal does not know this name" } }
-        @{ Name = 'a + range the closure misses is a violation, as a mandatory one is (#208)'; Test = {
+        @{ Name = 'a + range the closure misses is a violation, as a mandatory one is, and a + base range is a floor (#208)'; Test = {
             $r = & $resolve (& $pack 'P' @('recommends-new'))
-            $r[0].Violations.Count -eq 1 -and $r[0].Violations[0] -match "recommends-new 1\.0\.0 declares '\+ lib >= 2\.5\.0'.*lib 2\.4\.0" } }
+            $base = & $resolve (& $pack 'P' @('recommends-base'))
+            $base[0].Unresolved.Count -eq 1 -and $base[0].Unresolved[0] -match "declares 'recommends-base': no release declares factorio_version 2\.0 with a base floor 2\.0\.77 meets" -and
+                $r[0].Violations.Count -eq 1 -and $r[0].Violations[0] -match "recommends-new 1\.0\.0 declares '\+ lib >= 2\.5\.0'.*lib 2\.4\.0" } }
         @{ Name = 'a prefix Factorio does not define is read as part of the name (#208)'; Test = {
             $dep = ConvertFrom-Dependency '* lib'
             $r = & $resolve (& $pack 'P' @('* lib'))

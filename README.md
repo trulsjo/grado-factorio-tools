@@ -77,9 +77,10 @@ the locale check have already moved — see Status above. The prototype-name che
 ## Resolving a modpack
 
 `scripts/resolve-modpack.ps1` answers, for a modpack and a game build, which release of each mod in
-the pack's mandatory closure that build would install, and whether those releases satisfy each
-other. A Grado pack runs it before every release, to check that its declared `base >=` minimum is
-still true. It reads only the public portal API, which needs no login.
+the pack's closure, its required and recommended (`+`) mods, that build would install, and
+whether those releases satisfy each other. A Grado pack runs it before every release, to check
+that its declared `base >=` minimum is still true. It reads only the public
+portal API, which needs no login.
 
     pwsh -File scripts/resolve-modpack.ps1 -Line 2.1 -Build 2.1.23 -PinFile pins.psd1 `
         Grado_NonChanging/info.json Grado_ChangingBase/info.json Grado_ABC/info.json `
@@ -131,8 +132,8 @@ The path is the last line it prints. The cache is `.dump-cache` under the curren
 `-CacheDirectory`; keep it out of git. A set is the game build, the bundled mods enabled and each
 mod's name, version and size, so the same mods in another directory are served the same dump. It
 reads sizes and not contents: what that misses is in its header. `-Disabled` loads the named mods
-of the directory disabled, a comma list in exact case, and `-FactorioExe` names the game, as the
-harness takes it. `-SelfTest` needs no game.
+of the directory disabled, or a bundled one such as quality, a comma list in exact case, and
+`-FactorioExe` names the game, as the harness takes it. `-SelfTest` needs no game.
 
 ## Reading a dump
 
