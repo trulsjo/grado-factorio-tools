@@ -223,7 +223,8 @@ function Get-BundledMods {
 }
 
 function Resolve-BundledSelection {
-    <#  Canonicalise the requested names and close over their hard dependencies.
+    <#  Canonicalise the requested names and close over the dependencies the game enables with
+        them: required, `~` and `+`.
 
         Both halves matter. space-age hard-depends on elevated-rails and recycler (2.1.23), so
         enabling it alone writes a mod-list whose dependencies are explicitly disabled --
@@ -231,6 +232,15 @@ function Resolve-BundledSelection {
         broken. And an unknown
         name must be rejected rather than ignored, or a typo produces a base-only run that gets
         reported as an expansion pass.
+
+        THE PREFIXES are those of the 2.1.23 page of the mod structure
+        (https://lua-api.factorio.com/2.1.23/auxiliary/mod-structure.html). `?`, `(?)` and `!`
+        are not followed. `~` and `+` are. A `+` mod is "optional but recommended" and "gets
+        enabled by default but can be turned off" (the 2.1.23 changelog, data/changelog.txt line
+        759, for 2.1.0), so `-With space-age` enables quality, which space-age declares
+        `+ quality >= 2.1.0` (Truls, 2026-10-26, #208). A run for a player who turned it off
+        disables it: see Write-HarnessModList. A prefix Factorio does not define is read as part
+        of the name, which then names no bundled mod and is not followed.
 
         CASE MATTERS HERE and is why this is one implementation. PowerShell's -in, -notin and its
         hashtables are case-insensitive, while HashSet[string] is ordinal, so an uncanonicalised
@@ -263,9 +273,10 @@ function Resolve-BundledSelection {
         if (-not $m -or -not $enabled.Add($m)) { continue }
         foreach ($dep in @($Bundled[$m].dependencies)) {
             # Skip optional ("?"), hidden-optional ("(?)") and incompatible ("!") only. "~" is a
-            # REQUIRED dependency that merely does not affect load order, so it must be followed.
+            # REQUIRED dependency that merely does not affect load order, so it must be followed,
+            # and "+" one the game enables by default.
             if ($dep -match '^\s*[?!(]') { continue }
-            $name = (($dep -replace '^\s*~?\s*', '') -split '\s+' | Select-Object -First 1)
+            $name = (($dep -replace '^\s*[~+]?\s*', '') -split '\s+' | Select-Object -First 1)
             $c = & $canonical $name
             if ($c) { $queue.Enqueue($c) }
         }
@@ -305,6 +316,22 @@ function Write-ModList {
 
     @{ mods = $entries } | ConvertTo-Json -Depth 4 |
         Set-Content -Path (Join-Path $ModDirectory 'mod-list.json') -Encoding utf8
+}
+
+function Write-HarnessModList {
+    <#  mod-list.json for a run of $Harness: every harness mod enabled but those $Disabled names,
+        and the bundled mods New-LoadHarness enabled, less any $Disabled names in exact case
+        (#208). So `-With space-age` with quality disabled stands for a player who turned
+        Quality off, and Write-ModList writes quality once, disabled. A harness mod's name is
+        matched in any case, as before. A name that is neither is passed over here; get-dump.ps1
+        refuses it. What the game does when a mod it needs is disabled is the game's: a disabled
+        `~` or bare dependency of an enabled bundled mod is not refused here.  #>
+    param([Parameter(Mandatory)] [object] $Harness, [string[]] $Disabled = @())
+
+    Write-ModList -ModDirectory $Harness.ModDirectory -Bundled $Harness.Bundled `
+        -EnabledBundled @($Harness.EnabledBundled | Where-Object { $_ -cnotin $Disabled }) `
+        -Mods @($Harness.Mods.Name | Where-Object { $_ -notin $Disabled }) `
+        -Disabled @($Harness.Mods.Name | Where-Object { $_ -in $Disabled })
 }
 
 function Get-ModLinks {
@@ -530,9 +557,9 @@ function Get-FactorioErrorText {
 }
 
 function Invoke-HarnessLoad {
-    <#  Enable every harness mod (less -Disabled), create a throwaway map, and say whether it
-        loaded. Creating a map runs every mod's on_init, so a mod that refuses itself at start-up
-        fails here as well as one whose prototypes do not validate.
+    <#  Enable every harness mod and the bundled mods (less -Disabled), create a throwaway map,
+        and say whether it loaded. Creating a map runs every mod's on_init, so a mod that refuses
+        itself at start-up fails here as well as one whose prototypes do not validate.
 
         Loaded means Factorio exited 0 AND wrote the save: "exit 0 but no save" is a failure.
         ErrorText is Get-FactorioErrorText's, for a failed load.  #>
@@ -542,10 +569,7 @@ function Invoke-HarnessLoad {
         [string] $Tag = 'load'
     )
 
-    $enabled = @($Harness.Mods.Name | Where-Object { $_ -notin $Disabled })
-    $off = @($Harness.Mods.Name | Where-Object { $_ -in $Disabled })
-    Write-ModList -ModDirectory $Harness.ModDirectory -Bundled $Harness.Bundled `
-        -EnabledBundled $Harness.EnabledBundled -Mods $enabled -Disabled $off
+    Write-HarnessModList -Harness $Harness -Disabled $Disabled
 
     $save = Join-Path $Harness.Temp "$Tag.zip"
     Remove-Item -LiteralPath $save -Force -ErrorAction SilentlyContinue
@@ -564,8 +588,9 @@ function Invoke-HarnessLoad {
 }
 
 function Invoke-HarnessDump {
-    <#  Run --dump-data with every harness mod enabled (less -Disabled) and return the path of the
-        dump, kept aside under -Tag. Throws if Factorio fails or writes no dump.
+    <#  Run --dump-data with every harness mod and the bundled mods enabled (less -Disabled) and
+        return the path of the dump, kept aside under -Tag.
+        Throws if Factorio fails or writes no dump.
 
         THE DUMP PATH IS DELETED FIRST, NOT MERELY OVERWRITTEN. Every dump in a run writes the one
         path, so a run that exits 0 without writing would leave the PREVIOUS dump there to be read
@@ -579,10 +604,7 @@ function Invoke-HarnessDump {
     $raw = Join-Path $Harness.Temp 'write-data/script-output/data-raw-dump.json'
     Remove-Item -LiteralPath $raw -Force -ErrorAction SilentlyContinue
 
-    $enabled = @($Harness.Mods.Name | Where-Object { $_ -notin $Disabled })
-    $off = @($Harness.Mods.Name | Where-Object { $_ -in $Disabled })
-    Write-ModList -ModDirectory $Harness.ModDirectory -Bundled $Harness.Bundled `
-        -EnabledBundled $Harness.EnabledBundled -Mods $enabled -Disabled $off
+    Write-HarnessModList -Harness $Harness -Disabled $Disabled
     $result = Invoke-Factorio -FactorioExe $Harness.FactorioExe -ModDirectory $Harness.ModDirectory `
         -Arguments @('--dump-data') -OutputDirectory $Harness.Temp -Tag $Tag
     if ($result.Code -ne 0) {

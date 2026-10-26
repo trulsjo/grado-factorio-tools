@@ -56,7 +56,8 @@
 
 .PARAMETER With
     Bundled mods to enable, comma-separated, e.g. -With space-age. Dependencies are pulled in, so
-    space-age alone is enough. An unknown name is refused rather than ignored.
+    space-age alone is enough, and on 2.1 it brings quality, which it declares `+` (#208). An
+    unknown name is refused rather than ignored.
 
 .PARAMETER Check
     A script to run on the loaded game, called as `& <Check> -Harness $h -Load $load` after a

@@ -25,8 +25,13 @@
                mandatory `base` constraint -Build meets. Newest by version number, which is what the
                mod manager installs. Only an exact `base` counts: a release declaring `Base` is
                picked, and the walk reports that line.
-      walk     The mandatory closure from those picks: every dependency with no prefix or a `~`
-               prefix. `?`, `(?)` and `!` are not followed. The game's own mods -- base, space-age,
+      walk     The closure from those picks: every dependency with no prefix, a `~` prefix or a
+               `+` prefix. `?`, `(?)` and `!` are not followed. A `+` mod is "optional but
+               recommended", and "gets enabled by default but can be turned off" (the 2.1.23
+               changelog, data/changelog.txt line 759, for 2.1.0), so a player who installs the
+               pack and changes nothing has it: what a player gets by default is what the closure
+               holds (Truls, 2026-10-26, #208). One that does not resolve is UNRESOLVED, as a
+               bare line's is. The game's own mods -- base, space-age,
                quality, elevated-rails, recycler -- are left out: they come with the build, not the
                portal. Every mod name is matched in exact case, as the game does -- Factorio 2.0.77
                (build 84539), measured headless in grado-factorio-tools 607ceef, fails a dependency
@@ -40,8 +45,10 @@
                already picked, and `mypack` is not the local pack `MyPack`. Each is looked up under
                its own spelling.
       check    Every dependency line of every member of a pack's closure, against the other
-               members: a mandatory version constraint, a `!` incompatibility, and a version range
-               on an optional dependency whose mod is in the closure.
+               members: a mandatory or `+` version constraint, a `!` incompatibility, and a version
+               range on an optional dependency whose mod is in the closure. Factorio 2.1.23
+               refuses a mod declaring `+ lib >= 2.0.0` beside `lib` 1.0.0, and loads it with no
+               `lib` at all (#208, in docs/measurements.md).
 
     PER PACK, NOT AS ONE UNION. Each pack given is resolved and checked as the closure a player of
     that pack installs, so the ABCX/ABCS pair, which declare opposite answers on space-age, cannot
@@ -57,9 +64,15 @@
     agree can still fail together in game, which is the load harness's question. It assumes the
     mod manager takes the newest qualifying release. It does not check a game mod's constraints
     beyond `base`, and it does not read a mod's `!` against a game mod (SpaceX's `! space-age` is
-    the designed ABCX/ABCS split). A dependency prefix Factorio does not define -- `+` has been
-    seen in the wild -- is read as part of the name, so it is reported as a mod the portal does
-    not know rather than silently dropped.
+    the designed ABCX/ABCS split). Whether the game or the portal downloads a `+` mod that is not
+    installed: the changelog speaks of enabling, and the load harness measured loading only.
+
+    THE PREFIXES are those of the 2.1.23 page of the mod structure
+    (https://lua-api.factorio.com/2.1.23/auxiliary/mod-structure.html): `!` incompatible, `?`
+    optional, `+` recommended, `(?)` hidden optional, `~` not affecting load order, and none for
+    required. A space after the prefix is optional: 2.1.23 reads `+lib` as `+ lib` (#208). A
+    prefix Factorio does not define, such as `*`, is read as part of the name, so it is reported
+    as a mod the portal does not know rather than silently dropped.
 
     A wrong case is detected as such only for a game mod. Any other mandatory line in the wrong
     case is reported because the portal does not serve that spelling; if it ever served both, the
@@ -129,16 +142,17 @@ $ErrorActionPreference = 'Stop'
 
 function ConvertFrom-Dependency {
     <#  One info.json dependency string as Kind, Name, Op and Version. Kind is required, unordered
-        (`~`), optional (`?`), hidden (`(?)`) or incompatible (`!`). Names may hold spaces, so
-        the name ends where an operator starts, not at whitespace.  #>
+        (`~`), recommended (`+`), optional (`?`), hidden (`(?)`) or incompatible (`!`). Names
+        may hold spaces, so the name ends where an operator starts, not at whitespace.  #>
     param([Parameter(Mandatory)] [string] $Text)
 
-    $m = [regex]::Match($Text, '^\s*(?<prefix>\(\?\)|[?!~])?\s*(?<name>.+?)\s*(?:(?<op><=|>=|<|>|=)\s*(?<ver>\S+))?\s*$')
+    $m = [regex]::Match($Text, '^\s*(?<prefix>\(\?\)|[?!~+])?\s*(?<name>.+?)\s*(?:(?<op><=|>=|<|>|=)\s*(?<ver>\S+))?\s*$')
     $kind = switch ($m.Groups['prefix'].Value) {
         '!'   { 'incompatible' }
         '?'   { 'optional' }
         '(?)' { 'hidden' }
         '~'   { 'unordered' }
+        '+'   { 'recommended' }
         default { 'required' }
     }
     [pscustomobject]@{
@@ -250,7 +264,7 @@ function Resolve-Packs {
             }
             foreach ($d in $closure[$name].Dependencies) {
                 $dep = ConvertFrom-Dependency $d
-                if ($dep.Kind -notin 'required', 'unordered') { continue }
+                if ($dep.Kind -notin 'required', 'unordered', 'recommended') { continue }
                 # Mod names compare exactly, so a game mod in another case is taken as not bundled
                 # (measured for game mods; see game-mods.ps1).
                 $game = Get-MiscasedGameMod $dep.Name
@@ -394,6 +408,11 @@ function Invoke-SelfTest {
         'shouty'   = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0'; dependencies = @('Base >= 2.0.99', 'Space-Age >= 2.0.0', '? Quality') } })
         # Another mod in the wrong case: the portal serves `lib`, not `LIB`.
         'wrongcase' = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0'; dependencies = @('LIB') } })
+        # Recommended (`+`) lines, with and without the space, as Automatic_Train_Painter 2.1.0
+        # declares `+FluidWagonColorMask`.
+        'recommends' = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0'; dependencies = @('+ no-deps', '+mod with spaces', '+ quality') } })
+        'recommends-ghost' = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0'; dependencies = @('+ghost') } })
+        'recommends-new' = @(@{ version = '1.0.0'; info_json = @{ factorio_version = '2.0'; dependencies = @('+ lib >= 2.5.0') } })
     }
     # Through JSON, so each release has the shape Invoke-RestMethod hands back rather than a
     # hashtable's.
@@ -426,6 +445,22 @@ function Invoke-SelfTest {
         @{ Name = 'walks bare and ~, not ?, (?), ! or game mods; reads names with spaces'; Test = {
             $r = & $resolve (& $pack 'P' @('content'))
             (($r[0].Picks.Keys | Sort-Object -CaseSensitive) -join ',') -ceq 'content,lib,mod with spaces' -and -not $r[0].Unresolved } }
+        @{ Name = 'a + line, with or without the space, is read as recommended and walked, its mod in the closure; a game mod behind + is left out (#208)'; Test = {
+            $dep = ConvertFrom-Dependency '+FluidWagonColorMask'
+            $r = & $resolve (& $pack 'P' @('recommends'))
+            $dep.Kind -eq 'recommended' -and $dep.Name -ceq 'FluidWagonColorMask' -and
+                (($r[0].Picks.Keys | Sort-Object -CaseSensitive) -join ',') -ceq 'mod with spaces,no-deps,recommends' -and -not $r[0].Unresolved } }
+        @{ Name = 'a + line whose mod does not resolve is UNRESOLVED, naming the line (#208)'; Test = {
+            $r = & $resolve (& $pack 'P' @('recommends-ghost'))
+            $r[0].Unresolved.Count -eq 1 -and $r[0].Unresolved[0] -ceq "recommends-ghost 1.0.0 declares '+ghost': the portal does not know this name" } }
+        @{ Name = 'a + range the closure misses is a violation, as a mandatory one is (#208)'; Test = {
+            $r = & $resolve (& $pack 'P' @('recommends-new'))
+            $r[0].Violations.Count -eq 1 -and $r[0].Violations[0] -match "recommends-new 1\.0\.0 declares '\+ lib >= 2\.5\.0'.*lib 2\.4\.0" } }
+        @{ Name = 'a prefix Factorio does not define is read as part of the name (#208)'; Test = {
+            $dep = ConvertFrom-Dependency '* lib'
+            $r = & $resolve (& $pack 'P' @('* lib'))
+            $dep.Kind -eq 'required' -and $dep.Name -ceq '* lib' -and
+                $r[0].Unresolved.Count -eq 1 -and $r[0].Unresolved[0] -ceq "P 0.1.0 declares '* lib': the portal does not know this name" } }
         @{ Name = 'the floor is the highest base >= among the picks'; Test = {
             $r = & $resolve (& $pack 'P' @('base >= 2.0.0', 'content'))
             $r[0].Floor -eq '2.0.60' -and $r[0].FloorBy -eq 'lib 2.4.0' -and $r[0].Declared -eq '>= 2.0.0' } }
