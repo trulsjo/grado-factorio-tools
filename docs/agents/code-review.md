@@ -27,7 +27,8 @@ On top of the `/code-review` plugin. The evidence is in
   particulars.
 - **The working tree stays on the branch the lanes read until every lane has reported**: a
   check run across a switch reads two branches' files.
-- **The reviewing session scores each finding itself**, on the plugin's rubric.
+- **The reviewing session scores each finding itself**, on the plugin's rubric. Where a rule on a
+  review page sets a finding's score, the session gives it, which is not re-scoring.
 - **A check fails when the rules it reads, or the set it must cover, come back empty, and its
   self-test covers that run.** A run that only has nothing to check this time, such as a commit
   that stages no Markdown, may pass, and says it read nothing. A lister that does not fail is
