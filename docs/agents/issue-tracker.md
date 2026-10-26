@@ -100,14 +100,23 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
   nothing.
   The body does not recount the review: each review posts its findings as one comment on the
   pull request, by the rule in [`code-review.md`](code-review.md).
-- **The Blast Radius of a change to a script names each place a sibling uses it**: each line that
-  `git -C <sibling> grep -n vendor/grado-factorio-tools/scripts/<script> <commit>` lists: the grep
-  [*Pin tickets*](#pin-tickets) runs over every script, narrowed to the one changed. It covers
-  the whole sibling, documents included, not its gates alone, and the body cites the commit and
-  the date, as `pr-body-check.ps1 -CiteSiblings` asks. PR #223's first body grepped
-  realistic-fusion-refreshed's gates only, and missed its `docs/agents/shipping.md`, which at
-  `ff59e79` (read 2026-10-25) runs `locale-check.ps1 -Prefix rf-` by hand before shipping; the
-  review's prose lane found it (finding 2, score 40).
+- **The Blast Radius of a change to a script names each place a sibling uses it**, found by two
+  greps of the whole sibling at a cited commit, documents included, not its gates alone. The
+  first, `git -C <sibling> grep -n vendor/grado-factorio-tools/scripts/<script> <commit>`, lists
+  each line that spells the script's path. The second is the grep
+  [*Pin tickets*](#pin-tickets) runs, not narrowed:
+  `git -C <sibling> grep -n vendor/grado-factorio-tools/scripts <commit>`. Each of its hits is
+  read, since a sibling script can hold the tools path in a variable and name the script apart
+  from it, and the first grep then lists nothing: grado-factorio-modpack's
+  `scripts/stage-pack.ps1` at `2cd7936` (read 2026-10-26) sets
+  `$TOOLS = Join-Path $ROOT 'vendor/grado-factorio-tools/scripts'` on line 151 and runs
+  `pack-mods.ps1`, `game-mods.ps1`, `load-harness-lib.ps1`, `resolve-modpack.ps1` and
+  `fetch-mods.ps1` through it, where the first grep for `pack-mods.ps1` prints nothing (PR #250's
+  review, finding 1). The body cites the commit and the date, as `pr-body-check.ps1
+  -CiteSiblings` asks. PR #223's first body grepped realistic-fusion-refreshed's gates only, and
+  missed its `docs/agents/shipping.md`, which at `ff59e79` (read 2026-10-25) runs
+  `locale-check.ps1 -Prefix rf-` by hand before shipping; the review's prose lane found it
+  (finding 2, score 40).
 - **A revert a pull request cites as evidence shows that its copy differs**, with
   `git diff --no-index --stat <file> <copy>/<file>`, as [`review-brief.md`](review-brief.md) asks
   of a review lane under *The reverts* (Truls, 2026-10-21, #183). On 2026-10-20, fixing PR #178's
