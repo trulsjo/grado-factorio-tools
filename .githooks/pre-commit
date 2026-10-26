@@ -1,37 +1,52 @@
 #!/bin/sh
-# Runs scripts/markdown-check.ps1 -All with check.ps1's line limit before a commit is made, so a
-# Markdown problem is refused in seconds and not minutes later by pre-push
-# (grado-factorio-tools#182).
+# Runs two checks before a commit is made, each with check.ps1's line limit, so a problem is
+# refused in seconds and not minutes later by pre-push:
+#
+# - scripts/markdown-check.ps1 -All (grado-factorio-tools#182), which reads every tracked Markdown
+#   file as staged;
+# - the comment-line rule check.ps1 holds every script to, Invoke-StagedCommentCheck in
+#   scripts/comment-line-lib.ps1 (grado-factorio-tools#225), which reads each staged
+#   scripts/*.ps1 as staged, and says so when none is staged.
+#
 # This file is only the wiring, as commit-msg is, and is installed by the same one step:
 #
 #     git config core.hooksPath .githooks
 #
-# It reads every tracked Markdown file as staged, which is what the commit commits: with
-# `git commit -a` or a path, the index git hands the hook. An edit not staged is not read, and
-# markdown-check.ps1 names each file that has one. What that script checks, and what it cannot
-# see, is in its header. Nothing else is run here: scripts and self-tests are pre-push's.
+# Both read what the commit commits: with `git commit -a` or a path, the index git hands the
+# hook. An edit not staged is not read; markdown-check.ps1 names each Markdown file that has one.
+# What each checks, and what it cannot see, is in its header. Nothing else is run here: the rest
+# of check.ps1 and the self-tests are pre-push's. Both run, so a commit that fails both is told
+# of both.
 #
-# The limit is $MARKDOWN_LINE_LIMIT, read from scripts/check.ps1, so the two cannot drift apart.
-# The posture on a missing pwsh, script or limit is commit-msg's: say nothing was checked, and let
-# the commit through.
+# The limit is $MARKDOWN_LINE_LIMIT, read from scripts/check.ps1, so the checks cannot drift
+# apart. The posture on a missing pwsh, script or limit is commit-msg's: say what was not checked,
+# and let the commit through.
 if ! command -v pwsh >/dev/null 2>&1; then
-    echo "pre-commit: pwsh not found, so the Markdown was NOT checked." >&2
+    echo "pre-commit: pwsh not found, so the Markdown and the scripts were NOT checked." >&2
     exit 0
 fi
 
 ROOT="$(git rev-parse --show-toplevel)"
-CHECK="$ROOT/scripts/markdown-check.ps1"
-if [ ! -f "$CHECK" ]; then
-    echo "pre-commit: $CHECK not found, so the Markdown was NOT checked." >&2
-    exit 0
-fi
-
 LIMIT="$(sed -n 's/^\$MARKDOWN_LINE_LIMIT = \([0-9][0-9]*\)\r*$/\1/p' "$ROOT/scripts/check.ps1" 2>/dev/null)"
 if [ -z "$LIMIT" ]; then
-    echo "pre-commit: no \$MARKDOWN_LINE_LIMIT in scripts/check.ps1, so the Markdown was NOT checked." >&2
+    echo "pre-commit: no \$MARKDOWN_LINE_LIMIT in scripts/check.ps1, so the Markdown and the scripts were NOT checked." >&2
     exit 0
 fi
 
-# markdown-check.ps1 reads the repository it stands in.
+# Both read the repository they stand in.
 cd "$ROOT" || exit 1
-exec pwsh -NoProfile -File "$CHECK" -All -MaxLineLength "$LIMIT"
+STATUS=0
+
+if [ -f scripts/markdown-check.ps1 ]; then
+    pwsh -NoProfile -File scripts/markdown-check.ps1 -All -MaxLineLength "$LIMIT" || STATUS=1
+else
+    echo "pre-commit: scripts/markdown-check.ps1 not found, so the Markdown was NOT checked." >&2
+fi
+
+if [ -f scripts/comment-line-lib.ps1 ]; then
+    pwsh -NoProfile -Command ". ./scripts/comment-line-lib.ps1; exit (Invoke-StagedCommentCheck -Root . -Limit $LIMIT)" || STATUS=1
+else
+    echo "pre-commit: scripts/comment-line-lib.ps1 not found, so the scripts were NOT checked." >&2
+fi
+
+exit $STATUS
