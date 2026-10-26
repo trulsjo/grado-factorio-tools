@@ -25,10 +25,10 @@ each with
 
 **The check.** `<CI's run <id> passed on this commit: name it and do not run the check again |
 CI's run <id> has not finished on this commit: run gh run watch <id> --exit-status >
-<your scratch folder>/watch.txt 2>&1, then report its exit code and the file's last lines, not
-the whole file; if it exits 0, name the run and do not run the check, and if not, run
-pwsh -File scripts/check.ps1 and report what it printed | CI has not passed on this commit:
-run pwsh -File scripts/check.ps1 and report what it printed>`.
+<your scratch folder>/watch.txt 2>&1, then report its exit code and the run's closing line,
+grep '<id>$' watch.txt | tail -1, not the whole file; if it exits 0, name the run and do not
+run the check, and if not, run pwsh -File scripts/check.ps1 and report what it printed | CI
+has not passed on this commit: run pwsh -File scripts/check.ps1 and report what it printed>`.
 
 **The self-tests CI does not run.** `<each, as pwsh -File scripts/<script> -SelfTest, or "none">`.
 Run each and report its last line.
