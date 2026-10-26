@@ -24,5 +24,8 @@ what it reports are in [code-review.md](code-review.md); the evidence is in
   pull request body, a ticket and a page: a bare `#267` here is this repository's. One bare is a
   finding.
 - **Check a claim about entanglement against the file, not the reference count.**
+- **A pull request body's `## Summary` prose is brief, with no preamble**, as the
+  `mattpocock-skills:pr` skill asks. Prose that restates the visual, a preamble, or prose past
+  what the visual needs is a finding.
 - **Flag a header or comment that lists what the code lists**: self-test cases, fixtures, a count
   of them, a list of refusals.
