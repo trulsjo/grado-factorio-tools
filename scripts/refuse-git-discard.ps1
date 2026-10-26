@@ -28,9 +28,12 @@
     <path>` and `git checkout --detach`; `git switch` with any argument but `-c` or `--create`;
     `git reset --hard`, `--merge` or `--keep`; `git restore` without `--staged` or `-S`, or with
     `--worktree` or `-W`; and `git stash`, bare or with `push`, `save` or an option, which hides
-    the work. On any tree with an untracked file: `git clean`, whatever its options, a dry run
-    included, since those files are what it deletes. It binds every caller, the main session and
-    a subagent alike (Truls's ruling): the main session commits before it switches branches.
+    the work. A redirection, as `2>&1` or `> out.log`, is not read as an argument, so
+    `git stash 2>&1` is a bare stash. On any tree with an untracked file: `git clean`, whatever
+    its options, a dry run included, since those files are what it deletes; with `-x` or `-X`,
+    alone or among other short options as in `-fdx`, on a tree with an ignored file too, which
+    those delete (PR #252's review, 2026-10-26). It binds every caller, the main session and a
+    subagent alike (Truls's ruling): the main session commits before it switches branches.
 
     WHAT IT LETS THROUGH. On a dirty tree: `git switch -c` and `git checkout -b`, which carry the
     work to a new branch; `git reset --soft` and a mixed `git reset`; `git restore --staged`;
@@ -42,7 +45,8 @@
     `git -C <path>` the git call names. The tree is read as it stands before the command runs,
     so `git commit -am x && git switch main` on a dirty tree is refused: commit in one call and
     switch in the next. A git call in a compound, after `&&`, `||`, `;`, `|`, `&` or a newline,
-    or inside parentheses or braces, is found.
+    or inside parentheses or braces, is found, and so is one after the assignments that lead a
+    command, as `MSYS_NO_PATHCONV=1 git ...`; a `x=y` word later in the call is an argument.
 
     IT FAILS OPEN, LOUDLY (Truls's ruling). Where it cannot tell, it lets the command run and
     prints, on stdout, JSON whose additionalContext tells the agent the command was NOT checked:
@@ -66,7 +70,8 @@
     Build a scratch repository with a second branch, a clean one beside it and a directory
     outside both, and prove: each refused form refused on a dirty tree and let through on a clean
     one; a staged-only change counted as dirty; each let-through form let through on a dirty
-    tree; `git clean` refused with an untracked file and let through without; a form inside a
+    tree; `git clean` refused with an untracked file and let through without, and with `-x` or
+    `-X` refused with an ignored file alone; a stash with a redirection refused; a form inside a
     compound found; `git -C` and a `cd` moving where the tree is read; a call that holds no
     command, one outside a repository, one with `--git-dir` and one with an unpaired quote let
     through with the NOT-checked message. Then the wired command, run through sh, refuses with
@@ -106,10 +111,22 @@ function Split-ShellCommand {
         })
 }
 
+# $Words less each redirection: a word that is one, as `2>` or `>`, with the word after it, and one
+# with its target joined on, as `>/dev/null`. `2>&1` reaches here as `2>`, its `&` an operator.
+function Remove-Redirection {
+    param([string[]] $Words)
+    for ($k = 0; $k -lt $Words.Count; $k++) {
+        if ($Words[$k] -match '^[\d*]*[<>]{1,2}$') { $k++; continue }
+        if ($Words[$k] -match '^[\d*]*[<>]{1,2}') { continue }
+        $Words[$k]
+    }
+}
+
 # What a git call's subcommand and arguments need of the tree to be refused: 'dirty', 'untracked',
-# or nothing, which lets it through.
+# 'ignored' for a clean that deletes ignored files too, or nothing, which lets it through.
 function Get-GitRisk {
     param([string] $Subcommand, [string[]] $Rest)
+    $Rest = @(Remove-Redirection $Rest)
     $has = { param([string[]] $names) [bool] ($Rest | Where-Object { $_ -cin $names }) }
     switch -CaseSensitive ($Subcommand) {
         'checkout' { if ($Rest -and -not (& $has '-b')) { 'dirty' } }
@@ -117,19 +134,21 @@ function Get-GitRisk {
         'reset' { if (& $has '--hard', '--merge', '--keep') { 'dirty' } }
         'restore' { if (-not (& $has '--staged', '-S') -or (& $has '--worktree', '-W')) { 'dirty' } }
         'stash' { if (-not $Rest -or $Rest[0] -cin 'push', 'save' -or $Rest[0] -like '-*') { 'dirty' } }
-        'clean' { 'untracked' }
+        # -x or -X, alone or among other short options, as -fdx: ignored files are deleted too.
+        'clean' { if ($Rest -cmatch '^-[^-]*[xX]') { 'ignored' } else { 'untracked' } }
     }
 }
 
-# The tree at $Dir: its top, whether a tracked file has changed, and whether a file is untracked;
-# $null where git cannot say, as outside a repository.
+# The tree at $Dir: its top, whether a tracked file has changed, whether a file is untracked, and,
+# with -Ignored, whether a file is ignored; $null where git cannot say, as outside a repository.
 function Get-TreeState {
-    param([string] $Dir)
+    param([string] $Dir, [switch] $Ignored)
     $top = git -C $Dir rev-parse --show-toplevel 2>$null
     if ($LASTEXITCODE) { return $null }
-    $lines = @(git -C $Dir status --porcelain=v1 --untracked-files=normal 2>$null)
+    $lines = @(git -C $Dir status --porcelain=v1 --untracked-files=normal @(if ($Ignored) { '--ignored' }) 2>$null)
     if ($LASTEXITCODE) { return $null }
-    @{ Top = $top; Dirty = [bool] ($lines | Where-Object { $_ -notlike '`?`? *' }); Untracked = [bool] ($lines | Where-Object { $_ -like '`?`? *' }) }
+    @{ Top = $top; Dirty = [bool] ($lines | Where-Object { $_ -notlike '`?`? *' -and $_ -notlike '!! *' })
+        Untracked = [bool] ($lines | Where-Object { $_ -like '`?`? *' }); Ignored = [bool] ($lines | Where-Object { $_ -like '!! *' }) }
 }
 
 # What to do with $Command run from $Cwd: @{ Refuse = <reason> }, @{ Unchecked = <why> }, or $null
@@ -146,7 +165,10 @@ function Get-GitRefusal {
     $segment = [Collections.Generic.List[string]]::new()
     foreach ($w in @($words) + @(@{ Op = 'end' })) {
         if (-not $w.ContainsKey('Op')) { $segment.Add($w.Word); continue }
-        $s = @($segment | Select-Object -Skip @($segment | Where-Object { $_ -match '^\w+=' }).Count)
+        # The assignments that lead a command, as `MSYS_NO_PATHCONV=1 git ...`; not a later one.
+        $lead = 0
+        while ($lead -lt $segment.Count -and $segment[$lead] -match '^\w+=') { $lead++ }
+        $s = @($segment | Select-Object -Skip $lead)
         $segment.Clear()
         if (-not $s) { continue }
         # A move to a literal directory lasts for what follows it.
@@ -168,8 +190,11 @@ function Get-GitRefusal {
         $risk = Get-GitRisk -Subcommand $s[$i] -Rest @($s | Select-Object -Skip ($i + 1))
         if (-not $risk) { continue }
         $call = "git $(@($s | Select-Object -Skip $i) -join ' ')"
-        $tree = Get-TreeState $at
+        $tree = Get-TreeState $at -Ignored:($risk -eq 'ignored')
         if (-not $tree) { return @{ Unchecked = "git could not read a working tree at $at for ``$call``" } }
+        if ($risk -eq 'ignored' -and ($tree.Untracked -or $tree.Ignored)) {
+            return @{ Refuse = "``$call`` would delete the untracked and ignored files in $($tree.Top), which are what it deletes." }
+        }
         if ($risk -eq 'dirty' -and $tree.Dirty) {
             return @{ Refuse = "``$call`` would discard, overwrite or hide uncommitted work in $($tree.Top): a tracked file there has changed, staged or not." }
         }
@@ -206,15 +231,19 @@ if ($SelfTest) {
             Set-Content -LiteralPath (Join-Path $r 'a.txt') -Value 'one'
             New-Item -ItemType Directory -Path (Join-Path $r 'sub') | Out-Null
             Set-Content -LiteralPath (Join-Path $r 'sub/b.txt') -Value 'one'
+            Set-Content -LiteralPath (Join-Path $r '.gitignore') -Value '*.log'
             git -C $r add -A; git -C $r commit --quiet -m one; git -C $r branch other
         }
         $dirty = { Set-Content -LiteralPath (Join-Path $repo 'a.txt') -Value 'two' }
         $tidy = { git -C $repo checkout --quiet -- a.txt }
         $refused = 'git checkout other', 'git checkout -- a.txt', 'git checkout --detach', 'git switch other',
             'git reset --hard', 'git reset --merge', 'git reset --keep', 'git restore a.txt',
-            'git restore --staged --worktree a.txt', 'git stash', 'git stash push -m keep', 'git stash -u'
+            'git restore --staged --worktree a.txt', 'git stash', 'git stash push -m keep', 'git stash -u',
+            # A redirection is not the stash's argument; an assignment after `git` does not lead it.
+            'git stash 2>&1', 'git stash > stash.log', 'git stash 2>/dev/null', 'git stash push -m note=wip'
         $through = 'git switch -c keep', 'git checkout -b keep', 'git reset --soft HEAD', 'git reset', 'git reset HEAD a.txt',
-            'git restore --staged a.txt', 'git restore -S a.txt', 'git stash list', 'git status', 'git checkout', 'git clean -fd'
+            'git restore --staged a.txt', 'git restore -S a.txt', 'git stash list', 'git stash list 2>&1', 'git status',
+            'git checkout', 'git clean -fd'
         foreach ($c in $refused) {
             & $dirty; $onDirty = & $verdict (Get-GitRefusal $c $repo)
             & $tidy; $onClean = & $verdict (Get-GitRefusal $c $repo)
@@ -236,6 +265,14 @@ if ($SelfTest) {
         Remove-Item -LiteralPath (Join-Path $repo 'sub/new.txt')
         $without = & $verdict (Get-GitRefusal 'git clean -fd' $repo)
         & $check '`git clean` refused with an untracked file, a dry run too, and let through without; an untracked file alone does not make the tree dirty' ($withNew -eq 'refused' -and $dryRun -eq 'refused' -and $without -eq 'through' -and $notDirty -eq 'through') "with: $withNew, dry run: $dryRun, without: $without, reset --hard: $notDirty"
+        # An ignored file only: what -x and -X delete, and a plain clean keeps.
+        Set-Content -LiteralPath (Join-Path $repo 'sub/kept.log') -Value 'kept'
+        $fdx = & $verdict (Get-GitRefusal 'git clean -fdx' $repo)
+        $bigX = & $verdict (Get-GitRefusal 'git clean -f -X' $repo)
+        $plain = & $verdict (Get-GitRefusal 'git clean -fd' $repo)
+        Remove-Item -LiteralPath (Join-Path $repo 'sub/kept.log')
+        $noneIgnored = & $verdict (Get-GitRefusal 'git clean -fdx' $repo)
+        & $check '`git clean -x` and `-X` refused with an ignored file, a plain clean not; `-x` let through with nothing ignored or untracked' ($fdx -eq 'refused' -and $bigX -eq 'refused' -and $plain -eq 'through' -and $noneIgnored -eq 'through') "-fdx: $fdx, -f -X: $bigX, -fd: $plain, -fdx with none: $noneIgnored"
         & $dirty
         $compound = 'git status && git reset --hard', 'git log -1; git stash', "echo x |`ngit checkout other", '(git switch other)',
             'MSYS_NO_PATHCONV=1 git checkout other', '& git reset --hard', 'git -c core.quotePath=false checkout other'
