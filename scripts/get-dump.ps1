@@ -216,7 +216,8 @@ function Invoke-SelfTest {
             $r.Made -and (Split-Path $r.Path -Leaf) -match '^Fixture\+space-age-4242-' -and
                 (Get-Content ([IO.Path]::ChangeExtension($r.Path, '.key')) -Raw) -match '(?m)^bundled space-age$' } }
         @{ Name = 'the harness follows a + line among bundled mods, and a disabled bundled mod is written once, disabled (#208)'; Test = {
-            # A synthetic bundled table, as 2.1.23's space-age declares `+ quality >= 2.1.0`.
+            # A synthetic bundled table, as 2.1.23's space-age declares `+ quality >= 2.1.0`, but
+            # with `* recycler`, a prefix the game does not define, which names no bundled mod.
             $table = @{
                 'space-age' = @{ dependencies = @('base >= 2.1.0', 'elevated-rails >= 2.1.0', '+ quality >= 2.1.0', '* recycler') }
                 'quality' = @{ dependencies = @('base') }; 'elevated-rails' = @{ dependencies = @('base') }; 'recycler' = @{ dependencies = @('base') }

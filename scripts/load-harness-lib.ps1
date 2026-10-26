@@ -237,7 +237,7 @@ function Resolve-BundledSelection {
         (https://lua-api.factorio.com/2.1.23/auxiliary/mod-structure.html). `?`, `(?)` and `!`
         are not followed. `~` and `+` are. A `+` mod is "optional but recommended" and "gets
         enabled by default but can be turned off" (the 2.1.23 changelog, data/changelog.txt line
-        759, for 2.1.0), so `-With space-age` enables quality, which space-age declares
+        759, under 2.1.7), so `-With space-age` enables quality, which space-age declares
         `+ quality >= 2.1.0` (Truls, 2026-10-26, #208). A run for a player who turned it off
         disables it: see Write-HarnessModList. A prefix Factorio does not define is read as part
         of the name, which then names no bundled mod and is not followed.
@@ -273,8 +273,8 @@ function Resolve-BundledSelection {
         if (-not $m -or -not $enabled.Add($m)) { continue }
         foreach ($dep in @($Bundled[$m].dependencies)) {
             # Skip optional ("?"), hidden-optional ("(?)") and incompatible ("!") only. "~" is a
-            # REQUIRED dependency that merely does not affect load order, so it must be followed,
-            # and "+" one the game enables by default.
+            # REQUIRED dependency that merely does not affect load order, so it must be followed;
+            # "+" is optional, but the game enables it by default, so it is followed too.
             if ($dep -match '^\s*[?!(]') { continue }
             $name = (($dep -replace '^\s*[~+]?\s*', '') -split '\s+' | Select-Object -First 1)
             $c = & $canonical $name
