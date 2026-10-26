@@ -15,5 +15,6 @@ pr-body-check
 cd-hook
 hook-skip
 heredoc-hook
+pin-measure
 docs
 repo
