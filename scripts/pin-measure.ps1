@@ -37,8 +37,8 @@
       lines are the same reads "differs above the last line". Outputs are compared with each
       clone's own path written as <clone>, so a path that only names the clone is no difference.
       Under the table, each `git grep -n vendor/grado-factorio-tools/scripts` hit in the sibling
-      that no form runs: a hit is run when a form's tools script has the name it names, or when
-      it sits in a sibling script a form runs.
+      that no form runs, matched by script name: a hit is run when every script of this
+      repository it names is a form's tools script, wherever the hit sits (#247's brief).
 
     It reports and does not judge: a form that differs, or fails at both pins, is evidence for
     the pull request, and the run still exits 0. It exits 1 only when it cannot measure: a pin
@@ -84,10 +84,11 @@
     BREAKING CHANGE footer, and a sibling holding a forms file, whose origin is a local path, and
     measure the move with pull request bodies read from a stub. Check each form's output and exit
     at both pins, each placeholder, breaking.txt, table.md's rows, a "differs above the last line"
-    row among them, a sibling reference no form runs being listed, that a write into one clone
-    does not show in the other's run, and that the run returns with forms that differ. Then run
-    this script, copied into the tools repository, with a pin that is not there: exit 1, naming
-    it. Needs git, and no game and no network.
+    row among them, a sibling reference no form runs being listed, by script name, and that a
+    write into one clone does not show in the other's run. Then run this script itself: copied
+    into the tools repository, with a pin that is not there, it exits 1, naming it; copied into a
+    sibling that holds the tools repository as its submodule, with forms that differ and none
+    that reads gh, it exits 0. Needs git, and no game and no network.
 
 .EXAMPLE
     From the sibling's root, with the submodule at the new pin:
@@ -254,10 +255,8 @@ function Invoke-PinMeasure {
     }
     $hits = @(git -C $clones['old'] grep -n vendor/grado-factorio-tools/scripts HEAD -- 2>$null | ForEach-Object { $_ -replace '^HEAD:', '' })
     $toolNames = @($runScripts | Where-Object { $_.From -eq 'tools' } | ForEach-Object { Split-Path -Leaf $_.Script })
-    $siblingFiles = @($runScripts | Where-Object { $_.From -ne 'tools' } | ForEach-Object { $_.Script -replace '\\', '/' -replace '^\./', '' })
     $unrun = foreach ($hit in $hits) {
         $named = @([regex]::Matches($hit, 'vendor/grado-factorio-tools/scripts/([\w.-]+)') | ForEach-Object { $_.Groups[1].Value })
-        if ($hit.Split(':')[0] -in $siblingFiles) { continue }
         if ($named -and -not ($named | Where-Object { $_ -notin $toolNames })) { continue }
         $hit
     }
@@ -300,7 +299,10 @@ if ($SelfTest) {
         $newPin = & $commit $toolsRepo '✨ feat!: two', 'Body.', "BREAKING CHANGE: t.ps1 says v2.`nIt exits 3.", 'Co-Authored-By: someone <a@b.c>'
         & $write (Join-Path $sib 'scripts/w.ps1') 'if (Test-Path marker.txt) { ''marker seen'' } else { ''no marker'' }', 'Set-Content marker.txt x'
         & $write (Join-Path $sib 'docs/use.md') 'Run `vendor/grado-factorio-tools/scripts/t.ps1` and `vendor/grado-factorio-tools/scripts/unrun.ps1`.'
+        & $write (Join-Path $sib 'docs/run.md') 'Run `vendor/grado-factorio-tools/scripts/t.ps1` alone.'
         & $write (Join-Path $sib 'scripts/w2.ps1') '# runs vendor/grado-factorio-tools/scripts/elsewhere.ps1'
+        # For the run of this script itself: forms that differ, and none that reads gh.
+        & $write (Join-Path $sib 'scripts/pin-forms-offline.psd1') "@{ Forms = @( @{ Name = 'last'; From = 'tools'; Script = 't.ps1'; Args = @('last') } ) }"
         & $write (Join-Path $sib 'scripts/pin-forms.psd1') @(
             '@{ Forms = @(',
             "  @{ Name = 'same'; From = 'tools'; Script = 't.ps1'; Args = @('same') }",
@@ -337,8 +339,8 @@ if ($SelfTest) {
             $md -match '(?m)^\| above \| 0 \| 3 \| differs above the last line \| last \| last \|\r?$' -and
             $md -match '(?m)^\| last \| 0 \| 3 \| differs \| v1 \| v2 \|\r?$' -and
             $md -match '(?m)^\| tools \| 0 \| 3 \| same \|') $md
-        & $check 'a sibling reference no form runs is listed; one a form runs, by name or by its file, is not' (
-            $md -match 'docs/use\.md:1:.*unrun\.ps1' -and $md -notmatch 'w2\.ps1:') $md
+        & $check 'a sibling reference to a script no form runs is listed, even inside a script a form runs; one naming only run scripts is not' (
+            $md -match 'docs/use\.md:1:.*unrun\.ps1' -and $md -match 'scripts/w2\.ps1:1:.*elsewhere\.ps1' -and $md -notmatch 'docs/run\.md') $md
         $none = Get-BreakingChange -Repo $toolsRepo -Range "$oldPin..$oldPin"
         & $check 'a range with no breaking change lists none' (-not $none) "$none"
         $again = try { Invoke-PinMeasure -Tools $toolsRepo -Sibling $sib -Old $oldPin -New $newPin -Out $out -Forms 'scripts/pin-forms.psd1' -Bodies $stub | Out-Null; '' } catch { $_.Exception.Message }
@@ -347,6 +349,15 @@ if ($SelfTest) {
         Copy-Item -LiteralPath $PSCommandPath -Destination (Join-Path $toolsRepo 'scripts/pin-measure.ps1')
         $said = & pwsh -NoProfile -File (Join-Path $toolsRepo 'scripts/pin-measure.ps1') -Old 0123456789abcdef -New $newPin -Out (Join-Path $temp 'out2') 2>&1 | Out-String
         & $check 'a pin missing from the tools repository: exit 1, naming it' ($LASTEXITCODE -eq 1 -and $said -match '0123456789abcdef') "$LASTEXITCODE $said"
+        # The script itself, as a sibling runs it: from its submodule, with forms that differ.
+        git -C $sib -c protocol.file.allow=always submodule add --quiet $toolsRepo vendor/grado-factorio-tools 2>&1 | Out-Null
+        $inSub = Join-Path $sib 'vendor/grado-factorio-tools/scripts/pin-measure.ps1'
+        Copy-Item -LiteralPath $PSCommandPath -Destination $inSub
+        $out3 = Join-Path $temp 'out3'
+        $said = & pwsh -NoProfile -File $inSub -Old $oldPin -New $newPin -Out $out3 -Forms 'scripts/pin-forms-offline.psd1' 2>&1 | Out-String
+        $code = $LASTEXITCODE
+        $row = if (Test-Path -LiteralPath (Join-Path $out3 'table.md')) { Get-Content -LiteralPath (Join-Path $out3 'table.md') -Raw } else { '' }
+        & $check 'run from a sibling, with forms that differ: exit 0' ($code -eq 0 -and $row -match '(?m)^\| last \| 0 \| 3 \| differs \|') "$code $said"
     }
     finally { Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue }
     Write-Host ''
