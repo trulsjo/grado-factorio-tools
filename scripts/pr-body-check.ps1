@@ -9,7 +9,8 @@
     under `## Evidence` and **Door:** and **Blast Radius:** under `## Merge Danger`; exit 1 names
     each commit, each line, each heading and each marker that fails that. With -CiteSiblings, a
     fifth: each statement about a sibling repository carries a commit and an ISO date, and exit
-    1 names each sentence that does not.
+    1 names each sentence that does not. With -RequireSummaryVisual, a sixth: `## Summary`
+    holds a fenced or an indented code block, and exit 1 says so where it holds none.
 
 .DESCRIPTION
     WHY (grado-factorio-tools#96). Pull requests here are rebase-merged, which rewrites every
@@ -93,6 +94,20 @@
     there that does not ask checks what it did before (Truls, 2026-10-20). This repository's CI
     asks, and so does the command before `gh pr create` in docs/agents/issue-tracker.md.
 
+    `## Summary` HOLDS A VISUAL, WITH -RequireSummaryVisual (grado-factorio-tools#264). The
+    `mattpocock-skills:pr` template's Summary is a diagram, a diff sketch or a tree, and each of
+    the skill's examples is a code block. The Summaries of PRs #249 to #252 and #257 held none,
+    251 to 438 words of prose each (2026-10-26). A visual is a fence that opens under the
+    heading, by the fence rule below, or an indented code block there, by the rule the sibling
+    statements are read by: a code span in a sentence is none, nor is a line indented under a
+    list item, nor a block under another heading. A missing `## Summary` is the headings' job and
+    is not reported again here. The rule is asked for, at Truls's word (2026-10-26, #264): of
+    the last merged pull requests read that day, a fenced block stood in the Summary of 25 of 25
+    in grado-factorio-modpack and 16 of 20 in realistic-fusion-refreshed, so on by default it
+    would fail a body either sibling writes. This repository's CI asks, and so does the command
+    before `gh pr create` in docs/agents/issue-tracker.md. Whether the visual is the smallest one
+    that makes the point is a reader's call.
+
     A SHALLOW CLONE IS REFUSED, and nothing is checked: there an ancestor cannot be told from a
     commit whose history was cut off. CI therefore fetches the whole history for this. Whatever
     else git cannot answer fails the run too; nothing passes for not having been asked.
@@ -159,6 +174,9 @@
 .PARAMETER CiteSiblings
     Hold each statement about a sibling to a commit and an ISO date, as above. Off unless asked.
 
+.PARAMETER RequireSummaryVisual
+    Hold `## Summary` to a visual, as above. Off unless asked.
+
 .PARAMETER SelfTest
     Run the cases that hold the check to what this header says, naming each as it runs. Needs
     git, for fixture repositories in a temp directory.
@@ -177,7 +195,8 @@ param(
     [Parameter(ParameterSetName = 'Body', Mandatory)] [AllowEmptyString()] [string] $Body,
     [Parameter(ParameterSetName = 'SelfTest', Mandatory)] [switch] $SelfTest,
     [string] $Main = 'origin/main',
-    [switch] $CiteSiblings
+    [switch] $CiteSiblings,
+    [switch] $RequireSummaryVisual
 )
 
 Set-StrictMode -Version Latest
@@ -271,6 +290,30 @@ function Get-MarkerProblem {
     foreach ($h in $TemplateMarkers.Keys) {
         foreach ($m in $TemplateMarkers[$h]) { if (-not $found.Contains($m)) { "``**${m}:**`` is missing under ``## $h``" } }
     }
+}
+
+function Get-VisualProblem {
+    <#  One line if `## Summary` stands in $Text and holds no visual: no fenced block opens under
+        it, and no indented code block, by the rule Get-SiblingProblem skips one by. Empty
+        otherwise, a missing `## Summary` included, which Get-HeadingProblem reports.  #>
+    param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text)
+    $summary = $false; $seen = $false; $fenced = $false; $blank = $true; $inList = $false
+    foreach ($line in $Text -split '\r?\n') {
+        if ($line -match '^\s*(```|~~~)') {
+            if ($summary -and -not $fenced) { return }
+            $fenced = -not $fenced; $blank = $false
+            if ($line -match '^\S') { $inList = $false }
+            continue
+        }
+        if ($fenced) { continue }
+        if ($line -match '^## ') { $summary = $line.TrimEnd() -ceq '## Summary'; $seen = $seen -or $summary; $blank = $false; $inList = $false; continue }
+        if ($blank -and -not $inList -and $line -match '^(?: {4}|\t)\s*\S') { if ($summary) { return }; continue }
+        if ($line -match '^\s*$') { $blank = $true; continue }
+        $blank = $false
+        if ($line -match '^\s*(?:[-*+]|\d+[.)])\s') { $inList = $true }
+        elseif ($line -match '^\S') { $inList = $false }
+    }
+    if ($seen) { '`## Summary` holds no visual: no fenced or indented code block stands under it' }
 }
 
 function Get-SiblingProblem {
@@ -511,6 +554,30 @@ function Invoke-SelfTest {
                 $refused.Text -match '\*\*Before:\*\* and \*\*After:\*\*, each saying none where there is nothing to show, and under ## Merge Danger \*\*Door:\*\* and \*\*Blast Radius:\*\*\.' -and
                 ($wrong -join '|') -eq ('`**Before:**` is missing under `## Evidence`|`**After:**` is missing under `## Evidence`|' +
                     '`**Door:**` is missing under `## Merge Danger`') } }
+        @{ Name = 'a Summary holding a fenced block, a tilde fence or an indented code block has a visual; one with no ## Summary is left to the headings (#264)'; Test = {
+            $fenced = @(Get-VisualProblem "## Summary`n`nA change.`n`n``````diff`n+ a line`n```````n`n$marked")
+            $tilde = @(Get-VisualProblem "## Summary`n`n~~~text`ntree`n~~~`n`n$marked")
+            $indented = @(Get-VisualProblem "## Summary`n`nA change:`n`n    on(save)`n      write`n`n$marked")
+            $none = @(Get-VisualProblem $marked)
+            $fenced.Count -eq 0 -and $tilde.Count -eq 0 -and $indented.Count -eq 0 -and $none.Count -eq 0 } }
+        @{ Name = 'a Summary of prose and code spans, one whose only code block is under another heading, or one whose indented line continues a list item, has none'; Test = {
+            $prose = @(Get-VisualProblem "## Summary`n`nIt runs ``a * b`` and more.`n`n$marked")
+            $elsewhere = @(Get-VisualProblem "## Summary`n`nA change.`n`n## Evidence`n`n``````text`nok`n```````n`n**Before:** x`n**After:** y`n`n## Merge Danger`n`n**Door:** two-way`n`n**Blast Radius:** none")
+            $item = @(Get-VisualProblem "## Summary`n`n- an item`n`n    still the item`n`n$marked")
+            $want = '`## Summary` holds no visual: no fenced or indented code block stands under it'
+            ($prose -join '|') -eq $want -and ($elsewhere -join '|') -eq $want -and ($item -join '|') -eq $want } }
+        @{ Name = 'run with -RequireSummaryVisual on a Summary with no visual it exits 1 saying so; without it the same body passes, and with it a body with one passes'; Test = {
+            $file = Join-Path $temp 'body.md'
+            Set-Content -LiteralPath $file -Value "## Summary`n`nA change.`n`n$marked"
+            $refused = & $run @($file, '-RequireSummaryVisual')
+            $passed = & $run @($file)
+            Set-Content -LiteralPath $file -Value "## Summary`n`n``````text`nscripts/`n```````n`n$marked"
+            $drawn = & $run @($file, '-RequireSummaryVisual')
+            Write-Host ($refused.Text.TrimEnd() -replace '(?m)^', '    ')
+            $refused.Code -eq 1 -and $refused.Text -match '(?m)^pr-body-check: `## Summary` holds no visual' -and
+                $refused.Text -match '(?m)^FAILED - pr-body-check: .*1 Summary with no visual' -and
+                $passed.Code -eq 0 -and $passed.Text -notmatch 'Summary holds a visual' -and
+                $drawn.Code -eq 0 -and $drawn.Text -match '## Summary holds a visual\.' } }
         @{ Name = 'any other ## heading ends a section: a marker after it is missing'; Test = {
             $after = @(Get-MarkerProblem ("## Evidence`n`n**Before:** none`n`n## Notes`n`n**After:** none`n`n" +
                 "## Merge Danger`n`n**Door:** two-way`n`n## Review`n`n**Blast Radius:** none"))
@@ -556,6 +623,10 @@ $markers = @(Get-MarkerProblem -Text "$Body")
 foreach ($m in $markers) {
     Write-Host "pr-body-check: $m. Under ## Evidence the body carries **Before:** and **After:**, each saying none where there is nothing to show, and under ## Merge Danger **Door:** and **Blast Radius:**."
 }
+$visual = @(if ($RequireSummaryVisual) { Get-VisualProblem -Text "$Body" })
+foreach ($v in $visual) {
+    Write-Host "pr-body-check: $v. The pr skill's Summary is the smallest diagram, diff sketch, tree or pseudocode that makes the point, in a code block."
+}
 $siblings = @(if ($CiteSiblings) { Get-SiblingProblem -Text "$Body" })
 foreach ($s in $siblings) {
     Write-Host "pr-body-check: line $($s.Line) says `"$($s.Sentence)`", a statement about a sibling with no $($s.Missing -replace '^an? ' -replace ' and an? ', ' and no '). Give it the commit and the date it was read at."
@@ -563,12 +634,14 @@ foreach ($s in $siblings) {
 $unchecked = if ($read.Unknown) { " $($read.Unknown) named no commit here and were NOT checked." } else { '' }
 $found = @("$($read.Off.Count) word(s) of the body name a commit that is not on $Main", "$($closing.Count) closing keyword(s) stand outside a Closes #N line",
     "$($headings.Count) problem(s) with the pr template's three headings", "$($markers.Count) marker(s) of the pr template missing")
+if ($RequireSummaryVisual) { $found += "$($visual.Count) Summary with no visual" }
 if ($CiteSiblings) { $found += "$($siblings.Count) statement(s) about a sibling lack a commit or an ISO date" }
-if ($read.Off -or $closing -or $headings -or $markers -or $siblings) {
+if ($read.Off -or $closing -or $headings -or $markers -or $visual -or $siblings) {
     Write-Host ''
     Write-Host "FAILED - pr-body-check: $(($found | Select-Object -SkipLast 1) -join ', '), and $($found[-1]).$unchecked"
     exit 1
 }
 $cited = if ($CiteSiblings) { ' Each statement about a sibling carries a commit and an ISO date.' } else { '' }
-Write-Host "OK - pr-body-check: $($read.On) word(s) of the body name a commit, each on $Main, no closing keyword stands outside a Closes #N line, and the pr template's three headings stand once each, in order, with ## Evidence and ## Merge Danger each carrying its markers.$cited$unchecked"
+$drawn = if ($RequireSummaryVisual) { ' ## Summary holds a visual.' } else { '' }
+Write-Host "OK - pr-body-check: $($read.On) word(s) of the body name a commit, each on $Main, no closing keyword stands outside a Closes #N line, and the pr template's three headings stand once each, in order, with ## Evidence and ## Merge Danger each carrying its markers.$drawn$cited$unchecked"
 exit 0

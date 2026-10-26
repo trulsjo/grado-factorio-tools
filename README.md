@@ -475,7 +475,7 @@ is not on `main`: a rebase-merge rewrites every SHA on a branch, so such a citat
 the merge deletes.
 
     pwsh -File scripts/pr-body-check.ps1 ../scratch/body.md
-    pwsh -File scripts/pr-body-check.ps1 -Body "$env:PR_BODY" -CiteSiblings
+    pwsh -File scripts/pr-body-check.ps1 -Body "$env:PR_BODY" -CiteSiblings -RequireSummaryVisual
 
 `-Body` takes the body itself, as CI has it in the environment; quote it, or an unset variable
 hands over no argument. `-Main` names the branch a cited commit must be on, `origin/main` unless
@@ -494,12 +494,14 @@ change with nothing to show says none after **Before:** and **After:**.
 
 With `-CiteSiblings` it also fails a sentence about a sibling repository that lacks a commit or
 an ISO date (#177). That is this repository's rule, so it is asked for; a run that does not ask,
-as a sibling's CI does, checks what it did before.
+as a sibling's CI does, checks what it did before. With `-RequireSummaryVisual` it fails a
+`## Summary` that holds no fenced or indented code block, the diagram, diff sketch or tree the
+template asks for there (#264); it is asked for too, since a sibling's body may hold none.
 
-CI runs it, with `-CiteSiblings`, on the body of every pull request here, and again when the
-body is edited. A word that names no commit in the clone, such as a commit of a sibling, is
-said to be unchecked and passes. What else it cannot see is in its header. `-SelfTest` proves
-it can fail.
+CI runs it, with `-CiteSiblings` and `-RequireSummaryVisual`, on the body of every pull request
+here, and again when the body is edited. A word that names no commit in the clone, such as a commit
+of a sibling, is said to be unchecked and passes. What else it cannot see is in its header.
+`-SelfTest` proves it can fail.
 
 ## Checking that list parameters are split
 
