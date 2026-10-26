@@ -292,7 +292,10 @@ if ($SelfTest) {
         $wPlain = & $wire $tools 'git status'
         $wAbsent = & $wire $outside 'git switch other'
         $toldAbsent = try { ($wAbsent.Text | ConvertFrom-Json).hookSpecificOutput.hookEventName -ceq 'PreToolUse' -and ($wAbsent.Text | ConvertFrom-Json).hookSpecificOutput.additionalContext } catch { $false }
-        & $check 'the wired command refuses with exit 2 and a reason, passes a plain command, and where the script is not there exits 0 and prints JSON telling the agent' ($wRefused.Code -eq 2 -and $wRefused.Text -match 'Refused' -and $wPlain.Code -eq 0 -and -not $wPlain.Text.Trim() -and $wAbsent.Code -eq 0 -and $toldAbsent) "refused: $($wRefused.Code) $($wRefused.Text) | plain: $($wPlain.Code) $($wPlain.Text) | absent: $($wAbsent.Code) $($wAbsent.Text)"
+        # The advice leads with git show after committing, and names no git worktree, which a hook
+        # on the development machine blocks (Truls, 2026-10-26, on grado-factorio-tools#224).
+        $advice = $wRefused.Text -match 'Commit the work first\. To read another revision without leaving this one: git show ' -and $wRefused.Text -notmatch 'worktree add'
+        & $check 'the wired command refuses with exit 2, a reason and git show as the advice after committing, passes a plain command, and where the script is not there exits 0 and prints JSON telling the agent' ($wRefused.Code -eq 2 -and $wRefused.Text -match 'Refused' -and $advice -and $wPlain.Code -eq 0 -and -not $wPlain.Text.Trim() -and $wAbsent.Code -eq 0 -and $toldAbsent) "refused: $($wRefused.Code) $($wRefused.Text) | plain: $($wPlain.Code) $($wPlain.Text) | absent: $($wAbsent.Code) $($wAbsent.Text)"
     }
     finally { Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue }
     Write-Host ''
@@ -313,7 +316,7 @@ if ($verdict) {
     [Console]::Error.WriteLine(@"
 Refused: $($verdict.Refuse)
 Commit the work first. To read another revision without leaving this one: git show <rev>:<path>,
-git log -p, git blame <rev> -- <path>, or run at it in git worktree add <scratch>/<name> <rev>.
+git log -p, or git blame <rev> -- <path>.
 "@)
     exit 2
 }
