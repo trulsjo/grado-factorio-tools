@@ -285,21 +285,20 @@ function Test-Markdown {
     }
     $fence = $null
     $numbered = $false
-    # For the length rule alone: the lines PowerShell's own Markdown parser puts in an indented
-    # code block, counted from 0. The parser is asked, and nothing here follows lists, blank lines
-    # or rules to work it out (grado-factorio-tools#95). A fenced block has a type of its own.
+    # The lines PowerShell's own Markdown parser puts in an indented code block, counted from 0,
+    # which no rule reads as prose (grado-factorio-tools#261). The parser is asked, and nothing
+    # here follows lists, blank lines or rules to work it out (grado-factorio-tools#95). A fenced
+    # block has a type of its own.
     $codeLines = [System.Collections.Generic.HashSet[int]]::new()
-    if ($MaxLineLength -gt 0) {
-        $pending = [System.Collections.Generic.Stack[object]]::new()
-        # The parser has a depth limit and throws past it. That must not end the run with no file
-        # named, nor pass the page: it is held to the limit with nothing exempt as code.
-        try { $pending.Push((ConvertFrom-Markdown -InputObject ($Lines -join "`n")).Tokens) }
-        catch { Write-Host "markdown-check: ${Path}: PowerShell's parser could not read it, so no line of it was taken for code: $($_.Exception.Message)" }
-        while ($pending.Count) {
-            $block = $pending.Pop()
-            if ($block.GetType().Name -eq 'CodeBlock') { for ($l = 0; $l -lt $block.Lines.Count; $l++) { $null = $codeLines.Add($block.Line + $l) } }
-            elseif ($block -is [System.Collections.IEnumerable]) { foreach ($child in $block) { $pending.Push($child) } }
-        }
+    $pending = [System.Collections.Generic.Stack[object]]::new()
+    # The parser has a depth limit and throws past it. That must not end the run with no file
+    # named, nor pass the page: it is read with no line of it taken for code.
+    try { $pending.Push((ConvertFrom-Markdown -InputObject ($Lines -join "`n")).Tokens) }
+    catch { Write-Host "markdown-check: ${Path}: PowerShell's parser could not read it, so no line of it was taken for code: $($_.Exception.Message)" }
+    while ($pending.Count) {
+        $block = $pending.Pop()
+        if ($block.GetType().Name -eq 'CodeBlock') { for ($l = 0; $l -lt $block.Lines.Count; $l++) { $null = $codeLines.Add($block.Line + $l) } }
+        elseif ($block -is [System.Collections.IEnumerable]) { foreach ($child in $block) { $pending.Push($child) } }
     }
     for ($i = 0; $i -lt $Lines.Count; $i++) {
         $line = $Lines[$i] -replace '^(\s*>)+\s?'
@@ -307,6 +306,9 @@ function Test-Markdown {
             if ($line -match "^\s*$([regex]::Escape($fence))+\s*$") { $fence = $null }
             continue
         }
+        # A line of an indented code block ends the paragraph before it, and is not read: a fence
+        # line in one opens no fence.
+        if ($codeLines.Contains($i)) { . $flush; continue }
         if ($line -match '^\s*(`{3,}|~{3,})') { . $flush; $fence = $Matches[1]; $fenceLine = $i + 1; continue }
 
         # Links, on every line outside a fence, a table's rows included. Only a line holding
@@ -336,10 +338,10 @@ function Test-Markdown {
         # wrapped. A heading and a `[label]: target` line cannot be broken at all, and neither can a
         # line with no space at or before the limit, past its list marker and first word. A space
         # inside a code span is no place to break: a command wrapped there is no longer the command.
-        # A line of an indented code block is quoted output, which cannot be wrapped.
+        # A line of an indented code block never reaches here.
         if ($MaxLineLength -gt 0) {
             $counted = Get-CountedLine $Lines[$i]
-            if ($counted.Length -gt $MaxLineLength -and -not $codeLines.Contains($i) -and $line -notmatch '^\s{0,3}#{1,6}\s' -and $prose -notmatch '^\s{0,3}\[[^\]^][^\]]*\]:') {
+            if ($counted.Length -gt $MaxLineLength -and $line -notmatch '^\s{0,3}#{1,6}\s' -and $prose -notmatch '^\s{0,3}\[[^\]^][^\]]*\]:') {
                 $lead = [regex]::Match($counted, '^(\s*>)*\s*(([-*+]|\d+[.)])\s+)?').Length
                 $solid = [regex]::Replace($counted, '(`+)(?:(?!\1).)+?\1', { param($m) 'x' * $m.Length })
                 if ($solid.Substring($lead, [Math]::Max(0, $MaxLineLength + 1 - $lead)) -match '\S\s') {

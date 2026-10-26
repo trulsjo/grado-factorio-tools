@@ -34,7 +34,8 @@
     why; so does a file inside a submodule, which is read by running the check from inside it.
 
     WHAT IT READS AS WHAT. A paragraph ends at a blank line, a heading, a list item, a table or a
-    fenced code block; nothing inside a fence is read, and a fence never closed is reported. A
+    fenced or indented code block; nothing inside either is read, no emphasis and no link
+    (grado-factorio-tools#261), and a fence never closed is reported. A
     number ends a paragraph only as `1.`; inside a numbered list any number is the next item.
     Emphasis follows CommonMark's flanking rules and its rule of 3: a `*` or `_` with whitespace
     on both sides is a literal, and so is a `_` inside a word. An opener still open when its
@@ -76,10 +77,10 @@
     is no such place, so a command in one is never wrapped. Trailing spaces are not counted. A
     limit below 1 is refused.
     WHICH LINES ARE AN INDENTED CODE BLOCK IS ASKED OF POWERSHELL'S PARSER, ConvertFrom-Markdown
-    (grado-factorio-tools#95), and of nothing here: the script follows no list, blank line or
-    rule to work it out. Fences, tables and headings are still read by this script, as they are
-    with no limit. The parser is not GitHub's renderer, and where the two disagree the check
-    follows the parser. Where they were found to, each time over an indented line, is recorded
+    (grado-factorio-tools#95), for every rule and with or without a limit, and of nothing here:
+    the script follows no list, blank line or rule to work it out. Fences, tables and headings
+    are read by this script. The parser is not GitHub's renderer, and where the two disagree the
+    check follows the parser. Where they were found to, each time over an indented line, is recorded
     in docs/measurements.md (2026-10-10). Code to the parser and prose to GitHub: after a rule
     that is itself indented into a list item, and straight after a `^^^` or a `:::` line. Prose
     to the parser and code to GitHub: after a `term` line and a `:   definition` line, and on a
@@ -487,6 +488,13 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             $wide = 'word ' * 12
             $f = @(& $long "text`n`n    $wide`n    $wide`n`ntext`n`n- item`n`n    $wide" 40)
             $f.Count -eq 1 -and $f[0] -match '^10: the line is 63 characters' } }
+        @{ Name = 'with no limit, an indented code block is code: a * or _ in it opens no emphasis and a link in it is not checked; the same lines continuing a list item are prose (#261)'; Test = {
+            $code = @(& $find "A paragraph that ends here:`n`n    git log | awk '/^x/ {f=1} f && (/^$/ || /^[A-Z]*: /) {f=0} f'`n    a _b and [x](missing.md)`n`nNext.")
+            $inItem = @(& $find "- item`n`n    *open")
+            $code.Count -eq 0 -and $inItem.Count -eq 1 -and $inItem[0] -match '^3: emphasis opened with \* is not closed' } }
+        @{ Name = 'a fence line inside an indented code block opens no fence, so what follows the block is read'; Test = {
+            $f = @(& $find "text`n`n    ``````text`n`nafter *open")
+            $f.Count -eq 1 -and $f[0] -match '^5: emphasis opened with \* is not closed' } }
         @{ Name = 'a table or a rule ends a list, so a code block after it is not held to the limit; a lazy line does not, so the item''s next paragraph is'; Test = {
             $wide = 'word ' * 12
             $afterTable = @(& $long "- item`n`n| a | b |`n|---|---|`n`n    $wide" 40)
