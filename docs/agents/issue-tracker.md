@@ -29,6 +29,15 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
   #106 said, "read from source, not run for this ticket", that with a two-dot range the files
   `main` changed since are listed too. The first run, on PR #107, showed that false for a file
   the base added.
+- **An acceptance criterion on what a script does names the self-test case that fails when that
+  behaviour is reverted**, or says the behaviour is held by a manual run only. The second is a
+  decision recorded in the ticket, not a gap a review finds. The rule is for criteria on a
+  script's behaviour, not on prose, a label or a page; how a revert is made and shown is
+  [`review-brief.md`](review-brief.md)'s *The reverts*. #221's brief held one half of its ruling
+  to the self-test and the other, a type with no `stack_size` still refused, to a manual stub run.
+  On PR #223, on 2026-10-25, the bug scan reverted the `Test-Stackable` condition and `-SelfTest`
+  still passed (its review comment, bug finding 1, score 75), and a third half was added in a fix
+  round.
 - **A command that printed nothing** has shown what it prints for that input only. Before a
   ticket, a page or a pull request body records what the command does, it is run again on an
   input that should print something, and the record shows both runs. #148 ran
@@ -91,6 +100,14 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
   nothing.
   The body does not recount the review: each review posts its findings as one comment on the
   pull request, by the rule in [`code-review.md`](code-review.md).
+- **The Blast Radius of a change to a script names each place a sibling uses it**: each line that
+  `git -C <sibling> grep -n vendor/grado-factorio-tools/scripts/<script> <commit>` lists: the grep
+  [*Pin tickets*](#pin-tickets) runs over every script, narrowed to the one changed. It covers
+  the whole sibling, documents included, not its gates alone, and the body cites the commit and
+  the date, as `pr-body-check.ps1 -CiteSiblings` asks. PR #223's first body grepped
+  realistic-fusion-refreshed's gates only, and missed its `docs/agents/shipping.md`, which at
+  `ff59e79` (read 2026-10-25) runs `locale-check.ps1 -Prefix rf-` by hand before shipping; the
+  review's prose lane found it (finding 2, score 40).
 - **A revert a pull request cites as evidence shows that its copy differs**, with
   `git diff --no-index --stat <file> <copy>/<file>`, as [`review-brief.md`](review-brief.md) asks
   of a review lane under *The reverts* (Truls, 2026-10-21, #183). On 2026-10-20, fixing PR #178's
