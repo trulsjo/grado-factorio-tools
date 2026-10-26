@@ -17,5 +17,6 @@ hook-skip
 heredoc-hook
 pin-measure
 discard-hook
+pr-body-hook
 docs
 repo
