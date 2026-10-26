@@ -328,6 +328,32 @@ whose `matcher` would not start the hook for both shell tools. What the hook can
 its header: a script or an alias that passes the switch itself and a hook manager turned off
 through the environment are two of them.
 
+## Keeping an agent session from running Python from a heredoc
+
+A Python edit script fed through a heredoc, `python - <<'EOF'`, changes a backslash escape in
+any string that is not raw, so a regex or a PowerShell path comes out changed (#240).
+`scripts/refuse-python-heredoc.ps1` is a hook that refuses a shell command running `python`,
+`python3` or `py` with its script read from a heredoc, and says to write the script to a file
+with the Write tool and run `python -I <file>`, or to use the Edit tool. `python -c`,
+`python -m`, a script file given a heredoc as its input, and a here-string, `<<<`, pass.
+
+This repository wires it for its own sessions in its tracked `.claude/settings.json`, beside the
+hook-skip hook. A consumer adds it to its own:
+
+```json
+{
+  "type": "command",
+  "command": "i=$(cat); case $i in *py*'<<'*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-python-heredoc.ps1\";; esac"
+}
+```
+
+The `case` keeps PowerShell from starting unless the command holds `py` and `<<`. Exit 2
+refuses; a tool call it cannot read exits 1 and says on stderr that the command was not checked.
+`-SelfTest` proves what is refused and what is not, and runs the command this repository's
+settings wire; `-SelfTest -Settings .claude/settings.json` runs a consumer's, and fails a wiring
+whose `matcher` would not start the hook for both shell tools. What the hook cannot see is in
+its header: a heredoc piped into Python, `cat <<EOF | python -`, is one.
+
 ## Packing mods
 
 `scripts/pack-mods.ps1` builds one zip per mod directory, named `<name>_<version>.zip` from the
@@ -481,8 +507,8 @@ scripts/     PowerShell entry points, one job each, and the libraries they
              markdown-check.ps1 -SelfTest reads (CC BY-SA 4.0)
 .githooks/   this repo's own pre-commit (the staged Markdown), commit-msg and
              pre-push hooks, opted into once per clone
-.claude/     settings.json, which wires the session hook that refuses a commit
-             or push skipping those
+.claude/     settings.json, which wires the session hooks: one refuses a commit
+             or push skipping those, and one Python run from a heredoc
 .github/     the workflow that runs scripts/check.ps1 on pull requests and main
 docs/        the commit convention, the ADRs, the notes agents read, the
              extraction record — what moved, from where, and why — and

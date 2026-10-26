@@ -13,6 +13,10 @@
           {
             "type": "command",
             "command": "i=$(cat); case $i in *commit*|*push*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/scripts/refuse-git-hook-skip.ps1\";; esac"
+          },
+          {
+            "type": "command",
+            "command": "i=$(cat); case $i in *py*'<<'*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/scripts/refuse-python-heredoc.ps1\";; esac"
           }
         ]
       }
