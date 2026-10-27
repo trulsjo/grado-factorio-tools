@@ -69,8 +69,8 @@ range is the commits between the old pin and the new one.
 _Avoid_: pin bump, upgrade
 
 **Breaking commit**:
-A commit that calls itself breaking. What it breaks is a consumer's
-interface, as `CLAUDE.md` defines a breaking change.
+A commit that calls itself breaking, by the rule in `scripts/breaking-lib.ps1`'s header. What it
+breaks is a consumer's interface, as `CLAUDE.md` defines a breaking change.
 _Avoid_: breaking change, when the commit is meant
 
 ### The game
