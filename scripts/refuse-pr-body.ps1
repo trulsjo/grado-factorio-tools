@@ -3,8 +3,9 @@
     A hook for agent sessions: refuses `gh pr create` or `gh pr edit` whose body
     pr-body-check.ps1 fails, or whose body this cannot read from a file. Exit 2 refuses the
     command before it runs, with the check's report or what to write instead on stderr; exit 0
-    lets it run, and means only that each body file this saw passed the check. Exit 1 says on
-    stderr that the tool call could not be read and was not checked; the command still runs.
+    lets it run, and means only that each body file this checked passed: a call with `--help` or
+    `-h` is not checked. Exit 1 says on stderr that the command could not be checked, as where
+    the tool call cannot be read; the command still runs.
 
 .DESCRIPTION
     WHY (grado-factorio-tools#259). PR #252 was opened with a body the check failed. The
@@ -47,6 +48,12 @@
     whether the settings still reach it, unless -SelfTest is run, which reads the wired
     command and the matcher of its entry, and nothing else of the settings.
 
+    WHAT IT REFUSES WRONGLY. It reads the command as text and does not parse the shell, so text
+    that names `gh pr create` or `gh pr edit` outside quotes is read as a command: in a heredoc,
+    in an `echo`, in a comment, between backticks, or after a lone apostrophe in a here-string.
+    A value of another option that begins `-b`, as `--title '-bump deps'`, reads as an inline
+    body. Write such text to a file and pass the file.
+
     TO CHECK IT, run the second example below.
 
 .PARAMETER SelfTest
@@ -56,8 +63,9 @@
     the command needs sh: the one on the path, or the one Git for Windows ships.
 
 .PARAMETER Settings
-    With -SelfTest: the .claude/settings.json whose wiring the last two cases read, with that
-    file's repository as the project. Defaults to this repository's own.
+    With -SelfTest: the .claude/settings.json read by the case that runs the wired command and
+    the one that reads its matcher, with that file's repository as the project. Defaults to
+    this repository's own.
 
 .PARAMETER CheckArgs
     The arguments that follow the body file on pr-body-check.ps1's command line, as
@@ -162,6 +170,8 @@ if ($SelfTest) {
         @('gh pr create -b "text"', @(), 'inline'),
         @('gh pr create --body=text', @(), 'inline'),
         @('gh pr edit 5 --body "text"', @(), 'inline'),
+        @('gh pr edit 5 -btext', @(), 'inline'),
+        @('/usr/bin/gh.exe pr create --body text', @(), 'inline'),
         @('gh pr create --fill', @(), 'no --body-file'),
         @('gh pr create --title t', @(), 'no --body-file'),
         @('gh pr create --body-file $R/x.md', @(), 'in full'),
@@ -183,6 +193,8 @@ if ($SelfTest) {
         @("gh pr create --body-file $msys", $visual, $null),
         @('gh pr edit 5 --title t --add-label x', @(), $null),
         @('gh pr create --help', @(), $null),
+        @('gh pr create -h', @(), $null),
+        @("gh pr edit 5 --title t; git commit -F `"$bad`"", @(), $null),
         @('gh pr view 5 --json body', @(), $null),
         @('git status', @(), $null),
         @('', @(), $null)
@@ -259,7 +271,7 @@ try {
 }
 catch {
     # Loud, and not a refusal: a hook that cannot read its input must not stop every command.
-    [Console]::Error.WriteLine("refuse-pr-body: could not read the tool call, so the command was NOT checked: $($_.Exception.Message)")
+    [Console]::Error.WriteLine("refuse-pr-body: could not check the command, so it was NOT checked: $($_.Exception.Message)")
     exit 1
 }
 if ($refusal) {
