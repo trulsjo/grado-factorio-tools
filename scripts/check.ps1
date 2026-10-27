@@ -132,7 +132,7 @@ param([switch] $SkipIfPassed, [switch] $SelfTest)
 $ErrorActionPreference = 'Stop'
 
 $SELF_TESTS = @('check.ps1', 'commit-check.ps1', 'compare-resource-counts.ps1', 'dump-diff.ps1', 'dump-keys.ps1', 'dump-planets.ps1', 'dump-shared-names.ps1', 'fetch-mods.ps1',
-    'get-dump.ps1', 'hook-matcher.ps1', 'markdown-check.ps1', 'markdown-rewrap.ps1', 'mod-info.ps1', 'pack-mods.ps1', 'param-check.ps1', 'pin-measure.ps1', 'pr-body-check.ps1',
+    'follow-pin.ps1', 'get-dump.ps1', 'hook-matcher.ps1', 'markdown-check.ps1', 'markdown-rewrap.ps1', 'mod-info.ps1', 'pack-mods.ps1', 'param-check.ps1', 'pin-measure.ps1', 'pr-body-check.ps1',
     'refuse-backtick-substitution.ps1', 'refuse-cd-into-mod-cache.ps1', 'refuse-git-discard.ps1', 'refuse-git-hook-skip.ps1', 'refuse-pr-body.ps1', 'refuse-python-heredoc.ps1', 'resolve-modpack.ps1', 'self-test-halves.ps1')
 # Has a self-test this does not run, and why: it needs Factorio installed.
 $NEEDS_GAME = @('dump-walk.ps1', 'load-harness.ps1', 'locale-check.ps1', 'trace-definitions.ps1', 'tree-viewer.ps1')
