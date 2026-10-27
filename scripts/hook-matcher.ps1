@@ -1,15 +1,15 @@
 #Requires -Version 7
 <#
-    Whether a session hook's `matcher` starts the hook for a tool, for the -SelfTest of the two
-    session hooks here, refuse-cd-into-mod-cache.ps1 and refuse-git-hook-skip.ps1
-    (grado-factorio-tools#120). Dot-source it:
+    Whether a session hook's `matcher` starts the hook for a tool, for a session hook's
+    -SelfTest (grado-factorio-tools#120). Dot-source it:
 
         . "$PSScriptRoot/hook-matcher.ps1"
         Get-UnstartedShellTool -Entry $settings.hooks.PreToolUse[0]
 
-    WHY. Each of those self-tests ran the command a .claude/settings.json wires and read nothing
-    else of the entry. With the matcher narrowed from `Bash|PowerShell` to `Bash` both passed
-    (2026-10-12), while a session would no longer start the hook for the PowerShell tool.
+    WHY. Each session hook's self-test here, on 2026-10-12, ran the command a
+    .claude/settings.json wires and read nothing else of the entry. With the matcher narrowed
+    from `Bash|PowerShell` to `Bash` each passed (2026-10-12), while a session would no longer
+    start the hook for the PowerShell tool.
 
     THE RULE IS THE CLIENT'S, READ 2026-10-12 from *Matcher patterns* in Claude Code's hooks
     reference, https://code.claude.com/docs/en/hooks, and Test-HookMatcher follows it:
