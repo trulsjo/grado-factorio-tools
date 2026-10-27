@@ -44,8 +44,10 @@
     holding a word and a token too long to share a line. A line of one token longer than the
     limit is not named: the check passes it, having no space to break at. What the check exempts
     is never flagged, so never touched. With -Comment, every comment line over the limit after
-    the run is named, rewrapped or not, as a keyword line or a `##` line is not: all but a line
-    under `.EXAMPLE` and a line of one word after its marker, which comment-line-lib.ps1 exempts.
+    the run is named, rewrapped or not, a keyword line or a `##` line, which it never rewraps,
+    among them. It exempts what comment-line-lib.ps1 does, a line under `.EXAMPLE` and a line of
+    one word after its marker, and also a shebang and a line over only by its trailing spaces,
+    which the lib names.
 
     WHAT IT CANNOT SEE. Whether the wrap reads well: it is greedy, not balanced. A flagged line
     that starts inside a code span opened on the line before, whose backticks it then pairs
@@ -55,8 +57,11 @@
     comment's opening or closing mark inside a string, which is taken as the block's edge, and a
     hanging indent such as a help paragraph's term and its text, whose flagged line is rewrapped to
     its own indent. A prose line in a block comment opening with `.` and upper-case letters, as
-    `.NET`, which is taken for a keyword and left. And a line starting `# ` inside a here-string or
-    a YAML block scalar, which is taken for a comment and rewrapped.
+    `.NET`, which is taken for a keyword: it is left, and named where over, and under `.EXAMPLE`
+    it ends that section, so a command after it is rewrapped, where the lib's closed list of
+    keywords ends none. A block comment opened after code on its line, which is not read as one,
+    and so not named. And a line starting `# ` inside a here-string or a YAML block scalar, which
+    is taken for a comment, rewrapped and named.
 
 .PARAMETER Range
     Rewrap the Markdown files changed in this commit range, as markdown-check.ps1 takes it:
@@ -254,8 +259,8 @@ function Invoke-CommentRewrap {
         $next = $e + 1
     }
     for ($k = $next; $k -lt $Lines.Count; $k++) { $out.Add($Lines[$k]) }
-    # Left is each comment line still over, rewrapped or not, less what the comment-line check
-    # exempts: a line under .EXAMPLE, and one of a single word after its marker.
+    # Left is each comment line still over, rewrapped or not, less a line under .EXAMPLE and one
+    # of a single word after its marker, as the comment-line check exempts, and a shebang.
     $after = & $read $out.ToArray()
     for ($k = 0; $k -lt $out.Count; $k++) {
         $comment = $after.InBlock[$k] -or ($out[$k] -match '^\s*#' -and $out[$k] -notmatch '^#!')
@@ -361,12 +366,19 @@ function Invoke-SelfTest {
             $cmd = '    pwsh -File scripts/markdown-rewrap.ps1 -MaxLineLength 100'
             $in = @('<#', '.DESCRIPTION', '    The start of a paragraph,', '    .github/, .claude/ or scripts/ names its path here.', '    Then more.', '.EXAMPLE', $cmd, '#>')
             $r = Invoke-CommentRewrap -Lines $in -Max $max
+            # A . line after a flagged one goes on with its paragraph; one heading a paragraph under
+            # .DESCRIPTION is not taken for a section of its own, as .example would be.
+            $after = Invoke-CommentRewrap -Lines @('<#', '.DESCRIPTION', '    A line that runs past the limit of forty,', '    .claude/ is next.', '#>') -Max $max
+            $own = Invoke-CommentRewrap -Lines @('<#', '.DESCRIPTION', '    .example.com hosts it, and this runs past forty.', '#>') -Max $max
             ($r.Lines -ccontains $cmd) -and ($r.Lines -ccontains '.EXAMPLE') -and ($r.Lines -join ' ') -match '\.github/' -and
-                (& $commentHolds $in '^    (?!pwsh)' '    ') }
-        'a comment line over the limit that is not rewrapped is counted as left over' = {
-            $in = @('<#', '.PARAMETER AParameterNameThatIsLong with its text', '    Short.', '#>', '## A ## line that is well over the limit of forty.')
+                (& $commentHolds $in '^    (?!pwsh)' '    ') -and -not ($after.Lines -ccontains '    .claude/ is next.') -and
+                -not @($own.Lines | Where-Object { $_.Length -gt $max }) }
+        'a comment line over the limit that is not rewrapped is counted as left over; a line the check exempts, or no comment, is not' = {
+            $in = @('#!/usr/bin/env pwsh -NoProfile -File a-long-script-name.ps1', '<#', '.PARAMETER AParameterNameThatIsLong with its text', '    Two words.',
+                '.EXAMPLE', '    pwsh -File scripts/markdown-rewrap.ps1 -MaxLineLength 100', '#>', '## A ## line that is well over the limit of forty.',
+                ('# two words' + ' ' * 40), '$x = ''a code line that is well over the limit of forty''', '# https://example.com/a-very-long-address-past-forty')
             $r = Invoke-CommentRewrap -Lines $in -Max $max
-            -not $r.Rewrapped -and ($r.Left -join ',') -ceq '2,5' }
+            ($r.Lines -join "`n") -ceq ($in -join "`n") -and ($r.Left -join ',') -ceq '3,8' }
         'a token longer than the limit goes on a line of its own, not named; a line the check still reports is named' = {
             $r = Invoke-MarkdownRewrap -Lines @('A word then `a-code-span-much-longer-than-forty-characters` after.') -Max $max
             $named = Invoke-MarkdownRewrap -Lines @('A word then a [link whose text runs well past forty characters](u) after.') -Max $max
