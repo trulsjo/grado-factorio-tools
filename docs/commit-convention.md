@@ -61,7 +61,9 @@ A pull request title is a subject line, with one difference: **the scope is requ
 
 Say what changed and why, and cite the ticket where there is one. *What changed* is the change in
 a sentence, not a walk through what the diff already shows; the *why* is what the diff cannot
-show. What happened on an earlier pull request or in the session is the ticket's to tell.
+show. A body may cite an earlier pull request or the session as its reason, in a sentence, read
+from the source or marked as an account. The account of what happened, step by step, is the
+ticket's.
 
 Wrap at 72 — with two exemptions the check makes on purpose, both listed under *What the check is
 blind to*.
@@ -104,7 +106,8 @@ A gate that overstates its coverage is worse than no gate, so:
   listed and nothing more: `pack` on a commit that touches only the resolver is accepted.
 - **What a body says.** The check asks a body for the blank line above it, for lines that wrap
   and, under a `!`, for the `BREAKING CHANGE:` footer. It does not read what the body tells: one
-  that cites no ticket, or retells an earlier pull request or the session, passes.
+  that cites no ticket passes, and so does one that cites an earlier pull request or the session
+  from memory, unmarked, or walks through what happened step by step.
 - **Trailer lines are exempt from the 72-character body rule.** A `Key: value` block at the end of
   the message is skipped, because `Co-Authored-By:` and `Claude-Session:` end in an address or a
   URL that cannot be broken, and git parses that block by position.
