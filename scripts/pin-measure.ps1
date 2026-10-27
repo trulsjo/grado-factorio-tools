@@ -352,6 +352,21 @@ if ($SelfTest) {
         Write-BreakingList -Tools $toolsRepo -Old $oldPin -New $oldPin -Out $emptyOut
         $empty = "$(Get-Content -LiteralPath (Join-Path $emptyOut 'breaking.txt') -Raw)".Trim()
         & $check 'an empty range writes none to breaking.txt' ($empty -ceq 'none') $empty
+        # Commits off the old pin, outside the fixture's range, each a move of its own.
+        $side = { param([string[]] $msg) git -C $toolsRepo commit-tree "$oldPin^{tree}" -p $oldPin @($msg | ForEach-Object { '-m', $_ }) }
+        $text = { param($to) (Format-BreakingCommit @(Get-BreakingCommit -Repo $toolsRepo -Old $oldPin -New $to)) -join "`n" }
+        $para = & $text (& $side 'feat: para', 'BREAKING CHANGE: the footer.', 'A later paragraph.')
+        & $check 'a footer ends at a blank line: a later paragraph is not printed' ($para -cmatch '(?m)^    BREAKING CHANGE: the footer\.$' -and $para -notmatch 'later paragraph') $para
+        $two = & $text (& $side 'feat: two', 'BREAKING CHANGE: first.', 'BREAKING-CHANGE: second.')
+        & $check 'a body with two footers prints both, in order' ($two -cmatch '(?m)^    BREAKING CHANGE: first\.\n    BREAKING-CHANGE: second\.$') $two
+        $plain = @(Get-BreakingCommit -Repo $toolsRepo -Old $oldPin -New (& $side 'fix: say "wow!: x"', 'breaking change: written in lower case.'))
+        & $check 'a !: after the first colon, and a footer in lower case, are not breaking' (-not $plain) ($plain | Out-String)
+        $order = @(Get-BreakingCommit -Repo $toolsRepo -Old (& $side 'feat!: side') -New $newPin | ForEach-Object Dropped)
+        & $check 'a pin moved sideways lists what it brings in, then what it drops' (($order -join ',') -ceq 'False,False,False,True') ($order -join ',')
+        $page = [Console]::OutputEncoding.CodePage
+        $threw = try { $null = Get-BreakingCommit -Repo $toolsRepo -Old 0123456789abcdef -New $newPin; '' } catch { $_.Exception.Message }
+        & $check "a range git cannot read throws, naming it, and the console's encoding is left as it was" (
+            $threw -match 'could not read the range 0123456789abcdef\.\.' -and [Console]::OutputEncoding.CodePage -eq $page) "$threw $([Console]::OutputEncoding.CodePage)"
         $md = & $read 'table.md'
         & $check "table.md's rows: same, differs above the last line, differs" (
             $md -match '(?m)^\| same \| 0 \| 3 \| same \| same \| same \|\r?$' -and

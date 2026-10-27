@@ -608,11 +608,11 @@ prototype name is that mod's business. If a script needs to know `rf-`, it stays
 
 ```
 scripts/     PowerShell entry points, one job each, and the libraries they
-             dot-source: load-harness-lib.ps1, dump-lib.ps1, game-mods.ps1, mod-info.ps1,
+             dot-source: load-harness-lib.ps1, dump-lib.ps1, game-mods.ps1,
+             mod-info.ps1, which reads a mod's info.json for four of them,
              markdown-lib.ps1, the reading markdown-check.ps1 and markdown-rewrap.ps1 share,
              comment-line-lib.ps1, the comment-line rule check.ps1 and pre-commit share,
-             breaking-lib.ps1, the rule for a pin move's breaking commits,
-             which reads a mod's info.json for four of them,
+             breaking-lib.ps1, the rule for a pin move's breaking commits pin-measure.ps1 loads,
              self-test-halves.ps1, the runner a -SelfTest hands its halves to,
              and hook-matcher.ps1, which reads a session hook's matcher;
              grado-count/, the counting mod count-resources.ps1 loads;
