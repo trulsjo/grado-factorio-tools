@@ -56,9 +56,10 @@
     the one Git for Windows ships.
 
 .PARAMETER Settings
-    With -SelfTest: the .claude/settings.json whose wiring the last two cases read, with that
-    file's repository as the project. Defaults to this repository's own. They take the first
-    command, of any PreToolUse entry, that names this script, as refuse-git-hook-skip.ps1's do.
+    With -SelfTest: the .claude/settings.json read by the case that runs the wired command and
+    the one that reads its matcher, with that file's repository as the project. Defaults to
+    this repository's own. They take the first command, of any PreToolUse entry, that names this
+    script, as refuse-git-hook-skip.ps1's do.
 
 .EXAMPLE
     The wired command: the PreToolUse hook in this repository's .claude/settings.json, as HOW IT
