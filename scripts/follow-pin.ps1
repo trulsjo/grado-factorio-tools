@@ -41,12 +41,22 @@
     - its clone has uncommitted changes, an untracked file among them;
     - its HEAD is not the old HEAD's pin, as when a newer tools commit was checked out there to
       try it;
+    - git cannot read the submodule's HEAD;
     - `git submodule update` failed, as when the pin could not be fetched.
+    A hook it does not serve, or anything else that fails, prints one line saying the submodule
+    was not checked, with the command to bring it to the pin HEAD records. It runs with git's
+    GIT_DIR, GIT_WORK_TREE and GIT_INDEX_FILE taken out of its environment, which git sets for a
+    hook when it is run with --git-dir, so its git calls into the submodule read the submodule.
 
-    WHAT IT CANNOT SEE. A HEAD moved by a command that runs none of these hooks, as `git reset
-    --hard`, which leaves the submodule as it was. A change to the submodule's own submodules,
-    which it never updates. And whether the new pin's scripts work: it moves the checkout, and
-    the sibling's gates judge the rest.
+    WHAT IT CANNOT SEE. A HEAD moved by a command that runs none of these hooks: `git reset
+    --hard` leaves the submodule as it was, and so do `git rebase --abort` and `--quit`, after
+    the rebase's own checkout moved it. A `git merge --squash`, whose post-merge sees ORIG_HEAD
+    and HEAD the same while the index records the new pin, so it prints nothing. After each,
+    `git submodule update -- vendor/grado-factorio-tools` brings it there. A checkout made while
+    vendor/ holds a pin older than this script, whose copy has none to run, and a clone with no
+    pwsh: the wrapper below skips both, saying nothing. A change to the submodule's own submodules,
+    which it never updates. And whether the new pin's scripts work: it moves the checkout, and the
+    sibling's gates judge the rest.
 
 .PARAMETER Hook
     The hook that runs it: post-checkout, post-merge or post-rewrite.
@@ -60,16 +70,18 @@
 .PARAMETER SelfTest
     Build, in a temp directory, a tools repository of four commits and a sibling holding it as a
     submodule, with this script wired into its post-checkout, post-merge and post-rewrite hooks,
-    and hold each case above by running git: a switch, a merge and a rebase that move the pin, a
-    switch that does not, a file checkout, a dirty submodule, one off the old pin, one not
-    initialised, a pin the clone must fetch and one it cannot. Needs git, and no game and no
-    network.
+    and hold each case above by running git. Needs git, and no game and no network.
 
 .EXAMPLE
-    pwsh -File vendor/grado-factorio-tools/scripts/follow-pin.ps1 post-checkout 8189e45 2c13393 1
+    Run by hand from a sibling's root, as post-checkout would be after a switch from the
+    previous HEAD:
+
+        pwsh -File vendor/grado-factorio-tools/scripts/follow-pin.ps1 post-checkout HEAD@{1} HEAD 1
 
 .EXAMPLE
-    A sibling's .githooks/post-checkout, and the same for post-merge and post-rewrite:
+    A sibling's .githooks/post-checkout, and the same for post-merge and post-rewrite, each
+    committed executable (`git add --chmod=+x .githooks/post-checkout`): off Windows, git ignores a
+    hook that is not.
 
         #!/bin/sh
         # Brings vendor/grado-factorio-tools to the pin the new HEAD records.
@@ -93,7 +105,6 @@ $ErrorActionPreference = 'Stop'
 # The commit $Commit's tree records for $Sub, or '' where it records none.
 function Get-Pin {
     param([string] $Commit, [string] $Sub)
-    if (-not $Commit) { return '' }
     $entry = git ls-tree $Commit -- $Sub 2>$null
     if ($LASTEXITCODE -or "$entry" -notmatch '^160000 commit ([0-9a-f]+)\t') { return '' }
     $Matches[1]
@@ -113,7 +124,6 @@ function Invoke-FollowPin {
         }
         default { throw "$Hook is not a hook this serves: give post-checkout, post-merge or post-rewrite." }
     }
-    if (-not $new) { return $null }
     $was = Get-Pin $old $Sub; $now = Get-Pin $new $Sub
     if (-not $was -or -not $now -or $was -eq $now) { return $null }
     $short = { param($c) $c.Substring(0, 7) }
@@ -176,6 +186,8 @@ if ($SelfTest) {
         New-Item -ItemType Directory -Path $hooks | Out-Null
         foreach ($h in 'post-checkout', 'post-merge', 'post-rewrite') {
             [IO.File]::WriteAllText((Join-Path $hooks $h), "#!/bin/sh`npwsh -NoProfile -File '$($PSCommandPath -replace '\\', '/')' $h `"`$@`"`nexit 0`n")
+            # Off Windows, git runs only a hook file that is executable, and ignores the rest.
+            if (-not $IsWindows) { chmod +x (Join-Path $hooks $h); if ($LASTEXITCODE) { throw 'chmod failed on a hook.' } }
         }
         Set-Content -LiteralPath (Join-Path $sib '.git/info/exclude') -Value 'hooks/'
         git -C $sib config core.hooksPath hooks
@@ -191,15 +203,17 @@ if ($SelfTest) {
         & $check 'a branch switch that changes the pin updates it and prints the line' ($said.Trim() -ceq (& $line 'post-checkout' $A $B) -and (& $at) -eq $B) $said
         $null = & $git switch --quiet main
         $said = & $git switch --quiet sameA
-        & $check 'a branch switch that does not change the pin prints nothing' (-not $said.Trim() -and (& $at) -eq $A) $said
+        & $check 'a branch switch that does not change the pin prints nothing' ($said -ceq '' -and (& $at) -eq $A) $said
         $null = & $git switch --quiet main
         $mainSha = git -C $sib rev-parse main; $moveSha = git -C $sib rev-parse moveB
-        # An amend whose rewritten commit's parent records b, as a rebase's would be read; and a
-        # clone's first checkout, whose old HEAD is all zeros and records no pin.
+        # An amend whose rewritten commit's parent records b, as a rebase's would be read; a
+        # clone's first checkout, whose old HEAD is all zeros and records no pin; and a switch to a
+        # commit whose tree, git's empty tree, records none.
         $afterB = git -C $sib commit-tree "moveB^{tree}" -p $moveSha -m 'after b'
+        $noPin = git -C $sib commit-tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904 -m 'no submodule'
         $said = (& $direct '' 'post-checkout', $mainSha, $moveSha, '0') + (& $direct "$afterB $afterB" 'post-rewrite', 'amend') +
-            (& $direct '' 'post-checkout', ('0' * 40), $moveSha, '1')
-        & $check "a file checkout, an amend and a first checkout do nothing" (-not $said.Trim() -and (& $at) -eq $A) $said
+            (& $direct '' 'post-checkout', ('0' * 40), $moveSha, '1') + (& $direct '' 'post-checkout', $mainSha, $noPin, '1')
+        & $check "a file checkout, an amend, a first checkout and a commit with no pin do nothing" (-not $said.Trim() -and (& $at) -eq $A) $said
         # Run with --git-dir, git hands the hooks GIT_DIR, which must not reach the submodule's git.
         $said = & $git --git-dir="$sib/.git" --work-tree=$sib switch --quiet moveB
         & $check 'a switch with GIT_DIR set updates it too' ($said.Trim() -ceq (& $line 'post-checkout' $A $B) -and (& $at) -eq $B) $said
