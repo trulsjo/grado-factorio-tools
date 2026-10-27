@@ -28,10 +28,10 @@
     - <form>.old.txt, <form>.old.exit, <form>.new.txt and <form>.new.exit for every form: its
       output, stdout and stderr together, and its exit code, run with pwsh -NoProfile -File in
       its clone's root.
-    - breaking.txt: each commit in -Old..-New whose message holds a `BREAKING CHANGE: ` footer
-      line, as `== <short hash>`, and the footer, to the next blank or trailer line. The same
-      list as the command Pin tickets gives (grado-factorio-tools#244), for the pull request's
-      Merge Danger; "none" where there is none.
+    - breaking.txt: the breaking commits of the move, those -Old..-New brings in and those a pin
+      moved back drops, marked dropped, for the pull request's Merge Danger; "none" where there is
+      none. The rule and the text are breaking-lib.ps1's (grado-factorio-tools#255), which its
+      header states with an example.
     - table.md: a Markdown table of each form, its old and new exit, whether the outputs are the
       same, and each pin's last non-empty output line; a form whose outputs differ while those
       lines are the same reads "differs above the last line". Outputs are compared with each
@@ -80,10 +80,12 @@
     The forms file's path in the sibling's clone. Defaults to scripts/pin-forms.psd1.
 
 .PARAMETER SelfTest
-    Build, in a temp directory and offline, a tools repository of two commits, the second with a
-    BREAKING CHANGE footer, and a sibling holding a forms file, whose origin is a local path, and
-    measure the move with pull request bodies read from a stub. Check each form's output and exit
-    at both pins, each placeholder, breaking.txt, table.md's rows, a "differs above the last line"
+    Build, in a temp directory and offline, a tools repository whose pins have between them a
+    plain commit, a `!` with no footer, a BREAKING-CHANGE footer and a BREAKING CHANGE footer with
+    a trailer in its paragraph, and a sibling holding a forms file, whose origin is a local path,
+    and measure the move with pull request bodies read from a stub. Check each form's output and
+    exit at both pins, each placeholder, breaking.txt and breaking-lib.ps1's rule, forward, back
+    and over an empty range, table.md's rows, a "differs above the last line"
     row among them, a sibling reference no form runs being listed, by script name, and that a
     write into one clone does not show in the other's run. Then run this script itself: copied
     into the tools repository, with a pin that is not there, it exits 1, naming it; copied into a
@@ -131,18 +133,15 @@ function Invoke-Git {
     $said
 }
 
-# Each commit in $Range of $Repo with a `BREAKING CHANGE: ` footer line, as `== <short hash>` and
-# the footer to the next blank or trailer line: what Pin tickets' command prints.
-function Get-BreakingChange {
-    param([string] $Repo, [string] $Range)
-    $log = Invoke-Git 'reading the range' -C $Repo log --format='== %h%n%b' -E --grep='^BREAKING CHANGE: ' $Range
-    $in = $false
-    foreach ($line in $log) {
-        if ($line -like '== *') { $in = $false; $line; continue }
-        if ($line -match '^BREAKING CHANGE: ') { $in = $true }
-        elseif (-not $line -or $line -match '^[A-Za-z][A-Za-z0-9-]*: ') { $in = $false }
-        if ($in) { $line }
-    }
+# Get-BreakingCommit and Format-BreakingCommit, the one rule for a pin move's breaking commits.
+. "$PSScriptRoot/breaking-lib.ps1"
+
+# breaking.txt, in $Out: the breaking commits of the move from $Old to $New in $Tools, as
+# Format-BreakingCommit writes them.
+function Write-BreakingList {
+    param([string] $Tools, [string] $Old, [string] $New, [string] $Out)
+    $text = Format-BreakingCommit @(Get-BreakingCommit -Repo $Tools -Old $Old -New $New)
+    Set-Content -LiteralPath (Join-Path $Out 'breaking.txt') -Value $text
 }
 
 # The last line of $Text that is not blank, ready for a table cell.
@@ -241,8 +240,7 @@ function Invoke-PinMeasure {
         }
     }
 
-    $breaking = @(Get-BreakingChange -Repo $Tools -Range "$($pins['old'])..$($pins['new'])")
-    Set-Content -LiteralPath (Join-Path $Out 'breaking.txt') -Value $(if ($breaking) { $breaking } else { 'none' })
+    Write-BreakingList -Tools $Tools -Old $pins['old'] -New $pins['new'] -Out $Out
 
     $table = [Collections.Generic.List[string]]::new()
     $table.Add('| form | old exit | new exit | output | old last line | new last line |')
@@ -295,8 +293,16 @@ if ($SelfTest) {
         }
         & $write (Join-Path $toolsRepo 'scripts/t.ps1') (& $tool 'one' 'v1')
         $oldPin = & $commit $toolsRepo '✨ feat: one'
+        # Between the pins: a plain commit, a `!` with no footer, a footer spelt with a hyphen, and
+        # the new pin, whose footer has a trailer in its paragraph.
+        & $write (Join-Path $toolsRepo 'scripts/other.txt') 'plain'
+        $null = & $commit $toolsRepo '🐛 fix: plain', 'Not breaking.'
+        & $write (Join-Path $toolsRepo 'scripts/other.txt') 'bang'
+        $null = & $commit $toolsRepo '✨ feat!: bang'
+        & $write (Join-Path $toolsRepo 'scripts/other.txt') 'hyphen'
+        $null = & $commit $toolsRepo '✨ feat: hyphen', 'BREAKING-CHANGE: written with a hyphen.'
         & $write (Join-Path $toolsRepo 'scripts/t.ps1') (& $tool 'two' 'v2')
-        $newPin = & $commit $toolsRepo '✨ feat!: two', 'Body.', "BREAKING CHANGE: t.ps1 says v2.`nIt exits 3.", 'Co-Authored-By: someone <a@b.c>'
+        $newPin = & $commit $toolsRepo '✨ feat!: two', 'Body.', "BREAKING CHANGE: t.ps1 says v2.`nIt exits 3.`nCo-Authored-By: someone <a@b.c>"
         & $write (Join-Path $sib 'scripts/w.ps1') 'if (Test-Path marker.txt) { ''marker seen'' } else { ''no marker'' }', 'Set-Content marker.txt x'
         & $write (Join-Path $sib 'docs/use.md') 'Run `vendor/grado-factorio-tools/scripts/t.ps1` and `vendor/grado-factorio-tools/scripts/unrun.ps1`.'
         & $write (Join-Path $sib 'docs/run.md') 'Run `vendor/grado-factorio-tools/scripts/t.ps1` alone.'
@@ -331,8 +337,21 @@ if ($SelfTest) {
         & $check '{prbody:last-merged:2} runs once per body, in place and in PR_BODY' ((& $read 'prbody-pr8.new.txt') -eq 'arg: body=body eight; env: body eight' -and (& $read 'prbody-pr7.old.txt') -eq 'arg: body=body seven; env: body seven') "$(& $read 'prbody-pr8.new.txt') | $(& $read 'prbody-pr7.old.txt')"
         & $check "{tools} is the pin's copy of scripts/" ((& $read 'tools.old.txt') -eq 'tools has t.ps1: True') (& $read 'tools.old.txt')
         & $check "a form that writes into its clone does not show in the other pin's run" ((& $read 'marker.old.txt') -eq 'no marker' -and (& $read 'marker.new.txt') -eq 'no marker') "$(& $read 'marker.old.txt') | $(& $read 'marker.new.txt')"
-        $breaking = & $read 'breaking.txt'
-        & $check 'breaking.txt holds the one footer, and not its trailer' ($breaking -eq "== $($newPin.Substring(0, 7))`nBREAKING CHANGE: t.ps1 says v2.`nIt exits 3." -or $breaking -eq "== $($newPin.Substring(0, 7))`r`nBREAKING CHANGE: t.ps1 says v2.`r`nIt exits 3.") $breaking
+        $forward = (Format-BreakingCommit @(Get-BreakingCommit -Repo $toolsRepo -Old $oldPin -New $newPin)) -join "`n"
+        $back = (Format-BreakingCommit @(Get-BreakingCommit -Repo $toolsRepo -Old $newPin -New $oldPin)) -join "`n"
+        $breaking = (& $read 'breaking.txt') -replace "`r"
+        & $check "breaking.txt holds Format-BreakingCommit's text of the move, subject and indented footer" (
+            $breaking -ceq $forward -and $breaking -cmatch "(?m)^breaking: $($newPin.Substring(0, 4))[0-9a-f]* ✨ feat!: two\n    BREAKING CHANGE: t\.ps1 says v2\.\n    It exits 3\.$") $breaking
+        & $check 'a ! commit with no footer is listed, with a note under it' ($forward -cmatch '(?m)^breaking: [0-9a-f]+ ✨ feat!: bang\n    \(no BREAKING CHANGE: footer\)$') $forward
+        & $check 'a BREAKING-CHANGE: footer is listed' ($forward -cmatch '(?m)^breaking: [0-9a-f]+ ✨ feat: hyphen\n    BREAKING-CHANGE: written with a hyphen\.$') $forward
+        & $check "a trailer in the footer's paragraph is not printed" ($forward -match 'It exits 3\.' -and $forward -notmatch 'Co-Authored-By') $forward
+        & $check 'a plain commit in the range is not listed' ($forward -notmatch 'fix: plain' -and @($forward -split "`n" | Where-Object { $_ -like 'breaking*' }).Count -eq 3) $forward
+        & $check 'a pin moved back lists its breaking commits as dropped' (
+            @($back -split "`n" | Where-Object { $_ -like 'breaking, dropped: *' }).Count -eq 3 -and $back -notmatch '(?m)^breaking: ' -and $back -match 'dropped: [0-9a-f]+ ✨ feat!: bang') $back
+        $emptyOut = Join-Path $temp 'empty'; New-Item -ItemType Directory -Path $emptyOut | Out-Null
+        Write-BreakingList -Tools $toolsRepo -Old $oldPin -New $oldPin -Out $emptyOut
+        $empty = (Get-Content -LiteralPath (Join-Path $emptyOut 'breaking.txt') -Raw).Trim()
+        & $check 'an empty range writes none to breaking.txt' ($empty -ceq 'none') $empty
         $md = & $read 'table.md'
         & $check "table.md's rows: same, differs above the last line, differs" (
             $md -match '(?m)^\| same \| 0 \| 3 \| same \| same \| same \|\r?$' -and
@@ -341,18 +360,18 @@ if ($SelfTest) {
             $md -match '(?m)^\| tools \| 0 \| 3 \| same \|') $md
         & $check 'a sibling reference to a script no form runs is listed, even inside a script a form runs; one naming only run scripts is not' (
             $md -match 'docs/use\.md:1:.*unrun\.ps1' -and $md -match 'scripts/w2\.ps1:1:.*elsewhere\.ps1' -and $md -notmatch 'docs/run\.md') $md
-        $none = Get-BreakingChange -Repo $toolsRepo -Range "$oldPin..$oldPin"
-        & $check 'a range with no breaking change lists none' (-not $none) "$none"
         $again = try { Invoke-PinMeasure -Tools $toolsRepo -Sibling $sib -Old $oldPin -New $newPin -Out $out -Forms 'scripts/pin-forms.psd1' -Bodies $stub | Out-Null; '' } catch { $_.Exception.Message }
         & $check 'an -Out that is not empty is refused' ($again -match 'not empty') $again
         # The script itself, from inside the tools repository, with a pin that is not there.
         Copy-Item -LiteralPath $PSCommandPath -Destination (Join-Path $toolsRepo 'scripts/pin-measure.ps1')
+        Copy-Item -LiteralPath "$PSScriptRoot/breaking-lib.ps1" -Destination (Join-Path $toolsRepo 'scripts/breaking-lib.ps1')
         $said = & pwsh -NoProfile -File (Join-Path $toolsRepo 'scripts/pin-measure.ps1') -Old 0123456789abcdef -New $newPin -Out (Join-Path $temp 'out2') 2>&1 | Out-String
         & $check 'a pin missing from the tools repository: exit 1, naming it' ($LASTEXITCODE -eq 1 -and $said -match '0123456789abcdef') "$LASTEXITCODE $said"
         # The script itself, as a sibling runs it: from its submodule, with forms that differ.
         git -C $sib -c protocol.file.allow=always submodule add --quiet $toolsRepo vendor/grado-factorio-tools 2>&1 | Out-Null
         $inSub = Join-Path $sib 'vendor/grado-factorio-tools/scripts/pin-measure.ps1'
         Copy-Item -LiteralPath $PSCommandPath -Destination $inSub
+        Copy-Item -LiteralPath "$PSScriptRoot/breaking-lib.ps1" -Destination (Join-Path (Split-Path $inSub) 'breaking-lib.ps1')
         $out3 = Join-Path $temp 'out3'
         $said = & pwsh -NoProfile -File $inSub -Old $oldPin -New $newPin -Out $out3 -Forms 'scripts/pin-forms-offline.psd1' 2>&1 | Out-String
         $code = $LASTEXITCODE

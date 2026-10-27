@@ -63,6 +63,16 @@ that copy is today.
 _Avoid_: client, dependent, downstream — "upstream" here means predecessor mod code in the sibling
 repository, so "downstream" cannot be pressed into service as its mirror.
 
+**Pin move**:
+A change to the commit of this repository that a consumer records for its `vendor/` submodule. Its
+range is the commits between the old pin and the new one.
+_Avoid_: pin bump, upgrade
+
+**Breaking commit**:
+A commit that calls itself breaking. What it breaks is a consumer's
+interface, as `CLAUDE.md` defines a breaking change.
+_Avoid_: breaking change, when the commit is meant
+
 ### The game
 
 **Line**:
