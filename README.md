@@ -395,10 +395,11 @@ in its header: an alias, a script that runs git itself, and both shells' quoting
 PR #252 was opened with a body `pr-body-check.ps1` failed: the check was piped to `tail`, whose
 exit code let `&&` go on (#259). `scripts/refuse-pr-body.ps1` is a hook that refuses a
 `gh pr create` or `gh pr edit` whose body the check fails, with its report. It refuses a body
-given inline, a `gh pr create` with no `--body-file`, and a body file it cannot read: `-`, a
-path through a variable, `$(…)` or `~`, or one that is not there; a relative path is taken
-against the call's `cwd`, where the check runs too. A `gh pr edit` that touches no body passes.
-The title is not checked.
+given inline, a `gh pr create` with no `--body-file`, and a body file it cannot read or that is
+not there, each as its header's WHAT IT REFUSES lists; a relative path is taken against the
+call's `cwd`, where the check runs too. A `gh pr edit` that touches no body passes. The title is
+not checked. Text that names `gh pr create` outside quotes, as in a heredoc, is read as a
+command and may be refused: its header's WHAT IT REFUSES WRONGLY says where.
 
 This repository wires it in its tracked `.claude/settings.json`, with the arguments CI hands the
 check. A consumer adds it to its own, with the arguments its own gate uses:
@@ -592,7 +593,8 @@ scripts/     PowerShell entry points, one job each, and the libraries they
 .githooks/   this repo's own pre-commit (the staged Markdown and scripts), commit-msg and
              pre-push hooks, opted into once per clone
 .claude/     settings.json, which wires the session hooks: one refuses a commit
-             or push skipping those, and one Python run from a heredoc
+             or push skipping those, one Python run from a heredoc, and one a
+             pull request body the check fails
 .github/     the workflow that runs scripts/check.ps1 on pull requests and main
 docs/        the commit convention, the ADRs, the notes agents read, the
              extraction record — what moved, from where, and why — and
