@@ -88,21 +88,24 @@ function Test-BacktickSubstitution {
     param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Command)
 
     $c = $Command -replace '\r\n', "`n"
-    # What the walk is inside, innermost last: '' the command itself, '"' double quotes, '(' a
-    # $(...) or a subshell, 'A' arithmetic. Single-quoted text and comments are stepped over.
+    # What the walk is inside, innermost last: '' the command itself, '"' double quotes, '$' a
+    # $(...), '(' a subshell, 'A' arithmetic. Single-quoted text and comments are stepped over.
     $stack = [System.Collections.Generic.List[string]]::new()
     $stack.Add('')
     # Heredocs opened on the current line; their bodies follow its newline, in order.
     $heredocs = [System.Collections.Generic.List[hashtable]]::new()
+    # Where a backslash escaped a character, and where a subshell's `)` stood: what a `#` after
+    # each means differs, as below. -2 is neither yet, and no `$i - 1`.
+    $escaped = $subshellEnd = -2
     $i = 0
     while ($i -lt $c.Length) {
         $ch = $c[$i]
         $in = $stack[-1]
         $rest = $c.Substring($i)
-        if ($ch -eq '\') { $i += 2; continue }
+        if ($ch -eq '\') { $escaped = $i + 1; $i += 2; continue }
         if ($ch -eq '`') { return $true }
         if ($rest.StartsWith('$((')) { $stack.Add('A'); $stack.Add('A'); $i += 3; continue }
-        if ($rest.StartsWith('$(')) { $stack.Add('('); $i += 2; continue }
+        if ($rest.StartsWith('$(')) { $stack.Add('$'); $i += 2; continue }
         if ($in -eq 'A') {
             if ($ch -eq '(') { $stack.Add('A') } elseif ($ch -eq ')') { $stack.RemoveAt($stack.Count - 1) }
             $i++
@@ -118,11 +121,16 @@ function Test-BacktickSubstitution {
         if ($rest.StartsWith('$''')) { $i += [regex]::Match($rest, '^\$''(?:\\[\s\S]|[^''\\])*''?').Length; continue }
         if ($ch -eq '"' -or $ch -eq '(') { $stack.Add([string] $ch); $i++; continue }
         if ($ch -eq ')') {
-            if ($in -eq '(') { $stack.RemoveAt($stack.Count - 1) }
+            if ($in -eq '(') { $subshellEnd = $i }
+            if ($in -eq '(' -or $in -eq '$') { $stack.RemoveAt($stack.Count - 1) }
             $i++
             continue
         }
-        if ($ch -eq '#' -and ($i -eq 0 -or $c[$i - 1] -match '[\s;&|()]')) {
+        # A comment starts a word: after unescaped blank space or an operator, or a subshell's
+        # `)`. After the `)` of $(...) or $((...)), or an escaped space, a `#` is in the word.
+        $wordStart = $i -eq 0 -or $i - 1 -eq $subshellEnd -or
+            ($i - 1 -ne $escaped -and $c[$i - 1] -match '[\s;&|<>(]')
+        if ($ch -eq '#' -and $wordStart) {
             $end = $c.IndexOf("`n", $i)
             $i = $end -lt 0 ? $c.Length : $end
             continue
@@ -191,6 +199,18 @@ if ($SelfTest) {
         @('echo "$(( 1 )) ''`x`''"', $true),
         @('echo "a" ''`x`''', $false),
         @('echo "$( (echo a) )" ''`x`''', $false),
+        @('echo $(echo a)#b `date`', $true),
+        @('echo $((1))#b `date`', $true),
+        @('echo a\ #b `date`', $true),
+        @('(echo a)#b `date`', $false),
+        @("echo a;# it's`necho ``date``", $true),
+        @("echo `$(# it's`necho ``date``)", $true),
+        @("true &# it's`necho ``date``", $true),
+        @("echo a |# it's`ncat; echo ``date``", $true),
+        @('echo a >#b `date`', $false),
+        @('case a in a) echo;; b) echo `date`;; esac', $true),
+        @('echo it''s `date`', $false),
+        @('echo $''it `date`', $false),
         @('echo ''`date`''', $false),
         @('echo "a \` b"', $false),
         @('echo a \` b', $false),
