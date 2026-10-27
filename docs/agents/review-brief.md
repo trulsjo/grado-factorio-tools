@@ -40,12 +40,13 @@ Run each and report its last line.
 its caller's. The bug scan reverts each claim, and each condition on a line the diff adds or
 changes that the claims leave out: a script the change adds, on every line. It makes one copy
 of the commit per review, outside the repository, a clone, since a self-test may ask git for
-`origin/main`: `git clone -q <repository> <empty scratch folder>`, then
+`origin/main` as GitHub has it:
+`git clone -q https://github.com/trulsjo/grado-factorio-tools <empty scratch folder>`, then
 `git -C <copy> checkout -q <full SHA>`. It reverts one piece at a time in the copy and restores
 the file with `git -C <copy> checkout -- <file>` before the next. For each revert it shows the
-copy differs, with `git diff --no-index --stat <file> <copy>/<file>`, runs the copy's self-test
-and reports how many checks failed. A revert that fails nothing is a finding.
-With "none", it reverts nothing.
+copy differs from the commit, with `git -C <copy> diff --stat`, which reads no working tree
+but the copy's, runs the copy's self-test and reports how many checks failed. A revert that
+fails nothing is a finding. With "none", it reverts nothing.
 
 **Read-only.** Edit no file in the repository, commit nothing, push nothing, and post nothing to
 GitHub: the session acts on the findings and posts the review.

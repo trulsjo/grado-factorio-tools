@@ -140,8 +140,11 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
   `ff59e79` (read 2026-10-25) runs `locale-check.ps1 -Prefix rf-` by hand before shipping; the
   review's prose lane found it (finding 2, score 40).
 - **A revert a pull request cites as evidence shows that its copy differs**, with
-  `git diff --no-index --stat <file> <copy>/<file>`, as [`review-brief.md`](review-brief.md) asks
-  of a review lane under *The reverts* (Truls, 2026-10-21, #183). On 2026-10-20, fixing PR #178's
+  `git -C <copy> diff --stat`, as [`review-brief.md`](review-brief.md) asks of a review lane
+  under *The reverts* (Truls, 2026-10-21, #183). Until PR #276, both pages compared the copy's
+  file with the working tree's, `git diff --no-index --stat <file> <copy>/<file>`, which on a
+  working tree on another branch showed that branch's lines and hid the revert (PR #276's
+  review, bug finding 1, 2026-10-27). On 2026-10-20, fixing PR #178's
   review findings, a `perl` revert of the changed-tree guard matched nothing, and the copy's
   self-test passed 5 of 5 on an unchanged file, which reads as "this fix is not tested". An empty
   diff showed it; with the pattern fixed, the revert failed case 3, by that session's account.
