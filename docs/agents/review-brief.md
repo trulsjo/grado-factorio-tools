@@ -37,10 +37,14 @@ Run each and report its last line.
 
 **The reverts.** `<each claim the change makes of a script, with the self-test that covers it |
 "none: the change touches no script">`. A claim of a library with no self-test of its own names
-its caller's. For each claim the bug scan copies the commit outside the repository, with
-`git archive <full SHA> | tar -x -C <empty scratch folder>`, and reverts that piece in the copy.
-It shows the copy differs, with `git diff --no-index --stat <file> <copy>/<file>`, runs the
-copy's self-test and reports how many checks failed. A revert that fails nothing is a finding.
+its caller's. The bug scan reverts each claim, and each condition on a line the diff adds or
+changes that the claims leave out: a script the change adds, on every line. It makes one copy
+of the commit per review, outside the repository, a clone, since a self-test may ask git for
+`origin/main`: `git clone -q <repository> <empty scratch folder>`, then
+`git -C <copy> checkout -q <full SHA>`. It reverts one piece at a time in the copy and restores
+the file with `git -C <copy> checkout -- <file>` before the next. For each revert it shows the
+copy differs, with `git diff --no-index --stat <file> <copy>/<file>`, runs the copy's self-test
+and reports how many checks failed. A revert that fails nothing is a finding.
 With "none", it reverts nothing.
 
 **Read-only.** Edit no file in the repository, commit nothing, push nothing, and post nothing to
