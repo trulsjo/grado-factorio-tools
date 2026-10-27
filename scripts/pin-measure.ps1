@@ -363,10 +363,17 @@ if ($SelfTest) {
         & $check 'a !: after the first colon, and a footer in lower case, are not breaking' (-not $plain) ($plain | Out-String)
         $order = @(Get-BreakingCommit -Repo $toolsRepo -Old (& $side 'feat!: side') -New $newPin | ForEach-Object Dropped)
         & $check 'a pin moved sideways lists what it brings in, then what it drops' (($order -join ',') -ceq 'False,False,False,True') ($order -join ',')
-        $page = [Console]::OutputEncoding.CodePage
-        $threw = try { $null = Get-BreakingCommit -Repo $toolsRepo -Old 0123456789abcdef -New $newPin; '' } catch { $_.Exception.Message }
-        & $check "a range git cannot read throws, naming it, and the console's encoding is left as it was" (
-            $threw -match 'could not read the range 0123456789abcdef\.\.' -and [Console]::OutputEncoding.CodePage -eq $page) "$threw $([Console]::OutputEncoding.CodePage)"
+        # The console is set to UTF-16 first, which no caller leaves it at, so a library that set
+        # UTF-8 and kept it would show; and the throw carries git's own words.
+        $was = [Console]::OutputEncoding
+        try {
+            [Console]::OutputEncoding = [Text.Encoding]::Unicode
+            $threw = try { $null = Get-BreakingCommit -Repo $toolsRepo -Old 0123456789abcdef -New $newPin; '' } catch { $_.Exception.Message }
+            $page = [Console]::OutputEncoding.CodePage
+        }
+        finally { [Console]::OutputEncoding = $was }
+        & $check "a range git cannot read throws, naming it with git's message, and the console's encoding is left as it was" (
+            $threw -match 'could not read the range 0123456789abcdef\.\..*fatal' -and $page -eq 1200) "$threw $page"
         $md = & $read 'table.md'
         & $check "table.md's rows: same, differs above the last line, differs" (
             $md -match '(?m)^\| same \| 0 \| 3 \| same \| same \| same \|\r?$' -and
