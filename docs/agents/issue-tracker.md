@@ -166,7 +166,7 @@ it.
 `vendor/grado-factorio-tools/scripts/` with the submodule at the new pin (#247). It clones the
 sibling twice at GitHub's `main`, fills each clone's `vendor/` with one pin's copy of `scripts/`,
 runs each form the sibling's forms file lists at both pins, and writes each output and exit code,
-a table that compares them and the range's breaking changes to the directory it is given. Its
+a table that compares them and the move's breaking commits to the directory it is given. Its
 header holds the commands, the forms file's shape and what each output file is. Each sibling
 hand-wrote this from the prose that stood here, and got it wrong first: on
 grado-factorio-modpack's PR #387 (2026-10-26) the first run had three bugs and was discarded.
@@ -204,17 +204,15 @@ and each command with what it printed, as *Conventions* asks.
 the script reports and does not judge, and exits 0 whatever it found. Its table goes in
 *Evidence*.
 
-**Each breaking change in the range is named too** (#244). Run in this repository, this lists
-each commit in the range whose message holds a `BREAKING CHANGE:` footer, with the footer, and
-nothing for a range with none; the script writes the same list to its `breaking.txt`:
-
-```sh
-git log --format='== %h%n%b' -E --grep='^BREAKING CHANGE: ' <old>..<new> | awk '/^== / {print; next} /^BREAKING CHANGE: / {f=1} f && (/^$/ || /^[A-Za-z][A-Za-z0-9-]*: / && !/^BREAKING CHANGE: /) {f=0} f'
-```
-
-The sibling's pull request names each, under *Merge Danger*, with what it changes for the
-sibling, or that it changes nothing there and why; and the list goes to the sibling's pre-PR
-reviewer with the rest of the measurement. On grado-factorio-modpack's PR #387 (2026-10-26),
+**Each breaking commit of the move is named too** (#244, #255). The script writes them to its
+`breaking.txt`, by the one rule, in `scripts/breaking-lib.ps1`, whose header states it: the
+breaking commits the move brings in, and those a pin moved back drops, marked `dropped`; `none`
+where there is none. This page held a shell command of its own for the list until #255, whose
+triage grill (Truls, 2026-10-26) reversed #244's asking for it here, so that the rule has one
+home. The sibling's pull request names each, a dropped one included, under *Merge Danger*, with
+what it changes for the sibling, or that it changes nothing there and why; of a dropped one,
+that the move undoes it. The list goes to the sibling's pre-PR reviewer with the rest of the
+measurement. On grado-factorio-modpack's PR #387 (2026-10-26),
 moving the pin from `8189e45` to `2c13393`, the range's one breaking commit, `67c7e60`, made
 `-With space-age` enable `quality` too. No gate runs the harness, so the measurement, the pre-PR
 review and the first body all missed it; the plugin pass found it (PR #387's comment
