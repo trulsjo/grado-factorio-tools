@@ -97,15 +97,23 @@ function Test-BacktickSubstitution {
     # Where a backslash escaped a character, and where a subshell's `)` stood: what a `#` after
     # each means differs, as below. -2 is neither yet, and no `$i - 1`.
     $escaped = $subshellEnd = -2
+    # Matched from $i, so the command is not copied to match them. The first two are tried only
+    # where their quote is at $i; the third, at any `<`, is held there by \G.
+    $single = [regex] '''[^'']*''?'
+    $ansi = [regex] '\$''(?:\\[\s\S]|[^''\\])*''?'
+    $heredoc = [regex] '\G<<(-?)[ \t]*((?:[^\s;&|()<>''"\\]|''[^'']*''|"[^"]*"|\\.)+)'
     $i = 0
     while ($i -lt $c.Length) {
         $ch = $c[$i]
         $in = $stack[-1]
-        $rest = $c.Substring($i)
+        # At a `$` or `<`, the next three characters, all a StartsWith below reads. Elsewhere no
+        # method is called: a copy of the rest per character made the walk quadratic, and a call
+        # per character costs as much as the walk (PR #277's second review).
+        $rest = $ch -eq '$' -or $ch -eq '<' ? $c.Substring($i, [Math]::Min(3, $c.Length - $i)) : ''
         if ($ch -eq '\') { $escaped = $i + 1; $i += 2; continue }
         if ($ch -eq '`') { return $true }
-        if ($rest.StartsWith('$((')) { $stack.Add('A'); $stack.Add('A'); $i += 3; continue }
-        if ($rest.StartsWith('$(')) { $stack.Add('$'); $i += 2; continue }
+        if ($rest -and $rest.StartsWith('$((')) { $stack.Add('A'); $stack.Add('A'); $i += 3; continue }
+        if ($rest -and $rest.StartsWith('$(')) { $stack.Add('$'); $i += 2; continue }
         if ($in -eq 'A') {
             if ($ch -eq '(') { $stack.Add('A') } elseif ($ch -eq ')') { $stack.RemoveAt($stack.Count - 1) }
             $i++
@@ -117,8 +125,8 @@ function Test-BacktickSubstitution {
             continue
         }
         # Unquoted: the command itself, or inside $(...) or a subshell.
-        if ($ch -eq "'") { $i += [regex]::Match($rest, '^''[^'']*''?').Length; continue }
-        if ($rest.StartsWith('$''')) { $i += [regex]::Match($rest, '^\$''(?:\\[\s\S]|[^''\\])*''?').Length; continue }
+        if ($ch -eq "'") { $i += $single.Match($c, $i).Length; continue }
+        if ($rest -and $rest.StartsWith('$''')) { $i += $ansi.Match($c, $i).Length; continue }
         if ($ch -eq '"' -or $ch -eq '(') { $stack.Add([string] $ch); $i++; continue }
         if ($ch -eq ')') {
             if ($in -eq '(') { $subshellEnd = $i }
@@ -128,18 +136,18 @@ function Test-BacktickSubstitution {
         }
         # A comment starts a word: after unescaped blank space or an operator, or a subshell's
         # `)`. After the `)` of $(...) or $((...)), or an escaped space, a `#` is in the word.
-        $wordStart = $i -eq 0 -or $i - 1 -eq $subshellEnd -or
-            ($i - 1 -ne $escaped -and $c[$i - 1] -match '[\s;&|<>(]')
-        if ($ch -eq '#' -and $wordStart) {
+        if ($ch -eq '#' -and ($i -eq 0 -or $i - 1 -eq $subshellEnd -or
+                ($i - 1 -ne $escaped -and $c[$i - 1] -match '[\s;&|<>(]'))) {
             $end = $c.IndexOf("`n", $i)
             $i = $end -lt 0 ? $c.Length : $end
             continue
         }
         # A here-string, <<<, holds a word, not a body.
-        if ($rest.StartsWith('<<<')) { $i += 3; continue }
-        if ($rest -match '^<<(-?)[ \t]*((?:[^\s;&|()<>''"\\]|''[^'']*''|"[^"]*"|\\.)+)') {
-            $heredocs.Add(@{ Strip = [bool] $Matches[1]; Word = $Matches[2] })
-            $i += $Matches[0].Length
+        if ($rest -and $rest.StartsWith('<<<')) { $i += 3; continue }
+        $m = $ch -eq '<' ? $heredoc.Match($c, $i) : $null
+        if ($m -and $m.Success) {
+            $heredocs.Add(@{ Strip = [bool] $m.Groups[1].Value; Word = $m.Groups[2].Value })
+            $i += $m.Length
             continue
         }
         $i++
@@ -211,6 +219,7 @@ if ($SelfTest) {
         @('case a in a) echo;; b) echo `date`;; esac', $true),
         @('echo it''s `date`', $false),
         @('echo $''it `date`', $false),
+        @("cat < f <<'EOF'`n``x```nEOF`necho ``date``", $true),
         @('echo ''`date`''', $false),
         @('echo "a \` b"', $false),
         @('echo a \` b', $false),
