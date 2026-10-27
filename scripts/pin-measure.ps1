@@ -350,7 +350,7 @@ if ($SelfTest) {
             @($back -split "`n" | Where-Object { $_ -like 'breaking, dropped: *' }).Count -eq 3 -and $back -notmatch '(?m)^breaking: ' -and $back -match 'dropped: [0-9a-f]+ ✨ feat!: bang') $back
         $emptyOut = Join-Path $temp 'empty'; New-Item -ItemType Directory -Path $emptyOut | Out-Null
         Write-BreakingList -Tools $toolsRepo -Old $oldPin -New $oldPin -Out $emptyOut
-        $empty = (Get-Content -LiteralPath (Join-Path $emptyOut 'breaking.txt') -Raw).Trim()
+        $empty = "$(Get-Content -LiteralPath (Join-Path $emptyOut 'breaking.txt') -Raw)".Trim()
         & $check 'an empty range writes none to breaking.txt' ($empty -ceq 'none') $empty
         $md = & $read 'table.md'
         & $check "table.md's rows: same, differs above the last line, differs" (
