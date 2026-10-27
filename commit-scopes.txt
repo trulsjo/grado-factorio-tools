@@ -18,5 +18,6 @@ heredoc-hook
 pin-measure
 discard-hook
 pr-body-hook
+backtick-hook
 docs
 repo

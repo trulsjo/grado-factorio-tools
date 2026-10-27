@@ -417,6 +417,30 @@ not checked. `-SelfTest` proves each refusal and pass, and runs the command the 
 `-SelfTest -Settings .claude/settings.json` runs a consumer's. What it cannot see is in its
 header: a command inside `sh -c`, and a body written by `gh api`, are two.
 
+## Keeping an agent session from running a backtick span
+
+On 2026-10-27 a Bash tool call, `python -I -c "…"`, held Markdown code spans in backticks, and
+bash ran one of them, `gh pr create`, as a command substitution (#272).
+`scripts/refuse-backtick-substitution.ps1` is a hook that refuses a Bash tool command holding a
+backtick bash would substitute: inside double quotes, outside any quotes, or in the body of a
+heredoc whose delimiter is unquoted. A backtick inside single quotes, one escaped with a
+backslash, one in a quoted heredoc's body, and every PowerShell tool call pass. The refusal asks
+for `$(…)`, or for literal text to be written to a file with the Write tool.
+
+This repository wires it in its tracked `.claude/settings.json`. A consumer adds it to its own:
+
+```json
+{
+  "type": "command",
+  "command": "i=$(cat); case $i in *'`'*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-backtick-substitution.ps1\";; esac"
+}
+```
+
+Exit 2 refuses; a tool call it cannot read exits 1 and says on stderr that the command was not
+checked. `-SelfTest` proves each refusal and pass, and runs the command the settings wire;
+`-SelfTest -Settings .claude/settings.json` runs a consumer's. What it cannot see is in its
+header: a substitution in a script the command runs, and a command inside `sh -c`, are two.
+
 ## Packing mods
 
 `scripts/pack-mods.ps1` builds one zip per mod directory, named `<name>_<version>.zip` from the
@@ -593,8 +617,9 @@ scripts/     PowerShell entry points, one job each, and the libraries they
 .githooks/   this repo's own pre-commit (the staged Markdown and scripts), commit-msg and
              pre-push hooks, opted into once per clone
 .claude/     settings.json, which wires the session hooks: one refuses a commit
-             or push skipping those, one Python run from a heredoc, and one a
-             pull request body the check fails
+             or push skipping those, one Python run from a heredoc, one a
+             pull request body the check fails, and one a Bash command bash
+             would run a backtick span in
 .github/     the workflow that runs scripts/check.ps1 on pull requests and main
 docs/        the commit convention, the ADRs, the notes agents read, the
              extraction record — what moved, from where, and why — and
