@@ -423,8 +423,10 @@ On 2026-10-27 a Bash tool call, `python -I -c "…"`, held Markdown code spans i
 bash ran one of them, `gh pr create`, as a command substitution (#272).
 `scripts/refuse-backtick-substitution.ps1` is a hook that refuses a Bash tool command holding a
 backtick bash would substitute: inside double quotes, outside any quotes, or in the body of a
-heredoc whose delimiter is unquoted. A backtick inside single quotes, one escaped with a
-backslash, one in a quoted heredoc's body, and every PowerShell tool call pass. The refusal asks
+heredoc whose delimiter is unquoted, inside `$(...)` too. A backtick inside single quotes or
+`$'...'`, one in a `#` comment, one escaped with a backslash, one in a quoted heredoc's body,
+also inside `"$(...)"` as `git commit -m "$(cat <<'EOF' … EOF )"` writes, and every PowerShell
+tool call pass. The refusal asks
 for `$(…)`, or for literal text to be written to a file with the Write tool.
 
 This repository wires it in its tracked `.claude/settings.json`. A consumer adds it to its own:
