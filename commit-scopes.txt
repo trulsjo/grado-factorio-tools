@@ -16,6 +16,7 @@ cd-hook
 hook-skip
 heredoc-hook
 pin-measure
+pin-hook
 discard-hook
 pr-body-hook
 backtick-hook

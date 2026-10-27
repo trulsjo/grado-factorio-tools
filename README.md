@@ -585,6 +585,22 @@ sibling names a script here that no form runs. It reports and does not judge: ex
 forms did, exit 1 only when it could not measure. The forms file's shape and its four
 placeholders are in the header. `-SelfTest` builds both repositories offline and needs no game.
 
+## Keeping a sibling's submodule at its pin
+
+`scripts/follow-pin.ps1` brings a sibling's `vendor/grado-factorio-tools` to the pin the new
+`HEAD` records, run by the sibling's `post-checkout`, `post-merge` and `post-rewrite` hooks
+(#253). A branch switch, a merge or a rebase otherwise leaves the submodule where it was, and
+`git status` shows it modified. Each hook passes its name and git's arguments through, as
+`-Hook` and `-HookArgs`; `-Path` names the submodule, `vendor/grado-factorio-tools` unless said:
+
+    pwsh -NoProfile -File vendor/grado-factorio-tools/scripts/follow-pin.ps1 post-checkout "$@"
+
+It updates only a submodule that is initialised, clean and at the pin the old `HEAD` records,
+and prints `<hook>: <path> <old> -> <new>`; otherwise it leaves it, with one line saying why and
+the command to run. It always exits 0, as a hook's exit status would become the checkout's. A
+wrapper for each hook is in its header. `-SelfTest` builds a sibling with this repository as a
+submodule and runs git through the hooks; it needs no game and no network.
+
 ## Checking this repository
 
 `scripts/check.ps1` is the one command before a push. It parses every script here, runs each
