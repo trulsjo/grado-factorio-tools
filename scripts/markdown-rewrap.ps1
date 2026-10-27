@@ -35,13 +35,17 @@
     their length, and rewraps each from that line to the end of its block: a run of lines with
     the same indent, `#` and one space, ended by a line of that prefix alone or another prefix;
     or a paragraph of a PowerShell block comment, between its opening and closing marks, ended by
-    a blank line, a line such as `.SYNOPSIS`, or a change of indent. The indent is kept on each line
-    written, and lines under `.EXAMPLE` are left as they are. A shebang and code are never touched.
+    a blank line, a help keyword line such as `.SYNOPSIS`, or a change of indent. A keyword is
+    a `.` and upper-case letters, matched with case (#254): a line opening `.github/` is prose of
+    its paragraph. The indent is kept on each line written, and lines under `.EXAMPLE` are left as
+    they are. A shebang and code are never touched.
 
     WHAT IT LEAVES, and names: a line the check still reports once it is rewrapped, as one
     holding a word and a token too long to share a line. A line of one token longer than the
     limit is not named: the check passes it, having no space to break at. What the check exempts
-    is never flagged, so never touched.
+    is never flagged, so never touched. With -Comment, every comment line over the limit after
+    the run is named, rewrapped or not, as a keyword line or a `##` line is not: all but a line
+    under `.EXAMPLE` and a line of one word after its marker, which comment-line-lib.ps1 exempts.
 
     WHAT IT CANNOT SEE. Whether the wrap reads well: it is greedy, not balanced. A flagged line
     that starts inside a code span opened on the line before, whose backticks it then pairs
@@ -50,8 +54,9 @@
     continues lazily into a line the check reads as something else. In -Comment mode, a block
     comment's opening or closing mark inside a string, which is taken as the block's edge, and a
     hanging indent such as a help paragraph's term and its text, whose flagged line is rewrapped to
-    its own indent. And a line starting `# ` inside a here-string or a YAML block scalar, which
-    is taken for a comment and rewrapped.
+    its own indent. A prose line in a block comment opening with `.` and upper-case letters, as
+    `.NET`, which is taken for a keyword and left. And a line starting `# ` inside a here-string or
+    a YAML block scalar, which is taken for a comment and rewrapped.
 
 .PARAMETER Range
     Rewrap the Markdown files changed in this commit range, as markdown-check.ps1 takes it:
@@ -188,32 +193,40 @@ function Invoke-CommentRewrap {
     <#  As Invoke-MarkdownRewrap, for the comment lines of a script: a `#` block or a paragraph of
         a block comment, found over $Max by length alone.  #>
     param([AllowEmptyCollection()] [AllowEmptyString()] [string[]] $Lines, [int] $Max)
-    # What each line is: in a block comment, and under which help keyword.
-    $inBlock = @($false) * $Lines.Count; $section = @('') * $Lines.Count
-    $open = $false; $keyword = ''
-    for ($i = 0; $i -lt $Lines.Count; $i++) {
-        if (-not $open -and $Lines[$i] -match '^\s*<#') { $open = $true; $keyword = '' }
-        if ($open) {
-            $inBlock[$i] = $true
-            if ($Lines[$i] -match '^\s*\.([A-Z]+)\b') { $keyword = $Matches[1] }
-            $section[$i] = $keyword
-            if ($Lines[$i] -match '#>\s*$') { $open = $false }
+    # What each line is: in a block comment, and under which help keyword. A keyword is matched
+    # in upper case, as PowerShell writes .SYNOPSIS: a line opening .github is prose.
+    $HELP_KEYWORD = '^\s*\.([A-Z]+)\b'
+    $read = {
+        param([string[]] $l)
+        $inBlock = @($false) * $l.Count; $section = @('') * $l.Count
+        $open = $false; $keyword = ''
+        for ($i = 0; $i -lt $l.Count; $i++) {
+            if (-not $open -and $l[$i] -match '^\s*<#') { $open = $true; $keyword = '' }
+            if ($open) {
+                $inBlock[$i] = $true
+                if ($l[$i] -cmatch $HELP_KEYWORD) { $keyword = $Matches[1] }
+                $section[$i] = $keyword
+                if ($l[$i] -match '#>\s*$') { $open = $false }
+            }
         }
+        @{ InBlock = $inBlock; Section = $section }
     }
+    $seen = & $read $Lines
+    $inBlock = $seen.InBlock; $section = $seen.Section
     $out = [System.Collections.Generic.List[string]]::new()
     $rewrapped = @(); $left = @()
     $next = 0
     for ($f = 0; $f -lt $Lines.Count; $f++) {
         if ($f -lt $next -or $Lines[$f].TrimEnd().Length -le $Max) { continue }
         if ($inBlock[$f]) {
-            if ($section[$f] -eq 'EXAMPLE' -or $Lines[$f] -match '^\s*\.[A-Z]+\b') { continue }
+            if ($section[$f] -eq 'EXAMPLE' -or $Lines[$f] -cmatch $HELP_KEYWORD) { continue }
             $opener = [regex]::Match($Lines[$f], '^\s*<#\s*')
             $first = if ($opener.Success) { $opener.Value } else { [regex]::Match($Lines[$f], '^\s*').Value }
             $rest = ' ' * $first.Length
             $e = $f
             while ($e + 1 -lt $Lines.Count -and $inBlock[$e + 1] -and $Lines[$e] -notmatch '#>\s*$') {
                 $n = $Lines[$e + 1]
-                if ($n -notmatch '\S' -or $n -match '^\s*\.[A-Z]+\b|^\s*#>' -or [regex]::Match($n, '^\s*').Length -ne $rest.Length) { break }
+                if ($n -notmatch '\S' -or $n -cmatch $HELP_KEYWORD -or $n -match '^\s*#>' -or [regex]::Match($n, '^\s*').Length -ne $rest.Length) { break }
                 $e++
             }
         }
@@ -236,11 +249,18 @@ function Invoke-CommentRewrap {
         $new = Join-Greedy -Tokens (Split-Token $text) -First $first -Rest $rest -Max $Max -Measure { $args[0].Length }
         if ($close.Success) { $new[-1] += $close.Value }
         $start = $out.Count + 1
-        foreach ($l in $new) { $out.Add($l); if ($l.Length -gt $Max) { $left += $out.Count } }
+        foreach ($l in $new) { $out.Add($l) }
         $rewrapped += "$start-$($out.Count)"
         $next = $e + 1
     }
     for ($k = $next; $k -lt $Lines.Count; $k++) { $out.Add($Lines[$k]) }
+    # Left is each comment line still over, rewrapped or not, less what the comment-line check
+    # exempts: a line under .EXAMPLE, and one of a single word after its marker.
+    $after = & $read $out.ToArray()
+    for ($k = 0; $k -lt $out.Count; $k++) {
+        $comment = $after.InBlock[$k] -or ($out[$k] -match '^\s*#' -and $out[$k] -notmatch '^#!')
+        if ($comment -and $out[$k].TrimEnd().Length -gt $Max -and $after.Section[$k] -ne 'EXAMPLE' -and $out[$k] -notmatch '^\s*(#+\s*)?\S+\s*$') { $left += $k + 1 }
+    }
     @{ Lines = $out.ToArray(); Rewrapped = $rewrapped; Left = $left }
 }
 
@@ -337,6 +357,16 @@ function Invoke-SelfTest {
             $cmd = '    pwsh -File scripts/markdown-rewrap.ps1 -MaxLineLength 100'
             $r = Invoke-CommentRewrap -Lines @('<#', '.EXAMPLE', $cmd, '#>') -Max $max
             $r.Lines[2] -ceq $cmd -and -not $r.Rewrapped }
+        'a block-comment line opening with . and a lowercase word is prose, rewrapped; .EXAMPLE beside it is left' = {
+            $cmd = '    pwsh -File scripts/markdown-rewrap.ps1 -MaxLineLength 100'
+            $in = @('<#', '.DESCRIPTION', '    The start of a paragraph,', '    .github/, .claude/ or scripts/ names its path here.', '    Then more.', '.EXAMPLE', $cmd, '#>')
+            $r = Invoke-CommentRewrap -Lines $in -Max $max
+            ($r.Lines -ccontains $cmd) -and ($r.Lines -ccontains '.EXAMPLE') -and ($r.Lines -join ' ') -match '\.github/' -and
+                (& $commentHolds $in '^    (?!pwsh)' '    ') }
+        'a comment line over the limit that is not rewrapped is counted as left over' = {
+            $in = @('<#', '.PARAMETER AParameterNameThatIsLong with its text', '    Short.', '#>', '## A ## line that is well over the limit of forty.')
+            $r = Invoke-CommentRewrap -Lines $in -Max $max
+            -not $r.Rewrapped -and ($r.Left -join ',') -ceq '2,5' }
         'a token longer than the limit goes on a line of its own, not named; a line the check still reports is named' = {
             $r = Invoke-MarkdownRewrap -Lines @('A word then `a-code-span-much-longer-than-forty-characters` after.') -Max $max
             $named = Invoke-MarkdownRewrap -Lines @('A word then a [link whose text runs well past forty characters](u) after.') -Max $max
