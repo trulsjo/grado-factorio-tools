@@ -573,8 +573,9 @@ the parameter is used; the rest it cannot see is in its header. `-SelfTest` prov
 PowerShell variable names ignore case, so `$KEYWORD` and `$keyword` are one variable (#285).
 `scripts/variable-case-check.ps1` reads each script in a directory, `-Path`, and fails on a scope
 that spells one variable two ways, naming both and the first line of each. A scope is the script,
-a function or a scriptblock, with its own parameters; a block handed to `ForEach-Object` or
-`Where-Object` is read in the scope around it, as PowerShell runs it there.
+a function, a scriptblock or a trap's body, with its own parameters; a block handed to
+`ForEach-Object` or `Where-Object`, but not with `-Parallel`, is read in the scope around it, as
+PowerShell runs it there.
 
     pwsh -File scripts/variable-case-check.ps1 scripts
 
