@@ -285,20 +285,29 @@ function Get-ReadmeProblem {
 }
 
 # -SelfTest of each of $SelfTests and -SelfTest -NoGame of each of $NoGameCases in $Folder, each in
-# a pwsh of its own, judged by Get-RunProblem, a line printed for each; returns what failed.
+# a pwsh of its own and all at once (#296), judged by Get-RunProblem; once all have finished, a
+# line for each, with its own time, in list order; returns what failed.
 function Invoke-SelfTestRun {
-    param([string] $Folder, [string[]] $SelfTests, [string[]] $NoGameCases)
-    foreach ($run in @($SelfTests | ForEach-Object { , @($_, '-SelfTest') }) + @($NoGameCases | ForEach-Object { , @($_, '-SelfTest', '-NoGame') })) {
-        $name = $run[0]; $switches = @($run | Select-Object -Skip 1)
-        $clock.Restart()
-        $said = & pwsh -NoProfile -File (Join-Path $Folder $name) @switches 2>&1 | Out-String
+    param([string] $Folder, [string[]] $SelfTests, [string[]] $NoGameCases,
+          [int] $ThrottleLimit = [Math]::Max(2, [Environment]::ProcessorCount))
+    $runs = @(@($SelfTests | Where-Object { $_ } | ForEach-Object { , @($_, '-SelfTest') }) +
+              @($NoGameCases | Where-Object { $_ } | ForEach-Object { , @($_, '-SelfTest', '-NoGame') }))
+    if (-not $runs) { return }
+    $done = @(0..($runs.Count - 1) | ForEach-Object -ThrottleLimit $ThrottleLimit -Parallel {
+        $name = ($using:runs)[$_][0]; $switches = @(($using:runs)[$_] | Select-Object -Skip 1)
+        $clock = [Diagnostics.Stopwatch]::StartNew()
+        $said = & pwsh -NoProfile -File (Join-Path $using:Folder $name) @switches 2>&1 | Out-String
+        @{ Index = $_; Run = "$name $switches"; Code = $LASTEXITCODE; Said = $said; Seconds = $clock.Elapsed.TotalSeconds }
+    }) | Sort-Object { $_.Index }
+    foreach ($run in $done) {
         # Exit 0 having run no case is not a pass: mod-info.ps1 has no param block, so it would
         # take a -SelfTest it no longer answers in silence, and a broken -NoGame passed with all 0
         # cases.
-        $problem = Get-RunProblem -Run "$name $switches" -ExitCode $LASTEXITCODE -Said $said
-        Write-Host "check: $name $switches -- $($problem ? 'FAILED' : 'ok') $(& $took)"
+        $problem = Get-RunProblem -Run $run.Run -ExitCode $run.Code -Said $run.Said
+        $time = '({0}s)' -f $run.Seconds.ToString('0.0', [cultureinfo]::InvariantCulture)
+        Write-Host "check: $($run.Run) -- $($problem ? 'FAILED' : 'ok') $time"
         if ($problem) {
-            $said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
+            $run.Said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
             $problem
         }
     }
@@ -419,6 +428,35 @@ if ($SelfTest) {
                 ($scripts -join '|') -eq ('bad.ps1 declares -NoGame and is not in $NO_GAME_CASES, so its no-game cases are not run|' +
                     'bad.ps1 has comment lines over 100 characters, line 2|broken.ps1 does not parse') -and
                 ($runs -join '|') -eq 'bad.ps1 -SelfTest ran no case|crash.ps1 -SelfTest exited 3|game.ps1 -SelfTest -NoGame exited 4' }
+            # PARALLEL (#296): the slow run is first and finishes last, so a line printed as each
+            # run finishes is out of list order; and two runs that each sleep finish in less than
+            # the sum of their own times.
+            'the self-tests run at once, and are printed and returned in list order, a failure with its output' = {
+                $folder = Join-Path $outside 'parallel'; New-Item -ItemType Directory -Path $folder | Out-Null
+                $say = { param($name, [string[]] $text) Set-Content -LiteralPath (Join-Path $folder $name) -Value $text }
+                $pass = "'OK - self-test passed: all 1 cases.'"
+                & $say 'slow.ps1' 'param([switch] $SelfTest)', 'Start-Sleep -Seconds 3', $pass
+                & $say 'fail.ps1' 'param([switch] $SelfTest)', "'boom from fail'", 'exit 1'
+                & $say 'quick.ps1' 'param([switch] $SelfTest)', $pass
+                $out = @(Invoke-SelfTestRun -Folder $folder -SelfTests 'slow.ps1', 'fail.ps1', 'quick.ps1' 6>&1)
+                $lines = @($out | Where-Object { $_ -is [Management.Automation.InformationRecord] } | ForEach-Object { "$_" })
+                $returned = @($out | Where-Object { $_ -is [string] })
+                $order = @($lines | Where-Object { $_ -match '^check: ' } | ForEach-Object { ($_ -split ' ')[1] })
+                $boom = [array]::IndexOf($lines, '    boom from fail')
+                ($order -join ' ') -eq 'slow.ps1 fail.ps1 quick.ps1' -and $boom -gt 0 -and
+                $lines[$boom - 1] -match '^check: fail\.ps1 -SelfTest -- FAILED' -and ($returned -join '|') -eq 'fail.ps1 -SelfTest exited 1' }
+            'two runs that each sleep finish in less time than their own times summed' = {
+                $folder = Join-Path $outside 'overlap'; New-Item -ItemType Directory -Path $folder | Out-Null
+                foreach ($name in 'a.ps1', 'b.ps1') {
+                    Set-Content -LiteralPath (Join-Path $folder $name) -Value 'param([switch] $SelfTest)', 'Start-Sleep -Seconds 2',
+                        "'OK - self-test passed: all 1 cases.'"
+                }
+                $wall = [Diagnostics.Stopwatch]::StartNew()
+                $lines = @(Invoke-SelfTestRun -Folder $folder -SelfTests 'a.ps1', 'b.ps1' 6>&1 | ForEach-Object { "$_" })
+                $wall.Stop()
+                $own = ($lines | Where-Object { $_ -match '^check: .* -- ok \(([\d.]+)s\)$' } | ForEach-Object {
+                    [double] ($_ -replace '^.*\(([\d.]+)s\)$', '$1') } | Measure-Object -Sum)
+                $own.Count -eq 2 -and $wall.Elapsed.TotalSeconds -lt $own.Sum }
             'a script parameter README never names as -Name is named; one it names, and a function''s, are not; no README fails' = {
                 $folder = Join-Path $outside 'readme'; New-Item -ItemType Directory -Path $folder | Out-Null
                 Set-Content -LiteralPath (Join-Path $folder 'p.ps1') -Value 'param([string] $Named, [switch] $Unnamed, [int] $NamedLonger)', 'function f { param($Inner) }'
