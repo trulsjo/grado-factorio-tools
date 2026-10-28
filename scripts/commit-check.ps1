@@ -26,7 +26,10 @@
       case      Lowercase after the colon. Held perfectly in 300 commits, so it is safe to enforce.
       stop      No trailing period.
       length    The whole subject line, 72 characters or fewer.
-      breaking  A `!` before the colon requires a `BREAKING CHANGE:` footer. All seven breaking
+      breaking  A `!` before the colon and a footer, both or neither. A footer is a body line
+                opening `BREAKING CHANGE:` or `BREAKING-CHANGE:`, in upper case, the rule
+                breaking-lib.ps1 reads a breaking commit by (grado-factorio-tools#282). A footer
+                with no `!` is refused, as the library would list it. All seven breaking
                 commits in history carry one, so this too is safe to enforce.
       blank     A blank line between the subject and the body.
       wrap      Every body line, 72 characters or fewer.
@@ -303,9 +306,23 @@ function Test-CommitMessage([string[]] $raw, [string[]] $listed = $SCOPES, [bool
             $bad.Add('a pull request title needs a scope: "<emoji> <type>(<scope>): <subject>"')
         }
 
-        # A title has no body to carry the footer.
-        if ($bang -and -not $isTitle -and -not ($lines | Where-Object { $_ -match '^BREAKING CHANGE: ' })) {
-            $bad.Add('a "!" before the colon needs a "BREAKING CHANGE:" footer explaining the migration')
+        # A title has no body to carry the footer. Both directions, by breaking-lib.ps1's rule
+        # (#282): a footer is a line opening the token in upper case, either spelling, and reads
+        # as breaking on its own, so it needs the `!` as the `!` needs it.
+        if (-not $isTitle) {
+            $footers = @(for ($i = 1; $i -lt $lines.Count; $i++) {
+                if ($lines[$i] -cmatch '^BREAKING[ -]CHANGE:') { $i }
+            })
+            if ($bang -and -not $footers) {
+                $bad.Add('a "!" before the colon needs a "BREAKING CHANGE:" footer explaining the migration')
+            }
+            if (-not $bang) {
+                foreach ($i in $footers) {
+                    $bad.Add(("body line $($i + 1) opens with `"$($lines[$i].Substring(0, 16))`" but the subject " +
+                        'has no "!" before the colon: add the "!", or reword the line so it does not open ' +
+                        "with the token: $($lines[$i])"))
+                }
+            }
         }
     }
 
@@ -359,7 +376,15 @@ if ($SelfTest) {
         @{ why = 'the subject is';   msg = @("🐛 fix(repo): $('word ' * 15)") }
         @{ why = 'the subject is 73'; msg = @($over) }
         @{ why = 'BREAKING CHANGE';  msg = @('✨ feat(power)!: break a save', '', 'No footer here.') }
-        @{ why = 'blank line';       msg = @('🐛 fix(repo): a subject', 'body with no blank line') }
+        # ONE RULE WITH breaking-lib.ps1 (#282): a footer reads as breaking with no `!`, so it is
+        # refused; and a footer in lower case is not one, under a `!` either.
+        @{ why = 'body line 3 opens with "BREAKING CHANGE:"'
+           msg = @('✨ feat(pack): no bang', '', 'BREAKING CHANGE: or BREAKING-CHANGE: line, wrapped.') }
+        @{ why = 'body line 5 opens with "BREAKING-CHANGE:"'
+           msg = @('✨ feat(pack): no bang', '', 'Body.', '', 'BREAKING-CHANGE: the other spelling.') }
+        @{ why = 'needs a "BREAKING CHANGE:" footer'
+           msg = @('✨ feat(power)!: break a save', '', 'Body.', '', 'breaking change: lower case.') }
+        @{ why = 'blank line';      msg = @('🐛 fix(repo): a subject', 'body with no blank line') }
         # Built from short words on purpose: a line made of ONE 80-character token is exempt by
         # design, and an earlier version of this case used $long twice and passed for that reason.
         @{ why = 'body line 3';      msg = @('🐛 fix(repo): a subject', '', ('wrappable ' * 12).Trim()) }
@@ -386,6 +411,10 @@ if ($SelfTest) {
         @{ msg = @('🔀 chore(repo): merge something (#249)') }
         @{ msg = @('🐛 fix(repo): no scope is allowed') }
         @{ msg = @('✨ feat(power)!: break a save', '', 'Body.', '', 'BREAKING CHANGE: migrate thus.') }
+        @{ msg = @('✨ feat(power)!: break a save', '', 'Body.', '', 'BREAKING-CHANGE: migrate thus.') }
+        # Not a footer, so no `!` is asked for: the token inside a line, and in lower case.
+        @{ msg = @('🐛 fix(repo): name the token in prose', '', 'A line naming BREAKING CHANGE: inside it.') }
+        @{ msg = @('🐛 fix(repo): a footer in lower case', '', 'breaking change: is prose here.') }
         @{ msg = @('🐛 fix(repo): a trailer may run long', '', 'Body.', '', $trailer) }
         @{ msg = @('🐛 fix(repo): an unwrappable url is left alone', '', $url) }
         @{ msg = @('fixup! 🐛 fix(repo): git rewrites this away') }

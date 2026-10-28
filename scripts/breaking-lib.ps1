@@ -32,8 +32,10 @@
 
     WHAT IT CANNOT SEE. What a commit breaks: it reads what a commit says of itself, whatever
     commit-check.ps1 let through, so a breaking change written as neither `!` nor a footer is not
-    listed, and a `!` on a change that breaks nothing is. And a footer written in lower case,
-    which the rule does not read.
+    listed, and a `!` on a change that breaks nothing is. The check reads a footer by this rule and
+    asks for the `!` and a footer together (#282), so a commit it passed has both or neither; one
+    it never read, as a commit made with its hook skipped, may have either alone. And a footer
+    written in lower case, which the rule does not read.
 #>
 
 # Each breaking commit of $Repo in $Range, as Get-BreakingCommit returns it, with $Dropped.

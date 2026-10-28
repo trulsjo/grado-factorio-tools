@@ -72,6 +72,11 @@ blind to*.
 
 Put `!` before the colon *and* a `BREAKING CHANGE:` footer explaining the migration.
 
+The check asks for both or neither (#282). A footer is a body line opening `BREAKING CHANGE:` or
+`BREAKING-CHANGE:` in upper case, as `scripts/breaking-lib.ps1` reads one, and that library lists
+a commit with either half as breaking. So a body line that only names the token must not open
+with it: wrap the line around it, or the check refuses the commit for its missing `!`.
+
 **What counts as a breaking change is each repository's own**, and stays in its `CLAUDE.md`.
 This page owns the mechanism; the definition is domain knowledge, and this repository's rule is
 that one mod's domain does not live here. A mod repository's answer is save compatibility; a
@@ -105,9 +110,11 @@ A gate that overstates its coverage is worse than no gate, so:
   format rule rather than by anything that knows what a scope is. With one, the scope has to be
   listed and nothing more: `pack` on a commit that touches only the resolver is accepted.
 - **What a body says.** The check asks a body for the blank line above it, for lines that wrap
-  and, under a `!`, for the `BREAKING CHANGE:` footer. It does not read what the body tells: one
-  that cites no ticket passes, and so does one that cites an earlier pull request or the session
-  from memory, unmarked, or walks through what happened step by step.
+  and, under *Breaking changes* above, for the `!` and a footer together or neither. It does not
+  read what the body tells: one that cites no ticket passes, and so does one that cites an earlier
+  pull request or the session from memory, unmarked, or walks through what happened step by step.
+  Nor what a footer says, nor a footer in lower case, which is prose to the check and to the
+  library alike.
 - **Trailer lines are exempt from the 72-character body rule.** A `Key: value` block at the end of
   the message is skipped, because `Co-Authored-By:` and `Claude-Session:` end in an address or a
   URL that cannot be broken, and git parses that block by position.
