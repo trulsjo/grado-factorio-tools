@@ -583,6 +583,22 @@ PowerShell runs it there.
 `Get-Variable` or a string, nor a dot-sourced file's; the rest is in its header. `-SelfTest`
 proves it can fail.
 
+## Running a review's reverts
+
+A review reverts each claim of a script on a copy and runs its self-test, as
+[`docs/agents/review-brief.md`](docs/agents/review-brief.md)'s *The reverts* asks.
+`scripts/revert-run.ps1` runs a list of them (#284): `-Copy` is a clean git working tree,
+`-List` a `.psd1` of reverts, each one exact edit of one file and the self-test to run. A revert
+whose text does not occur once, or whose edit changes more lines than it names, is refused; the
+rest are run and reported as *fails*, *passes* or *crashed*, one line each and a Markdown table,
+with the file restored before the next.
+
+    pwsh -File scripts/revert-run.ps1 -Copy <copy> -List <list>
+
+It exits 0 once every revert was run or refused, and 1 only when it could not run, as for a copy
+left dirty. The list's shape, and what it cannot see, are in its header. `-SelfTest` runs it on a
+scratch repository.
+
 ## Measuring a sibling's pin move
 
 `scripts/pin-measure.ps1` measures what moving a sibling's `vendor/grado-factorio-tools` pin

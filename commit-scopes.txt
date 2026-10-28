@@ -12,6 +12,7 @@ resource-counts
 markdown-check
 param-check
 variable-case-check
+revert-run
 pr-body-check
 cd-hook
 hook-skip
