@@ -42,11 +42,13 @@ changes that the claims leave out: a script the change adds, on every line. It m
 of the commit per review, outside the repository, a clone, since a self-test may ask git for
 `origin/main` as GitHub has it:
 `git clone -q https://github.com/trulsjo/grado-factorio-tools <empty scratch folder>`, then
-`git -C <copy> checkout -q <full SHA>`. It reverts one piece at a time in the copy and restores
-the file with `git -C <copy> checkout -- <file>` before the next. For each revert it shows the
-copy differs from the commit, with `git -C <copy> diff --stat`, which reads no working tree
-but the copy's, runs the copy's self-test and reports how many checks failed. A revert that
-fails nothing is a finding. With "none", it reverts nothing.
+`git -C <copy> checkout -q <full SHA>`. It writes the reverts as a list and runs them with
+`pwsh -File scripts/revert-run.ps1 -Copy <copy> -List <list>` (#284), whose header gives the
+list's shape: one exact edit each, refused unless it changes the lines it names, shown with
+`git -C <copy> diff --stat`, which reads no working tree but the copy's, its self-test run and
+reported as *fails*, *passes* or *crashed*, and the file restored before the next. It reports
+the runner's table. A revert that fails nothing is a finding. With "none", it reverts nothing.
+The session answering a review's findings runs its reverts the same way.
 
 **Read-only.** Edit no file in the repository, commit nothing, push nothing, and post nothing to
 GitHub: the session acts on the findings and posts the review.
