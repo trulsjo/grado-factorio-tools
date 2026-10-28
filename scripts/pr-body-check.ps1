@@ -179,7 +179,8 @@
 
 .PARAMETER SelfTest
     Run the cases that hold the check to what this header says, naming each as it runs. Needs
-    git, for fixture repositories in a temp directory.
+    git, for fixture repositories in a temp directory. Their commits carry a fixed date, so the
+    same script makes the same hashes and prints the same output on every run.
 
 .EXAMPLE
     pwsh -File scripts/pr-body-check.ps1 ../scratch/body.md
@@ -371,8 +372,13 @@ function Invoke-SelfTest {
     New-Item -ItemType Directory -Path $repo -Force | Out-Null
     git -C $repo init --quiet
     if ($LASTEXITCODE -ne 0) { throw 'git init failed; the self-test needs git.' }
+    # A fixed author and committer date, so each run makes the same commits and prints the same
+    # hashes (#288); the three differ by message and parent all the same.
     $commit = {
-        git -C $repo -c user.name=self-test -c user.email=self-test@example.invalid -c commit.gpgsign=false commit --quiet --allow-empty -m $args[0] 2>&1 | Out-Null
+        $was = $env:GIT_AUTHOR_DATE, $env:GIT_COMMITTER_DATE
+        $env:GIT_AUTHOR_DATE = $env:GIT_COMMITTER_DATE = '2026-01-01T00:00:00Z'
+        try { git -C $repo -c user.name=self-test -c user.email=self-test@example.invalid -c commit.gpgsign=false commit --quiet --allow-empty -m $args[0] 2>&1 | Out-Null }
+        finally { $env:GIT_AUTHOR_DATE, $env:GIT_COMMITTER_DATE = $was }
         if ($LASTEXITCODE -ne 0) { throw "git could not commit '$($args[0])' in the fixture repository." }
         git -C $repo rev-parse HEAD
     }
