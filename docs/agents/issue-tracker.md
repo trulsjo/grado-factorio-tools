@@ -111,6 +111,11 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
   Among what this repository adds to the template: above it, the `Closes` lines of the rule
   above, where the branch closes any ticket; inside it, what `-CiteSiblings` and the
   *Blast Radius* rule below ask of its prose; below it, nothing.
+  *Evidence* cites `scripts/check.ps1` by CI's run id once that run has passed on every job on
+  the pull request's tip; until then it names the platform of the run it cites, as "passed
+  locally, on Windows, in the pre-push hook", and a body edited after CI passes replaces the
+  second with the first (#286). PR #283's first body cited the pre-push run as passing, and CI's
+  run 40596186420 on that commit failed on ubuntu-latest.
   The body does not recount the review: each review posts its findings as one comment on the
   pull request, by the rule in [`code-review.md`](code-review.md).
 - **The Blast Radius of a change to a script names each place a sibling uses it**, found by two

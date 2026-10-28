@@ -15,7 +15,9 @@
     and so does the workflow in .github/workflows/ on every pull request and on main, on Windows
     and on Linux (grado-factorio-tools#117). Nothing here is left out on either: a self-test
     that cannot pass on one of them fails this check there. What a self-test itself skips off
-    Windows, it names.
+    Windows, it names. A local run covers the platform it runs on, as the pre-push hook's covers
+    the development machine's Windows; CI's two jobs are where it runs on the other
+    (grado-factorio-tools#286).
 
     WHAT IT RUNS. A parse of each script beside it, which finds a syntax error on a line no
     self-test reaches, and in the libraries that have no self-test. Then param-check.ps1 over the
