@@ -47,7 +47,8 @@
     WHAT IT CANNOT SEE. Whether a revert is the right one: a Find that matches once but in the
     wrong place is run. A self-test whose summary line is worded other than this repository's
     `OK - self-test` and `FAILED - self-test`, which reads as crashed; check.ps1 fails such a
-    self-test in this repository (#297), not in a sibling. A revert across two files,
+    self-test among those it runs (grado-factorio-tools#297), not one that needs the game, nor one
+    in a sibling. A revert across two files,
     or by a pattern. A self-test that changes a tracked file and puts it back.
 
 .PARAMETER Copy
