@@ -42,9 +42,11 @@
 
     It reports and does not judge: a form that differs, or fails at both pins, is evidence for
     the pull request, and the run still exits 0. It exits 1 only when it cannot measure: a pin
-    missing, a forms file it cannot read, a clone, fetch or archive that fails, or gh or the
-    remote out of reach. It fetches, lists the remote and reads pull requests with gh; nothing
-    downloaded is run but the sibling's own forms and scripts, at origin's main.
+    missing, a forms file it cannot read, a clone, fetch or archive that fails, gh or the remote
+    out of reach, or, for a {prbody} form, an origin that names no github.com/<owner>/<repository>.
+    The origin may be a URL or a local path, with either slash. It fetches, lists the remote and
+    reads pull requests with gh; nothing downloaded is run but the sibling's own forms and
+    scripts, at origin's main.
 
     THE FORMS FILE, the one contract between this repository and each sibling: a PowerShell data
     file the sibling keeps, at -Forms in its clone, read with Import-PowerShellDataFile. It holds
@@ -53,7 +55,8 @@
     from its clone's root; Script, its path from there; and Args, a list of arguments. In an
     argument these are replaced:
     - {tools}: the pin's copy of scripts/, in that clone.
-    - {headmsg}: the path of a file holding the clone's HEAD commit message.
+    - {headmsg}: the path of a file holding the clone's HEAD commit message, byte for byte as
+      `git log -1 --format=%B` prints it: UTF-8 with no BOM, and LF.
     - {prbody:last-merged:<n>}: the body of one of the sibling's last <n> merged pull requests,
       read with gh. The form is run once for each, as <form>-pr<number>, with the body in place of
       the placeholder and in the environment variable PR_BODY.
@@ -84,7 +87,10 @@
     plain commit, a `!` with no footer, a BREAKING-CHANGE footer and a BREAKING CHANGE footer with
     a trailer in its paragraph, and a sibling holding a forms file, whose origin is a local path,
     and measure the move with pull request bodies read from a stub. Check each form's output and
-    exit at both pins, each placeholder, breaking.txt and breaking-lib.ps1's rule, forward, back
+    exit at both pins, each placeholder, {headmsg}'s file byte for byte against git's with an emoji
+    in the subject, run under a Latin-1 console that is Latin-1 still after it, the pull request
+    slug read from an origin in each spelling and refused from one with no github.com,
+    breaking.txt and breaking-lib.ps1's rule, forward, back
     and over an empty range, table.md's rows, a "differs above the last line"
     row among them, a sibling reference no form runs being listed, by script name, and that a
     write into one clone does not show in the other's run. Then run this script itself: copied
@@ -149,6 +155,17 @@ function Get-LastLine {
     param([string] $Text)
     $last = @($Text -split '\r?\n' | Where-Object { $_.Trim() }) | Select-Object -Last 1
     "$last".Trim() -replace '\|', '\|'
+}
+
+# The owner/repository gh reads pull requests from, out of the sibling's $Origin: a URL, or a
+# local path that holds github.com/<owner>/<repository>, in either slash; it throws, naming
+# $Origin, where none is there.
+function Get-RepoSlug {
+    param([string] $Origin)
+    if ($Origin -notmatch 'github\.com[:/\\]+([^:/\\]+)[/\\]([^/\\]+?)(?:\.git)?[/\\]?$') {
+        throw "the sibling's origin, $Origin, names no github.com repository, so gh cannot read its pull requests."
+    }
+    "$($Matches[1])/$($Matches[2])"
 }
 
 # The runs of one form: each its name, its arguments with the placeholders filled, its stdin and
@@ -217,7 +234,15 @@ function Invoke-PinMeasure {
         $clone = $clones[$pin]
         $copy = Join-Path $clone 'vendor/grado-factorio-tools/scripts'
         $headMsg = Join-Path $Out "head-message.$pin.msg"
-        Invoke-Git 'reading the HEAD message' -C $clone log -1 --format=%B | Set-Content -LiteralPath $headMsg
+        # git writes UTF-8, which the console's own code page would mangle in a subject's emoji;
+        # the file is written as git printed it, LF and no BOM.
+        $was = [Console]::OutputEncoding
+        try {
+            [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+            $lines = @(Invoke-Git 'reading the HEAD message' -C $clone log -1 --format=%B)
+        }
+        finally { [Console]::OutputEncoding = $was }
+        [IO.File]::WriteAllText($headMsg, ($lines -join "`n") + "`n", [Text.UTF8Encoding]::new($false))
         foreach ($form in $list) {
             $script = if ($form.From -eq 'tools') { Join-Path $copy $form.Script } else { Join-Path $clone $form.Script }
             if ($pin -eq 'old') { $runScripts.Add($form) }
@@ -321,19 +346,40 @@ if ($SelfTest) {
             "  @{ Name = 'writes'; From = 'sibling'; Script = 'scripts/w2.ps1'; Args = @() }",
             "  @{ Name = 'marker'; From = 'sibling'; Script = 'scripts/w.ps1'; Args = @() }",
             ') }')
-        $null = & $commit $sib 'feat: the sibling at main'
+        # A subject outside ASCII, so a {headmsg} read in the console's code page would show.
+        $null = & $commit $sib '✨ feat: the sibling at main'
         git -C $sib remote add origin $sib
         $stub = { param([int] $count) @(@{ Number = 8; Body = 'body eight' }, @{ Number = 7; Body = 'body seven' }) | Select-Object -First $count }
         $table = $null
-        $threw = try { $table = @(Invoke-PinMeasure -Tools $toolsRepo -Sibling $sib -Old $oldPin -New $newPin -Out $outDir -Forms 'scripts/pin-forms.psd1' -Bodies $stub); '' } catch { $_.Exception.Message }
+        # The console is set to Latin-1, which reads git's ASCII as it is and mangles its UTF-8, as
+        # a Windows console's code page does; and it is to be Latin-1 still after the run.
+        $was = [Console]::OutputEncoding
+        try {
+            [Console]::OutputEncoding = [Text.Encoding]::Latin1
+            $threw = try { $table = @(Invoke-PinMeasure -Tools $toolsRepo -Sibling $sib -Old $oldPin -New $newPin -Out $outDir -Forms 'scripts/pin-forms.psd1' -Bodies $stub); '' } catch { $_.Exception.Message }
+            $page = [Console]::OutputEncoding.CodePage
+        }
+        finally { [Console]::OutputEncoding = $was }
         & $check 'the measurement returns, with forms that differ' (-not $threw -and $table) $threw
+        & $check "the console's output encoding is the same after the run as before it" ($page -eq [Text.Encoding]::Latin1.CodePage) "$page"
+        $gitMsg = Join-Path $temp 'head-message.git'
+        git -C $sib log -1 --format=%B --output=$gitMsg
+        $written = [IO.File]::ReadAllBytes((Join-Path $outDir 'head-message.old.msg')); $held = [IO.File]::ReadAllBytes($gitMsg)
+        & $check "{headmsg}'s file is byte for byte what git log -1 --format=%B prints, an emoji in its subject" (
+            [Linq.Enumerable]::SequenceEqual($written, $held)) "written: $([BitConverter]::ToString($written)); git: $([BitConverter]::ToString($held))"
+        $slugs = @('C:\src\github.com\trulsjo\grado-factorio-modpack.git', 'C:/src/github.com/trulsjo/grado-factorio-modpack.git',
+            'git@github.com:trulsjo/grado-factorio-modpack.git', 'https://github.com/trulsjo/grado-factorio-modpack') | ForEach-Object { Get-RepoSlug $_ }
+        $refused = try { Get-RepoSlug 'C:\src\elsewhere\grado-factorio-modpack.git'; '' } catch { $_.Exception.Message }
+        & $check 'the slug is read from an origin in backslashes, in forward slashes, as git@github.com: and as https://github.com/; one naming no github.com is refused, naming it' (
+            ($slugs | Where-Object { $_ -ceq 'trulsjo/grado-factorio-modpack' }).Count -eq 4 -and $refused -match 'C:\\src\\elsewhere\\grado-factorio-modpack\.git') "$($slugs -join ', ') | $refused"
         $read = { param($name) $p = Join-Path $outDir $name; if (Test-Path -LiteralPath $p) { (Get-Content -LiteralPath $p -Raw).Trim() } else { "<no $name>" } }
         $names = 'same', 'above', 'last', 'stdin', 'headmsg', 'prbody-pr8', 'prbody-pr7', 'tools', 'writes', 'marker'
         $missing = @(foreach ($f in $names) { foreach ($pin in 'old', 'new') { foreach ($ext in 'txt', 'exit') { if (-not (Test-Path -LiteralPath (Join-Path $outDir "$f.$pin.$ext"))) { "$f.$pin.$ext" } } } })
         & $check "each form's output and exit kept at both pins" (-not $missing) "missing: $missing"
         & $check 'the exits are kept as each pin gave them' ((& $read 'last.old.exit') -eq '0' -and (& $read 'last.new.exit') -eq '3' -and (& $read 'last.new.txt') -eq 'v2') "$(& $read 'last.old.exit') $(& $read 'last.new.exit') $(& $read 'last.new.txt')"
         & $check '{stdin:<text>} is given on stdin and taken out of the arguments' ((& $read 'stdin.old.txt') -eq 'stdin: {"cwd":"."}') (& $read 'stdin.old.txt')
-        & $check "{headmsg} is a file holding the clone's HEAD message" ((& $read 'headmsg.old.txt') -eq 'head: feat: the sibling at main') (& $read 'headmsg.old.txt')
+        # The emoji is the form's own output, read back in Latin-1: the file's bytes are held above.
+        & $check "{headmsg} is a file holding the clone's HEAD message" ((& $read 'headmsg.old.txt') -cmatch '^head: \S+ feat: the sibling at main$') (& $read 'headmsg.old.txt')
         & $check '{prbody:last-merged:2} runs once per body, in place and in PR_BODY' ((& $read 'prbody-pr8.new.txt') -eq 'arg: body=body eight; env: body eight' -and (& $read 'prbody-pr7.old.txt') -eq 'arg: body=body seven; env: body seven') "$(& $read 'prbody-pr8.new.txt') | $(& $read 'prbody-pr7.old.txt')"
         & $check "{tools} is the pin's copy of scripts/" ((& $read 'tools.old.txt') -eq 'tools has t.ps1: True') (& $read 'tools.old.txt')
         & $check "a form that writes into its clone does not show in the other pin's run" ((& $read 'marker.old.txt') -eq 'no marker' -and (& $read 'marker.new.txt') -eq 'no marker') "$(& $read 'marker.old.txt') | $(& $read 'marker.new.txt')"
@@ -413,7 +459,7 @@ try {
     $sibling = git -C $tools rev-parse --show-superproject-working-tree 2>$null
     $bodies = {
         param([int] $count)
-        $slug = (git -C $sibling remote get-url origin) -replace '^.*github\.com[:/]', '' -replace '\.git$', ''
+        $slug = Get-RepoSlug (git -C $sibling remote get-url origin)
         $json = gh pr list --repo $slug --state merged --limit 30 --json number,body,mergedAt 2>&1
         if ($LASTEXITCODE) { throw "gh could not read $slug's merged pull requests: $json" }
         $json | ConvertFrom-Json | Sort-Object mergedAt -Descending | Select-Object -First $count | ForEach-Object { @{ Number = $_.number; Body = $_.body } }
