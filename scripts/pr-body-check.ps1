@@ -590,8 +590,10 @@ function Invoke-SelfTest {
             ($after -join '|') -eq '`**After:**` is missing under `## Evidence`|`**Blast Radius:**` is missing under `## Merge Danger`' } }
         @{ Name = 'the fixture''s commits carry a fixed author and committer date, so each run makes the same hashes (#288)'; Test = {
             # The dates, not a hash: a hash changes with the messages and with git's object format.
-            $dates = @($root, $onMain, $onBranch | ForEach-Object { git -C $repo log -1 --format='%aI %cI' $_ })
-            $want = '2026-01-01T00:00:00+00:00 2026-01-01T00:00:00+00:00'
+            # In Unix seconds, alike in every git; an ISO date ends Z or +00:00 by version.
+            $dates = @($root, $onMain, $onBranch | ForEach-Object { git -C $repo log -1 --format='%at %ct' $_ })
+            $at = [DateTimeOffset]::new(2026, 1, 1, 0, 0, 0, [TimeSpan]::Zero).ToUnixTimeSeconds()
+            $want = "$at $at"
             if ($dates -ne $want) { Write-Host "    $($dates -join ' | ')" }
             $dates.Count -eq 3 -and -not ($dates -ne $want) } }
     )
