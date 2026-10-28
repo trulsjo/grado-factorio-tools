@@ -272,7 +272,7 @@ if ($SelfTest) {
         $said = & $direct '' 'pre-commit'
         & $check 'a hook it does not serve prints a line' ($said -match 'pre-commit is not a hook this serves') $said
         $bad = @($codes | Where-Object { $_ -notmatch ': 0$' })
-        & $check "every case exits 0, and so every git command the hooks ran in ($($codes.Count) runs)" (-not $bad) ($bad -join "`n")
+        & $check "every case exits 0, and so every git command the hooks ran in, and every setup step ($($codes.Count) runs)" (-not $bad) ($bad -join "`n")
     }
     finally {
         $env:GIT_CONFIG_COUNT = $was; Remove-Item Env:GIT_CONFIG_KEY_0, Env:GIT_CONFIG_VALUE_0 -ErrorAction SilentlyContinue
