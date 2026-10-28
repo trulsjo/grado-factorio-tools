@@ -1,7 +1,8 @@
 <#
 .SYNOPSIS
     Parses every script under scripts/, holds their comment lines to a width, reads their list
-    parameters with param-check.ps1, holds README.md to naming each of their parameters, runs
+    parameters with param-check.ps1 and their variables' spelling with variable-case-check.ps1,
+    holds README.md to naming each of their parameters, runs
     every self-test that needs neither the game nor the network, holds the agent pages to their
     size limits, and runs markdown-check.ps1 over the tracked Markdown. Exit 0 means all of that
     held. With -SkipIfPassed, as the pre-push hook runs
@@ -22,14 +23,15 @@
     WHAT IT RUNS. A parse of each script beside it, which finds a syntax error on a line no
     self-test reaches, and in the libraries that have no self-test. Then param-check.ps1 over the
     same scripts, for a list parameter that `pwsh -File` would hand over as one string
-    (grado-factorio-tools#163). Then -SelfTest of each script in $SELF_TESTS, each in a pwsh of
-    its own, so one script's `exit` does not end the run, and -SelfTest -NoGame of each in
-    $NO_GAME_CASES: the cases of a script that needs the game which read no game's output but a
-    log written for them (grado-factorio-tools#175). A self-test that passes prints one line
-    here; one that fails prints everything it said. One that exits 0 having run no case fails:
-    one that never says `self-test`, or that says it passed with 0 cases, all of them or 0 of
-    some, as a -NoGame broken to run nothing would (grado-factorio-tools#181). It reads the
-    output, so a self-test that counts a case it did not run is not seen.
+    (grado-factorio-tools#163), and variable-case-check.ps1, for one scope spelling a variable
+    two ways that differ only in case (grado-factorio-tools#285). Then -SelfTest of each script
+    in $SELF_TESTS, each in a pwsh of its own, so one script's `exit` does not end the run, and
+    -SelfTest -NoGame of each in $NO_GAME_CASES: the cases of a script that needs the game which
+    read no game's output but a log written for them (grado-factorio-tools#175). A self-test that
+    passes prints one line here; one that fails prints everything it said. One that exits 0 having
+    run no case fails: one that never says `self-test`, or that says it passed with 0 cases, all of
+    them or 0 of some, as a -NoGame broken to run nothing would (grado-factorio-tools#181). It reads
+    the output, so a self-test that counts a case it did not run is not seen.
 
     A COMMENT OR HEADER LINE OF A SCRIPT HERE IS HELD TO $COMMENT_LINE_LIMIT, the Markdown's limit
     (grado-factorio-tools#181): this header had a line of 147 characters, from
@@ -135,7 +137,8 @@ $ErrorActionPreference = 'Stop'
 
 $SELF_TESTS = @('check.ps1', 'commit-check.ps1', 'compare-resource-counts.ps1', 'dump-diff.ps1', 'dump-keys.ps1', 'dump-planets.ps1', 'dump-shared-names.ps1', 'fetch-mods.ps1',
     'follow-pin.ps1', 'get-dump.ps1', 'hook-matcher.ps1', 'markdown-check.ps1', 'markdown-rewrap.ps1', 'mod-info.ps1', 'pack-mods.ps1', 'param-check.ps1', 'pin-measure.ps1', 'pr-body-check.ps1',
-    'refuse-backtick-substitution.ps1', 'refuse-cd-into-mod-cache.ps1', 'refuse-git-discard.ps1', 'refuse-git-hook-skip.ps1', 'refuse-pr-body.ps1', 'refuse-python-heredoc.ps1', 'resolve-modpack.ps1', 'self-test-halves.ps1')
+    'refuse-backtick-substitution.ps1', 'refuse-cd-into-mod-cache.ps1', 'refuse-git-discard.ps1', 'refuse-git-hook-skip.ps1', 'refuse-pr-body.ps1', 'refuse-python-heredoc.ps1', 'resolve-modpack.ps1', 'self-test-halves.ps1',
+    'variable-case-check.ps1')
 # Has a self-test this does not run, and why: it needs Factorio installed.
 $NEEDS_GAME = @('dump-walk.ps1', 'load-harness.ps1', 'locale-check.ps1', 'trace-definitions.ps1', 'tree-viewer.ps1')
 # Of those, each whose -SelfTest -NoGame runs the cases that need no game. This runs them.
@@ -443,6 +446,15 @@ Write-Host "check: param-check.ps1 scripts -- $($bad ? 'FAILED' : 'ok') $(& $too
 if ($bad) {
     $said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
     $failed.Add('param-check.ps1 found a list parameter never split on a comma')
+}
+
+$clock.Restart()
+$said = & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'variable-case-check.ps1') $PSScriptRoot 2>&1 | Out-String
+$bad = $LASTEXITCODE -or $said -notmatch '(?m)^OK - variable-case-check: '
+Write-Host "check: variable-case-check.ps1 scripts -- $($bad ? 'FAILED' : 'ok') $(& $took)"
+if ($bad) {
+    $said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
+    $failed.Add('variable-case-check.ps1 found a variable spelt two ways in one scope')
 }
 
 $clock.Restart()
