@@ -142,7 +142,7 @@ function Invoke-FollowPin {
 
 if ($SelfTest) {
     $temp = Join-Path ([IO.Path]::GetTempPath()) "follow-pin-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
-    $tools = Join-Path $temp 'tools'; $sib = Join-Path $temp 'sibling'
+    $tools = Join-Path $temp 'tools'; $sib = Join-Path $temp 'sibling'; $noHooks = Join-Path $temp 'no-hooks'
     $sub = 'vendor/grado-factorio-tools'; $subDir = Join-Path $sib $sub
     $failures = 0; $n = 0; $codes = [Collections.Generic.List[string]]::new()
     $check = {
@@ -154,6 +154,13 @@ if ($SelfTest) {
     # git in the sibling, its output and its hooks' together; each exit code is kept, as a hook's
     # exit status would become a checkout's.
     $git = { $said = & git -C $sib @args 2>&1 | Out-String; $codes.Add("git $($args -join ' '): $LASTEXITCODE"); $said }
+    # A step that sets up a case and is not one: git with no hooks, so no pwsh is started for it
+    # (#296), then the submodule brought to the pin the new HEAD records, where the hook would have
+    # left it or the step after it put it.
+    $setup = {
+        $null = & git -C $sib -c "core.hooksPath=$noHooks" @args 2>&1; $codes.Add("setup git $($args -join ' '): $LASTEXITCODE")
+        git -C $sib submodule --quiet update
+    }
     # This script run as a hook would be, from the sibling's root, with $stdin on its stdin.
     $direct = {
         param([string] $stdin, [string[]] $a)
@@ -168,6 +175,7 @@ if ($SelfTest) {
     $was = $env:GIT_CONFIG_COUNT
     $env:GIT_CONFIG_COUNT = '1'; $env:GIT_CONFIG_KEY_0 = 'protocol.file.allow'; $env:GIT_CONFIG_VALUE_0 = 'always'
     try {
+        New-Item -ItemType Directory -Path $noHooks -Force | Out-Null
         foreach ($r in $tools, $sib) {
             New-Item -ItemType Directory -Path $r -Force | Out-Null
             git -C $r init --quiet -b main; if ($LASTEXITCODE) { throw 'git init failed; the self-test needs git.' }
@@ -193,18 +201,18 @@ if ($SelfTest) {
         git -C $sib config core.hooksPath hooks
         # The branches: moveB records b; sameA records a, with a commit of its own; topicC, from
         # main, records c.
-        $null = & $git switch --quiet -c moveB
+        & $setup switch --quiet -c moveB
         git -C $subDir checkout --quiet $B; git -C $sib add $sub; git -C $sib commit --quiet -m 'tools at b'
-        $null = & $git switch --quiet -c sameA main
+        & $setup switch --quiet -c sameA main
         Set-Content -LiteralPath (Join-Path $sib 'x.txt') -Value x; git -C $sib add x.txt; git -C $sib commit --quiet -m 'x'
-        $null = & $git switch --quiet main
+        & $setup switch --quiet main
 
         $said = & $git switch --quiet moveB
         & $check 'a branch switch that changes the pin updates it and prints the line' ($said.Trim() -ceq (& $line 'post-checkout' $A $B) -and (& $at) -eq $B) $said
-        $null = & $git switch --quiet main
+        & $setup switch --quiet main
         $said = & $git switch --quiet sameA
         & $check 'a branch switch that does not change the pin prints nothing' ($said -ceq '' -and (& $at) -eq $A) $said
-        $null = & $git switch --quiet main
+        & $setup switch --quiet main
         $mainSha = git -C $sib rev-parse main; $moveSha = git -C $sib rev-parse moveB
         # An amend whose rewritten commit's parent records b, as a rebase's would be read; a
         # clone's first checkout, whose old HEAD is all zeros and records no pin; and a switch to a
@@ -217,7 +225,7 @@ if ($SelfTest) {
         # Run with --git-dir, git hands the hooks GIT_DIR, which must not reach the submodule's git.
         $said = & $git --git-dir="$sib/.git" --work-tree=$sib switch --quiet moveB
         & $check 'a switch with GIT_DIR set updates it too' ($said.Trim() -ceq (& $line 'post-checkout' $A $B) -and (& $at) -eq $B) $said
-        $null = & $git switch --quiet main
+        & $setup switch --quiet main
         $said = & $git merge --quiet --ff-only moveB
         & $check 'a merge that moves the pin updates it, from ORIG_HEAD' ($said -match [regex]::Escape((& $line 'post-merge' $A $B)) -and (& $at) -eq $B) $said
         git -C $sib reset --quiet --hard $mainSha; git -C $sib submodule --quiet update
@@ -225,38 +233,37 @@ if ($SelfTest) {
         Add-Content -LiteralPath (Join-Path $subDir 'f.txt') -Value 'edited'
         $said = & $git switch --quiet moveB
         & $check 'a submodule with uncommitted changes is left, with its line' ($said -match "post-checkout: $sub has uncommitted changes, so it was left at $(& $short $A); the new HEAD records $(& $short $B)\. Once they are dealt with: git submodule update -- $sub" -and (& $at) -eq $A) $said
-        git -C $subDir checkout --quiet -- .; $null = & $git switch --quiet main
+        git -C $subDir checkout --quiet -- .; & $setup switch --quiet main
 
         git -C $subDir checkout --quiet $C
         $said = & $git switch --quiet moveB
         & $check 'a submodule off the old pin is left, with its line' ($said -match "post-checkout: $sub is at $(& $short $C), not the $(& $short $A) the old HEAD records, so it was left; the new HEAD records $(& $short $B)\." -and (& $at) -eq $C) $said
-        $null = & $git switch --quiet main; git -C $sib submodule --quiet update
+        & $setup switch --quiet main
 
         git -C $sib submodule --quiet deinit --force $sub
         $said = & $git switch --quiet moveB
         & $check 'a submodule not initialised is left, with its line' ($said -match "post-checkout: $sub is not initialised, so it was left; the new HEAD records $(& $short $B)\. To bring it there: git submodule update --init -- $sub") $said
-        $null = & $git switch --quiet main; git -C $sib submodule --quiet update --init
+        & $setup switch --quiet main; git -C $sib submodule --quiet update --init
 
         # A pin the clone does not hold: d is committed in tools after the clone, and a pin that
         # is nowhere, which no fetch can bring.
         Set-Content -LiteralPath (Join-Path $tools 'f.txt') -Value 'd'; git -C $tools commit --quiet -am d; $D = git -C $tools rev-parse HEAD
         $nowhere = 'f' * 40
         foreach ($branch in @{ Name = 'moveD'; Pin = $D }, @{ Name = 'moveNowhere'; Pin = $nowhere }) {
-            git -C $sib switch --quiet --no-guess -c $branch.Name main 2>&1 | Out-Null
+            & $setup switch --quiet --no-guess -c $branch.Name main
             git -C $sib update-index --cacheinfo "160000,$($branch.Pin),$sub"; git -C $sib commit --quiet -m $branch.Name
-            git -C $sib switch --quiet main 2>&1 | Out-Null
-            git -C $sib submodule --quiet update
+            & $setup switch --quiet main
         }
         $said = & $git switch --quiet moveD
         & $check 'a pin the clone does not hold is fetched' ($said -match [regex]::Escape((& $line 'post-checkout' $A $D)) -and (& $at) -eq $D) $said
-        $null = & $git switch --quiet main
+        & $setup switch --quiet main
         $said = & $git switch --quiet moveNowhere
         & $check 'a pin that cannot be fetched is left, with the command to retry' ($said -match "post-checkout: git submodule update failed, so $sub was left at $(& $short $A); the new HEAD records ffffff\w*\..*To retry: git submodule update -- $sub" -and (& $at) -eq $A) $said
-        git -C $sib switch --quiet main 2>&1 | Out-Null; git -C $sib submodule --quiet update
+        & $setup switch --quiet main
 
         # A rebase of a branch that moves the pin itself onto one that moved it: post-checkout
         # takes the submodule to moveB's pin, and post-rewrite to the branch's.
-        $null = & $git switch --quiet -c topicC main
+        & $setup switch --quiet -c topicC main
         git -C $subDir checkout --quiet $C; git -C $sib add $sub; git -C $sib commit --quiet -m 'tools at c'
         $said = & $git rebase --quiet -X theirs moveB
         & $check "a rebase onto a moved pin, of a branch that moves it, ends at the branch's pin" (
