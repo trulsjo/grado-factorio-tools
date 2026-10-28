@@ -269,7 +269,7 @@ function Invoke-PinMeasure {
 
 if ($SelfTest) {
     $temp = Join-Path ([IO.Path]::GetTempPath()) "pin-measure-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
-    $toolsRepo = Join-Path $temp 'tools'; $sib = Join-Path $temp 'sibling'; $out = Join-Path $temp 'out'
+    $toolsRepo = Join-Path $temp 'tools'; $sib = Join-Path $temp 'sibling'; $outDir = Join-Path $temp 'out'
     $failures = 0; $n = 0
     $check = {
         param([string] $Name, [bool] $Ok, [string] $Said)
@@ -325,11 +325,11 @@ if ($SelfTest) {
         git -C $sib remote add origin $sib
         $stub = { param([int] $count) @(@{ Number = 8; Body = 'body eight' }, @{ Number = 7; Body = 'body seven' }) | Select-Object -First $count }
         $table = $null
-        $threw = try { $table = @(Invoke-PinMeasure -Tools $toolsRepo -Sibling $sib -Old $oldPin -New $newPin -Out $out -Forms 'scripts/pin-forms.psd1' -Bodies $stub); '' } catch { $_.Exception.Message }
+        $threw = try { $table = @(Invoke-PinMeasure -Tools $toolsRepo -Sibling $sib -Old $oldPin -New $newPin -Out $outDir -Forms 'scripts/pin-forms.psd1' -Bodies $stub); '' } catch { $_.Exception.Message }
         & $check 'the measurement returns, with forms that differ' (-not $threw -and $table) $threw
-        $read = { param($name) $p = Join-Path $out $name; if (Test-Path -LiteralPath $p) { (Get-Content -LiteralPath $p -Raw).Trim() } else { "<no $name>" } }
+        $read = { param($name) $p = Join-Path $outDir $name; if (Test-Path -LiteralPath $p) { (Get-Content -LiteralPath $p -Raw).Trim() } else { "<no $name>" } }
         $names = 'same', 'above', 'last', 'stdin', 'headmsg', 'prbody-pr8', 'prbody-pr7', 'tools', 'writes', 'marker'
-        $missing = @(foreach ($f in $names) { foreach ($pin in 'old', 'new') { foreach ($ext in 'txt', 'exit') { if (-not (Test-Path -LiteralPath (Join-Path $out "$f.$pin.$ext"))) { "$f.$pin.$ext" } } } })
+        $missing = @(foreach ($f in $names) { foreach ($pin in 'old', 'new') { foreach ($ext in 'txt', 'exit') { if (-not (Test-Path -LiteralPath (Join-Path $outDir "$f.$pin.$ext"))) { "$f.$pin.$ext" } } } })
         & $check "each form's output and exit kept at both pins" (-not $missing) "missing: $missing"
         & $check 'the exits are kept as each pin gave them' ((& $read 'last.old.exit') -eq '0' -and (& $read 'last.new.exit') -eq '3' -and (& $read 'last.new.txt') -eq 'v2') "$(& $read 'last.old.exit') $(& $read 'last.new.exit') $(& $read 'last.new.txt')"
         & $check '{stdin:<text>} is given on stdin and taken out of the arguments' ((& $read 'stdin.old.txt') -eq 'stdin: {"cwd":"."}') (& $read 'stdin.old.txt')
@@ -382,7 +382,7 @@ if ($SelfTest) {
             $md -match '(?m)^\| tools \| 0 \| 3 \| same \|') $md
         & $check 'a sibling reference to a script no form runs is listed, even inside a script a form runs; one naming only run scripts is not' (
             $md -match 'docs/use\.md:1:.*unrun\.ps1' -and $md -match 'scripts/w2\.ps1:1:.*elsewhere\.ps1' -and $md -notmatch 'docs/run\.md') $md
-        $again = try { Invoke-PinMeasure -Tools $toolsRepo -Sibling $sib -Old $oldPin -New $newPin -Out $out -Forms 'scripts/pin-forms.psd1' -Bodies $stub | Out-Null; '' } catch { $_.Exception.Message }
+        $again = try { Invoke-PinMeasure -Tools $toolsRepo -Sibling $sib -Old $oldPin -New $newPin -Out $outDir -Forms 'scripts/pin-forms.psd1' -Bodies $stub | Out-Null; '' } catch { $_.Exception.Message }
         & $check 'an -Out that is not empty is refused' ($again -match 'not empty') $again
         # The script itself, from inside the tools repository, with a pin that is not there.
         Copy-Item -LiteralPath $PSCommandPath -Destination (Join-Path $toolsRepo 'scripts/pin-measure.ps1')

@@ -568,6 +568,20 @@ statement of its script. A function's param block is not read.
 `scripts/check.ps1` runs it on `scripts/`. It reads that a split exists, not that it runs before
 the parameter is used; the rest it cannot see is in its header. `-SelfTest` proves it can fail.
 
+## Checking that a variable is spelt one way
+
+PowerShell variable names ignore case, so `$KEYWORD` and `$keyword` are one variable (#285).
+`scripts/variable-case-check.ps1` reads each script in a directory, `-Path`, and fails on a scope
+that spells one variable two ways, naming both and the first line of each. A scope is the script,
+a function or a scriptblock, with its own parameters; a block handed to `ForEach-Object` or
+`Where-Object` is read in the scope around it, as PowerShell runs it there.
+
+    pwsh -File scripts/variable-case-check.ps1 scripts
+
+`scripts/check.ps1` runs it on `scripts/`. It cannot see a variable reached through
+`Get-Variable` or a string, nor a dot-sourced file's; the rest is in its header. `-SelfTest`
+proves it can fail.
+
 ## Measuring a sibling's pin move
 
 `scripts/pin-measure.ps1` measures what moving a sibling's `vendor/grado-factorio-tools` pin
@@ -605,13 +619,13 @@ submodule and runs git through the hooks; it needs no game and no network.
 ## Checking this repository
 
 `scripts/check.ps1` is the one command before a push. It parses every script here, runs each
-self-test that needs neither the game nor the network, runs `param-check.ps1` and
-`markdown-check.ps1` over this repository, holds the agent pages to their size limits, and fails
-on a script parameter this README never names as `-<Name>` (#194), or a script's comment line over
-100 characters; the `pre-commit` hook holds the staged scripts to that rule too, loaded from
-`scripts/comment-line-lib.ps1` (#225). CI runs it, and so does the
-`pre-push` hook, with `-SkipIfPassed`, which runs nothing when a recorded run passed this same
-tree. What it cannot see is in its header.
+self-test that needs neither the game nor the network, runs `param-check.ps1`,
+`variable-case-check.ps1` and `markdown-check.ps1` over this repository, holds the agent pages to
+their size limits, and fails on a script parameter this README never names as `-<Name>` (#194), or a
+script's comment line over 100 characters; the `pre-commit` hook holds the staged scripts to that
+rule too, loaded from `scripts/comment-line-lib.ps1` (#225). CI runs it, and so does the `pre-push`
+hook, with `-SkipIfPassed`, which runs nothing when a recorded run passed this same tree. What it
+cannot see is in its header.
 
     pwsh -File scripts/check.ps1
 

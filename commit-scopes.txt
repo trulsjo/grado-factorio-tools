@@ -11,6 +11,7 @@ resolve-modpack
 resource-counts
 markdown-check
 param-check
+variable-case-check
 pr-body-check
 cd-hook
 hook-skip

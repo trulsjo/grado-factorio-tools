@@ -381,8 +381,8 @@ end)
         return $Value
     }
 
-    function Get-History([string] $Class, [string] $Name) {
-        $row = $history[$Class][$Name]
+    function Get-History([string] $Class, [string] $name) {
+        $row = $history[$Class][$name]
         if (-not $row) { return @{ c = 'base'; ch = @() } }
         return @{ c = $row['c']; ch = (Get-DumpList $row['ch']) }
     }

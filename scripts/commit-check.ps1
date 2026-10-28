@@ -246,10 +246,10 @@ function Test-Wrappable([string] $line) {
 <#
 .SYNOPSIS
     Every rule broken by one message, as a list of sentences. An empty list means it passes.
-    $scopes is the vocabulary to hold the scope to, or nothing; $isTitle reads $raw as a pull
+    $listed is the vocabulary to hold the scope to, or nothing; $isTitle reads $raw as a pull
     request title.
 #>
-function Test-CommitMessage([string[]] $raw, [string[]] $scopes = $SCOPES, [bool] $isTitle = $false, [string] $comment = '#') {
+function Test-CommitMessage([string[]] $raw, [string[]] $listed = $SCOPES, [bool] $isTitle = $false, [string] $comment = '#') {
     $bad   = [System.Collections.Generic.List[string]]::new()
     $lines = Get-MessageLines $raw $comment
 
@@ -296,8 +296,8 @@ function Test-CommitMessage([string[]] $raw, [string[]] $scopes = $SCOPES, [bool
         if ($text.EndsWith('.'))    { $bad.Add('no trailing period on the subject') }
 
         # -cnotin: a scope is a name somebody chose, and `Pack` is not the `pack` that was listed.
-        if ($scope -and $scopes -and $scope -cnotin $scopes) {
-            $bad.Add("'$scope' is not a scope this repository lists: $($scopes -join ', ')")
+        if ($scope -and $listed -and $scope -cnotin $listed) {
+            $bad.Add("'$scope' is not a scope this repository lists: $($listed -join ', ')")
         }
         if ($isTitle -and -not $scope) {
             $bad.Add('a pull request title needs a scope: "<emoji> <type>(<scope>): <subject>"')

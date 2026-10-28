@@ -253,10 +253,10 @@ function Resolve-BundledSelection {
         [Parameter(Mandatory)] [hashtable] $Bundled
     )
 
-    $requested = @($Requested | Where-Object { $_ })
-    if (-not $requested) { return @() }
+    $Requested = @($Requested | Where-Object { $_ })
+    if (-not $Requested) { return @() }
 
-    $unknown = $requested | Where-Object { $_ -notin $Bundled.Keys }
+    $unknown = $Requested | Where-Object { $_ -notin $Bundled.Keys }
     if ($unknown) {
         throw ("names no bundled mod: {0}. Available: {1}." -f
             ($unknown -join ', '), (($Bundled.Keys | Sort-Object) -join ', '))
@@ -266,7 +266,7 @@ function Resolve-BundledSelection {
 
     $enabled = [System.Collections.Generic.HashSet[string]]::new()
     $queue = [System.Collections.Queue]::new()
-    foreach ($r in $requested) { $queue.Enqueue((& $canonical $r)) }
+    foreach ($r in $Requested) { $queue.Enqueue((& $canonical $r)) }
 
     while ($queue.Count -gt 0) {
         $m = $queue.Dequeue()
