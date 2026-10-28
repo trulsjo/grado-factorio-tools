@@ -44,9 +44,8 @@
     the pull request, and the run still exits 0. It exits 1 only when it cannot measure: a pin
     missing, a forms file it cannot read, a clone, fetch or archive that fails, gh or the remote
     out of reach, or, for a {prbody} form, an origin that names no github.com/<owner>/<repository>.
-    The origin may be a URL or a local path, with either slash. It fetches, lists the remote and
-    reads pull requests with gh; nothing downloaded is run but the sibling's own forms and
-    scripts, at origin's main.
+    It fetches, lists the remote and reads pull requests with gh; nothing downloaded is run but
+    the sibling's own forms and scripts, at origin's main.
 
     THE FORMS FILE, the one contract between this repository and each sibling: a PowerShell data
     file the sibling keeps, at -Forms in its clone, read with Import-PowerShellDataFile. It holds
@@ -55,8 +54,9 @@
     from its clone's root; Script, its path from there; and Args, a list of arguments. In an
     argument these are replaced:
     - {tools}: the pin's copy of scripts/, in that clone.
-    - {headmsg}: the path of a file holding the clone's HEAD commit message, byte for byte as
-      `git log -1 --format=%B` prints it: UTF-8 with no BOM, and LF.
+    - {headmsg}: the path of a file holding the clone's HEAD commit message, as
+      `git log -1 --format=%B` prints it, in UTF-8 with no BOM, each line ending in LF; a CR in
+      the message is not kept.
     - {prbody:last-merged:<n>}: the body of one of the sibling's last <n> merged pull requests,
       read with gh. The form is run once for each, as <form>-pr<number>, with the body in place of
       the placeholder and in the environment variable PR_BODY.
@@ -87,10 +87,7 @@
     plain commit, a `!` with no footer, a BREAKING-CHANGE footer and a BREAKING CHANGE footer with
     a trailer in its paragraph, and a sibling holding a forms file, whose origin is a local path,
     and measure the move with pull request bodies read from a stub. Check each form's output and
-    exit at both pins, each placeholder, {headmsg}'s file byte for byte against git's with an emoji
-    in the subject, run under a Latin-1 console that is Latin-1 still after it, the pull request
-    slug read from an origin in each spelling and refused from one with no github.com,
-    breaking.txt and breaking-lib.ps1's rule, forward, back
+    exit at both pins, each placeholder, breaking.txt and breaking-lib.ps1's rule, forward, back
     and over an empty range, table.md's rows, a "differs above the last line"
     row among them, a sibling reference no form runs being listed, by script name, and that a
     write into one clone does not show in the other's run. Then run this script itself: copied
@@ -162,7 +159,7 @@ function Get-LastLine {
 # $Origin, where none is there.
 function Get-RepoSlug {
     param([string] $Origin)
-    if ($Origin -notmatch 'github\.com[:/\\]+([^:/\\]+)[/\\]([^/\\]+?)(?:\.git)?[/\\]?$') {
+    if ($Origin -notmatch 'github\.com[:/\\]([^:/\\]+)[/\\]([^/\\]+?)(?:\.git)?$') {
         throw "the sibling's origin, $Origin, names no github.com repository, so gh cannot read its pull requests."
     }
     "$($Matches[1])/$($Matches[2])"
@@ -365,7 +362,7 @@ if ($SelfTest) {
         $gitMsg = Join-Path $temp 'head-message.git'
         git -C $sib log -1 --format=%B --output=$gitMsg
         $written = [IO.File]::ReadAllBytes((Join-Path $outDir 'head-message.old.msg')); $held = [IO.File]::ReadAllBytes($gitMsg)
-        & $check "{headmsg}'s file is byte for byte what git log -1 --format=%B prints, an emoji in its subject" (
+        & $check "{headmsg}'s file is byte for byte what git log -1 --format=%B prints, for a message with an emoji in its subject and no CR" (
             [Linq.Enumerable]::SequenceEqual($written, $held)) "written: $([BitConverter]::ToString($written)); git: $([BitConverter]::ToString($held))"
         $slugs = @('C:\src\github.com\trulsjo\grado-factorio-modpack.git', 'C:/src/github.com/trulsjo/grado-factorio-modpack.git',
             'git@github.com:trulsjo/grado-factorio-modpack.git', 'https://github.com/trulsjo/grado-factorio-modpack') | ForEach-Object {
