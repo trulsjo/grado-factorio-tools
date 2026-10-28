@@ -588,6 +588,10 @@ function Invoke-SelfTest {
             $after = @(Get-MarkerProblem ("## Evidence`n`n**Before:** none`n`n## Notes`n`n**After:** none`n`n" +
                 "## Merge Danger`n`n**Door:** two-way`n`n## Review`n`n**Blast Radius:** none"))
             ($after -join '|') -eq '`**After:**` is missing under `## Evidence`|`**Blast Radius:**` is missing under `## Merge Danger`' } }
+        @{ Name = 'the fixture''s commits carry a fixed date, so the commit on the branch has the same hash on every run (#288)'; Test = {
+            $want = '527189d0f47d5d2f8dcfa6d70a8eaa251f1a18f4'
+            if ($onBranch -ne $want) { Write-Host "    $onBranch, not $want" }
+            $onBranch -eq $want } }
     )
 
     $failures = 0
