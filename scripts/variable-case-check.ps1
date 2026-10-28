@@ -12,22 +12,26 @@
     showed an error where it went wrong.
 
     THE RULE. Within one scope, every variable is spelt one way. A scope is the script itself, a
-    function, or a scriptblock, each with its own parameters, a function's written after its name
-    as much as in a param block. A scope holds only the variables written in it, not those of a
-    scriptblock or function nested in it, with one exception: a scriptblock handed to
-    ForEach-Object or Where-Object, or to their aliases %, ?, foreach and where, is read as part
-    of the scope it stands in, as PowerShell runs it there (Truls, 2026-10-28, on #285). A name with
-    a scope or drive qualifier, as $script:x, $env:x or $global:x, is outside the rule. Two
-    spellings in one scope fail, naming the script, each spelling and the first line it stands on. A
-    script that does not parse fails, named as such, and so does a -Path that holds no *.ps1. Only
-    the scripts in -Path are read, not those in its subdirectories.
+    function, a scriptblock or a trap's body, each with its own parameters, a function's written
+    after its name as much as in a param block. A scope holds only the variables written in it,
+    not those of one nested in it, with one exception: a scriptblock handed to ForEach-Object or
+    Where-Object, or an alias of either ($CALLER_SCOPE_COMMANDS), module-qualified or not, bare,
+    in parentheses or after -Process:, is read as part of the scope it stands in, as PowerShell
+    runs it there (Truls, 2026-10-28, on #285); but not with -Parallel, which runs it in a
+    runspace of its own. A name with a scope or drive qualifier, as $script:x, $env:x, $global:x
+    or $using:x, is outside the rule. Two spellings in one scope fail, naming the script, each
+    spelling and the first line it stands on. A script that does not parse fails, named as such,
+    and so does a -Path that holds no *.ps1. Only the scripts in -Path are read, not those in its
+    subdirectories.
 
     WHAT IT CANNOT SEE. A variable reached through Get-Variable, Set-Variable or a string. A
     dot-sourced file's variables, which join the caller's scope. Any other scriptblock that runs
-    in its parent's scope, read here as its own: one run with `.` rather than `&`, one held in a
-    variable and then handed to ForEach-Object, and one handed to a .ForEach() or .Where()
-    method. A child scope that reads its parent's variable under another
-    spelling, as & { $X } inside a scope that sets $x, which is one variable read across scopes.
+    in its parent's scope, read here as its own, among them one run with `.` rather than `&`,
+    one held in a variable and then handed to ForEach-Object, one handed to a .ForEach() or
+    .Where() method, and one handed to Measure-Command. A child scope that reads its parent's
+    variable under another spelling, as & { $X } inside a scope that sets $x, which is one
+    variable read across scopes. An automatic variable spelt two ways, as $True and $true, fails
+    like any other.
 
 .PARAMETER Path
     The directory whose scripts are read.
@@ -52,40 +56,69 @@ $ErrorActionPreference = 'Stop'
 # The commands, and their aliases, whose scriptblock runs in the caller's scope (Truls, on #285).
 $CALLER_SCOPE_COMMANDS = @('ForEach-Object', '%', 'foreach', 'Where-Object', '?', 'where')
 
+function Get-CallerScopeCommand {
+    <#  The command that hands the scriptblock $Block to be run in its caller's scope, or nothing:
+        one of $CALLER_SCOPE_COMMANDS, module-qualified or not, the block given bare, in
+        parentheses or after -Process:, and without -Parallel, which runs it in a runspace of
+        its own.  #>
+    param([Parameter(Mandatory)] [System.Management.Automation.Language.ScriptBlockAst] $Block)
+    $at = $Block.Parent
+    if ($at -isnot [System.Management.Automation.Language.ScriptBlockExpressionAst]) { return }
+    $at = $at.Parent
+    while ($at -is [System.Management.Automation.Language.CommandExpressionAst] -or $at -is [System.Management.Automation.Language.PipelineAst] -or
+        $at -is [System.Management.Automation.Language.ParenExpressionAst] -or $at -is [System.Management.Automation.Language.CommandParameterAst]) { $at = $at.Parent }
+    if ($at -isnot [System.Management.Automation.Language.CommandAst]) { return }
+    if (("$($at.GetCommandName())" -replace '^.*\\') -notin $CALLER_SCOPE_COMMANDS) { return }
+    $parallel = $at.CommandElements | Where-Object {
+        $_ -is [System.Management.Automation.Language.CommandParameterAst] -and $_.ParameterName.Length -ge 2 -and 'parallel'.StartsWith($_.ParameterName.ToLowerInvariant()) }
+    if (-not $parallel) { $at }
+}
+
+function Get-VariableScope {
+    <#  The scope $Variable is written in: the nearest scriptblock, or the function whose
+        parameters are written after its name, or a trap's body, which runs in a scope of its own;
+        past a block handed to a command that runs it in its caller's scope.  #>
+    param([Parameter(Mandatory)] [System.Management.Automation.Language.VariableExpressionAst] $Variable)
+    $at = $Variable.Parent
+    while ($true) {
+        while ($at -isnot [System.Management.Automation.Language.ScriptBlockAst] -and $at -isnot [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $at -isnot [System.Management.Automation.Language.TrapStatementAst]) { $at = $at.Parent }
+        if ($at -is [System.Management.Automation.Language.FunctionDefinitionAst]) { return $at.Body }
+        if ($at -is [System.Management.Automation.Language.TrapStatementAst]) { return $at }
+        $command = Get-CallerScopeCommand -Block $at
+        if (-not $command) { return $at }
+        $at = $command
+    }
+}
+
 function Get-CaseClash {
-    <#  Each scope of the script at $File that spells a variable more than one way, as
-        @{ Spellings = @(@{ Name; Line }) }, one entry per spelling at its first line.  #>
+    <#  Each variable that a scope of the script at $File spells more than one way, as
+        @{ Spellings = @(@{ Name; Line }) }, one entry per spelling at its first line, in order of
+        those lines.  #>
     param([Parameter(Mandatory)] [string] $File)
     $errors = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($File, [ref] $null, [ref] $errors)
     if ($errors) { throw "$(Split-Path $File -Leaf) does not parse: line $($errors[0].Extent.StartLineNumber), $($errors[0].Message)" }
-    # Not @{} or [ordered]@{}: their keys ignore case, which is what is being looked for, and
-    # $h.Count of one would read a key named count.
+    # Not @{}: a key such as values would shadow .Values, which is read below.
     $scopes = [System.Collections.Generic.Dictionary[object, object]]::new()
     foreach ($v in $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.VariableExpressionAst] }, $true)) {
         $name = $v.VariablePath.UserPath
-        # $script:x, $env:x and the like name a scope or a drive, not this one.
-        if ($name.Contains(':')) { continue }
-        # The nearest scriptblock, or the function whose parameters are written after its name;
-        # past a block handed to ForEach-Object or Where-Object, which runs in its caller's scope.
-        $at = $v.Parent
-        while ($true) {
-            while ($at -isnot [System.Management.Automation.Language.ScriptBlockAst] -and $at -isnot [System.Management.Automation.Language.FunctionDefinitionAst]) { $at = $at.Parent }
-            if ($at -is [System.Management.Automation.Language.FunctionDefinitionAst]) { $at = $at.Body; break }
-            $command = if ($at.Parent -is [System.Management.Automation.Language.ScriptBlockExpressionAst] -and $at.Parent.Parent -is [System.Management.Automation.Language.CommandAst]) { $at.Parent.Parent.GetCommandName() }
-            if ($command -notin $CALLER_SCOPE_COMMANDS) { break }
-            $at = $at.Parent.Parent
-        }
+        # $script:x, $env:x and the like name a scope or a drive, not this one; $using:x keeps its
+        # qualifier on the expression around it.
+        if ($name.Contains(':') -or $v.Parent -is [System.Management.Automation.Language.UsingExpressionAst]) { continue }
+        $at = Get-VariableScope -Variable $v
         if (-not $scopes.ContainsKey($at)) { $scopes[$at] = [System.Collections.Generic.Dictionary[string, object]]::new([StringComparer]::OrdinalIgnoreCase) }
         $variable = $scopes[$at]
-        if (-not $variable.ContainsKey($name)) { $variable[$name] = [System.Collections.Generic.List[object]]::new() }
-        # In order of appearance, so the first line seen of a spelling is its first.
+        if (-not $variable.ContainsKey($name)) { $variable[$name] = [System.Collections.Generic.Dictionary[string, int]]::new([StringComparer]::Ordinal) }
+        # The smallest line, as the walk does not go in the order of the source: a loop's
+        # condition comes before its body.
         $spellings = $variable[$name]
-        if (-not ($spellings | Where-Object { $_.Name -ceq $name })) { $spellings.Add(@{ Name = $name; Line = $v.Extent.StartLineNumber }) }
+        $line = $v.Extent.StartLineNumber
+        if (-not $spellings.ContainsKey($name) -or $line -lt $spellings[$name]) { $spellings[$name] = $line }
     }
     foreach ($variable in $scopes.Values) {
         foreach ($spellings in $variable.Values) {
-            if ($spellings.Count -gt 1) { @{ Spellings = @($spellings) } }
+            if ($spellings.Count -gt 1) { @{ Spellings = @($spellings.GetEnumerator() | Sort-Object Value, Key | ForEach-Object { @{ Name = $_.Key; Line = $_.Value } }) } }
         }
     }
 }
@@ -113,7 +146,18 @@ function Invoke-SelfTest {
             $foreach = & $read "`$KEYWORD = '^x'`n1 | ForEach-Object { `$keyword = '' }"
             $aliases = & $read "`$Out = 1`n1 | % { 2 | ? { `$out } }"
             $called = & $read "`$KEYWORD = '^x'`n& { `$keyword = '' }"
-            $foreach -eq 'KEYWORD@1,keyword@2' -and $aliases -eq 'Out@1,out@2' -and $called -eq '' } }
+            # Each name of the ruling, and the forms a block is handed in.
+            $named = & $read "`$A = 1`n1 | Where-Object { `$a }`n`$B = 1`n1 | foreach { `$b }`n`$C = 1`n1 | where { `$c }"
+            $forms = & $read "`$D = 1`n1 | Microsoft.PowerShell.Core\ForEach-Object { `$d }`n`$E = 1`n1 | ForEach-Object ({ `$e })`n`$F = 1`n1 | ForEach-Object -Process:{ `$f }"
+            # -Parallel runs the block in a runspace of its own, and -Pa is -Parallel too.
+            $parallel = & $read "`$G = 1`n1 | ForEach-Object -Parallel { `$g = 2 }`n1 | % -Pa { `$g }"
+            $foreach -eq 'KEYWORD@1,keyword@2' -and $aliases -eq 'Out@1,out@2' -and $called -eq '' -and
+                $named -eq 'A@1,a@2|B@3,b@4|C@5,c@6' -and $forms -eq 'D@1,d@2|E@3,e@4|F@5,f@6' -and $parallel -eq '' } }
+        @{ Name = 'a trap''s body is a scope of its own, and each spelling is named at its first line though the walk reads a loop''s condition first'; Test = {
+            $trap = & $read "`$X = 1`ntrap { `$x = 2; continue }"
+            $loop = & $read "`$A = 0`ndo {`n    `$a++`n} while (`$a -lt 3)"
+            $trapFirst = & $read "`$x = 1`n& { trap { `$y; continue }; `$Y }"
+            $trap -eq '' -and $loop -eq 'A@1,a@3' -and $trapFirst -eq '' } }
         @{ Name = 'a nested scriptblock''s own $Name parameter, in a function that uses $name, passes, and so does a nested function''s'; Test = {
             $block = & $read "function f {`n    `$name = 'a'`n    `$g = { param(`$Name) `$Name }`n    & `$g `$name`n}"
             $nested = & $read "function f {`n    `$name = 'a'`n    function g([string] `$Name) { `$Name }`n    g `$name`n}"
@@ -122,9 +166,10 @@ function Invoke-SelfTest {
             $block = & $read "function f {`n    param(`$Out)`n    `$out = 'x'`n}"
             $after = & $read "function f([string] `$Out) {`n    `$out = 'x'`n}"
             $block -eq 'Out@2,out@3' -and $after -eq 'Out@1,out@2' } }
-        @{ Name = '$script:X beside $x passes, and so do $env:Path beside $path and $env:PATH, and $global:N beside $n and $global:n'; Test = {
+        @{ Name = '$script:X beside $x passes, and so do $env:Path beside $path and $env:PATH, $global:N beside $n and $global:n, and $using:k beside $K'; Test = {
             $got = & $read "`$x = 1`n`$script:X = 2`n`$path = `$env:Path`n`$p = `$env:PATH`n`$n = `$global:N`n`$global:n = 1"
-            $got -eq '' } }
+            $using = & $read "function f {`n    `$K = 1`n    1 | ForEach-Object -Parallel { `$using:k }`n    & { `$using:k }`n}"
+            $got -eq '' -and $using -eq '' } }
         @{ Name = 'one spelling used many times passes, and three spellings are named each at its first line'; Test = {
             $one = & $read "`$a = 1`n`$a++`n`$a"
             $three = & $read "`$Abc = 1`n`$abc = 2`n`$Abc`n`$ABC = 3"

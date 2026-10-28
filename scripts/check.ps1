@@ -2,12 +2,11 @@
 .SYNOPSIS
     Parses every script under scripts/, holds their comment lines to a width, reads their list
     parameters with param-check.ps1 and their variables' spelling with variable-case-check.ps1,
-    holds README.md to naming each of their parameters, runs
-    every self-test that needs neither the game nor the network, holds the agent pages to their
-    size limits, and runs markdown-check.ps1 over the tracked Markdown. Exit 0 means all of that
-    held. With -SkipIfPassed, as the pre-push hook runs
-    it, exit 0 may instead mean that nothing ran, because a run recorded that this same tree
-    passed it; the run then says so.
+    holds README.md to naming each of their parameters, runs every self-test that needs neither
+    the game nor the network, holds the agent pages to their size limits, and runs
+    markdown-check.ps1 over the tracked Markdown. Exit 0 means all of that held. With
+    -SkipIfPassed, as the pre-push hook runs it, exit 0 may instead mean that nothing ran,
+    because a run recorded that this same tree passed it; the run then says so.
 
 .DESCRIPTION
     THE ONE COMMAND BEFORE A PUSH (grado-factorio-tools#60). The only gate here was commit-msg,
@@ -124,8 +123,9 @@
     a folder of fixture scripts outside it with lists of their own, some of them run as
     self-tests, and the one that holds Get-ReadmeProblem over a fixture script and README there;
     and nothing else. The run's own call of each loop and of Get-ReadmeProblem, with this folder,
-    this README and this script's lists, is not run: a run that stopped making a call, or passed
-    it a list less, would still pass. Needs git, and no game.
+    this README and this script's lists, is not run, nor its run of param-check.ps1 and
+    variable-case-check.ps1 over this folder: a run that stopped making a call, or passed it a
+    list less, would still pass. Needs git, and no game.
 
 .EXAMPLE
     pwsh -File scripts/check.ps1
