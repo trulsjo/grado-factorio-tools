@@ -91,6 +91,11 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
   with a failing body, its check piped to `tail`, whose 0 let `&&` go on. The chain is still
   written out, because the hook checks the body only, not the title, and a person's terminal and
   a sibling without the hook have no hook.
+  Under `-CiteSiblings`, a statement about consumers in general, or about a fixture a self-test
+  builds, says *consumer*, [GLOSSARY.md](../../GLOSSARY.md)'s word for a repository that resolves
+  a tool from here; one about a sibling names it, with its commit and the date it was read
+  (#287). The check reads *sibling* as naming one: PR #283's first body was refused for five generic
+  statements so worded, by that session's account (2026-10-28).
 - **A pull request carries one `Closes #N` line per ticket it closes**, and no other closing
   keyword before an issue reference: GitHub closes on "closed: #103" in a sentence too, as on
   PR #105 (2026-10-11), and `scripts/pr-body-check.ps1` fails such a line. Its title is checked;
