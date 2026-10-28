@@ -588,10 +588,12 @@ function Invoke-SelfTest {
             $after = @(Get-MarkerProblem ("## Evidence`n`n**Before:** none`n`n## Notes`n`n**After:** none`n`n" +
                 "## Merge Danger`n`n**Door:** two-way`n`n## Review`n`n**Blast Radius:** none"))
             ($after -join '|') -eq '`**After:**` is missing under `## Evidence`|`**Blast Radius:**` is missing under `## Merge Danger`' } }
-        @{ Name = 'the fixture''s commits carry a fixed date, so the commit on the branch has the same hash on every run (#288)'; Test = {
-            $want = '527189d0f47d5d2f8dcfa6d70a8eaa251f1a18f4'
-            if ($onBranch -ne $want) { Write-Host "    $onBranch, not $want" }
-            $onBranch -eq $want } }
+        @{ Name = 'the fixture''s commits carry a fixed author and committer date, so each run makes the same hashes (#288)'; Test = {
+            # The dates, not a hash: a hash changes with the messages and with git's object format.
+            $dates = @($root, $onMain, $onBranch | ForEach-Object { git -C $repo log -1 --format='%aI %cI' $_ })
+            $want = '2026-01-01T00:00:00+00:00 2026-01-01T00:00:00+00:00'
+            if ($dates -ne $want) { Write-Host "    $($dates -join ' | ')" }
+            $dates.Count -eq 3 -and -not ($dates -ne $want) } }
     )
 
     $failures = 0
