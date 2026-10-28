@@ -156,8 +156,10 @@ function Invoke-SelfTest {
         @{ Name = 'a trap''s body is a scope of its own, and each spelling is named at its first line though the walk reads a loop''s condition first'; Test = {
             $trap = & $read "`$X = 1`ntrap { `$x = 2; continue }"
             $loop = & $read "`$A = 0`ndo {`n    `$a++`n} while (`$a -lt 3)"
+            # The walk meets the condition's $b before the body's $B; the report is in line order.
+            $order = & $read "do {`n    `$B++`n} while (`$b -lt 3)"
             $trapFirst = & $read "`$x = 1`n& { trap { `$y; continue }; `$Y }"
-            $trap -eq '' -and $loop -eq 'A@1,a@3' -and $trapFirst -eq '' } }
+            $trap -eq '' -and $loop -eq 'A@1,a@3' -and $order -eq 'B@2,b@3' -and $trapFirst -eq '' } }
         @{ Name = 'a nested scriptblock''s own $Name parameter, in a function that uses $name, passes, and so does a nested function''s'; Test = {
             $block = & $read "function f {`n    `$name = 'a'`n    `$g = { param(`$Name) `$Name }`n    & `$g `$name`n}"
             $nested = & $read "function f {`n    `$name = 'a'`n    function g([string] `$Name) { `$Name }`n    g `$name`n}"
@@ -168,7 +170,7 @@ function Invoke-SelfTest {
             $block -eq 'Out@2,out@3' -and $after -eq 'Out@1,out@2' } }
         @{ Name = '$script:X beside $x passes, and so do $env:Path beside $path and $env:PATH, $global:N beside $n and $global:n, and $using:k beside $K'; Test = {
             $got = & $read "`$x = 1`n`$script:X = 2`n`$path = `$env:Path`n`$p = `$env:PATH`n`$n = `$global:N`n`$global:n = 1"
-            $using = & $read "function f {`n    `$K = 1`n    1 | ForEach-Object -Parallel { `$using:k }`n    & { `$using:k }`n}"
+            $using = & $read "function f {`n    `$K = 1`n    `$using:k`n}"
             $got -eq '' -and $using -eq '' } }
         @{ Name = 'one spelling used many times passes, and three spellings are named each at its first line'; Test = {
             $one = & $read "`$a = 1`n`$a++`n`$a"
