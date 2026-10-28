@@ -29,8 +29,11 @@
       breaking  A `!` before the colon and a footer, both or neither. A footer is a body line
                 opening `BREAKING CHANGE:` or `BREAKING-CHANGE:`, in upper case, the rule
                 breaking-lib.ps1 reads a breaking commit by (grado-factorio-tools#282). A footer
-                with no `!` is refused, as the library would list it. All seven breaking
-                commits in history carry one, so this too is safe to enforce.
+                with no `!` is refused, as the library would list it. Safe to enforce: every
+                footer in the three repositories' histories sits on a `!`, 3 of 313 commits here
+                at 6b6b7fd, 8 of 446 in grado-factorio-modpack at 9cfcdd3 and 12 of 1143 in
+                realistic-fusion-refreshed at c7b46a5 (2026-10-28). Subjects skipped below, as
+                `Revert "..."` and `Merge ...`, are not asked, and may carry either alone.
       blank     A blank line between the subject and the body.
       wrap      Every body line, 72 characters or fewer.
       scope     Only with -ScopeFile: the scope has to be one the file lists. A commit on
@@ -314,7 +317,8 @@ function Test-CommitMessage([string[]] $raw, [string[]] $listed = $SCOPES, [bool
                 if ($lines[$i] -cmatch '^BREAKING[ -]CHANGE:') { $i }
             })
             if ($bang -and -not $footers) {
-                $bad.Add('a "!" before the colon needs a "BREAKING CHANGE:" footer explaining the migration')
+                $bad.Add(('a "!" before the colon needs a "BREAKING CHANGE:" footer explaining the migration: ' +
+                    'a line opening "BREAKING CHANGE:" or "BREAKING-CHANGE:", in upper case'))
             }
             if (-not $bang) {
                 foreach ($i in $footers) {
@@ -382,6 +386,9 @@ if ($SelfTest) {
            msg = @('✨ feat(pack): no bang', '', 'BREAKING CHANGE: or BREAKING-CHANGE: line, wrapped.') }
         @{ why = 'body line 5 opens with "BREAKING-CHANGE:"'
            msg = @('✨ feat(pack): no bang', '', 'Body.', '', 'BREAKING-CHANGE: the other spelling.') }
+        # Each footer line is named, with its text, not the first alone.
+        @{ why = 'body line 5 opens with "BREAKING-CHANGE:" but the subject has no "!" before the colon: add the "!", or reword the line so it does not open with the token: BREAKING-CHANGE: two.'
+           msg = @('✨ feat(pack): no bang', '', 'BREAKING CHANGE: one.', '', 'BREAKING-CHANGE: two.') }
         @{ why = 'needs a "BREAKING CHANGE:" footer'
            msg = @('✨ feat(power)!: break a save', '', 'Body.', '', 'breaking change: lower case.') }
         @{ why = 'blank line';      msg = @('🐛 fix(repo): a subject', 'body with no blank line') }

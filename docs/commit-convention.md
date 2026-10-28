@@ -75,7 +75,9 @@ Put `!` before the colon *and* a `BREAKING CHANGE:` footer explaining the migrat
 The check asks for both or neither (#282). A footer is a body line opening `BREAKING CHANGE:` or
 `BREAKING-CHANGE:` in upper case, as `scripts/breaking-lib.ps1` reads one, and that library lists
 a commit with either half as breaking. So a body line that only names the token must not open
-with it: wrap the line around it, or the check refuses the commit for its missing `!`.
+with it: wrap the line around it, or the check refuses the commit for its missing `!`. A subject
+the check skips, below, is not asked: git's `Revert "…"` of a `!` commit carries the `!` with no
+footer, and the library lists it.
 
 **What counts as a breaking change is each repository's own**, and stays in its `CLAUDE.md`.
 This page owns the mechanism; the definition is domain knowledge, and this repository's rule is
