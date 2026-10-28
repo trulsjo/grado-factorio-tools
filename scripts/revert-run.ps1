@@ -24,11 +24,14 @@
 
     File and SelfTest are paths from the copy's root. Args is optional, handed to the self-test
     after -SelfTest. Lines is optional, 1 unless given. Find and Replace are exact text, matched
-    with case; a line break in either is read as the file's own, CRLF where the file has one.
+    with case; a line break in either, LF or CRLF, is read as the file's own.
 
-    EACH REVERT, IN ORDER. Refused, and not run, where Find occurs in File other than exactly
-    once, naming the count, or where the edit changes no line or more than Lines, removed or
-    added, by `git -C <copy> diff --numstat`; a refused revert leaves the file as it was.
+    EACH REVERT, IN ORDER. Refused, and not run, where Find is empty; where File is not a file
+    git tracks in the copy under that very name, as one outside the copy, an untracked one, or
+    one named in another case, which git could not restore; where Find occurs in File other than
+    exactly once, naming the count; where git reads File as binary; or where the edit changes no
+    line or more than Lines, removed or added, by `git -C <copy> diff --numstat`. A refused revert
+    leaves the file as it was.
     Otherwise `git -C <copy> diff --stat` is printed and the self-test is run, as
     `pwsh -NoProfile -File <SelfTest> -SelfTest <Args>`, from the copy's root. Its result is:
     *fails*, it exited other than 0 and its last summary line is `FAILED - self-test...`;
@@ -102,21 +105,33 @@ function Invoke-Revert {
     param([Parameter(Mandatory)] [string] $Root, [Parameter(Mandatory)] [hashtable] $Revert)
     $row = @{ Name = $Revert.Name; Result = 'refused'; Exit = ''; Summary = '' }
     $lines = if ($Revert.ContainsKey('Lines')) { [int] $Revert.Lines } else { 1 }
-    $path = Join-Path $Root $Revert.File
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { $row.Summary = "$($Revert.File) is not in the copy"; return $row }
+    $find = [string] $Revert.Find; $replace = [string] $Revert.Replace
+    # An empty Find occurs everywhere, and counting it would never end.
+    if (-not $find) { $row.Summary = 'Find is empty'; return $row }
+    # Only a file git tracks under this very name can be restored by git: not one outside the
+    # copy, an untracked one, or one named in another case, which Windows would let be written.
+    $file = $Revert.File -replace '\\', '/'
+    $tracked = @(git -C $Root ls-files -- $file 2>$null)
+    if ($LASTEXITCODE -or $tracked.Count -ne 1 -or $tracked[0] -cne $file) { $row.Summary = "$($Revert.File) is not a file git tracks in the copy under that name"; return $row }
+    $path = Join-Path $Root $file
     $bytes = [IO.File]::ReadAllBytes($path)
     $bom = $bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF
     $text = [Text.UTF8Encoding]::new($false).GetString($bytes, $(if ($bom) { 3 } else { 0 }), $bytes.Length - $(if ($bom) { 3 } else { 0 }))
-    $find = [string] $Revert.Find; $replace = [string] $Revert.Replace
-    if ($text.Contains("`r`n")) { $find = $find -replace '(?<!\r)\n', "`r`n"; $replace = $replace -replace '(?<!\r)\n', "`r`n" }
+    # A line break in the list, LF or CRLF, is read as the file's own.
+    $find = $find -replace '\r\n', "`n"; $replace = $replace -replace '\r\n', "`n"
+    if ($text.Contains("`r`n")) { $find = $find -replace '\n', "`r`n"; $replace = $replace -replace '\n', "`r`n" }
     $count = Get-OccurrenceCount -Text $text -Find $find
-    if ($count -ne 1) { $row.Summary = "Find occurs $count times in $($Revert.File), not once"; return $row }
+    if ($count -ne 1) { $row.Summary = "Find occurs $count times in $file, not once"; return $row }
     $at = $text.IndexOf($find, [StringComparison]::Ordinal)
     $edited = $text.Substring(0, $at) + $replace + $text.Substring($at + $find.Length)
     [IO.File]::WriteAllText($path, $edited, [Text.UTF8Encoding]::new($bom))
     try {
-        $numstat = "$(git -C $Root diff --numstat -- $Revert.File)".Trim()
-        $added, $removed = if ($numstat) { @($numstat -split '\s+')[0..1] | ForEach-Object { [int] $_ } } else { 0, 0 }
+        $numstat = "$(git -C $Root diff --numstat -- $file)".Trim()
+        if ($LASTEXITCODE) { throw "git diff --numstat -- $file failed in $Root." }
+        $counts = if ($numstat) { @($numstat -split '\s+')[0..1] } else { '0', '0' }
+        # git counts no lines of a file it reads as binary, and prints - for each.
+        if ($counts -contains '-') { $row.Summary = "git reads $file as binary, so its changed lines cannot be counted"; return $row }
+        $added, $removed = $counts | ForEach-Object { [int] $_ }
         if (-not ($added -or $removed)) { $row.Summary = 'the edit changes no line'; return $row }
         if ($added -gt $lines -or $removed -gt $lines) { $row.Summary = "the edit changes $added added and $removed removed lines, more than Lines = $lines"; return $row }
         Write-Host "revert-run: $($Revert.Name), git -C <copy> diff --stat:"
@@ -130,8 +145,8 @@ function Invoke-Revert {
         $row
     }
     finally {
-        git -C $Root checkout -q -- $Revert.File
-        if ($LASTEXITCODE) { throw "git checkout -- $($Revert.File) failed in $Root." }
+        git -C $Root checkout -q -- $file
+        if ($LASTEXITCODE) { throw "git checkout -- $file failed in $Root." }
     }
 }
 
@@ -195,7 +210,12 @@ function Invoke-SelfTest {
     & $git init --quiet
     & $git config core.autocrlf false
     [IO.File]::WriteAllText($stubPath, "$stub`n")
-    & $git add stub.ps1
+    # A file git reads as binary, and an ignored one, which leaves the copy clean.
+    [IO.File]::WriteAllBytes((Join-Path $repo 'bin.dat'), [byte[]] @(0x61, 0x62, 0x00, 0x63, 0x0A))
+    Set-Content -LiteralPath (Join-Path $repo '.gitignore') -Value 'ignored.txt'
+    Set-Content -LiteralPath (Join-Path $repo 'ignored.txt') -Value 'ignored one'
+    Set-Content -LiteralPath (Join-Path $temp 'outside.txt') -Value 'outside one'
+    & $git add stub.ps1 bin.dat .gitignore
     & $git commit --quiet -m stub
     $list = { param([string] $name, [string] $text) $p = Join-Path $temp "$name.psd1"; Set-Content -LiteralPath $p -Value $text; $p }
     $one = { param([string] $Find, [string] $Replace, [string] $More = '') "@{ Name = 'R'; File = 'stub.ps1'; Find = '$Find'; Replace = '$Replace'; SelfTest = 'stub.ps1'$More }" }
@@ -214,6 +234,17 @@ function Invoke-SelfTest {
             $got.Code -eq 0 -and @([regex]::Matches($got.Text, '(?m)^revert-run: R -- refused: Find occurs 0 times in stub\.ps1')).Count -eq 2 -and
                 $got.Text -match '(?m)^revert-run: R -- refused: Find occurs 2 times in stub\.ps1' -and
                 $got.Text -match '(?m)^revert-run: R -- refused: the edit changes no line' -and (& $same) } }
+        @{ Name = 'an empty Find, a File outside the copy, ignored or named in another case, and a binary File are refused, and no file is changed'; Test = {
+            $at = { param($file, $find) "@{ Name = 'R'; File = '$file'; Find = '$find'; Replace = 'zz'; SelfTest = 'stub.ps1' }" }
+            $p = & $list 'refused' "@{ Reverts = @( $(& $at 'stub.ps1' ''), $(& $at '../outside.txt' 'outside'), $(& $at 'ignored.txt' 'ignored'), $(& $at 'STUB.PS1' 'alpha'), $(& $at 'bin.dat' 'ab') ) }"
+            $got = & $run $p
+            Write-Host ($got.Text.TrimEnd() -replace '(?m)^', '    ')
+            $untouched = (Get-Content -LiteralPath (Join-Path $temp 'outside.txt') -Raw).Trim() -eq 'outside one' -and
+                (Get-Content -LiteralPath (Join-Path $repo 'ignored.txt') -Raw).Trim() -eq 'ignored one' -and
+                "$([IO.File]::ReadAllBytes((Join-Path $repo 'bin.dat')))" -eq '97 98 0 99 10'
+            $got.Code -eq 0 -and $got.Text -match '(?m)^revert-run: R -- refused: Find is empty' -and
+                @([regex]::Matches($got.Text, '(?m)^revert-run: R -- refused: \S+ is not a file git tracks in the copy under that name')).Count -eq 3 -and
+                $got.Text -match '(?m)^revert-run: R -- refused: git reads bin\.dat as binary' -and $untouched -and (& $same) } }
         @{ Name = 'an edit changing two lines is refused with Lines unset, and runs with Lines = 2'; Test = {
             $two = { param($more) & $one "`$b = ''beta''`n`$c = ''gamma''" "`$b = ''x''`n`$c = ''y''" $more }
             $refused = & $run (& $list 'two' "@{ Reverts = @( $(& $two '') ) }")
@@ -253,7 +284,7 @@ function Invoke-SelfTest {
             finally { & $git checkout -q -- stub.ps1 }
             Write-Host ($got.Text.TrimEnd() -replace '(?m)^', '    ')
             $got.Code -eq 1 -and $got.Text -match 'has uncommitted changes, so no revert was run: stub\.ps1' -and $got.Text -notmatch '(?m)^revert-run: R -- ' -and (& $same) } }
-        @{ Name = 'a Find with a line break matches a CRLF file, a file with a byte-order mark keeps it, and a list it cannot read, or one with no Reverts or a field missing, fails'; Test = {
+        @{ Name = 'a Find with a line break matches a CRLF file, and one from a CRLF list an LF file, a file with a byte-order mark keeps it, and a list it cannot read, or one with no Reverts or a field missing, fails'; Test = {
             $crlf = Join-Path $temp 'crlf'
             New-Item -ItemType Directory -Path $crlf | Out-Null
             git -C $crlf init --quiet; git -C $crlf config core.autocrlf false
@@ -265,10 +296,15 @@ function Invoke-SelfTest {
             $p = & $list 'crlf' "@{ Reverts = @( $(& $one "`$a = ''alpha''`n`$b = ''beta''" "`$a = ''other''`n`$b = ''beta''"), $bom ) }"
             $matched = & pwsh -NoProfile -File $PSCommandPath -Copy $crlf -List $p 2>&1 | Out-String
             Write-Host ($matched.TrimEnd() -replace '(?m)^', '    ')
+            # A list saved with CRLF, its Find spanning two lines of the LF stub.
+            $crlfList = & $list 'crlf-list' "@{ Reverts = @( $(& $one "`$a = ''alpha''`n`$b = ''beta''" "`$a = ''other''`n`$b = ''beta''") ) }"
+            [IO.File]::WriteAllText($crlfList, ([IO.File]::ReadAllText($crlfList) -replace '\r?\n', "`r`n"))
+            $fromCrlf = & $run $crlfList
             $broken = & $run (& $list 'broken' '@{ Reverts = ')
             $empty = & $run (& $list 'empty' '@{ Other = 1 }')
             $field = & $run (& $list 'field' "@{ Reverts = @( @{ Name = 'R'; File = 'stub.ps1' } ) }")
             $matched -match '(?m)^revert-run: R -- fails \(exit 1\)' -and $matched -match '(?m)^revert-run: B -- passes \(exit 0\)' -and
+                $fromCrlf.Text -match '(?m)^revert-run: R -- fails \(exit 1\)' -and (& $same) -and
                 $broken.Code -eq 1 -and $broken.Text -match 'cannot be read' -and $empty.Code -eq 1 -and $empty.Text -match 'holds no Reverts' -and
                 $field.Code -eq 1 -and $field.Text -match 'lacks Find, Replace, SelfTest' } }
     )
