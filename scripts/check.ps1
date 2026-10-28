@@ -30,9 +30,9 @@
     passes prints one line here; one that fails prints everything it said. One that exits 0
     fails where its last summary line, a line opening `OK - self-test` or `FAILED - self-test`,
     which revert-run.ps1 reads too, is missing or is FAILED (grado-factorio-tools#297); or where it
-    ran no case: it never says `self-test`, or says it passed with 0 cases, all of them or 0 of
-    some, as a -NoGame broken to run nothing would (grado-factorio-tools#181). It reads the output,
-    so a self-test that counts a case it did not run is not seen.
+    says it passed with 0 cases, all of them or 0 of some, as a -NoGame broken to run nothing would
+    (grado-factorio-tools#181). It reads the output, so a self-test that counts a case it did not
+    run is not seen.
 
     A COMMENT OR HEADER LINE OF A SCRIPT HERE IS HELD TO $COMMENT_LINE_LIMIT, the Markdown's limit
     (grado-factorio-tools#181): this header had a line of 147 characters, from
