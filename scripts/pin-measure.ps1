@@ -368,10 +368,12 @@ if ($SelfTest) {
         & $check "{headmsg}'s file is byte for byte what git log -1 --format=%B prints, an emoji in its subject" (
             [Linq.Enumerable]::SequenceEqual($written, $held)) "written: $([BitConverter]::ToString($written)); git: $([BitConverter]::ToString($held))"
         $slugs = @('C:\src\github.com\trulsjo\grado-factorio-modpack.git', 'C:/src/github.com/trulsjo/grado-factorio-modpack.git',
-            'git@github.com:trulsjo/grado-factorio-modpack.git', 'https://github.com/trulsjo/grado-factorio-modpack') | ForEach-Object { Get-RepoSlug $_ }
-        $refused = try { Get-RepoSlug 'C:\src\elsewhere\grado-factorio-modpack.git'; '' } catch { $_.Exception.Message }
+            'git@github.com:trulsjo/grado-factorio-modpack.git', 'https://github.com/trulsjo/grado-factorio-modpack') | ForEach-Object {
+            try { Get-RepoSlug $_ } catch { "threw: $($_.Exception.Message)" } }
+        $refused = try { "returned: $(Get-RepoSlug 'C:\src\elsewhere\grado-factorio-modpack.git')" } catch { $_.Exception.Message }
         & $check 'the slug is read from an origin in backslashes, in forward slashes, as git@github.com: and as https://github.com/; one naming no github.com is refused, naming it' (
-            ($slugs | Where-Object { $_ -ceq 'trulsjo/grado-factorio-modpack' }).Count -eq 4 -and $refused -match 'C:\\src\\elsewhere\\grado-factorio-modpack\.git') "$($slugs -join ', ') | $refused"
+            @($slugs | Where-Object { $_ -ceq 'trulsjo/grado-factorio-modpack' }).Count -eq 4 -and
+            $refused -match '^the sibling''s origin, C:\\src\\elsewhere\\grado-factorio-modpack\.git, names no github\.com repository') "$($slugs -join ', ') | $refused"
         $read = { param($name) $p = Join-Path $outDir $name; if (Test-Path -LiteralPath $p) { (Get-Content -LiteralPath $p -Raw).Trim() } else { "<no $name>" } }
         $names = 'same', 'above', 'last', 'stdin', 'headmsg', 'prbody-pr8', 'prbody-pr7', 'tools', 'writes', 'marker'
         $missing = @(foreach ($f in $names) { foreach ($pin in 'old', 'new') { foreach ($ext in 'txt', 'exit') { if (-not (Test-Path -LiteralPath (Join-Path $outDir "$f.$pin.$ext"))) { "$f.$pin.$ext" } } } })
