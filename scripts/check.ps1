@@ -26,17 +26,18 @@
     two ways that differ only in case (grado-factorio-tools#285). Then -SelfTest of each script
     in $SELF_TESTS, each in a pwsh of its own, so one script's `exit` does not end the run, and
     -SelfTest -NoGame of each in $NO_GAME_CASES: the cases of a script that needs the game which
-    read no game's output but a log written for them (grado-factorio-tools#175). They run at once,
-    as many as the machine has processors (grado-factorio-tools#296), and are printed in list
-    order once all have finished, each with its own time. Two self-tests that collide when run
-    together, over a shared path or setting, fail only on a run that happens to overlap them:
-    fourteen full runs on Windows passed when this was made. A self-test that passes prints one
-    line here; one that fails prints everything it said. One that exits 0 fails where its last
-    summary line, a line opening `OK - self-test` or `FAILED - self-test`, which revert-run.ps1
-    reads too, is missing or is FAILED (grado-factorio-tools#297); or where it says it passed with
-    0 cases, all of them or 0 of some, as a -NoGame broken to run nothing would
-    (grado-factorio-tools#181). It reads the output, so a self-test that counts a case it did not
-    run is not seen.
+    read no game's output but a log written for them (grado-factorio-tools#175). They run four at
+    a time, or as many as the machine has processors where that is fewer, and at least two
+    (grado-factorio-tools#296): twelve at a time ended no sooner and took the self-tests twice as
+    long in all. They are printed in list order once all have finished, each with its own time.
+    Two self-tests that collide when run together, over a shared path or setting, fail only on a
+    run that happens to overlap them: fifteen full runs on Windows passed when this was made. A
+    self-test that passes prints one line here; one that fails prints everything it said. One that
+    exits 0 fails where its last summary line, a line opening `OK - self-test` or
+    `FAILED - self-test`, which revert-run.ps1 reads too, is missing or is FAILED
+    (grado-factorio-tools#297); or where it says it passed with 0 cases, all of them or 0 of
+    some, as a -NoGame broken to run nothing would (grado-factorio-tools#181). It reads the output,
+    so a self-test that counts a case it did not run is not seen.
 
     A COMMENT OR HEADER LINE OF A SCRIPT HERE IS HELD TO $COMMENT_LINE_LIMIT, the Markdown's limit
     (grado-factorio-tools#181): this header had a line of 147 characters, from
@@ -118,8 +119,8 @@
     ten times slower while review lanes and the game were running beside it. No step here carries
     that. Each line prints its seconds so two runs can be compared; the measurement is in
     docs/measurements.md. Run at once, a self-test takes longer than alone, as the others share the
-    processors: the slowest, follow-pin.ps1's, about 80 s alone and 130 to 150 s here, so the run
-    ends no sooner than it does (grado-factorio-tools#296).
+    processors: the slowest, follow-pin.ps1's, about 73 s alone and 124 s here four at a time,
+    so the run ends no sooner than it does (grado-factorio-tools#296).
 
 .PARAMETER SkipIfPassed
     Run nothing when the record says this tree passed, as above.
@@ -295,7 +296,7 @@ function Get-ReadmeProblem {
 # line for each, with its own time, in list order; returns what failed.
 function Invoke-SelfTestRun {
     param([string] $Folder, [string[]] $SelfTests, [string[]] $NoGameCases,
-          [int] $ThrottleLimit = [Math]::Max(2, [Environment]::ProcessorCount))
+          [int] $ThrottleLimit = [Math]::Max(2, [Math]::Min(4, [Environment]::ProcessorCount)))
     $runs = @(@($SelfTests | Where-Object { $_ } | ForEach-Object { , @($_, '-SelfTest') }) +
               @($NoGameCases | Where-Object { $_ } | ForEach-Object { , @($_, '-SelfTest', '-NoGame') }))
     if (-not $runs) { return }
@@ -451,6 +452,13 @@ if ($SelfTest) {
                 $boom = [array]::IndexOf($lines, '    boom from fail')
                 ($order -join ' ') -eq 'slow.ps1 fail.ps1 quick.ps1' -and $boom -gt 0 -and
                 $lines[$boom - 1] -match '^check: fail\.ps1 -SelfTest -- FAILED' -and ($returned -join '|') -eq 'fail.ps1 -SelfTest exited 1' }
+            'a run of only -NoGame cases runs those alone, and a run of none runs nothing' = {
+                $folder = Join-Path $outside 'lists'; New-Item -ItemType Directory -Path $folder | Out-Null
+                Set-Content -LiteralPath (Join-Path $folder 'n.ps1') -Value 'param([switch] $SelfTest, [switch] $NoGame)',
+                    "if (-not `$NoGame) { exit 5 }", "'OK - self-test passed: all 1 cases.'"
+                $only = @(Invoke-SelfTestRun -Folder $folder -NoGameCases 'n.ps1' 6>&1 | ForEach-Object { "$_" })
+                $none = @(Invoke-SelfTestRun -Folder $folder 6>&1)
+                ($only -join '|') -match '^check: n\.ps1 -SelfTest -NoGame -- ok \([\d.]+s\)$' -and $none.Count -eq 0 }
             'two runs that each sleep finish in less time than their own times summed' = {
                 $folder = Join-Path $outside 'overlap'; New-Item -ItemType Directory -Path $folder | Out-Null
                 foreach ($name in 'a.ps1', 'b.ps1') {
