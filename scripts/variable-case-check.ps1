@@ -122,8 +122,8 @@ function Invoke-SelfTest {
             $block = & $read "function f {`n    param(`$Out)`n    `$out = 'x'`n}"
             $after = & $read "function f([string] `$Out) {`n    `$out = 'x'`n}"
             $block -eq 'Out@2,out@3' -and $after -eq 'Out@1,out@2' } }
-        @{ Name = '$script:X beside $x passes, and so do $env:Path beside $path and $global:N beside $n'; Test = {
-            $got = & $read "`$x = 1`n`$script:X = 2`n`$path = `$env:Path`n`$n = `$global:N"
+        @{ Name = '$script:X beside $x passes, and so do $env:Path beside $path and $env:PATH, and $global:N beside $n and $global:n'; Test = {
+            $got = & $read "`$x = 1`n`$script:X = 2`n`$path = `$env:Path`n`$p = `$env:PATH`n`$n = `$global:N`n`$global:n = 1"
             $got -eq '' } }
         @{ Name = 'one spelling used many times passes, and three spellings are named each at its first line'; Test = {
             $one = & $read "`$a = 1`n`$a++`n`$a"
