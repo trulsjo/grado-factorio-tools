@@ -26,11 +26,15 @@
     two ways that differ only in case (grado-factorio-tools#285). Then -SelfTest of each script
     in $SELF_TESTS, each in a pwsh of its own, so one script's `exit` does not end the run, and
     -SelfTest -NoGame of each in $NO_GAME_CASES: the cases of a script that needs the game which
-    read no game's output but a log written for them (grado-factorio-tools#175). A self-test that
-    passes prints one line here; one that fails prints everything it said. One that exits 0
-    fails where its last summary line, a line opening `OK - self-test` or `FAILED - self-test`,
-    which revert-run.ps1 reads too, is missing or is FAILED (grado-factorio-tools#297); or where it
-    says it passed with 0 cases, all of them or 0 of some, as a -NoGame broken to run nothing would
+    read no game's output but a log written for them (grado-factorio-tools#175). They run at once,
+    as many as the machine has processors (grado-factorio-tools#296), and are printed in list
+    order once all have finished, each with its own time. Two self-tests that collide when run
+    together, over a shared path or setting, fail only on a run that happens to overlap them:
+    fourteen full runs on Windows passed when this was made. A self-test that passes prints one
+    line here; one that fails prints everything it said. One that exits 0 fails where its last
+    summary line, a line opening `OK - self-test` or `FAILED - self-test`, which revert-run.ps1
+    reads too, is missing or is FAILED (grado-factorio-tools#297); or where it says it passed with
+    0 cases, all of them or 0 of some, as a -NoGame broken to run nothing would
     (grado-factorio-tools#181). It reads the output, so a self-test that counts a case it did not
     run is not seen.
 
@@ -113,7 +117,9 @@
     (grado-factorio-tools#70). On a quiet machine it is under twice CI's time; it was reported as
     ten times slower while review lanes and the game were running beside it. No step here carries
     that. Each line prints its seconds so two runs can be compared; the measurement is in
-    docs/measurements.md.
+    docs/measurements.md. Run at once, a self-test takes longer than alone, as the others share the
+    processors: the slowest, follow-pin.ps1's, about 80 s alone and 130 to 150 s here, so the run
+    ends no sooner than it does (grado-factorio-tools#296).
 
 .PARAMETER SkipIfPassed
     Run nothing when the record says this tree passed, as above.
