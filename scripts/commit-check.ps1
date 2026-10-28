@@ -527,13 +527,14 @@ if ($SelfTest) {
         $failures.Add('the self-test tables shrank, so this proves much less than it claims')
     }
 
+    # The summary line last, in the form check.ps1 and revert-run.ps1 read (#297).
     if ($failures.Count) {
-        Write-Host "commit-check -SelfTest: $checks checks, $($failures.Count) failure(s)."
         foreach ($f in $failures) { Write-Host "  - $f" }
+        Write-Host "FAILED - self-test: $($failures.Count) of $checks case(s) did not hold."
         exit 1
     }
-    Write-Host "commit-check -SelfTest: $checks checks, 0 failures."
     Write-Host 'Every rejected case was rejected for the reason it names, and every legal message passed.'
+    Write-Host "OK - self-test passed: all $checks cases."
     exit 0
 }
 
