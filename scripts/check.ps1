@@ -27,10 +27,12 @@
     in $SELF_TESTS, each in a pwsh of its own, so one script's `exit` does not end the run, and
     -SelfTest -NoGame of each in $NO_GAME_CASES: the cases of a script that needs the game which
     read no game's output but a log written for them (grado-factorio-tools#175). A self-test that
-    passes prints one line here; one that fails prints everything it said. One that exits 0 having
-    run no case fails: one that never says `self-test`, or that says it passed with 0 cases, all of
-    them or 0 of some, as a -NoGame broken to run nothing would (grado-factorio-tools#181). It reads
-    the output, so a self-test that counts a case it did not run is not seen.
+    passes prints one line here; one that fails prints everything it said. One that exits 0
+    fails where its last summary line, a line opening `OK - self-test` or `FAILED - self-test`,
+    which revert-run.ps1 reads too, is missing or is FAILED (grado-factorio-tools#297); or where it
+    ran no case: it never says `self-test`, or says it passed with 0 cases, all of them or 0 of
+    some, as a -NoGame broken to run nothing would (grado-factorio-tools#181). It reads the output,
+    so a self-test that counts a case it did not run is not seen.
 
     A COMMENT OR HEADER LINE OF A SCRIPT HERE IS HELD TO $COMMENT_LINE_LIMIT, the Markdown's limit
     (grado-factorio-tools#181): this header had a line of 147 characters, from
@@ -238,10 +240,16 @@ function Get-ScriptProblem {
     if ($long) { "$name has comment lines over $Limit characters, line $($long -join ', ')" }
 }
 
-# What is wrong with one self-test's run: it exited other than 0, or it said it ran no case.
+# What is wrong with one self-test's run: it exited other than 0; its last summary line, one
+# opening `OK - self-test` or `FAILED - self-test` as revert-run.ps1 reads it, is missing or is
+# FAILED (#297); or it said it ran no case.
 function Get-RunProblem {
     param([string] $Run, [int] $ExitCode, [string] $Said)
-    if ($ExitCode) { "$Run exited $ExitCode" } elseif (Test-RanNoCase $Said) { "$Run ran no case" }
+    $summary = @([regex]::Matches($Said, '(?m)^(OK|FAILED) - self-test') | ForEach-Object { $_.Groups[1].Value })
+    if ($ExitCode) { "$Run exited $ExitCode" }
+    elseif (-not $summary) { "$Run printed no OK - self-test or FAILED - self-test line" }
+    elseif ($summary[-1] -eq 'FAILED') { "$Run said FAILED - self-test and exited 0" }
+    elseif (Test-RanNoCase $Said) { "$Run ran no case" }
 }
 
 # Each script in $Folder parsed and judged by Get-ScriptProblem, a line printed for each; returns
@@ -385,6 +393,15 @@ if ($SelfTest) {
                 (Get-RunProblem 'x.ps1 -SelfTest' 1 'OK - self-test passed: all 3 cases.') -eq 'x.ps1 -SelfTest exited 1' -and
                 (Get-RunProblem 'x.ps1 -SelfTest' 1 'ParserError: no case ran') -eq 'x.ps1 -SelfTest exited 1' -and
                 -not (Get-RunProblem 'x.ps1 -SelfTest' 0 'OK - self-test passed: all 3 cases.') }
+            'a run with no summary line, or whose last one says FAILED with exit 0, is not a pass (#297)' = {
+                (Get-RunProblem 'x.ps1 -SelfTest' 0 "self-test: a case -- ok`nx: 3 checks, 0 failures.") -eq
+                    'x.ps1 -SelfTest printed no OK - self-test or FAILED - self-test line' -and
+                (Get-RunProblem 'x.ps1 -SelfTest' 0 "OK - self-test passed: all 3 cases.`nFAILED - self-test: 1 of 3 case(s) did not hold.") -eq
+                    'x.ps1 -SelfTest said FAILED - self-test and exited 0' -and
+                # The last line rules: a FAILED line before the run's own OK is not the run's.
+                # A line that quotes one past its start is not one.
+                -not (Get-RunProblem 'x.ps1 -SelfTest' 0 ("    FAILED - self-test: a child's.`nFAILED - self-test: 1 of 1`n" +
+                    "OK - self-test passed: all 3 cases.`nthe child said FAILED - self-test: 1 of 1")) }
             "a folder's scripts and self-tests are each judged, against the lists the run is given" = {
                 $folder = Join-Path $outside 'scripts'; New-Item -ItemType Directory -Path $folder | Out-Null
                 $say = { param($name, [string[]] $text) Set-Content -LiteralPath (Join-Path $folder $name) -Value $text }
