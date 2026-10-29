@@ -31,7 +31,7 @@
     core.ignorecase says the file system ignores case, two spellings are one file: a file named
     twice, in one case or two, is read once, and a submodule's file is known in either case. A name
     it cannot read as this repository's Markdown fails the run before anything is read, and says
-    why; so does a file inside a submodule, which is read by running the check from inside it.
+    why.
 
     WHAT IT READS AS WHAT. A paragraph ends at a blank line, a heading, a list item, a table or a
     fenced or indented code block; nothing inside either is read, no emphasis and no link
