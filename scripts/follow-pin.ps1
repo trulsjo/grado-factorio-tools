@@ -246,6 +246,9 @@ if ($SelfTest) {
         [IO.File]::WriteAllText($subHead, '')
         $said = & $git switch --quiet moveB
         $left = [IO.File]::ReadAllText($subHead) -eq ''; [IO.File]::WriteAllText($subHead, $held)
+        # $left and the pin after it hold that the submodule was left; neither is what fails a
+        # revert of Invoke-FollowPin (#304). No git command runs in it with HEAD emptied, and $at
+        # is read once HEAD is written back: the line the hook prints is what a revert changes.
         & $check 'a submodule whose HEAD git cannot read is left, with its line' ($said -match "post-checkout: git could not read $sub's HEAD, so it was left; the new HEAD records $(& $short $B)\. To bring it there: git submodule update -- $sub" -and $left -and (& $at) -eq $A) $said
         & $setup switch --quiet main
 
@@ -278,7 +281,9 @@ if ($SelfTest) {
         & $check "a rebase onto a moved pin, of a branch that moves it, ends at the branch's pin" (
             $said -match [regex]::Escape((& $line 'post-rewrite' $B $C)) -and (& $at) -eq $C -and -not (git -C $sib status --porcelain)) $said
         # A stdin with no rewritten commit, here where HEAD's parent records b and HEAD c; and a
-        # post-rewrite given no argument, as only a hand run would be.
+        # post-rewrite given no argument, as only a hand run would be. The pin holds that the
+        # submodule was left, and is not what fails a revert of Invoke-FollowPin (#304): one that
+        # moved it would print its line too.
         $said = (& $direct '' 'post-rewrite', 'rebase') + (& $direct 'not a rewrite line' 'post-rewrite', 'rebase') + (& $direct '' 'post-rewrite')
         & $check 'a rebase with no rewritten commit on stdin, and a post-rewrite with no argument, print nothing' (-not $said.Trim() -and (& $at) -eq $C) $said
 
