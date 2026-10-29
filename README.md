@@ -150,7 +150,7 @@ the script reads and what it does not see.
 | `dump-planets.ps1` | one, or two with `-Against` | each planet's resources and settings, and whether they name anything the dump lacks |
 | `dump-shared-names.ps1` | four: `-Base`, `-First`, `-Second`, `-Both` | the names two mod sets each define, and which definition the two together hold |
 | `dump-keys.ps1` | one, or two with `-Below`, and a `config.ini`, `-Config`, the player's unless named | the custom inputs that share a default key with an engine control or are linked to one |
-| `dump-diff.ps1` | two | the prototypes one has and the other has not, and those that differ, by field; a row lists its names up to `-MaxNames` and counts them above |
+| `dump-diff.ps1` | two | the prototypes one has and the other has not, and those that differ, by field; a row counts its names, and lists them unless there are more than `-MaxNames` |
 
     pwsh -File scripts/dump-walk.ps1 <pack dump> -Against <Space Age dump> -BroughtIn wood
 
@@ -463,17 +463,20 @@ can fail, in a scratch repository of its own.
 
 `scripts/commit-check.ps1` holds a commit message to
 [docs/commit-convention.md](docs/commit-convention.md). This repository's `commit-msg` hook runs
-it on each message, and both siblings run it from the submodule.
+it on each message. Both siblings run it from the submodule, in their `commit-msg` hook and in
+CI: grado-factorio-modpack at `9cfcdd3` and realistic-fusion-refreshed at `4f2dc44`, each read at
+GitHub's `main` on 2026-10-29.
 
     pwsh -File scripts/commit-check.ps1 -ScopeFile commit-scopes.txt -Range origin/main..HEAD -RequireCommits
     pwsh -File scripts/commit-check.ps1 -ScopeFile commit-scopes.txt -Title "<pull request title>"
 
 `-Range` checks every commit in a range. A range with none passes and says so, unless
-`-RequireCommits` is given: a consumer's CI passes it, where a pull request's range is never
-empty, and a local run on a branch with nothing on it yet need not (#196). `-Title` checks a pull
-request title, which needs a scope. `-ScopeFile` names the repository's scopes, one to a line;
-without it any scope passes. `-SelfTest` proves it can fail. What it lets through is in its
-header.
+`-RequireCommits` is given. It is meant for a consumer's CI, where a pull request's range is never
+empty by #196's account, and a local run on a branch with nothing on it yet need not pass it.
+grado-factorio-modpack's CI passes it at `9cfcdd3` (grado-factorio-modpack#364);
+realistic-fusion-refreshed's does not at `4f2dc44`. `-Title` checks a pull request title, which
+needs a scope. `-ScopeFile` names the repository's scopes, one to a line; without it any scope
+passes. `-SelfTest` proves it can fail. What it lets through is in its header.
 
 ## Checking Markdown
 
@@ -530,9 +533,10 @@ the merge deletes.
     pwsh -File scripts/pr-body-check.ps1 ../scratch/body.md
     pwsh -File scripts/pr-body-check.ps1 -Body "$env:PR_BODY" -CiteSiblings -RequireSummaryVisual
 
-`-Body` takes the body itself, as CI has it in the environment; quote it, or an unset variable
-hands over no argument. `-Main` names the branch a cited commit must be on, `origin/main` unless
-said.
+`-Body` takes the body itself, as CI has it in the environment. Under `pwsh -File`, quote it: with
+the variable unset, the unquoted form hands over no argument and the run fails. Called from a pwsh
+session, as CI calls it, either form passes. `-Main` names the branch a cited commit must be on,
+`origin/main` unless said.
 
 It also fails on a closing keyword before an issue reference, such as `fixed` and then a colon
 and an issue's number, on any line that is not `Closes #N` alone: GitHub closes that issue when
@@ -636,13 +640,13 @@ submodule and runs git through the hooks; it needs no game and no network.
 ## Checking this repository
 
 `scripts/check.ps1` is the one command before a push. It parses every script here, runs each
-self-test that needs neither the game nor the network, runs `param-check.ps1`,
-`variable-case-check.ps1` and `markdown-check.ps1` over this repository, holds the agent pages to
-their size limits, and fails on a script parameter this README never names as `-<Name>` (#194), or a
-script's comment line over 100 characters; the `pre-commit` hook holds the staged scripts to that
-rule too, loaded from `scripts/comment-line-lib.ps1` (#225). CI runs it, and so does the `pre-push`
-hook, with `-SkipIfPassed`, which runs nothing when a recorded run passed this same tree. What it
-cannot see is in its header.
+self-test that needs neither the game nor the network, runs `param-check.ps1` and
+`variable-case-check.ps1` over `scripts/` and `markdown-check.ps1` over the tracked Markdown,
+holds the agent pages to their size limits, and fails on a script parameter this README never
+names as `-<Name>` (#194), or a script's comment line over 100 characters; the `pre-commit` hook
+holds the staged scripts to that rule too, loaded from `scripts/comment-line-lib.ps1` (#225). CI
+runs it, and so does the `pre-push` hook, with `-SkipIfPassed`, which runs nothing when a
+recorded run passed this same tree. What it cannot see is in its header.
 
     pwsh -File scripts/check.ps1
 
