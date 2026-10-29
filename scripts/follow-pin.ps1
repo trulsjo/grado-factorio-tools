@@ -247,8 +247,9 @@ if ($SelfTest) {
         $said = & $git switch --quiet moveB
         $left = [IO.File]::ReadAllText($subHead) -eq ''; [IO.File]::WriteAllText($subHead, $held)
         # $left and the pin after it hold that the submodule was left; neither is what fails a
-        # revert of Invoke-FollowPin (#304). No git command runs in it with HEAD emptied, and $at
-        # is read once HEAD is written back: the line the hook prints is what a revert changes.
+        # revert of Invoke-FollowPin (#304). With HEAD emptied, every git command the hook runs
+        # in the submodule fails, so it cannot move it; and $at is read once HEAD is written
+        # back: the line the hook prints is what a revert changes.
         & $check 'a submodule whose HEAD git cannot read is left, with its line' ($said -match "post-checkout: git could not read $sub's HEAD, so it was left; the new HEAD records $(& $short $B)\. To bring it there: git submodule update -- $sub" -and $left -and (& $at) -eq $A) $said
         & $setup switch --quiet main
 
