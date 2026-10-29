@@ -277,9 +277,10 @@ if ($SelfTest) {
         $said = & $git rebase --quiet -X theirs moveB
         & $check "a rebase onto a moved pin, of a branch that moves it, ends at the branch's pin" (
             $said -match [regex]::Escape((& $line 'post-rewrite' $B $C)) -and (& $at) -eq $C -and -not (git -C $sib status --porcelain)) $said
-        # A stdin with no rewritten commit, here where HEAD's parent records b and HEAD c.
-        $said = (& $direct '' 'post-rewrite', 'rebase') + (& $direct 'not a rewrite line' 'post-rewrite', 'rebase')
-        & $check 'a rebase with no rewritten commit on stdin prints nothing' (-not $said.Trim() -and (& $at) -eq $C) $said
+        # A stdin with no rewritten commit, here where HEAD's parent records b and HEAD c; and a
+        # post-rewrite given no argument, as only a hand run would be.
+        $said = (& $direct '' 'post-rewrite', 'rebase') + (& $direct 'not a rewrite line' 'post-rewrite', 'rebase') + (& $direct '' 'post-rewrite')
+        & $check 'a rebase with no rewritten commit on stdin, and a post-rewrite with no argument, print nothing' (-not $said.Trim() -and (& $at) -eq $C) $said
 
         $said = & $direct '' 'pre-commit'
         & $check 'a hook it does not serve prints a line' ($said -match 'pre-commit is not a hook this serves') $said
