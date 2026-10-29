@@ -117,10 +117,11 @@ function Invoke-FollowPin {
         'post-checkout' { if (@($HookArgs).Count -ge 3 -and $HookArgs[2] -eq '1') { $HookArgs[0], $HookArgs[1] } }
         'post-merge' { 'ORIG_HEAD', 'HEAD' }
         # The rebase checked out the commit it replays onto, which post-checkout followed: the
-        # first rewritten commit's parent.
+        # first rewritten commit's parent. A stdin with no `<old> <new>` line gives `^`, which git
+        # cannot read, so no pin and nothing printed.
         'post-rewrite' {
             $first = [regex]::Match($Rewritten, '^[0-9a-f]+ ([0-9a-f]+)', 'Multiline')
-            if (@($HookArgs).Count -ge 1 -and $HookArgs[0] -eq 'rebase' -and $first.Success) { "$($first.Groups[1].Value)^", 'HEAD' }
+            if (@($HookArgs).Count -ge 1 -and $HookArgs[0] -eq 'rebase') { "$($first.Groups[1].Value)^", 'HEAD' }
         }
         default { throw "$Hook is not a hook this serves: give post-checkout, post-merge or post-rewrite." }
     }
@@ -240,6 +241,14 @@ if ($SelfTest) {
         & $check 'a submodule off the old pin is left, with its line' ($said -match "post-checkout: $sub is at $(& $short $C), not the $(& $short $A) the old HEAD records, so it was left; the new HEAD records $(& $short $B)\." -and (& $at) -eq $C) $said
         & $setup switch --quiet main
 
+        # A submodule whose HEAD file is emptied, which git then cannot read as a repository.
+        $subHead = Join-Path (git -C $subDir rev-parse --absolute-git-dir) 'HEAD'; $held = [IO.File]::ReadAllText($subHead)
+        [IO.File]::WriteAllText($subHead, '')
+        $said = & $git switch --quiet moveB
+        $left = [IO.File]::ReadAllText($subHead) -eq ''; [IO.File]::WriteAllText($subHead, $held)
+        & $check 'a submodule whose HEAD git cannot read is left, with its line' ($said -match "post-checkout: git could not read $sub's HEAD, so it was left; the new HEAD records $(& $short $B)\. To bring it there: git submodule update -- $sub" -and $left -and (& $at) -eq $A) $said
+        & $setup switch --quiet main
+
         git -C $sib submodule --quiet deinit --force $sub
         $said = & $git switch --quiet moveB
         & $check 'a submodule not initialised is left, with its line' ($said -match "post-checkout: $sub is not initialised, so it was left; the new HEAD records $(& $short $B)\. To bring it there: git submodule update --init -- $sub") $said
@@ -268,6 +277,9 @@ if ($SelfTest) {
         $said = & $git rebase --quiet -X theirs moveB
         & $check "a rebase onto a moved pin, of a branch that moves it, ends at the branch's pin" (
             $said -match [regex]::Escape((& $line 'post-rewrite' $B $C)) -and (& $at) -eq $C -and -not (git -C $sib status --porcelain)) $said
+        # A stdin with no rewritten commit, here where HEAD's parent records b and HEAD c.
+        $said = (& $direct '' 'post-rewrite', 'rebase') + (& $direct 'not a rewrite line' 'post-rewrite', 'rebase')
+        & $check 'a rebase with no rewritten commit on stdin prints nothing' (-not $said.Trim() -and (& $at) -eq $C) $said
 
         $said = & $direct '' 'pre-commit'
         & $check 'a hook it does not serve prints a line' ($said -match 'pre-commit is not a hook this serves') $said
