@@ -51,4 +51,3 @@ On top of the `/code-review` plugin. The evidence is in
   request unmerged, before any fix commit makes it no longer the tip. The outcome names the
   commit by subject as amended. A body below the tip is recorded.
 - **Do not re-score to make a finding binding.** Say it matters and let a human decide.
-
