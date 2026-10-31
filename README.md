@@ -633,9 +633,11 @@ no game.
 
 It updates only a submodule that is initialised, clean and at the pin the old `HEAD` records,
 and prints `<hook>: <path> <old> -> <new>`; otherwise it leaves it, with one line saying why and
-the command to run. It always exits 0, as a hook's exit status would become the checkout's. A
-wrapper for each hook is in its header. `-SelfTest` builds a sibling with this repository as a
-submodule and runs git through the hooks; it needs no game and no network.
+the command to run. It always exits 0, as a hook's exit status would become the checkout's. Its
+header holds a sibling's wrapper and what changes for each hook; with no pwsh, or no script in
+`vendor/`, the wrapper prints two lines naming the command to run (#307). `-SelfTest` builds a
+sibling with this repository as a submodule and runs git through the hooks; it needs no game and
+no network.
 
 ## Checking this repository
 
