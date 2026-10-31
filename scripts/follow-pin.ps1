@@ -83,7 +83,8 @@
     A sibling's .githooks/post-checkout, committed executable
     (`git add --chmod=+x .githooks/post-checkout`): off Windows, git ignores a hook that is not.
     With no pwsh, or no script in vendor/, it prints two lines naming the command to run, and only
-    where the script would have acted, so a file checkout prints nothing:
+    where the script would have acted, so a file checkout prints nothing. The command names
+    --init in both cases: the pwsh check comes first, so the submodule may not be initialised.
 
         #!/bin/sh
         # Brings vendor/grado-factorio-tools to the pin the new HEAD records.
@@ -95,15 +96,15 @@
             echo "$hook: $1 not found, so $sub was not checked against the pin HEAD records." >&2
             echo "$hook: if it is clean and holds no commit of your own, '$2' brings it there." >&2
         }
-        if ! command -v pwsh >/dev/null 2>&1; then say pwsh "git submodule update -- $sub"
+        if ! command -v pwsh >/dev/null 2>&1; then say pwsh "git submodule update --init -- $sub"
         elif [ ! -f "$f" ]; then say "$f" "git submodule update --init -- $sub"
         else pwsh -NoProfile -File "$f" "$hook" "$@"
         fi
         exit 0
 
-    post-merge is the same with hook=post-merge and no guard line, as every merge is acted on.
-    post-rewrite is the same with hook=post-rewrite and the guard [ "$1" = rebase ] || exit 0, so
-    an amend prints nothing.
+    post-merge and post-rewrite are the same, each committed executable too. post-merge has
+    hook=post-merge and no guard line, as every merge is acted on. post-rewrite has
+    hook=post-rewrite and the guard [ "$1" = rebase ] || exit 0, so an amend prints nothing.
 #>
 
 #Requires -Version 7
