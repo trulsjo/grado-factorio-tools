@@ -54,9 +54,10 @@
     and HEAD the same while the index records the new pin, so it prints nothing. After each,
     `git submodule update -- vendor/grado-factorio-tools` brings it there. A checkout made while
     vendor/ holds a pin older than this script, whose copy has none to run, and a clone with no
-    pwsh: the wrapper below skips both, saying nothing. A change to the submodule's own submodules,
-    which it never updates. And whether the new pin's scripts work: it moves the checkout, and the
-    sibling's gates judge the rest.
+    pwsh: the wrapper below runs nothing in either, and prints two lines saying the submodule was
+    not checked and naming the command that brings it there. A change to the submodule's own
+    submodules, which it never updates. And whether the new pin's scripts work: it moves the
+    checkout, and the sibling's gates judge the rest.
 
 .PARAMETER Hook
     The hook that runs it: post-checkout, post-merge or post-rewrite.
@@ -79,15 +80,30 @@
         pwsh -File vendor/grado-factorio-tools/scripts/follow-pin.ps1 post-checkout HEAD@{1} HEAD 1
 
 .EXAMPLE
-    A sibling's .githooks/post-checkout, and the same for post-merge and post-rewrite, each
-    committed executable (`git add --chmod=+x .githooks/post-checkout`): off Windows, git ignores a
-    hook that is not.
+    A sibling's .githooks/post-checkout, committed executable
+    (`git add --chmod=+x .githooks/post-checkout`): off Windows, git ignores a hook that is not.
+    With no pwsh, or no script in vendor/, it prints two lines naming the command to run, and only
+    where the script would have acted, so a file checkout prints nothing:
 
         #!/bin/sh
         # Brings vendor/grado-factorio-tools to the pin the new HEAD records.
-        f=vendor/grado-factorio-tools/scripts/follow-pin.ps1
-        [ -f "$f" ] && command -v pwsh >/dev/null && pwsh -NoProfile -File "$f" post-checkout "$@"
+        hook=post-checkout
+        [ "$3" = 1 ] || exit 0
+        sub=vendor/grado-factorio-tools
+        f=$sub/scripts/follow-pin.ps1
+        say() {
+            echo "$hook: $1 not found, so $sub was not checked against the pin HEAD records." >&2
+            echo "$hook: if it is clean and holds no commit of your own, '$2' brings it there." >&2
+        }
+        if ! command -v pwsh >/dev/null 2>&1; then say pwsh "git submodule update -- $sub"
+        elif [ ! -f "$f" ]; then say "$f" "git submodule update --init -- $sub"
+        else pwsh -NoProfile -File "$f" "$hook" "$@"
+        fi
         exit 0
+
+    post-merge is the same with hook=post-merge and no guard line, as every merge is acted on.
+    post-rewrite is the same with hook=post-rewrite and the guard [ "$1" = rebase ] || exit 0, so
+    an amend prints nothing.
 #>
 
 #Requires -Version 7
