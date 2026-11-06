@@ -68,10 +68,12 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
   reverted copy of a library is never loaded. In a copy with `game-mods.ps1` changed,
   `resolve-modpack.ps1 -SelfTest` failed 4 of 19 cases (the review comment on PR #151, finding 2,
   2026-10-14): the copy's library was loaded.
-- **Work happens on a branch named `<issue>-<slug>`, never on `main`.** Pull requests are
-  rebase-merged, which rewrites every SHA on the branch: cite the pull request, not a branch commit.
-  A SHA may be cited once it is on `main`. `scripts/pr-body-check.ps1` holds a body to this: CI
-  runs it, and so does the session, on the body file, before `gh pr create`.
+- **Work happens on a branch named `<issue>-<slug>`, never on `main`.**
+- **What a pull request body must hold, and how a branch commit is named, are on
+  [`docs/pr-body-convention.md`](../pr-body-convention.md)**, the page that declares what
+  `scripts/pr-body-check.ps1` checks. Here a branch commit is named by citing the pull request,
+  and CI and the `refuse-pr-body.ps1` hook run the check with both switches, `-CiteSiblings` and
+  `-RequireSummaryVisual`.
 - **The title and the body are checked before the create, in one command joined with `&&`**, so
   that a failure of either stops it. The body file is drafted first, by the pr skill, as
   *Pull request body* below says:
@@ -90,25 +92,19 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
   a tool from here; one about a sibling names it, with its commit and the date it was read
   (#287). The check reads *sibling* as naming one: PR #283's first body was refused for five generic
   statements so worded, by that session's account (2026-10-28).
-- **A pull request carries one `Closes #N` line per ticket it closes**, and no other closing
-  keyword before an issue reference: GitHub closes on "closed: #103" in a sentence too, as on
-  PR #105 (2026-10-11), and `scripts/pr-body-check.ps1` fails such a line. Its title is checked;
-  see *Pull request titles* in [`docs/commit-convention.md`](../commit-convention.md).
+- **A pull request's title is checked** too; see *Pull request titles* in
+  [`docs/commit-convention.md`](../commit-convention.md).
 - **Pull request body: load the `mattpocock-skills:pr` skill with the Skill tool, then draft the
   body by its template**, before the create command above runs. The skill fills `## Summary`
   with the smallest visual that makes the point, a diagram, a diff sketch, a tree or pseudocode,
   and brief prose beside it; `## Evidence` with a run before and after; and `## Merge Danger`.
   Where the plugin is not installed, the template is filled by hand. The session of PRs #249 to
   #252 and #257 drafted without loading it, and their Summaries held no visual (#263).
-  The three headings stand once each and in that order (Truls, 2026-10-19,
-  grado-factorio-modpack#320; for this repository, 2026-10-20, #171). `scripts/pr-body-check.ps1`
-  holds a body to the three, and to the template's **Before:** and **After:** under
-  `## Evidence` and **Door:** and **Blast Radius:** under `## Merge Danger`, and with
-  `-RequireSummaryVisual` `## Summary` to a fenced or indented code block (#264); a change with
-  nothing to show says none after **Before:** and **After:** (Truls, 2026-10-21, #185), this
-  repository's one departure from the template, which asks for a before and after.
-  Among what this repository adds to the template: above it, the `Closes` lines of the rule
-  above, where the branch closes any ticket; inside it, what `-CiteSiblings` and the
+  The headings and markers the check holds a body to are on the shared page: the three headings
+  ruled by Truls on 2026-10-19 (grado-factorio-modpack#320; for this repository, 2026-10-20,
+  #171), the markers on 2026-10-21 (#185), and the Summary's visual on 2026-10-26 (#264).
+  Among what this repository adds to the template: above it, a `Closes #N` line for each ticket
+  the branch closes; inside it, what `-CiteSiblings` and the
   *Blast Radius* rule below ask of its prose; below it, nothing.
   *Evidence* cites `scripts/check.ps1` by CI's run id once that run has passed on every job on
   the pull request's tip; until then it names the platform of the run it cites, as "passed
