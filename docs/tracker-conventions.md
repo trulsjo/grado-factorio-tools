@@ -3,8 +3,7 @@
 **This page is where the issue-tracker conventions are declared, for the repositories that link
 to it.** Each of them keeps a stub page at `docs/agents/issue-tracker.md`, the path the
 `mattpocock-skills` expect: the setup template's core, that repository's own parts, and a link
-here. What a stub adds is that repository's; where it says otherwise than this page, it says
-why.
+here.
 
 The rules were taken from the four `docs/agents/issue-tracker.md` pages, read 2026-11-06:
 trulsjo/grado-factorio-tools at `e70669f`, trulsjo/grado-factorio-modpack at `987e638`,
@@ -14,7 +13,6 @@ as ruled in
 (rulings 2 to 6) and
 [*Rulings: confirm the proposed leaves*](https://github.com/trulsjo/grado-factorio-tools/issues/330)
 (item 4). An incident is told as the page it came from tells it, and names that repository.
-Each repository's own incidents stay on its own pages.
 
 ## Read an issue with `--json`, not `--comments`
 
@@ -52,16 +50,22 @@ is the body. The setup template's "use a heredoc for multi-line bodies" is not f
 
 ## Search the open issues before filing
 
-Right before each `gh issue create`, list the open issues and check that none already covers the
-new ticket. The new ticket names any open one it touches.
+Right before each `gh issue create`, search the open issues and check that none already covers the
+new ticket:
+`gh issue list --state open --limit 500 --search "<topic words>" --json number,title,body`. The
+`--limit` matters: without it `gh` fetches 30 (`gh issue list --help`, gh 2.103.3), and on
+2026-11-07 `gh issue list --state all --json number --jq length` printed 30 on
+trulsjo/grado-factorio-tools, where the same with `--limit 500` printed 244. The new ticket names
+any open one it touches.
 
 - **Right before, not earlier in the session.** Other sessions file on the same tracker at the
   same time, so a check made earlier is stale (trulsjo/true-nukes-refreshed).
 - **Search for the concept, not only the wording**, and say in the pull request or the session's
   report what was searched for. trulsjo/realistic-fusion-refreshed#639 was filed on 2026-10-07
-  and closed as a duplicate of #591 there, open since 2026-10-05: both asked for the gate history
-  to move out of a `CLAUDE.md` section, under titles that share no noun but `CLAUDE.md`. The
-  session that filed #639 had not searched.
+  and closed as a duplicate of trulsjo/realistic-fusion-refreshed#591, open since 2026-10-05:
+  both asked for the gate history to move out of a `CLAUDE.md` section, under titles that share
+  no noun but `CLAUDE.md`. The session that filed trulsjo/realistic-fusion-refreshed#639 had not
+  searched.
 - **Search the other trackers the stub names too.** On 2026-10-09 a line-length ticket for
   trulsjo/grado-factorio-modpack's own Markdown check was close to being filed beside
   trulsjo/grado-factorio-tools#93, which had ruled the same day that the limit lives in the shared
@@ -111,7 +115,8 @@ such as a child's `## Parent`. Re-parent or close each in the same pass: an open
 closed issue reports to nothing (trulsjo/true-nukes-refreshed).
 
 **Close a duplicate with `gh issue close <n> --duplicate-of <m>`** (gh 2.103.1, read from
-`gh issue close --help` on 2026-10-26 by trulsjo/grado-factorio-modpack's page, not run). Comment
+`gh issue close --help` on 2026-10-26, not run, as trulsjo/grado-factorio-modpack's page
+records). Comment
 on `<m>` first, listing what `<n>` has that `<m>`'s body lacks: criteria, and any ruling it
 leaves open. While that ruling is open, `ready-for-agent` comes off `<m>`. On 2026-10-25
 trulsjo/grado-factorio-tools#210 was closed as a duplicate of trulsjo/grado-factorio-tools#208

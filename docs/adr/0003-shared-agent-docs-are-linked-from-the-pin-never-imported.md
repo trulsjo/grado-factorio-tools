@@ -23,7 +23,7 @@ the table:
 - **A path into `vendor/grado-factorio-tools/docs/`.** Pinned, so a page changes for a sibling
   only when it moves its pin, and readable offline. Empty until `git submodule update --init`.
 - **A stub page** in each sibling that names the shared page and keeps only that repository's own
-  parts, the shape the *Commit messages* sections of each `CLAUDE.md` already take under
+  parts, the shape the *Commit messages* sections of each `CLAUDE.md` take, by #314's account, under
   [ADR 0002](0002-the-commit-convention-is-declared-in-one-document.md).
 
 A further constraint: the `mattpocock-skills` read some pages at a fixed path, such as
@@ -81,8 +81,8 @@ stub back into a copy.
   `main`, which may be ahead.
 - **A gate can pass a `vendor/` link.** The shared Markdown check asks the working tree about a
   link into a submodule and reads no anchors there; the modpack's and realistic-fusion's CI check
-  out with `submodules: true`, and the modpack carried such links in four agent docs when this
-  was ruled.
+  out with `submodules: true`, and the modpack carried such links in four agent docs, by #314's
+  account of 2026-11-06, which names no commit.
 - **Re-running `/setup-matt-pocock-skills` undoes a stub** without warning beyond its first line:
   the link is restored from git.
 - The first doc lift is `docs/tracker-conventions.md`. The siblings' stubs come with their own
