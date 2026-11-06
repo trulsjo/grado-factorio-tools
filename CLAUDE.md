@@ -48,9 +48,8 @@ submodule, [ADR 0001](docs/adr/0001-siblings-consume-this-repo-as-a-submodule.md
 
 ## Factorio facts to check, not remember
 
-- The installed build: `Factorio.exe --version`, never remembered (#199).
-- API docs are per build at <https://lua-api.factorio.com/>. Pin an explicit build when
-  recording a fact: `/stable/` and `/latest/` both move, and `latest` is experimental.
+- The game: [`docs/factorio-facts.md`](docs/factorio-facts.md). Read the installed build with
+  `Factorio.exe --version`, and pin an explicit build when recording a fact.
 - The mod portal: [`docs/mod-portal.md`](docs/mod-portal.md), before querying it.
 
 ## Commit messages
