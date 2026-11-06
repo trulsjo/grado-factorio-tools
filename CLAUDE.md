@@ -51,11 +51,7 @@ submodule, [ADR 0001](docs/adr/0001-siblings-consume-this-repo-as-a-submodule.md
 - The installed build: `Factorio.exe --version`, never remembered (#199).
 - API docs are per build at <https://lua-api.factorio.com/>. Pin an explicit build when
   recording a fact: `/stable/` and `/latest/` both move, and `latest` is experimental.
-- `https://mods.factorio.com/api/mods/<name>/full` says what exists and at what version, with no
-  key. Publishing needs an API key, which is not the `player-data.json` token downloads use.
-- Check `factorio_version` for any `2.x`, not `== "2.0"`: a mod that moved to 2.1 is not missing.
-- A mod missing under one name may exist under another: `SpaceMod` has no 2.0 release,
-  `SpaceModFeorasFork` does (2026-09-20). Search titles and summaries, not just names.
+- The mod portal: [`docs/mod-portal.md`](docs/mod-portal.md), before querying it.
 
 ## Commit messages
 
