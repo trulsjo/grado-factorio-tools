@@ -44,7 +44,8 @@ submodule, [ADR 0001](docs/adr/0001-siblings-consume-this-repo-as-a-submodule.md
 - **A script does one job and says so in its header**: what exit 0 means, and what the script
   cannot see. A gate that overstates its coverage is worse than no gate.
 - **When a script moves here, record its origin repo and commit** in `docs/extraction-plan.md`.
-- Cite our own code by symbol, not line number.
+- Cite our own code by symbol, not line number
+  ([`docs/writing-agent-docs.md`](docs/writing-agent-docs.md)).
 
 ## Factorio facts to check, not remember
 
