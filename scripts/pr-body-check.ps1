@@ -15,9 +15,9 @@
 .DESCRIPTION
     WHY (grado-factorio-tools#96). Pull requests here are rebase-merged, which rewrites every
     SHA on the branch, so a body that cites a branch commit cites something the merge deletes.
-    docs/agents/issue-tracker.md says to cite the pull request, and a SHA only once it is on
-    main. On PR #94 (2026-10-09) the body cited a commit of its own branch and a reviewer found
-    it; a fixed pattern is a check's work.
+    docs/pr-body-convention.md says a branch commit is never cited by its hash, and a SHA
+    only once it is on main. On PR #94 (2026-10-09) the body cited a commit of its own branch
+    and a reviewer found it; a fixed pattern is a check's work.
 
     WHAT IT READS. Every word of 7 to 40 hexadecimal characters, in either case, with no letter,
     digit or underscore against it, wherever it stands: prose, a code span, a fenced block, an
@@ -29,7 +29,7 @@
     A CLOSING KEYWORD THE AUTHOR DID NOT MEAN (grado-factorio-tools#112). GitHub closes an issue
     when a pull request merges with a closing keyword before a reference to it anywhere in the
     body. PR #105 (2026-10-11) said "No ticket is closed: #103" and GitHub listed #103 as an
-    issue the merge would close. docs/agents/issue-tracker.md asks for one `Closes #N` line per
+    issue the merge would close. docs/pr-body-convention.md asks for one `Closes #N` line per
     ticket closed, so a keyword before a reference anywhere else is a mistake or a second way of
     saying that line. Reported, with its line: a closing keyword in any case, then a colon or a
     space or both, then `#N`, `OWNER/REPOSITORY#N` or the address of an issue on github.com. A
