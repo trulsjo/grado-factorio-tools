@@ -60,3 +60,31 @@ or it is a finding), likely without saying from what
 - **A conclusion takes the weakest grade among its parts.**
 - **A claim that names nothing it rests on has no grade**: it is marked "not measured", or it is a
   finding.
+
+## Tickets and ruling comments
+
+**A ticket, and a comment that rules on one, is written for the session that implements it**, which
+trusts what it says. So the grades reach a ticket by four rules (Truls, 2026-11-06, on
+[#325](https://github.com/trulsjo/grado-factorio-tools/issues/325), ruling 7). Each repository
+that links this page keeps the incidents that showed it a rule on its own pages.
+
+- **A figure carries its command.** A number, a count, a size, a commit or the date of a
+  measurement is followed by the command that printed it, or by where it was read and when: it is
+  *Measured* or *Read from source*, and says which. A figure with no command says so, with its
+  date. The session that implements the ticket runs the command before it copies the figure; where
+  the two disagree, the page gets what the command printed, and the pull request says the ticket
+  was wrong.
+- **A statement is read from its source, or marked as an account.** A statement about the
+  repository, or about a past pull request, issue or commit, is read when the ticket is written.
+  One that was not read says whose account it is and that it was not read again, as
+  "by #<n>'s account and not re-read here" does. The mark does not stand in for a reading that
+  could be made. A statement about what a command prints, lists or exits with is run, and the
+  ticket shows the command and what it printed; one that cannot be run is marked as not run, and
+  the run becomes an acceptance criterion.
+- **A quantifier carries its search.** A claim about all, none or the only one of a set ("every",
+  "no", "the one", "nowhere else") is followed by the search that showed it, as a command or as
+  the files walked: that nothing else exists is *Inferred* from a search, and names it. The
+  session that implements the ticket runs the search before it copies the claim.
+- **A command that printed nothing is run again on an input that should print something.** An
+  empty output shows what the command prints for that input only. Before a ticket, a page or a
+  pull request records what the command does, the record shows both runs.
