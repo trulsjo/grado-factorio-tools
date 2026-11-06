@@ -52,6 +52,9 @@ The commit-message convention this repo and its siblings share is declared in
 [docs/commit-convention.md](docs/commit-convention.md). The three claim grades, for a sibling
 that adopts them, and the rules of review that go with them are in
 [docs/claim-grades.md](docs/claim-grades.md). This repo does not apply them to its own docs.
+The issue-tracker conventions shared with the siblings are in
+[docs/tracker-conventions.md](docs/tracker-conventions.md), linked from a stub page as
+[ADR 0003](docs/adr/0003-shared-agent-docs-are-linked-from-the-pin-never-imported.md) says.
 
 Nothing is moved out of a working repo until it is agreed — see `CLAUDE.md`.
 

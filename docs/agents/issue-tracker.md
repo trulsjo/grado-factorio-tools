@@ -1,16 +1,22 @@
+> **Re-running `/setup-matt-pocock-skills` rewrites this stub page in place** and drops its link
+> to [`docs/tracker-conventions.md`](../tracker-conventions.md): restore both from git.
+
 # Issue tracker: GitHub
 
 Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
 
+**The conventions shared with the siblings are on
+[`docs/tracker-conventions.md`](../tracker-conventions.md)**: reading an issue with `--json`,
+multi-line bodies through `--body-file`, searching before filing, blocked-by, closing, and the bar
+for a follow-up ticket. Read it before filing, blocking or closing an issue. This page holds the
+setup template's core and this repository's own parts.
+
 ## Conventions
 
-- **Create an issue**: `gh issue create --title "..." --body "..."`. Write a multi-line body to a
-  file and pass `--body-file <path>`; the same goes for `gh issue comment` and `gh pr create`. Write
-  the file with the Write tool: a heredoc that writes the file is no safer. On 2026-10-08 one
-  command of three such heredocs, 118 lines meant to write the bodies of what became #74, #75 and
-  #76, failed here under the Bash tool with `unexpected EOF while looking for matching '` (recorded
-  on PR #81), and `realistic-fusion-refreshed`'s tracker page (read 2026-10-08) records heredoc
-  bodies failing with the same message.
+- **Create an issue**: `gh issue create --title "..." --body-file <path>`, after searching the open
+  issues as the shared page says. This repository names no other tracker to search. On
+  2026-10-08 one command of three heredocs, meant to write the bodies of what became #74, #75 and
+  #76, failed here (recorded on PR #81); the shared page has the rest.
 - **A figure in a ticket carries the command that gave it**: a number, a count, a size, a commit,
   or the date of a measurement is followed by the command that printed it, or by where it was
   read and when. A figure with no command, such as one a harness reported in a session, says so,
@@ -42,19 +48,18 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
   ticket, a page or a pull request body records what the command does, it is run again on an
   input that should print something, and the record shows both runs. #148 ran
   `gh issue view <number> --comments` on #145, which has no comments, and recorded "printed
-  nothing"; what the command does is under *Read an issue*.
+  nothing"; what the command does is on the shared page, *Read an issue with `--json`*.
 - **Read an issue**:
-  `gh issue view <number> --json title,body,labels,comments --jq '{title, body, labels: [.labels[].name], comments: [.comments[].body]}'`.
-  Not `gh issue view <number> --comments`: on 2026-10-14, with gh 2.102.0 and outside a
-  terminal, it printed a ticket's comments and never its body, so nothing at all for #145, which
-  has none, and exited 0 (#148). All five review lanes of that day's session met the same, by
-  their own accounts, and fell back to `--json`.
+  `gh issue view <number> --json title,body,labels,comments --jq '{title, body, labels: [.labels[].name], comments: [.comments[].body]}'`,
+  not `--comments`, for the shared page's reason. All five review lanes of #148's session met
+  that failure on 2026-10-14, by their own accounts, and fell back to `--json`.
 - **List issues**:
   `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'`
   with appropriate `--label` and `--state` filters.
 - **Comment on an issue**: `gh issue comment <number> --body "..."`
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
-- **Close**: `gh issue close <number> --comment "..."`
+- **Close**: `gh issue close <number> --comment "..."`, after listing what hangs off the issue, as
+  the shared page's *Before closing* says; a duplicate with `--duplicate-of`, as it says too.
 
 Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
 
@@ -159,10 +164,8 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
   review findings, a `perl` revert of the changed-tree guard matched nothing, and the copy's
   self-test passed 5 of 5 on an unchanged file, which reads as "this fix is not tested". An empty
   diff showed it; with the pattern fixed, the revert failed case 3, by that session's account.
-- **The bar for a follow-up ticket** (Truls, 2026-10-06): a leftover from a review, a session or
-  a retro becomes a ticket only if a real mod hit it or a consumer's gate needs it. Anything else
-  is named in the session report and not filed. A ticket Truls asks for directly is not held to
-  the bar.
+- **The bar for a follow-up ticket** is on the shared page: a leftover becomes a ticket only if a
+  real mod hit it or a consumer's gate needs it.
 
 ## Pin tickets
 
@@ -276,15 +279,12 @@ Used by `/wayfinder`. The **map** is a single issue with **child** issues as tic
   `Part of #<map>` at the top of the child body. Labels: `wayfinder:<type>`
   (`research`/`prototype`/`grilling`/`task`). Once claimed, the ticket is assigned to the driving
   dev.
-- **Blocking**: GitHub's **native issue dependencies**, the canonical, UI-visible representation.
-  Add an edge with
+- **Blocking**: GitHub's **native issue dependencies**, the canonical, UI-visible representation,
+  with a `## Blocked by` section kept in step, a readback after each write and no
+  `ready-for-agent` while blocked, as the shared page's *Blocked by* says. Here the POST is spelt
   `gh api --method POST repos/trulsjo/grado-factorio-tools/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`,
-  or the same with `grado-factorio-modpack` for a child there. `<blocker-db-id>` is the
-  blocker's numeric **database id**, _not_ its `#number` or `node_id`, read from the blocker's
-  own repository, which may be the other one: `gh api repos/trulsjo/<repo>/issues/<n> --jq .id`.
-  GitHub reports `issue_dependencies_summary.blocked_by` (open blockers only, the live gate).
-  Where dependencies aren't available, fall back to a `Blocked by: #<n>, #<n>` line at the top
-  of the child body. A ticket is unblocked when every blocker is closed.
+  or the same with `grado-factorio-modpack` for a child there. A ticket is unblocked when every
+  blocker is closed.
 
   **Run the POST with the Bash tool: a `Bash(...)` rule in the tracked `.claude/settings.json`
   allows it there, in this spelling, for a ticket of this repository or of
@@ -304,8 +304,8 @@ Used by `/wayfinder`. The **map** is a single issue with **child** issues as tic
   honoured: file a ticket with the transcript's lines and the client's version.
 - **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the
   map's sub-issues / task list), drop any with an open blocker
-  (`issue_dependencies_summary.blocked_by > 0`, or an open issue in the `Blocked by` line) or an
-  assignee; first in map order wins.
+  (`issue_dependencies_summary.blocked_by > 0`, or an open issue in the `## Blocked by` section) or
+  an assignee; first in map order wins.
 - **Claim**: `gh issue edit <n> --add-assignee @me`, the session's first write.
 - **Resolve**: `gh issue comment <n> --body "<answer>"`, then `gh issue close <n>`, then append a
   context pointer (gist + link) to the map's Decisions-so-far.

@@ -68,6 +68,14 @@ A change to the commit of this repository that a consumer records for its `vendo
 range is the commits between the old pin and the new one.
 _Avoid_: pin bump, upgrade
 
+**Stub page**:
+A page at the path a skill expects, such as `docs/agents/issue-tracker.md`, that holds one
+repository's own parts and links a shared page here for the rest. Its first line warns that
+re-running `/setup-matt-pocock-skills` rewrites it in place and drops the link. A sibling's stub
+links the shared page by its `vendor/` path with the GitHub URL beside it; this repository's own
+by a relative link ([ADR 0003](docs/adr/0003-shared-agent-docs-are-linked-from-the-pin-never-imported.md)).
+_Avoid_: pointer page, shim, copy — a stub holds none of the shared page's rules.
+
 **Breaking commit**:
 A commit that calls itself breaking, by the rule in `scripts/breaking-lib.ps1`'s header. What it
 breaks is a consumer's interface, as `CLAUDE.md` defines a breaking change.

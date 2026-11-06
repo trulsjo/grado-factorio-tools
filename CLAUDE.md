@@ -4,6 +4,8 @@
 [`docs/extraction-plan.md`](docs/extraction-plan.md) says what has moved here and what is still
 earmarked.
 
+**Read through another repository's `vendor/`?** Follow its `CLAUDE.md`, not this one (ADR 0003).
+
 **Long-term context lives in the brain**, not here. `CLAUDE.local.md` has the path. Read it at
 session start.
 
@@ -68,8 +70,8 @@ submodule, [ADR 0001](docs/adr/0001-siblings-consume-this-repo-as-a-submodule.md
 ## Agent skills
 
 - **Before starting a ticket**, read `docs/agents/issue-tracker.md`: work starts on a
-  `ready-for-agent` one, on a branch, never `main`. Tracker, pull request and follow-up-ticket
-  conventions are there.
+  `ready-for-agent` one, on a branch, never `main`. Tracker and pull request conventions are
+  there; the shared ones in [`docs/tracker-conventions.md`](docs/tracker-conventions.md).
 - **Triage labels**: `docs/agents/triage-labels.md`.
 - **Code review**: **load `docs/agents/code-review.md` before running a review.** One review, on
   the pull request; the prose is reviewed as carefully as the code.
