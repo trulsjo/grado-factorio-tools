@@ -1,8 +1,8 @@
 # Code review rules
 
 **This page holds the review rules the repositories that link to it share**: what the threshold
-does, and the prose checks every review makes. How and when a review runs is each repository's
-procedure, on its own `docs/agents/code-review.md`, which links this page and names its threshold.
+does, and the prose checks every review makes. How and when a review runs is not on this page.
+Each repository's `docs/agents/code-review.md` links this page and names its threshold.
 
 Ruled by Truls on 2026-11-06 in
 [*Rulings: code review rules*](https://github.com/trulsjo/grado-factorio-tools/issues/327),
@@ -18,7 +18,7 @@ sorts the comment, not the report* and *Review the prose, not only the code* at 
 **The threshold is the grade at which a finding must be fixed.** Each repository names its own
 value beside its link to this page: a score, a verdict, or every finding.
 
-- **Every finding that survived verification is reported, whatever its grade.** The threshold
+- **Every finding is reported, whatever its grade**, a verifier's verdict included. The threshold
   decides what must be fixed, and where a review posts more than one comment, which comment lists
   the finding. It does not decide what the person who ran the review is told, nor what reaches the
   pull request.
@@ -30,9 +30,8 @@ value beside its link to this page: a score, a verdict, or every finding.
 
 ## Prose
 
-Every gate checks machinery, and none reads English: whether the sentence beside a number says
-what the number says is a review's job. Each repository keeps its own prose checks beside its link
-to this page; these two are shared.
+Whether the sentence beside a number says what the number says is a review's job. Each repository
+keeps its own prose checks beside its link to this page; these two are shared.
 
 - **Check every number in prose against a number in the diff, and do the arithmetic.** Not "does
   this look plausible": add it up, multiply it out. A count, a percentage, a tally of kept,

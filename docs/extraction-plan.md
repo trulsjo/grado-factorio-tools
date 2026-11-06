@@ -730,8 +730,8 @@ The port follows GitHub in each.
 
 **Ruled by Truls on 2026-11-06, on the map
 [#309](https://github.com/trulsjo/grado-factorio-tools/issues/309): 21 lifts, and the row
-`docs/claim-grades.md` lacked.** Nothing has moved yet: each row is a ticket here, and the
-copies a lift replaces are deleted by the contraction tickets named beside it. The order is
+`docs/claim-grades.md` lacked.** Each row is a ticket here, its *Lift* cell says when it moved,
+and the copies a lift replaces are deleted by the contraction tickets named beside it. The order is
 *Rulings: the order of the lifts* ([#333](https://github.com/trulsjo/grado-factorio-tools/issues/333)): every lift lands here
 first, each sibling then moves its pin and switches over, and contracts last, the modpack first,
 then rf, then tn. The tickets were filed by

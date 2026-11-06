@@ -102,7 +102,9 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
   #252 and #257 drafted without loading it, and their Summaries held no visual (#263).
   The headings and markers the check holds a body to are on the shared page: the three headings
   ruled by Truls on 2026-10-19 (grado-factorio-modpack#320; for this repository, 2026-10-20,
-  #171), the markers on 2026-10-21 (#185), and the Summary's visual on 2026-10-26 (#264).
+  #171), the markers on 2026-10-21 (#185), and the Summary's visual on 2026-10-26 (#264). A
+  change with nothing to show says none after **Before:** and **After:** (Truls, 2026-10-21,
+  #185), this repository's one departure from the template, which asks for a before and after.
   Among what this repository adds to the template: above it, a `Closes #N` line for each ticket
   the branch closes; inside it, what `-CiteSiblings` and the
   *Blast Radius* rule below ask of its prose; below it, nothing.

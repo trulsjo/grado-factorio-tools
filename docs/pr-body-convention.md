@@ -28,8 +28,7 @@ trulsjo/realistic-fusion-refreshed at `9fd78b5`.
    `## Merge Danger`, stand once each and in that order. Other sections may stand before, between
    and after them.
 4. **The template's four markers**: `**Before:**` and `**After:**` under `## Evidence`, and
-   `**Door:**` and `**Blast Radius:**` under `## Merge Danger`. A change with nothing to show
-   says none after the first two.
+   `**Door:**` and `**Blast Radius:**` under `## Merge Danger`.
 
 ## What each switch adds
 
@@ -38,7 +37,7 @@ trulsjo/realistic-fusion-refreshed at `9fd78b5`.
 - **`-RequireSummaryVisual`**: `## Summary` holds a fenced or an indented code block.
 
 **The switches are each repository's choice** (ruling 4). A repository turns one on in its own CI
-line and its own hook line; its tracker page says which it uses.
+line and its own hook line.
 
 ## Naming a branch commit
 
