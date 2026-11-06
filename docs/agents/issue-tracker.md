@@ -14,9 +14,7 @@ setup template's core and this repository's own parts.
 ## Conventions
 
 - **Create an issue**: `gh issue create --title "..." --body-file <path>`, after searching the open
-  issues as the shared page says. This repository names no other tracker to search. On
-  2026-10-08 one command of three heredocs, meant to write the bodies of what became #74, #75 and
-  #76, failed here (recorded on PR #81); the shared page has the rest.
+  issues as the shared page says. This repository names no other tracker to search.
 - **A figure in a ticket carries the command that gave it**: a number, a count, a size, a commit,
   or the date of a measurement is followed by the command that printed it, or by where it was
   read and when. A figure with no command, such as one a harness reported in a session, says so,
@@ -58,8 +56,7 @@ setup template's core and this repository's own parts.
   with appropriate `--label` and `--state` filters.
 - **Comment on an issue**: `gh issue comment <number> --body "..."`
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
-- **Close**: `gh issue close <number> --comment "..."`, after listing what hangs off the issue, as
-  the shared page's *Before closing* says; a duplicate with `--duplicate-of`, as it says too.
+- **Close**: `gh issue close <number> --comment "..."`, after the shared page's *Before closing*.
 
 Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
 
@@ -164,8 +161,7 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
   review findings, a `perl` revert of the changed-tree guard matched nothing, and the copy's
   self-test passed 5 of 5 on an unchanged file, which reads as "this fix is not tested". An empty
   diff showed it; with the pattern fixed, the revert failed case 3, by that session's account.
-- **The bar for a follow-up ticket** is on the shared page: a leftover becomes a ticket only if a
-  real mod hit it or a consumer's gate needs it.
+- **The bar for a follow-up ticket** is on the shared page.
 
 ## Pin tickets
 
@@ -279,9 +275,7 @@ Used by `/wayfinder`. The **map** is a single issue with **child** issues as tic
   `Part of #<map>` at the top of the child body. Labels: `wayfinder:<type>`
   (`research`/`prototype`/`grilling`/`task`). Once claimed, the ticket is assigned to the driving
   dev.
-- **Blocking**: GitHub's **native issue dependencies**, the canonical, UI-visible representation,
-  with a `## Blocked by` section kept in step, a readback after each write and no
-  `ready-for-agent` while blocked, as the shared page's *Blocked by* says. Here the POST is spelt
+- **Blocking**: as the shared page's *Blocked by* says. Here the POST is spelt
   `gh api --method POST repos/trulsjo/grado-factorio-tools/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`,
   or the same with `grado-factorio-modpack` for a child there. A ticket is unblocked when every
   blocker is closed.
