@@ -66,7 +66,11 @@ or it is a finding), likely without saying from what
 **A ticket, and a comment that rules on one, is written for the session that implements it**, which
 trusts what it says. So the grades reach a ticket by four rules (Truls, 2026-11-06, on
 [#325](https://github.com/trulsjo/grado-factorio-tools/issues/325), ruling 7). Each repository
-that links this page keeps the incidents that showed it a rule on its own pages.
+that links this page keeps the incidents that showed it a rule on its own pages. Gathered from three
+sources, read 2026-11-06: trulsjo/grado-factorio-tools's tracker page at `e70669f`,
+trulsjo/grado-factorio-modpack's at `987e638` (the quantifier rule) and
+trulsjo/realistic-fusion-refreshed's `docs/agents/code-review.md` at `9fd78b5`. The intro's
+`39dfb8c` is the source of the sections above this one.
 
 - **A figure carries its command.** A number, a count, a size, a commit or the date of a
   measurement is followed by the command that printed it, or by where it was read and when: it is
