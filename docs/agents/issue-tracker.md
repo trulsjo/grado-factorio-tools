@@ -15,24 +15,21 @@ setup template's core and this repository's own parts.
 
 - **Create an issue**: `gh issue create --title "..." --body-file <path>`, after searching the open
   issues as the shared page says. This repository names no other tracker to search.
-- **A figure in a ticket carries the command that gave it**: a number, a count, a size, a commit,
-  or the date of a measurement is followed by the command that printed it, or by where it was
-  read and when. A figure with no command, such as one a harness reported in a session, says so,
-  with the date. The session that implements the ticket runs the command before it copies the
-  figure anywhere; if the two disagree, the page gets what the command printed and the pull
-  request says the ticket was wrong. On 2026-10-09 #87's ticket gave PR #85's first review the
-  merged pull request's line counts, 79 added and 27 deleted, where
-  `git diff --shortstat 49b0332~1 ac1108d` gives 73 and 24, and the figure reached a page before
-  a review caught it.
-- **What a ticket states**: a statement about the repository or about a past pull request is read
-  from the source when the ticket is written. One that was not read is marked as an account, as
-  #89 does with "by its #195's account and not re-read here". A statement about what a command
-  prints, lists or exits with is run when the ticket is written, and the ticket shows the command
-  and what it printed: the source says which command runs, not what it prints. Where it cannot be
-  run, the statement is marked as not run and the run is an acceptance criterion. On 2026-10-11
-  #106 said, "read from source, not run for this ticket", that with a two-dot range the files
-  `main` changed since are listed too. The first run, on PR #107, showed that false for a file
-  the base added.
+- **A ticket's evidence**: the four rules for a ticket and a ruling comment, a figure carries its
+  command, a statement is read or marked as an account, a quantifier carries its search, and a
+  command that printed nothing is run again, are
+  [`docs/claim-grades.md`](../claim-grades.md)'s *Tickets and ruling comments*. This
+  repository's incidents:
+  - **A figure.** On 2026-10-09 #87's ticket gave PR #85's first review the merged pull request's
+    line counts, 79 added and 27 deleted, where `git diff --shortstat 49b0332~1 ac1108d` gives 73
+    and 24, and the figure reached a page before a review caught it.
+  - **A statement.** #89 marks one as "by its #195's account and not re-read here". On
+    2026-10-11 #106 said, "read from source, not run for this ticket", that with a two-dot range
+    the files `main` changed since are listed too. The first run, on PR #107, showed that false
+    for a file the base added.
+  - **A command that printed nothing.** #148 ran `gh issue view <number> --comments` on #145,
+    which has no comments, and recorded "printed nothing"; what the command does is on the
+    shared tracker page, *Read an issue with `--json`*.
 - **An acceptance criterion on what a script does names the self-test case that fails when that
   behaviour is reverted**, or says the behaviour is held by a manual run only. The second is a
   decision recorded in the ticket, not a gap a review finds. The rule is for criteria on a
@@ -42,11 +39,6 @@ setup template's core and this repository's own parts.
   On PR #223, on 2026-10-25, the bug scan reverted the `Test-Stackable` condition and `-SelfTest`
   still passed (its review comment, bug finding 1, score 75), and a third half was added in a fix
   round.
-- **A command that printed nothing** has shown what it prints for that input only. Before a
-  ticket, a page or a pull request body records what the command does, it is run again on an
-  input that should print something, and the record shows both runs. #148 ran
-  `gh issue view <number> --comments` on #145, which has no comments, and recorded "printed
-  nothing"; what the command does is on the shared page, *Read an issue with `--json`*.
 - **Read an issue**:
   `gh issue view <number> --json title,body,labels,comments --jq '{title, body, labels: [.labels[].name], comments: [.comments[].body]}'`,
   not `--comments`, for the shared page's reason. All five review lanes of #148's session met
