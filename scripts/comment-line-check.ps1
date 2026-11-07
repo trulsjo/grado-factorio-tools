@@ -54,6 +54,7 @@
 .EXAMPLE
     pwsh -File vendor/grado-factorio-tools/scripts/comment-line-check.ps1 -Path 'scripts/*.ps1,.githooks/*,.github/workflows/*.yml'
 #>
+
 #Requires -Version 7
 param(
     [string[]] $Path = @('scripts/*.ps1'),

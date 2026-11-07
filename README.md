@@ -590,6 +590,21 @@ PowerShell runs it there.
 `Get-Variable` or a string, nor a dot-sourced file's; the rest is in its header. `-SelfTest`
 proves it can fail.
 
+## Checking that a script's help is read
+
+When PowerShell cannot read a comment-based help block it drops it without a word.
+`scripts/help-check.ps1` reads each script under each `-Path` given, a directory with its
+subdirectories, and fails on a help block PowerShell does not read, naming each cause it sees: a
+line that starts with a dot and is no help keyword, or a `#Requires` line above the block (#342).
+It fails, too, on a `#Requires` line straight after a block, which is read as help text, and on a
+script that does not parse.
+
+    pwsh -File scripts/help-check.ps1 scripts
+
+`scripts/check.ps1` runs it on `scripts/`. It finds a help block by its `.SYNOPSIS` line, so a
+script with no help passes; the rest it cannot see is in its header. `-SelfTest` proves it can
+fail.
+
 ## Checking comment line widths
 
 `scripts/comment-line-check.ps1` holds comment lines to a width, `-Limit`, 100 unless said
@@ -660,8 +675,9 @@ no network.
 ## Checking this repository
 
 `scripts/check.ps1` is the one command before a push. It parses every script here, runs each
-self-test that needs neither the game nor the network, runs `param-check.ps1` and
-`variable-case-check.ps1` over `scripts/` and `markdown-check.ps1` over the tracked Markdown,
+self-test that needs neither the game nor the network, runs `param-check.ps1`,
+`variable-case-check.ps1` and `help-check.ps1` over `scripts/` and `markdown-check.ps1` over the
+tracked Markdown,
 holds the agent pages to their size limits, and fails on a script parameter this README never
 names as `-<Name>` (#194), or a script's comment line over 100 characters; the `pre-commit` hook
 holds the staged scripts to that rule too, through `scripts/comment-line-check.ps1` (#225). CI
