@@ -15,6 +15,8 @@ and *Review the prose, not only the code* at `987e638`, and trulsjo/realistic-fu
 *The verdict sorts the comment, not the report* and *Review the prose, not only the code* at
 `9fd78b5`. Two checks under *Prose* were ruled by Truls at triage on 2026-11-07: the stub check
 at [#369](https://github.com/trulsjo/grado-factorio-tools/issues/369#issuecomment-6704506057),
+with a sibling read at a commit of its own `main` by
+[a later comment](https://github.com/trulsjo/grado-factorio-tools/issues/369#issuecomment-6706987161),
 and the question of whether a cited check could have failed at
 [#370](https://github.com/trulsjo/grado-factorio-tools/issues/370#issuecomment-6704506905).
 
