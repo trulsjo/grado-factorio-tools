@@ -8,10 +8,12 @@ Ruled by Truls on 2026-11-06 in
 [*Rulings: code review rules*](https://github.com/trulsjo/grado-factorio-tools/issues/327),
 rulings 1 and 2, with the threshold worded by
 [*Rulings: a shared code review procedure*](https://github.com/trulsjo/grado-factorio-tools/issues/332),
-ruling 7. Gathered from three review pages, read 2026-11-06: trulsjo/grado-factorio-tools's
-*What is reported* at `e70669f`, trulsjo/grado-factorio-modpack's *The threshold gates the
-comment, not the report* at `987e638`, and trulsjo/realistic-fusion-refreshed's *The verdict
-sorts the comment, not the report* and *Review the prose, not only the code* at `9fd78b5`.
+ruling 7. Gathered from four review pages, read 2026-11-06: trulsjo/grado-factorio-tools's
+*What is reported* and its `docs/agents/code-review-prose.md` (the quantifier check) at
+`e70669f`, trulsjo/grado-factorio-modpack's *The threshold gates the comment, not the report*
+and *Review the prose, not only the code* at `987e638`, and trulsjo/realistic-fusion-refreshed's
+*The verdict sorts the comment, not the report* and *Review the prose, not only the code* at
+`9fd78b5`.
 
 ## The threshold sorts the comment, not the report
 

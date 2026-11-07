@@ -38,7 +38,7 @@ On top of the `/code-review` plugin. The evidence is in
 ## What is reported
 
 - **Each review posts one comment on the pull request** once its findings are acted on: every
-  finding that survived verification, its score, whether it was verified and its outcome. A
+  finding, its score, whether it was verified and its outcome. A
   review with no finding says so there. Its bug scan section says which check it stands on:
   CI's run, by its id, or a local run. The comment is not edited once posted, and the
   plugin's own comment format is not used.

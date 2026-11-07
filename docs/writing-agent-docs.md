@@ -30,9 +30,9 @@ at `78486d2`; and trulsjo/grado-factorio-tools's `$PAGE_LIMITS` in `scripts/chec
 **Our own code is cited by its symbol**: the function, field, constant or prototype, with a
 repository-relative path, since two files may share a name (realistic-fusion-refreshed has two
 `entities.lua`). A comment with no symbol is cited by a quoted fragment of its own words.
-trulsjo/realistic-fusion-refreshed's ADR 0032 at `9fd78b5` gives the reason: two pull requests
-moved `control.lua`'s `get_capacity` call sites and left a research note pointing at the old
-lines.
+trulsjo/realistic-fusion-refreshed's ADR 0032 at `9fd78b5` gives the reason, *A line number is a
+claim no gate reads*: a stale line number reads as correct (its ADR 0018 cited two lines off),
+where a wrong symbol greps to nothing and a reader notices at once.
 
 **Ancestor, vanilla and third-party code keeps its line numbers**: a predecessor mod, the game's
 own Lua, another author's mod. Those trees are never edited here. So our own code is, by that

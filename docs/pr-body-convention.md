@@ -19,11 +19,10 @@ trulsjo/realistic-fusion-refreshed at `9fd78b5`.
    commit on the branch, so a branch commit's hash names something the merge deletes. A hash may
    be cited once it is on `main`. The check asks git whether each word that names a commit is an
    ancestor of `origin/main`.
-2. **A closing keyword stands only in a bare `Closes #N` line**, one line per ticket the pull
-   request closes. GitHub closes an issue on a closing keyword before a reference anywhere in the
-   body, whether the author meant it or not: trulsjo/grado-factorio-tools's PR #105 said "No
-   ticket is closed: #103" on 2026-10-11, and GitHub listed that issue as one the merge would
-   close.
+2. **A closing keyword stands only in a bare `Closes #N` line**, one ticket to a line. GitHub
+   closes an issue on a closing keyword before a reference anywhere in the body, whether the
+   author meant it or not: trulsjo/grado-factorio-tools's PR #105 said "No ticket is closed:
+   #103" on 2026-10-11, and GitHub listed that issue as one the merge would close.
 3. **The `mattpocock-skills:pr` template's three headings**, `## Summary`, `## Evidence` and
    `## Merge Danger`, stand once each and in that order. Other sections may stand before, between
    and after them.
