@@ -74,7 +74,7 @@ trulsjo/realistic-fusion-refreshed's `docs/agents/code-review.md` at `9fd78b5`. 
 
 - **A figure carries its command.** A number, a count, a size, a commit or the date of a
   measurement is followed by the command that printed it, or by where it was read and when: it is
-  *Measured* or *Read from source*, and says which. A figure with no command says so, with its
+  *Measured* or *Read from source*. A figure with no command says so, with its
   date. The session that implements the ticket runs the command before it copies the figure; where
   the two disagree, the page gets what the command printed, and the pull request says the ticket
   was wrong.

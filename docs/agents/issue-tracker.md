@@ -71,9 +71,8 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
 - **Work happens on a branch named `<issue>-<slug>`, never on `main`.**
 - **What a pull request body must hold, and how a branch commit is named, are on
   [`docs/pr-body-convention.md`](../pr-body-convention.md)**, the page that declares what
-  `scripts/pr-body-check.ps1` checks. Here a branch commit is named by citing the pull request,
-  and CI and the `refuse-pr-body.ps1` hook run the check with both switches, `-CiteSiblings` and
-  `-RequireSummaryVisual`.
+  `scripts/pr-body-check.ps1` checks. Here CI and the `refuse-pr-body.ps1` hook run the check
+  with both switches, `-CiteSiblings` and `-RequireSummaryVisual`.
 - **The title and the body are checked before the create, in one command joined with `&&`**, so
   that a failure of either stops it. The body file is drafted first, by the pr skill, as
   *Pull request body* below says:
