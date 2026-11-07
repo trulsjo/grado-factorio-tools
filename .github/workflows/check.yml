@@ -1,7 +1,8 @@
-# What .githooks/pre-push runs, for a clone that never opted into the hooks, plus two things a
-# hook cannot see: the pull request's title, and its body, for the commits it cites, for a
-# closing keyword outside a `Closes #N` line, and for the pr template's three headings. `edited`
-# is listed so a retitle or an edited body is checked again.
+# What .githooks/pre-push runs, for a clone that never opted into the hooks, plus three things a
+# hook cannot see: the commits the tracked Markdown cites, which reach origin/main only once
+# pushed; the pull request's title; and its body, for the commits it cites, for a closing keyword
+# outside a `Closes #N` line, and for the pr template's three headings. `edited` is listed so a
+# retitle or an edited body is checked again.
 #
 # On windows-latest and on ubuntu-latest, a job each (grado-factorio-tools#117): the scripts
 # were written on Windows, grado-factorio-modpack's check runs on ubuntu-latest (its
@@ -42,6 +43,12 @@ jobs:
 
       - name: Parse every script and run the self-tests
         run: pwsh -NoProfile -File scripts/check.ps1
+
+      # A whole-tree check, run here and not by pre-push (grado-factorio-tools#346, #319 ruling
+      # 8): a commit is on origin/main only once pushed. The two pages are records, which may
+      # cite a branch's commits on purpose.
+      - name: Check that each commit the Markdown cites is on main
+        run: pwsh -NoProfile -File scripts/cited-commit-check.ps1 -Exempt 'docs/measurements.md,docs/agents/code-review-evidence.md'
 
       # Through the environment, never pasted into the command: a title is text somebody typed.
       - name: Check the pull request title
