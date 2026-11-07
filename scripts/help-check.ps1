@@ -24,11 +24,11 @@
 
     WHAT A FAILURE NAMES. The script and the block's first line, and each cause it can see: a
     line in the block that starts with a dot and is no help keyword, and a #Requires line above
-    the block, which detaches it. Apart from those, a #Requires line on the line straight after a
-    read block's closing line, which PowerShell reads into the block's last section and shows as
-    help text, fails too; a blank line between them is the fix. A script that does not parse fails,
-    naming the parser's first error, and so does each -Path given that is no *.ps1 and holds
-    none, beside others that do.
+    the script's own block, which detaches it; above a function's, it is no cause. Apart from
+    those, a #Requires line on the line straight after a read block's closing line, which
+    PowerShell reads into the block's last section and shows as help text, fails too; a blank
+    line between them is the fix. A script that does not parse fails, naming the parser's first
+    error, and so does each -Path given that is no *.ps1 and holds none, beside others that do.
 
     WHAT IT CANNOT SEE. Help written as # line comments. A script whose help block has no
     .SYNOPSIS, which is not read as one, so a script that should have help and has none passes.
@@ -103,6 +103,10 @@ function Get-HelpProblem {
                 "    line $($first + $n) starts with a dot but is no help keyword: $l"
             }
         }
+        # A #Requires detaches only the script's own help: a block with code above it, a
+        # function's, is not the script's, and a #Requires at the top is no cause of it.
+        $code = @($tokens | Where-Object { $_.Kind -notin 'Comment', 'NewLine', 'LineContinuation', 'EndOfInput' -and $_.Extent.EndOffset -le $block.Extent.StartOffset })
+        if ($code) { continue }
         foreach ($r in $requires | Where-Object { $_.Extent.EndOffset -le $block.Extent.StartOffset }) {
             "    line $($r.Extent.StartLineNumber): a #Requires line above the block detaches it; move it below the block, after a blank line"
         }
@@ -116,7 +120,7 @@ function Invoke-HelpCheck {
     $files = @()
     foreach ($p in $Path) {
         $these = @(if (Test-Path -LiteralPath $p -PathType Container) { Get-ChildItem -LiteralPath $p -Recurse -Filter '*.ps1' -File }
-            elseif (Test-Path -LiteralPath $p -PathType Leaf) { Get-Item -LiteralPath $p })
+            elseif (Test-Path -LiteralPath $p -PathType Leaf) { Get-Item -LiteralPath $p | Where-Object Extension -eq '.ps1' })
         # Each one given, not only all of them: a mistyped one beside a good one is still a miss.
         if (-not $these) {
             $named = [IO.Path]::GetRelativePath($Root, [IO.Path]::GetFullPath($p, $Root)) -replace '\\', '/'
@@ -154,9 +158,9 @@ if ($SelfTest) {
                 $gap = @(Get-HelpProblem -Where 'gap.ps1' -Text (& $script '<#', '.SYNOPSIS', '    Short.', '#>', '', '#Requires -Version 7', 'param()'))
                 ($got -join '|') -eq 'below.ps1:5: the #Requires line straight after the help block of line 1 is read as help text; put a blank line between the #> and it' -and
                     $gap.Count -eq 0 }
-            'a function''s help block that is not read fails, by its own line' = {
-                $got = @(Get-HelpProblem -Where 'fn.ps1' -Text (& $script 'param()', 'function f {', '    <#', '    .SYNOPSIS', '        Short.', '    .NET reads this', '    #>', '    1', '}'))
-                ($got -join '|') -eq 'fn.ps1:3: a help block PowerShell does not read|    line 6 starts with a dot but is no help keyword: .NET reads this' }
+            'a function''s help block that is not read fails, by its own line, and the #Requires at the top is not named as its cause' = {
+                $got = @(Get-HelpProblem -Where 'fn.ps1' -Text (& $script '#Requires -Version 7', '', 'param()', 'function f {', '    <#', '    .SYNOPSIS', '        Short.', '    .NET reads this', '    #>', '    1', '}'))
+                ($got -join '|') -eq 'fn.ps1:5: a help block PowerShell does not read|    line 8 starts with a dot but is no help keyword: .NET reads this' }
             'a .SYNOPSIS in a string is no block, and a script that does not parse fails, naming the error' = {
                 $string = @(Get-HelpProblem -Where 's.ps1' -Text (& $script '$x = @''', '<#', '.SYNOPSIS', '    In a string.', '.bad line', '#>', '''@'))
                 $broken = @(Get-HelpProblem -Where 'b.ps1' -Text (& $script 'param(', '<#', '.SYNOPSIS', '    Short.', '#>'))
@@ -178,7 +182,9 @@ if ($SelfTest) {
                 $none = Invoke-HelpCheck -Path (Join-Path $temp 'empty') -Root $temp
                 $missing = Invoke-HelpCheck -Path (Join-Path $temp 'scripts/good.ps1'), (Join-Path $temp 'no-such') -Root $temp
                 $fine = Invoke-HelpCheck -Path (Join-Path $temp 'scripts/good.ps1') -Root $temp
-                $end.Code -eq 1 -and $end.Lines[0] -eq 'scripts/sub/bad.ps1:2: a help block PowerShell does not read' -and
+                $text = Invoke-HelpCheck -Path (Join-Path $temp 'scripts/notes.txt') -Root $temp
+                $text.Code -eq 1 -and $text.Lines[-1] -eq 'FAILED - help-check: scripts/notes.txt is no *.ps1 and holds none, so it was not read.' -and
+                    $end.Code -eq 1 -and $end.Lines[0] -eq 'scripts/sub/bad.ps1:2: a help block PowerShell does not read' -and
                     $end.Lines[-1] -match 'among 2 script\(s\)\.$' -and
                     $none.Code -eq 1 -and $none.Lines[-1] -eq 'FAILED - help-check: empty is no *.ps1 and holds none, so it was not read.' -and
                     $missing.Code -eq 1 -and $missing.Lines[-1] -eq 'FAILED - help-check: no-such is no *.ps1 and holds none, so it was not read.' -and
