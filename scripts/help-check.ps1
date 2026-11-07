@@ -9,10 +9,11 @@
     block it drops it without a word, and Get-Help shows only the syntax line; the block reads
     the same in the file either way. true-nukes-refreshed met it three times on 2026-11-05, a
     line inside the block that starts with a dot and is no help keyword, and
-    realistic-fusion-refreshed in twenty-eight scripts, a #Requires line above the block (its
-    #151). This merges the two checks: true-nukes-refreshed's scripts/tests/script-help.ps1 at
-    78486d2, whose method it keeps, and realistic-fusion-refreshed's scripts/ship-check.ps1
-    section 5 at 4de346d, whose #Requires diagnosis it names as a cause.
+    realistic-fusion-refreshed in twenty-seven scripts, a #Requires line above the block, and in
+    a twenty-eighth, one straight after it (its #151). This merges the two checks:
+    true-nukes-refreshed's scripts/tests/script-help.ps1 at 78486d2, whose method it keeps, and
+    realistic-fusion-refreshed's scripts/ship-check.ps1 section 5 at 4de346d, whose #Requires
+    diagnosis it names as a cause.
 
     THE METHOD. In each *.ps1 under -Path, a directory read with its subdirectories, the block
     comments with a .SYNOPSIS line are found from the parser's comment tokens, so text in a
@@ -26,7 +27,8 @@
     the block, which detaches it. Apart from those, a #Requires line on the line straight after a
     read block's closing line, which PowerShell reads into the block's last section and shows as
     help text, fails too; a blank line between them is the fix. A script that does not parse fails,
-    naming the parser's first error, and so does a -Path that holds no *.ps1.
+    naming the parser's first error, and so does each -Path given that is no *.ps1 and holds
+    none, beside others that do.
 
     WHAT IT CANNOT SEE. Help written as # line comments. A script whose help block has no
     .SYNOPSIS, which is not read as one, so a script that should have help and has none passes.
@@ -111,11 +113,17 @@ function Get-HelpProblem {
 # name is given relative to.
 function Invoke-HelpCheck {
     param([Parameter(Mandatory)] [string[]] $Path, [Parameter(Mandatory)] [string] $Root)
-    $files = @(foreach ($p in $Path) {
-            if (Test-Path -LiteralPath $p -PathType Container) { Get-ChildItem -LiteralPath $p -Recurse -Filter '*.ps1' -File }
-            elseif (Test-Path -LiteralPath $p -PathType Leaf) { Get-Item -LiteralPath $p }
-        })
-    if (-not $files) { return @{ Code = 1; Lines = @("FAILED - help-check: no *.ps1 under $($Path -join ', '), so nothing was read.") } }
+    $files = @()
+    foreach ($p in $Path) {
+        $these = @(if (Test-Path -LiteralPath $p -PathType Container) { Get-ChildItem -LiteralPath $p -Recurse -Filter '*.ps1' -File }
+            elseif (Test-Path -LiteralPath $p -PathType Leaf) { Get-Item -LiteralPath $p })
+        # Each one given, not only all of them: a mistyped one beside a good one is still a miss.
+        if (-not $these) {
+            $named = [IO.Path]::GetRelativePath($Root, [IO.Path]::GetFullPath($p, $Root)) -replace '\\', '/'
+            return @{ Code = 1; Lines = @("FAILED - help-check: $named is no *.ps1 and holds none, so it was not read.") }
+        }
+        $files += $these
+    }
     $problems = @(foreach ($f in $files) {
             Get-HelpProblem -Text ([IO.File]::ReadAllText($f.FullName)) -Where ([IO.Path]::GetRelativePath($Root, $f.FullName) -replace '\\', '/')
         })
@@ -153,15 +161,27 @@ if ($SelfTest) {
                 $string = @(Get-HelpProblem -Where 's.ps1' -Text (& $script '$x = @''', '<#', '.SYNOPSIS', '    In a string.', '.bad line', '#>', '''@'))
                 $broken = @(Get-HelpProblem -Where 'b.ps1' -Text (& $script 'param(', '<#', '.SYNOPSIS', '    Short.', '#>'))
                 $string.Count -eq 0 -and $broken.Count -eq 1 -and $broken[0] -match '^b\.ps1: does not parse: ' }
-            'a folder is read with its subdirectories, each problem named by its path; one with no *.ps1 fails' = {
+            'a block with no .SYNOPSIS is no help block; one opened on the <# line is found, its dot line there named; a #Requires below an unread block is not named as above (#374)' = {
+                $plain = @(Get-HelpProblem -Where 'p.ps1' -Text (& $script '<#', '.githooks are a folder', '#>', 'param()'))
+                $inline = @(Get-HelpProblem -Where 'i.ps1' -Text (& $script 'param()', 'function f {', '    <#  .SYNOPSIS', '        S.', '    .bad', '    #>', '    1', '}'))
+                $onOpen = @(Get-HelpProblem -Where 'o.ps1' -Text (& $script '<# .bad first', '.SYNOPSIS', '    S.', '#>', 'param()'))
+                $below = @(Get-HelpProblem -Where 'r.ps1' -Text (& $script '<#', '.SYNOPSIS', '    S.', '.bad', '#>', '#Requires -Version 7', 'param()'))
+                $plain.Count -eq 0 -and
+                    ($inline -join '|') -eq 'i.ps1:3: a help block PowerShell does not read|    line 5 starts with a dot but is no help keyword: .bad' -and
+                    ($onOpen -join '|') -eq 'o.ps1:1: a help block PowerShell does not read|    line 1 starts with a dot but is no help keyword: .bad first' -and
+                    ($below -join '|') -eq 'r.ps1:1: a help block PowerShell does not read|    line 4 starts with a dot but is no help keyword: .bad' }
+            'a folder is read with its subdirectories, *.ps1 only, each problem named by its path; a -Path that is no file and holds no *.ps1 fails, beside one that does' = {
                 Set-Content -LiteralPath (Join-Path $temp 'scripts/good.ps1') -Value $good -NoNewline
                 Set-Content -LiteralPath (Join-Path $temp 'scripts/sub/bad.ps1') -Value (& $script '#Requires -Version 7', '<#', '.SYNOPSIS', '    S.', '#>') -NoNewline
+                Set-Content -LiteralPath (Join-Path $temp 'scripts/notes.txt') -Value (& $script '<#', '.SYNOPSIS', '.bad', '#>') -NoNewline
                 $end = Invoke-HelpCheck -Path (Join-Path $temp 'scripts') -Root $temp
                 $none = Invoke-HelpCheck -Path (Join-Path $temp 'empty') -Root $temp
+                $missing = Invoke-HelpCheck -Path (Join-Path $temp 'scripts/good.ps1'), (Join-Path $temp 'no-such') -Root $temp
                 $fine = Invoke-HelpCheck -Path (Join-Path $temp 'scripts/good.ps1') -Root $temp
                 $end.Code -eq 1 -and $end.Lines[0] -eq 'scripts/sub/bad.ps1:2: a help block PowerShell does not read' -and
                     $end.Lines[-1] -match 'among 2 script\(s\)\.$' -and
-                    $none.Code -eq 1 -and $none.Lines[-1] -match '^FAILED - help-check: no \*\.ps1 under ' -and
+                    $none.Code -eq 1 -and $none.Lines[-1] -eq 'FAILED - help-check: empty is no *.ps1 and holds none, so it was not read.' -and
+                    $missing.Code -eq 1 -and $missing.Lines[-1] -eq 'FAILED - help-check: no-such is no *.ps1 and holds none, so it was not read.' -and
                     $fine.Code -eq 0 -and $fine.Lines[-1] -eq 'OK - help-check: PowerShell reads every help block in the 1 script(s) read.' }
         }
         $failures = 0; $n = 0
