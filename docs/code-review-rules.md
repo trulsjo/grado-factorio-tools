@@ -13,9 +13,10 @@ ruling 7. Gathered from four review pages, read 2026-11-06: trulsjo/grado-factor
 `e70669f`, trulsjo/grado-factorio-modpack's *The threshold gates the comment, not the report*
 and *Review the prose, not only the code* at `987e638`, and trulsjo/realistic-fusion-refreshed's
 *The verdict sorts the comment, not the report* and *Review the prose, not only the code* at
-`9fd78b5`. The stub check under *Prose* was ruled by Truls at the triage of
-[#369](https://github.com/trulsjo/grado-factorio-tools/issues/369#issuecomment-6704506057),
-2026-11-07.
+`9fd78b5`. Two checks under *Prose* were ruled by Truls at triage on 2026-11-07: the stub check
+at [#369](https://github.com/trulsjo/grado-factorio-tools/issues/369#issuecomment-6704506057),
+and the question of whether a cited check could have failed at
+[#370](https://github.com/trulsjo/grado-factorio-tools/issues/370#issuecomment-6704506905).
 
 ## The threshold sorts the comment, not the report
 
@@ -54,3 +55,12 @@ keeps its own prose checks beside its link to this page; these are shared.
   both, and the review panel found them
   ([its comment](https://github.com/trulsjo/grado-factorio-tools/pull/368#issuecomment-6703616741),
   findings A and B).
+- **For every check the pull request cites as passing, ask whether it could have failed on this
+  change.** A check that reads none of what the change touched passes whatever the change does,
+  and citing it is a finding, even with its passing run shown. For code a revert answers the
+  question. For help text, prose or configuration no revert applies, so the reviewer names what
+  the check reads and whether that includes the change. On trulsjo/grado-factorio-tools's
+  PR #368 the body cited `pr-body-check.ps1 -SelfTest` for an edit to that script's help text,
+  and the self-test reads no help text. All three panel reviewers found it
+  ([their comment](https://github.com/trulsjo/grado-factorio-tools/pull/368#issuecomment-6703616741),
+  finding G), and the PR's own review did not.
