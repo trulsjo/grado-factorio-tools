@@ -510,22 +510,23 @@ as what, and what it cannot see, is in its header.
 
     pwsh -File scripts/markdown-check.ps1 -All -MaxLineLength 100
 
-Handed `-MaxLineLength`, it also reports a prose line longer than that; without it, it is silent
-on length. `scripts/check.ps1` hands it 100 here. Neither sibling is asked to: counted on
-2026-10-09 by a throwaway script, `grado-factorio-modpack` had 326 such lines and
-`realistic-fusion-refreshed` 3,091.
+Handed `-MaxLineLength`, it also reports a prose line longer than that, and a figure grouped in
+thousands, as `580 000`, split across a line end (#345); without it, it is silent on both.
+`scripts/check.ps1` hands it 100 here. Neither sibling is asked to: counted on 2026-10-09 by a
+throwaway script, `grado-factorio-modpack` had 326 such lines and `realistic-fusion-refreshed`
+3,091.
 
     pwsh -File scripts/markdown-rewrap.ps1 -MaxLineLength 100
     pwsh -File scripts/markdown-rewrap.ps1 -Comment -Path .github/workflows/check.yml -MaxLineLength 100
 
 `scripts/markdown-rewrap.ps1` repairs what that reports (#215): each paragraph holding a line
-over the limit is rewrapped from that line to its end, never inside a code span, a link or an
-HTML comment, and never into a line that starts a list item, a heading or another block. It takes
-the check's `-Range`, `-All` and `-Path`, and with none the staged files; it writes the working
-tree only, and never stages. Which lines are prose and which are over is the check's own reading,
-through `scripts/markdown-lib.ps1`, which both load. `-Comment` does the same for a script's or a
-workflow's comment lines over the limit, a `#` block or a paragraph of a block comment, found by
-length. `-SelfTest` needs no git and no game.
+over the limit is rewrapped from that line to its end, never inside a code span, a link, an HTML
+comment or a figure grouped in thousands, and never into a line that starts a list item, a heading
+or another block. It takes the check's `-Range`, `-All` and `-Path`, and with none the staged files;
+it writes the working tree only, and never stages. Which lines are prose and which are over is the
+check's own reading, through `scripts/markdown-lib.ps1`, which both load. `-Comment` does the same
+for a script's or a workflow's comment lines over the limit, a `#` block or a paragraph of a block
+comment, found by length. `-SelfTest` needs no git and no game.
 
 ## Checking a pull request body
 

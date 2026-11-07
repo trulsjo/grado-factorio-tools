@@ -3,10 +3,10 @@
     Checks Markdown for three things a machine can decide: emphasis or a code span left open at
     the end of its paragraph, or a `*` that can only close with nothing open to close; a table
     row whose column count differs from its header's; and a link to a file in the repository,
-    or to a heading, that is not there. Handed -MaxLineLength, a fourth: a prose line longer than
-    that. Exit 0 means none was found in the files read, with -All alone that there was at least
-    one to read, and with -Path that each file named was read; exit 1 names each as
-    <file>:<line>: <what>.
+    or to a heading, that is not there. Handed -MaxLineLength, two more: a prose line longer than
+    that, and a figure grouped in thousands split across a line end. Exit 0 means none was found in
+    the files read, with -All alone that there was at least one to read, and with -Path that each
+    file named was read; exit 1 names each as <file>:<line>: <what>.
 
 .DESCRIPTION
     A PRE-COMMIT CHECK (grado-factorio-modpack#149, where it was written). Run with no arguments,
@@ -76,6 +76,16 @@
     code block, and a line with no space to break at within the limit. A space inside a code span
     is no such place, so a command in one is never wrapped. Trailing spaces are not counted. A
     limit below 1 is refused.
+    A FIGURE GROUPED IN THOUSANDS SPLIT ACROSS A LINE END, ALSO ONLY WITH A LIMIT
+    (grado-factorio-tools#345, from realistic-fusion-refreshed's #662, where a rewrap split
+    "133 423" and "580 000" and reviewers found them by reading). A prose line fails when it ends
+    in a number of one to three digits, or that and groups of three after it, and the next line
+    of its paragraph opens with exactly three digits. Before the number comes a space, the line's
+    start or punctuation, and not a letter, a digit, `#`, `.`, `,` or `-`: "#656", "2026",
+    "10.8" and "2026-10-09" at a line's end head no figure. Two numbers that are not one figure,
+    "the first 12" above "100 lines", fail too, as nothing in the lines tells them apart; break
+    the line a word earlier or later. markdown-rewrap.ps1 never breaks there. It cannot see a
+    figure grouped with a comma or split across a paragraph's end.
     WHICH LINES ARE AN INDENTED CODE BLOCK IS ASKED OF POWERSHELL'S PARSER, ConvertFrom-Markdown
     (grado-factorio-tools#95), for every rule and with or without a limit, and of nothing here:
     the script follows no list, blank line or rule to work it out. A page with no line indented
@@ -480,6 +490,12 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
                 $same = $same -and $ok
             }
             $same } }
+        @{ Name = 'handed a limit, a figure grouped in thousands split across a line end fails by its first line; #656, 2026, 10.8, a date and a paragraph break do not, nor anything with no limit (#345)'; Test = {
+            $text = "Ends in 580`n000 more.`nEnds in 1 565`n019 more.`nIssue #656`n100 x, year 2026`n100 y, 10.8`n100 z, 2026-10-09`n100 w and 12`n`n100 after a blank line."
+            $f = @(& $long $text 100)
+            ($f -join '|') -eq ('1: the line ends in a number and the next opens with three digits, which reads as the figure 580 000 split across the line end; if they are two numbers, break the line a word earlier or later|' +
+                '3: the line ends in a number and the next opens with three digits, which reads as the figure 1 565 019 split across the line end; if they are two numbers, break the line a word earlier or later') -and
+                @(& $find $text).Count -eq 0 } }
         @{ Name = 'handed a limit, a prose line over it fails with its length and the limit, and one at the limit passes'; Test = {
             $f = @(& $long "short`n$('word ' * 8)end`n$('word ' * 7)12345" 40)
             $f.Count -eq 1 -and $f[0] -match '^2: the line is 43 characters, over the limit of 40' } }
