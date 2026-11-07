@@ -15,6 +15,7 @@ cited-commit-check
 comment-line-check
 help-check
 variable-case-check
+strict-list-check
 revert-run
 pr-body-check
 cd-hook

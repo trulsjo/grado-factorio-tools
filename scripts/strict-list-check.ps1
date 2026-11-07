@@ -1,0 +1,538 @@
+<#
+.SYNOPSIS
+    Reads each strict-mode script under the paths it is given and fails on a property read
+    strict mode can throw on: .Count off a command result that can be $null or one object, or .Id
+    or .Name off any command result. Exit 0 means no such read was found in them.
+
+.DESCRIPTION
+    WHERE IT CAME FROM (grado-factorio-tools#343, #316 rulings 2 and 5). true-nukes-refreshed's
+    scripts/tests/strict-lists.ps1 and its fixtures in scripts/tests/strict-lists/, at 78486d2,
+    read 2026-11-06. The rule, the method and what it cannot see are its own, kept as they were;
+    what changed is how it is run: the fixtures are its -SelfTest, here in strict-list-check/
+    beside it, and a run reads the paths it is given. The marker keeps its name.
+
+    WHY. Under Set-StrictMode -Version Latest a command that outputs nothing gives $null, and one
+    that outputs one object gives that object. Reading .Count off either throws, and so does
+    reading the .Id or .Name of $null or of an empty array. All of it shows only on the run that
+    finds nothing or one, often minutes into a real check; it happened six times on 2026-11-05.
+
+    The fixes differ by property. For .Count, wrap the command in @(...), which always gives an
+    array. For .Id and .Name, take them with ForEach-Object Id or ForEach-Object Name, which gives
+    nothing for nothing; @(...) does not help there, since an empty array has no .Name.
+    A statement that always outputs exactly one object, such as one calling Start-Process
+    -PassThru, is right for .Id and .Name: put the comment # strict-lists: one straight after it,
+    on the line where it ends (a ; between is fine). One object still has no .Count, so the
+    marker never makes a .Count read safe. In $a, $b = ... only the first variable gets the one
+    object. A marker after a line with several unsafe reads covers none of them; nor does a
+    marker after a string cover a statement inside it.
+
+    It parses each .ps1 that calls Set-StrictMode and gives each value a state:
+      bare      a command result as PowerShell hands it over: Get-Thing, (Get-Thing),
+                $(Get-Thing), [type](Get-Thing), $a, $b = Get-Thing, or a foreach, while, if,
+                switch or try statement used as a value, whose output is unrolled
+      wrapped   @(...) around a command or a bare or wrapped variable, or a command added to an
+                array with +=
+      one       a statement marked # strict-lists: one
+    Reading .Count is unsafe off bare and one; reading .Id or .Name, off bare and wrapped. A type
+    constraint does not wrap: [string[]] $x = Get-Thing gives $null for nothing.
+
+    A variable's state at a read is that of every assignment that can reach it, in the same
+    function (or the script, outside any). It errs towards flagging. Going back from the read,
+    each assignment counts until one that surely runs before it: one directly in a block holding
+    the read, not in a branch, a switch clause, a try, catch or finally block, a loop, a script
+    block or a for loop's iterator. An assignment in another branch of an if does not reach the
+    read on the same pass. Loops include switch, which runs its clauses once per item and runs
+    every clause that matches. Inside a loop, the assignments after the read also count, back to
+    the last one directly in the loop body, and so do those in other branches of an if in the
+    loop; this is skipped when an assignment before the read in the same loop surely ran, other
+    than a for loop's initializer. A compound assignment (+=) keeps the state the variable had,
+    and a variable copied from another ($q = $p) takes that one's state.
+
+    THE SELF-TEST runs the check on the fixtures in strict-list-check/, where each line it must
+    flag carries the comment # expect: flag, or # expect: flag 2 for two reads, and fails unless
+    it flags each line exactly that often. Then it runs each strict-mode fixture and requires,
+    read by read, that every read runs and that exactly the flagged ones throw, so a fixture
+    cannot pin a wrong belief about strict mode; a line marked "known false hit" or "known miss"
+    excuses the one disagreement it names. A run with -Path skips that folder.
+
+    What it cannot see: a command result passed in as a parameter, a variable assigned in one
+    function and read in another, a copy made inside a loop of a variable assigned later in that
+    loop, an assignment inside the read itself (($j = Get-Thing).Count), $_ in a pipeline, a
+    script block a command runs repeatedly, such as ForEach-Object { }, which it does not treat
+    as a loop, other properties (.Length, .Exit) and results of method calls.
+
+    What it flags wrongly: a foreach, if, switch or try used as a value when no branch can give
+    $null or one object, such as one whose branches each give a hashtable or an array as one
+    object (, @(...)); and a bare value reassigned in every branch of an if and its else. For .Id
+    and .Name, mark such a statement; for .Count, the marker does not help, so assign a wrapped
+    value instead. It runs no game.
+
+    WHERE IT RUNS HERE. check.ps1 runs its -SelfTest only, not a run over this repository's
+    scripts/, which on 2026-11-07 flagged 35 reads (Truls, on #343).
+
+.PARAMETER Path
+    The scripts, or directories of scripts read with their subdirectories, to check.
+
+.PARAMETER SelfTest
+    Run the check on its fixtures, and the fixtures under strict mode, and nothing else.
+
+.EXAMPLE
+    pwsh -File scripts/strict-list-check.ps1 scripts
+#>
+using namespace System.Management.Automation.Language
+#Requires -Version 7
+[CmdletBinding(DefaultParameterSetName = 'Path')]
+param(
+    [Parameter(ParameterSetName = 'Path', Mandatory, Position = 0)] [string[]] $Path,
+    [Parameter(ParameterSetName = 'SelfTest', Mandatory)] [switch] $SelfTest
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+# A list handed through pwsh -File arrives as one string.
+if ($Path) { $Path = @($Path | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
+
+$properties = 'Count', 'Id', 'Name'
+$marker = '^#\s*strict-lists:\s*one\b'
+$fixtures = Join-Path $PSScriptRoot 'strict-list-check'
+# What each script is named relative to.
+$root = (Get-Location).Path
+
+# What may run zero times, or more than once, so an assignment inside does not surely come first.
+$conditional = [LoopStatementAst], [IfStatementAst], [SwitchStatementAst], [TryStatementAst], [TrapStatementAst],
+    [ScriptBlockAst], [PipelineChainAst]
+
+function Get-Source([Ast] $Node, [scriptblock] $Resolve) {
+    # A value's state: 'bare', 'wrapped', 'one' (from a marked variable), or $null for a value no
+    # command produced. $Resolve gives a variable's state where it is read.
+    if ($Node -is [PipelineAst]) {
+        if (@($Node.PipelineElements | Where-Object { $_ -is [CommandAst] }).Count) { return 'bare' }
+        if ($Node.PipelineElements.Count -eq 1 -and $Node.PipelineElements[0] -is [CommandExpressionAst]) {
+            return Get-Source $Node.PipelineElements[0].Expression $Resolve
+        }
+        return $null
+    }
+    # An assignment's right side is an expression statement when it holds no pipeline.
+    if ($Node -is [CommandExpressionAst]) { return Get-Source $Node.Expression $Resolve }
+    if ($Node -is [LoopStatementAst] -or $Node -is [IfStatementAst] -or $Node -is [SwitchStatementAst] -or
+        $Node -is [TryStatementAst]) { return 'bare' }
+    if ($Node -is [VariableExpressionAst]) { return & $Resolve $Node }
+    if ($Node -is [ParenExpressionAst]) { return Get-Source $Node.Pipeline $Resolve }
+    if ($Node -is [ConvertExpressionAst]) { return Get-Source $Node.Child $Resolve }
+    if ($Node -is [SubExpressionAst] -or $Node -is [ArrayExpressionAst]) {
+        $inner = @($Node.SubExpression.Statements | ForEach-Object { Get-Source $_ $Resolve })
+        $empty = $inner -contains 'bare' -or $inner -contains 'wrapped'
+        if ($Node -is [ArrayExpressionAst]) {
+            # @( ) always gives an array: empty if what it holds can be; one marked object is safe.
+            if ($empty) { return 'wrapped' }
+            return $null
+        }
+        # $( ) unrolls what it holds.
+        if ($empty) { return 'bare' }
+        if ($inner -contains 'one') { return 'one' }
+        return $null
+    }
+    return $null
+}
+
+function Join-State([object[]] $States) {
+    # One state for several that can reach the same place, unsafe wherever any of them is.
+    if ($States -contains 'bare' -or ($States -contains 'wrapped' -and $States -contains 'one')) { return 'bare' }
+    if ($States -contains 'wrapped') { return 'wrapped' }
+    if ($States -contains 'one') { return 'one' }
+    return $null
+}
+
+function Test-Unsafe([string] $State, [string] $Property) {
+    if ($Property -eq 'Count') { return $State -in 'bare', 'one' }
+    return $State -in 'bare', 'wrapped'
+}
+
+function Get-Scope([Ast] $Node) {
+    # The start of the node's nearest enclosing function, or -1 for the script itself.
+    for ($p = $Node.Parent; $p; $p = $p.Parent) {
+        if ($p -is [FunctionDefinitionAst]) { return $p.Extent.StartOffset }
+    }
+    return -1
+}
+
+function Get-Loops([Ast] $Node) {
+    # The loops around the node, innermost first, up to its function. A switch counts: it runs
+    # its clauses once per item of a list, and every clause that matches.
+    for ($p = $Node.Parent; $p -and $p -isnot [FunctionDefinitionAst]; $p = $p.Parent) {
+        if ($p -is [LoopStatementAst] -or $p -is [SwitchStatementAst]) { $p }
+    }
+}
+
+function Test-Inside([Ast] $Node, [Ast] $Outer) {
+    $Node.Extent.StartOffset -ge $Outer.Extent.StartOffset -and $Node.Extent.EndOffset -le $Outer.Extent.EndOffset
+}
+
+function Test-Direct([Ast] $Node, [Ast] $Outer) {
+    # Whether the node surely runs, and runs first, whenever $Outer is reached: no branch, loop
+    # or script block between them. Reaching $Outer through a branch, a switch clause, a try,
+    # catch or finally block, or a for loop's iterator (which runs after the body) is not direct;
+    # through a condition it is.
+    $child = $Node
+    for ($p = $Node.Parent; $p; $p = $p.Parent) {
+        if ($p -eq $Outer) {
+            if ($p -is [IfStatementAst] -or $p -is [SwitchStatementAst] -or $p -is [TryStatementAst]) {
+                return $child -isnot [StatementBlockAst] -and $child -isnot [CatchClauseAst]
+            }
+            if ($p -is [ForStatementAst] -and $child -eq $p.Iterator) { return $false }
+            return $true
+        }
+        foreach ($t in $conditional) { if ($p -is $t) { return $false } }
+        $child = $p
+    }
+    return $true
+}
+
+function Get-Reaching([object[]] $Records, [Ast] $At, [switch] $Loops) {
+    # The assignments, of one variable in one scope, whose value can be the one read at $At.
+    $start = $At.Extent.StartOffset
+    $stop = $null
+    $otherBranch = [System.Collections.Generic.List[object]]::new()
+    $prior = @($Records | Where-Object { $_.Ast.Extent.EndOffset -le $start })
+    for ($i = $prior.Count - 1; $i -ge 0; $i--) {
+        $rec = $prior[$i]
+        $common = $rec.Ast.Parent
+        while ($common -and -not (Test-Inside $At $common)) { $common = $common.Parent }
+        $branch = $rec.Ast
+        while ($branch.Parent -ne $common) { $branch = $branch.Parent }
+        # An assignment in one branch of an if never reaches a read in another on the same pass.
+        if ($common -is [IfStatementAst] -and $branch -is [StatementBlockAst]) { $otherBranch.Add($rec); continue }
+        $rec
+        if (Test-Direct $rec.Ast $common) { $stop = $rec; break }
+    }
+    if (-not $Loops) { return }
+    foreach ($loop in @(Get-Loops $At)) {
+        # An assignment before the read in this loop sets the value on every pass, unless it is
+        # a for loop's initializer, which runs only once.
+        $init = if ($loop -is [ForStatementAst]) { $loop.Initializer } else { $null }
+        if ($stop -and (Test-Inside $stop.Ast $loop) -and -not ($init -and (Test-Inside $stop.Ast $init))) { break }
+        # On the next pass, another branch of an if in the loop can have run.
+        $otherBranch | Where-Object { Test-Inside $_.Ast $loop }
+        $later = @($Records | Where-Object { $_.Ast.Extent.StartOffset -gt $start -and (Test-Inside $_.Ast $loop) })
+        for ($i = $later.Count - 1; $i -ge 0; $i--) {
+            $later[$i]
+            if (Test-Direct $later[$i].Ast $loop) { break }
+        }
+    }
+}
+
+function Get-VarName([VariableExpressionAst] $Var) {
+    $Var.VariablePath.UserPath -replace '^(script|global|local|private):', ''
+}
+
+function Get-Target([Ast] $Left) {
+    # The plain variables an assignment's left side sets: $x, [type] $x, or $a, $b.
+    if ($Left -is [ConvertExpressionAst]) { $Left = $Left.Child }
+    if ($Left -is [VariableExpressionAst]) { return $Left }
+    if ($Left -is [ArrayLiteralAst]) {
+        foreach ($e in $Left.Elements) {
+            if ($e -is [ConvertExpressionAst]) { $e = $e.Child }
+            if ($e -is [VariableExpressionAst]) { $e }
+        }
+    }
+}
+
+function Get-FlatTokens([Token[]] $Tokens) {
+    # Every token, with those inside expandable strings, which the parser nests.
+    foreach ($t in $Tokens) {
+        $t
+        if ($t -is [StringExpandableToken] -and $t.NestedTokens) { Get-FlatTokens @($t.NestedTokens) }
+    }
+}
+
+function Invoke-Check([IO.FileInfo[]] $Files) {
+    foreach ($file in $Files) {
+        $tokens = $null
+        $errors = $null
+        $ast = [Parser]::ParseFile($file.FullName, [ref] $tokens, [ref] $errors)
+        $where = [IO.Path]::GetRelativePath($root, $file.FullName)
+        if ($errors) {
+            [pscustomobject]@{ File = $file.FullName; Line = 0; Text = "$($where): does not parse: $($errors[0].Message)" }
+            continue
+        }
+        $strict = @($ast.FindAll({ param($n) $n -is [CommandAst] -and $n.GetCommandName() -eq 'Set-StrictMode' }, $true))
+        if (-not $strict.Count) { continue }
+        $script:checked++
+        $lines = @(Get-Content -LiteralPath $file.FullName)
+
+        # Where each marker attaches: the end of the token right before it on its line, skipping
+        # ; and line continuations. A statement ending exactly there is marked. With the tokens
+        # inside strings included, a statement inside a string ends before the string does.
+        $flat = @(Get-FlatTokens $tokens)
+        $markedEnds = [System.Collections.Generic.HashSet[int]]::new()
+        foreach ($m in @($flat | Where-Object { $_.Kind -eq 'Comment' -and $_.Text -match $marker })) {
+            $anchor = $null
+            foreach ($t in $flat) {
+                if ($t.Extent.EndOffset -le $m.Extent.StartOffset -and
+                    $t.Kind -notin 'Semi', 'LineContinuation', 'NewLine', 'Comment' -and
+                    (-not $anchor -or $t.Extent.EndOffset -gt $anchor.Extent.EndOffset)) { $anchor = $t }
+            }
+            if ($anchor -and $anchor.Extent.EndLineNumber -eq $m.Extent.StartLineNumber) {
+                [void] $markedEnds.Add($anchor.Extent.EndOffset)
+            }
+        }
+
+        # Every assignment to a variable, by scope and name, in source order, with the state it
+        # leaves the variable in.
+        $assigned = @{}
+        # While assignments are worked out, a variable resolves from those before it: later ones
+        # in a loop are not known yet, so a copy made inside a loop misses a value carried round it.
+        $resolve = {
+            param([VariableExpressionAst] $Var)
+            $k = "$(Get-Scope $Var)|$(Get-VarName $Var)"
+            if (-not $assigned.ContainsKey($k)) { return $null }
+            Join-State @(Get-Reaching $assigned[$k].ToArray() $Var | ForEach-Object State)
+        }
+        # Once all are known, an inline read resolves round loops too, like a plain one.
+        $resolveAll = {
+            param([VariableExpressionAst] $Var)
+            $k = "$(Get-Scope $Var)|$(Get-VarName $Var)"
+            if (-not $assigned.ContainsKey($k)) { return $null }
+            Join-State @(Get-Reaching $assigned[$k].ToArray() $Var -Loops | ForEach-Object State)
+        }
+        $all = @($ast.FindAll({ param($n) $n -is [AssignmentStatementAst] }, $true) | Sort-Object { $_.Extent.StartOffset })
+        foreach ($a in $all) {
+            $targets = @(Get-Target $a.Left)
+            if (-not $targets.Count) { continue }
+            $marked = $markedEnds.Contains($a.Extent.EndOffset)
+            $source = if ($marked) { 'one' } else { Get-Source $a.Right $resolve }
+            $records = foreach ($t in $targets) {
+                $key = "$(Get-Scope $a)|$(Get-VarName $t)"
+                if (-not $assigned.ContainsKey($key)) { $assigned[$key] = [System.Collections.Generic.List[object]]::new() }
+                $state = $source
+                if ($targets.Count -gt 1 -and $source) {
+                    # $a, $b = ... splits the value: past the first variable, any can be $null.
+                    $state = if ($marked -and $t -eq $targets[0]) { 'one' } else { 'bare' }
+                }
+                if ($a.Operator -ne [TokenKind]::Equals) {
+                    # += and the like keep what the variable held; a command added to a value
+                    # no command produced makes an array that can be empty.
+                    $prev = Join-State @(Get-Reaching $assigned[$key].ToArray() $a | ForEach-Object State)
+                    $state = if ($prev -in 'bare', 'wrapped') { $prev } elseif ($source) { 'wrapped' } else { $prev }
+                }
+                @{ Key = $key; Record = [pscustomobject]@{ Ast = $a; Line = $a.Extent.StartLineNumber; State = $state } }
+            }
+            # Added after all are worked out, so $x = @($x) reads the state from before.
+            foreach ($rec in @($records)) { $assigned[$rec.Key].Add($rec.Record) }
+        }
+
+        $reads = @($ast.FindAll({ param($n)
+                    $n -is [MemberExpressionAst] -and $n -isnot [InvokeMemberExpressionAst] -and
+                    $n.Member -is [StringConstantExpressionAst] -and $n.Member.Value -in $properties
+                }, $true))
+        # Inline reads first, so a marker can tell whether its statement holds only one.
+        $inline = @(foreach ($r in $reads) {
+                if ($r.Expression -is [VariableExpressionAst]) { continue }
+                $state = Get-Source $r.Expression $resolveAll
+                if (Test-Unsafe $state $r.Member.Value) { [pscustomobject]@{ Read = $r; State = $state } }
+            })
+        foreach ($r in $reads) {
+            $prop = $r.Member.Value
+            $target = $r.Expression
+            $why = $null
+            if ($target -is [VariableExpressionAst]) {
+                $key = "$(Get-Scope $r)|$(Get-VarName $target)"
+                if (-not $assigned.ContainsKey($key)) { continue }
+                $reaching = @(Get-Reaching $assigned[$key].ToArray() $r -Loops)
+                $bad = @($reaching | Where-Object { Test-Unsafe $_.State $prop } | Select-Object -First 1)
+                if ($bad.Count) {
+                    $kind = switch ($bad[0].State) { 'wrapped' { 'a wrapped' } 'one' { 'a single-object' } default { 'an unwrapped' } }
+                    $why = "off `$$(Get-VarName $target), assigned $kind command result on line $($bad[0].Line)"
+                }
+            } else {
+                $mine = @($inline | Where-Object { $_.Read -eq $r })
+                if (-not $mine.Count) { continue }
+                # A marked statement around the read covers it if it holds no other unsafe read,
+                # and only for .Id and .Name: its one object has no .Count.
+                $covered = $false
+                for ($s = $r.Parent; $s -and -not $covered -and -not (Test-Unsafe 'one' $prop); $s = $s.Parent) {
+                    if ($s -is [StatementAst] -and $markedEnds.Contains($s.Extent.EndOffset)) {
+                        $covered = @($inline | Where-Object { Test-Inside $_.Read $s }).Count -eq 1
+                    }
+                }
+                if (-not $covered) {
+                    $kind = switch ($mine[0].State) { 'wrapped' { 'a wrapped' } 'one' { 'a single-object' } default { 'an unwrapped' } }
+                    $why = "off $kind command result"
+                }
+            }
+            if (-not $why) { continue }
+            $fix = if ($prop -eq 'Count') { 'wrap the command in @(...)' } else {
+                "take it with ForEach-Object $prop, or end a statement that always outputs one object with # strict-lists: one"
+            }
+            $line = $r.Extent.StartLineNumber
+            [pscustomobject]@{
+                File   = $file.FullName
+                Line   = $line
+                Offset = $r.Extent.StartOffset
+                Text   = "$($where):$($line): .$prop $why; $fix`n      $($lines[$line - 1].Trim())"
+            }
+        }
+    }
+}
+
+function Get-FixtureRun([IO.FileInfo] $File) {
+    # Runs a fixture in a fresh runspace, so it sees none of this script's variables and cannot
+    # move its location, with every read wrapped to record that it ran and whether strict mode
+    # refused it (PropertyNotFoundStrict); any other error stops the run. The read's value passes
+    # through unchanged, arrays and all. Start-Process is replaced by this process's own Process
+    # object: one object, with an .Id and a .Name, and no .Count. Gives each read: its offset,
+    # line and property, and whether it ran and threw.
+    $tokens = $null
+    $errors = $null
+    $ast = [Parser]::ParseFile($File.FullName, [ref] $tokens, [ref] $errors)
+    $text = $ast.Extent.Text
+    $reads = @($ast.FindAll({ param($n)
+                $n -is [MemberExpressionAst] -and $n -isnot [InvokeMemberExpressionAst] -and
+                $n.Member -is [StringConstantExpressionAst] -and $n.Member.Value -in $properties
+            }, $true) | Sort-Object { $_.Extent.StartOffset } -Descending)
+    foreach ($r in $reads) {
+        if (@($reads | Where-Object { $_ -ne $r -and (Test-Inside $_ $r) }).Count) {
+            throw "$($File.Name):$($r.Extent.StartLineNumber): a read inside another read cannot be run as a fixture"
+        }
+    }
+    $code = [System.Text.StringBuilder]::new($text)
+    foreach ($r in $reads) {
+        $s = $r.Extent.StartOffset
+        [void] $code.Remove($s, $r.Extent.EndOffset - $s)
+        [void] $code.Insert($s, ("`$(try { `$null = `$__ran.Add($s); Write-Output -NoEnumerate -InputObject ($($r.Extent.Text)) } " +
+                "catch { if (`$_.FullyQualifiedErrorId -like 'PropertyNotFoundStrict*') { `$null = `$__threw.Add($s) } else { throw } })"))
+    }
+    $prelude = "`$ErrorActionPreference = 'Stop'`n" +
+        "function Start-Process { [System.Diagnostics.Process]::GetCurrentProcess() }`n" +
+        "`$__ran = [System.Collections.Generic.HashSet[int]]::new()`n" +
+        "`$__threw = [System.Collections.Generic.HashSet[int]]::new()`n"
+    # The results are read from the runspace's own variables, not from the fixture's output,
+    # which the fixture controls.
+    $epilogue = "`n`$__strictListsDone = `$true"
+    $ps = [powershell]::Create()
+    try {
+        [void] $ps.AddScript($prelude + $code.ToString() + $epilogue).Invoke()
+        # An error that does not stop the script, such as Write-Error -ErrorAction Continue,
+        # lands in the error stream, not in an exception.
+        if ($ps.HadErrors -and $ps.Streams.Error.Count) { throw "it wrote an error: $($ps.Streams.Error[0])" }
+        $state = $ps.Runspace.SessionStateProxy
+        if ($state.GetVariable('__strictListsDone') -ne $true) {
+            throw 'it ended before its last line, by a return, an exit or a break outside a loop'
+        }
+        $result = @{ Ran = $state.GetVariable('__ran'); Threw = $state.GetVariable('__threw') }
+    } finally { $ps.Dispose() }
+    foreach ($r in $reads) {
+        $s = $r.Extent.StartOffset
+        [pscustomobject]@{
+            Offset = $s
+            Line   = $r.Extent.StartLineNumber
+            Read   = ".$($r.Member.Value)"
+            Ran    = $result.Ran.Contains($s)
+            Threw  = $result.Threw.Contains($s)
+        }
+    }
+}
+
+function Get-Files([string[]] $From) {
+    @($From | ForEach-Object {
+            if (Test-Path -LiteralPath $_ -PathType Container) {
+                Get-ChildItem -LiteralPath $_ -Recurse -Filter '*.ps1' -File
+            } else { Get-Item -LiteralPath $_ }
+        })
+}
+
+
+if ($SelfTest) {
+    $root = $PSScriptRoot
+    # First the fixtures: the check must flag exactly the lines marked # expect: flag, as many
+    # times as # expect: flag <n> says (once without a number).
+    $script:checked = 0
+    $fixtureFiles = Get-Files $fixtures
+    $want = @{}
+    foreach ($f in $fixtureFiles) {
+        $n = 0
+        foreach ($l in Get-Content -LiteralPath $f.FullName) {
+            $n++
+            if ($l -match '#\s*expect:\s*flag(?:\s+(\d+))?\b') { $want["$($f.Name):$n"] = if ($Matches[1]) { [int] $Matches[1] } else { 1 } }
+        }
+    }
+    $got = @{}
+    $fixtureHits = @(Invoke-Check $fixtureFiles)
+    foreach ($hit in $fixtureHits) {
+        $k = "$(Split-Path $hit.File -Leaf):$($hit.Line)"
+        $got[$k] = 1 + $(if ($got.ContainsKey($k)) { $got[$k] } else { 0 })
+    }
+    $wrong = @(@($want.Keys) + @($got.Keys) | Sort-Object -Unique | ForEach-Object {
+            $w = if ($want.ContainsKey($_)) { $want[$_] } else { 0 }
+            $g = if ($got.ContainsKey($_)) { $got[$_] } else { 0 }
+            if ($w -ne $g) { "$($_): flagged $g time(s), expected $w" }
+        })
+    $expected = ($want.Values | Measure-Object -Sum).Sum
+    Write-Host "self-test 1/2: the check flags each fixture line as often as its # expect: flag says -- $(if (-not $want.Count -or $wrong.Count) { 'FAILED' } else { 'ok' })"
+    $wrong | ForEach-Object { Write-Host "    $_" }
+
+    # Then PowerShell itself: run each strict-mode fixture and require, read by read, that every
+    # read runs and that exactly the flagged ones throw, so a fixture cannot pin a wrong belief
+    # about strict mode. On a line marked "known false hit", a flagged read may run safely; on one
+    # marked "known miss", an unflagged read may throw. Neither excuses the other kind, or a read
+    # that never ran.
+    $flagged = [System.Collections.Generic.HashSet[string]]::new()
+    foreach ($hit in $fixtureHits) { [void] $flagged.Add("$(Split-Path $hit.File -Leaf):$($hit.Offset)") }
+    $untrue = @(foreach ($f in $fixtureFiles) {
+            $source = @(Get-Content -LiteralPath $f.FullName)
+            if (-not @($source -match '^\s*Set-StrictMode\b').Count) { continue }
+            try { $run = @(Get-FixtureRun $f) } catch { "$($f.Name): stopped when run: $($_.Exception.Message)"; continue }
+            $excused = @{}
+            foreach ($read in $run) {
+                $at = "$($f.Name):$($read.Line): $($read.Read)"
+                $text = $source[$read.Line - 1]
+                $isFlagged = $flagged.Contains("$($f.Name):$($read.Offset)")
+                if (-not $read.Ran) { "$at never ran, so the fixture proves nothing about it"; continue }
+                if ($isFlagged -and -not $read.Threw) {
+                    if ($text -match '#.*\bknown false hit\b') { $excused["$($read.Line)|false hit"] = $true } else { "$at is flagged, but strict mode let it through" }
+                }
+                if ($read.Threw -and -not $isFlagged) {
+                    if ($text -match '#.*\bknown miss\b') { $excused["$($read.Line)|miss"] = $true } else { "$at threw under strict mode, but is not flagged" }
+                }
+            }
+            # A tag whose disagreement has gone would quietly excuse the next one on its line:
+            # each tag on a line with reads must excuse one of them, and a tag on a comment-only
+            # line, left behind when its read went, has nothing to excuse.
+            $readLines = @($run | ForEach-Object Line | Sort-Object -Unique)
+            for ($n = 1; $n -le $source.Count; $n++) {
+                if ($n -in $readLines) {
+                    foreach ($kind in 'false hit', 'miss') {
+                        if ($source[$n - 1] -match "#.*\bknown $kind\b" -and -not $excused.ContainsKey("$n|$kind")) {
+                            "$($f.Name):$($n): says known $kind, but none of its reads disagree with strict mode that way now"
+                        }
+                    }
+                } elseif ($source[$n - 1] -match '^\s*#\s*known (false hit|miss)\b') {
+                    "$($f.Name):$($n): says known $($Matches[1]) on a line with no reads"
+                }
+            }
+        })
+    Write-Host "self-test 2/2: each strict-mode fixture, run, throws on exactly the reads the check flags -- $(if ($untrue.Count) { 'FAILED' } else { 'ok' })"
+    $untrue | ForEach-Object { Write-Host "    $_" }
+    Write-Host ''
+    $failures = @(@(-not $want.Count -or $wrong.Count) + @([bool] $untrue.Count) | Where-Object { $_ }).Count
+    if ($failures) { Write-Host "FAILED - self-test: $failures of 2 case(s) did not hold."; exit 1 }
+    Write-Host "OK - self-test passed: all 2 cases, $expected fixture flags as expected and as strict mode throws."
+    exit 0
+}
+
+$script:checked = 0
+$fixtureRoot = (Resolve-Path $fixtures).Path.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+$given = @(Get-Files $Path)
+$files = @($given | Where-Object { -not $_.FullName.StartsWith($fixtureRoot, [StringComparison]::OrdinalIgnoreCase) })
+if (-not $files.Count) {
+    Write-Host "FAILED - strict-list-check: no script under $($Path -join ', ') outside the fixture folder, so nothing was read."
+    exit 1
+}
+$found = @(Invoke-Check $files)
+if ($found.Count) {
+    $found | ForEach-Object { Write-Host "$($_.Text)" }
+    Write-Host "FAILED - strict-list-check: $($found.Count) read(s) strict mode can throw on, in $script:checked strict-mode script(s)."
+    exit 1
+}
+Write-Host "OK - strict-list-check: no unsafe .$($properties -join '/.') read in $script:checked strict-mode script(s)."
+exit 0
