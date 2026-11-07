@@ -737,6 +737,12 @@ first, each sibling then moves its pin and switches over, and contracts last, th
 then rf, then tn. The tickets were filed by
 [#334](https://github.com/trulsjo/grado-factorio-tools/issues/334).
 
+**A lift's pull request cannot name its own commit on `main`**: a rebase merge rewrites every
+branch hash. So its row records the date and the pull request, and **the next lift's pull request
+adds the commit on `main` to every row that names a merged pull request but no commit**. Ruled by
+Truls on
+[#335](https://github.com/trulsjo/grado-factorio-tools/issues/335#issuecomment-6697515371).
+
 Measured 2026-11-06 at each origin's `origin/main` (tools `e70669f`, the modpack `987e638`, rf
 `9fd78b5`, tn `78486d2`), with `git -C <repo> show origin/main:<path> | wc -l`,
 `git -C <repo> log -1 --format=%h origin/main -- <path>` and
