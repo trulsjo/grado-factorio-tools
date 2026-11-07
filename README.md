@@ -579,6 +579,23 @@ CI runs it so, and nothing earlier does: a commit is on `origin/main` only once 
 that names no commit in the clone passes; the rest it cannot see is in its header. `-SelfTest`
 runs it on a scratch repository.
 
+## Checking that prose cites code by name, not line
+
+A line number goes stale silently when a line is added above what it points at.
+`scripts/line-cite-check.ps1` (#347), the matcher of realistic-fusion-refreshed's section 7,
+fails a citation of our own code by line in the tracked files `-Path` names: a path and a line, as
+`scripts/example.ps1:12`, or a backticked line number after a path on the same line. A
+citation is ours when its path resolves to exactly one file `-Own` names, every tracked file
+unless said; a line `-Foreign` matches is left alone, for an ancestor's, vanilla's or the game's
+own lines. `-MinCitations` and `-MinContinuations` are floors that fail a run whose pattern found
+too little.
+
+    pwsh -File scripts/line-cite-check.ps1
+
+CI runs it so. Before it did, on 2026-11-07, it read 83 files here and failed on 1 citation, a
+quoted specimen it took for ours, which was reworded. Prose that writes "lines 196-197" with no
+path is not seen; the rest is in its header. `-SelfTest` runs it on a scratch repository.
+
 ## Checking that list parameters are split
 
 Under `pwsh -File`, a `[string[]]` parameter gets `-With a,b` as one string, `"a,b"`.
