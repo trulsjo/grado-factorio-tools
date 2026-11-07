@@ -13,7 +13,9 @@ ruling 7. Gathered from four review pages, read 2026-11-06: trulsjo/grado-factor
 `e70669f`, trulsjo/grado-factorio-modpack's *The threshold gates the comment, not the report*
 and *Review the prose, not only the code* at `987e638`, and trulsjo/realistic-fusion-refreshed's
 *The verdict sorts the comment, not the report* and *Review the prose, not only the code* at
-`9fd78b5`.
+`9fd78b5`. The stub check under *Prose* was ruled by Truls at the triage of
+[#369](https://github.com/trulsjo/grado-factorio-tools/issues/369#issuecomment-6704506057),
+2026-11-07.
 
 ## The threshold sorts the comment, not the report
 
@@ -33,7 +35,7 @@ value beside its link to this page: a score, a verdict, or every finding.
 ## Prose
 
 Whether the sentence beside a number says what the number says is a review's job. Each repository
-keeps its own prose checks beside its link to this page; these two are shared.
+keeps its own prose checks beside its link to this page; these are shared.
 
 - **Check every number in prose against a number in the diff, and do the arithmetic.** Not "does
   this look plausible": add it up, multiply it out. A count, a percentage, a tally of kept,
@@ -42,3 +44,13 @@ keeps its own prose checks beside its link to this page; these two are shared.
   replacement was found": a claim about all or none of a set is checked by walking the set, never
   by agreeing with its tone. A fix that adds a figure walks again every quantifier that covers the
   place it lands.
+- **When the change edits a shared page, read every stub page that links it against it.** The
+  stubs are the hits of `git grep -l <the page's file name>`, run in this repository on the
+  change and in each sibling at a commit of its `main` cited with its date, whose stubs link
+  the page through the pin. A stub sentence that narrows, widens or repeats the shared page is
+  a finding: no gate can read it. On trulsjo/grado-factorio-tools's PR #368 two stubs narrowed
+  the pages they link, one naming a single way to name a branch commit where three are allowed,
+  and one reporting only the findings that survived verification. The PR's own review missed
+  both, and the review panel found them
+  ([its comment](https://github.com/trulsjo/grado-factorio-tools/pull/368#issuecomment-6703616741),
+  findings A and B).
