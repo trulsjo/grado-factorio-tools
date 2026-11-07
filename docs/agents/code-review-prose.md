@@ -6,7 +6,7 @@ what it reports are in [code-review.md](code-review.md); the evidence is in
 
 ## Review the prose, not only the code
 
-The two shared checks, numbers and quantifiers, are in
+The shared checks are in
 [`docs/code-review-rules.md`](../code-review-rules.md)'s *Prose*; the lane loads that section too,
 and a pull request body is prose. This repository's own:
 
