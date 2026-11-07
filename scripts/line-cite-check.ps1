@@ -74,12 +74,16 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# git's paths are UTF-8; read in the console's code page, a non-ASCII name names no file.
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
 # A list handed through pwsh -File arrives as one string.
 $Path = @($Path | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $Own = @($Own | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 
 # A path token, with the line number optional so a continuation can inherit one that carries none.
-$OWN_PATH = '(?<![\w./-])([\w./-]+\.(?:lua|ps1|py|js|json|md))(:\d+(?:-\d+)?)?'
+# The extension ends the word: with js tried first and nothing after, a .json path matched as .js
+# with no line, so no .json citation was seen (PR #374's review, bug finding 6).
+$OWN_PATH = '(?<![\w./-])([\w./-]+\.(?:lua|ps1|py|json|js|md)(?!\w))(:\d+(?:-\d+)?)?'
 $OWN_CONT = '`:(\d+(?:-\d+)?)`'
 
 # The check over the repository at $Root, as its exit code and the lines it prints.
@@ -94,10 +98,11 @@ function Invoke-LineCiteCheck {
     # A path is ours when exactly one own file is it or ends in / and it.
     $ours = { param([string] $p) @($owned | Where-Object { $_ -ceq $p -or $_.EndsWith('/' + $p, [StringComparison]::Ordinal) }).Count -eq 1 }
     $found = [System.Collections.Generic.List[string]]::new()
-    $cites = 0; $conts = 0
+    $cites = 0; $conts = 0; $read = 0
     foreach ($f in $files) {
         $full = Join-Path $Root $f
         if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { continue }
+        $read++
         $n = 0
         foreach ($line in [IO.File]::ReadAllLines($full)) {
             $n++
@@ -122,9 +127,9 @@ function Invoke-LineCiteCheck {
     if ($found.Count -or $short) {
         $lines = @($found) + @($short | ForEach-Object { "line-cite-check: $_." })
         if ($found.Count) { $lines += 'Name the function, field, constant or section instead: a line number goes stale silently.' }
-        return @{ Code = 1; Lines = $lines + "FAILED - line-cite-check: $($found.Count) citation(s) of our own code by line number in $($files.Count) file(s)$(if ($short) { ', and a floor not met' })." }
+        return @{ Code = 1; Lines = $lines + "FAILED - line-cite-check: $($found.Count) citation(s) of our own code by line number in $read file(s)$(if ($short) { ', and a floor not met' })." }
     }
-    @{ Code = 0; Lines = @("OK - line-cite-check: $($files.Count) file(s) read, $cites path-and-line citation(s) and $conts continuation(s) found, none of our own code.") }
+    @{ Code = 0; Lines = @("OK - line-cite-check: $read file(s) read, $cites path-and-line citation(s) and $conts continuation(s) found, none of our own code.") }
 }
 
 if ($SelfTest) {
@@ -169,6 +174,16 @@ if ($SelfTest) {
                     ($under.Lines -join '|') -match 'found 1 path-and-line citation\(s\), under the floor of 2' -and
                     ($under.Lines -join '|') -match 'found 1 backticked continuation\(s\), under the floor of 2' -and
                     $under.Lines[-1] -eq 'FAILED - line-cite-check: 0 citation(s) of our own code by line number in 5 file(s), and a floor not met.' }
+            'a .json path is a citation, a non-ASCII name is read, a tracked file gone from disk is not counted, and a floor-only failure gives no renaming advice (#374)' = {
+                & $file 'docs/a.md' 'start'; & $file 'mod/table.json' '{}'; & $file 'docs/bløkk ø.md' 'See mod/table.json:4.'
+                & $file 'docs/gone.md' 'x'; git -C $repo add -A; Remove-Item -LiteralPath (Join-Path $repo 'docs/gone.md')
+                $end = & $run
+                $floor = & $run -Own 'none/**' -MinCitations 5
+                git -C $repo rm --cached --quiet mod/table.json 'docs/bløkk ø.md' docs/gone.md
+                Remove-Item -LiteralPath (Join-Path $repo 'mod/table.json'), (Join-Path $repo 'docs/bløkk ø.md')
+                $end.Lines[0] -eq 'docs/bløkk ø.md:1: cites mod/table.json:4 by line number' -and
+                    $end.Lines[-1] -eq 'FAILED - line-cite-check: 1 citation(s) of our own code by line number in 6 file(s).' -and
+                    $floor.Code -eq 1 -and -not ($floor.Lines -match '^Name the function') }
             'a -Path that names no tracked file fails, saying it read nothing' = {
                 $end = & $run -Path '**/*.txt'
                 $end.Code -eq 1 -and $end.Lines[0] -eq 'FAILED - line-cite-check: no tracked file for **/*.txt, so nothing was read.' }
