@@ -462,14 +462,22 @@ if ($SelfTest) {
         $k = "$(Split-Path $hit.File -Leaf):$($hit.Line)"
         $got[$k] = 1 + $(if ($got.ContainsKey($k)) { $got[$k] } else { 0 })
     }
-    $wrong = @(@($want.Keys) + @($got.Keys) | Sort-Object -Unique | ForEach-Object {
-            $w = if ($want.ContainsKey($_)) { $want[$_] } else { 0 }
-            $g = if ($got.ContainsKey($_)) { $got[$_] } else { 0 }
-            if ($w -ne $g) { "$($_): flagged $g time(s), expected $w" }
-        })
+    # Each line flagged other than its # expect: says, by name and line.
+    function Get-FixtureMismatch([hashtable] $Want, [hashtable] $Got) {
+        @(@($Want.Keys) + @($Got.Keys) | Sort-Object -Unique | ForEach-Object {
+                $w = if ($Want.ContainsKey($_)) { $Want[$_] } else { 0 }
+                $g = if ($Got.ContainsKey($_)) { $Got[$_] } else { 0 }
+                if ($w -ne $g) { "$($_): flagged $g time(s), expected $w" }
+            })
+    }
+    $wrong = @(Get-FixtureMismatch $want $got)
     $expected = ($want.Values | Measure-Object -Sum).Sum
-    Write-Host "self-test 1/2: the check flags each fixture line as often as its # expect: flag says -- $(if (-not $want.Count -or $wrong.Count) { 'FAILED' } else { 'ok' })"
+    Write-Host "self-test 1/3: the check flags each fixture line as often as its # expect: flag says -- $(if (-not $want.Count -or $wrong.Count) { 'FAILED' } else { 'ok' })"
     $wrong | ForEach-Object { Write-Host "    $_" }
+    # That the comparison can fail: the fixtures all match, so case 1 alone cannot show it.
+    $canary = @(Get-FixtureMismatch @{ 'a.ps1:3' = 1; 'a.ps1:5' = 2 } @{ 'a.ps1:5' = 2; 'a.ps1:9' = 1 })
+    $canaryOk = ($canary -join '|') -eq 'a.ps1:3: flagged 0 time(s), expected 1|a.ps1:9: flagged 1 time(s), expected 0'
+    Write-Host "self-test 2/3: a line flagged less, or more, than its # expect: says is named -- $(if ($canaryOk) { 'ok' } else { 'FAILED' })"
 
     # Then PowerShell itself: run each strict-mode fixture and require, read by read, that every
     # read runs and that exactly the flagged ones throw, so a fixture cannot pin a wrong belief
@@ -511,12 +519,12 @@ if ($SelfTest) {
                 }
             }
         })
-    Write-Host "self-test 2/2: each strict-mode fixture, run, throws on exactly the reads the check flags -- $(if ($untrue.Count) { 'FAILED' } else { 'ok' })"
+    Write-Host "self-test 3/3: each strict-mode fixture, run, throws on exactly the reads the check flags -- $(if ($untrue.Count) { 'FAILED' } else { 'ok' })"
     $untrue | ForEach-Object { Write-Host "    $_" }
     Write-Host ''
-    $failures = @(@(-not $want.Count -or $wrong.Count) + @([bool] $untrue.Count) | Where-Object { $_ }).Count
-    if ($failures) { Write-Host "FAILED - self-test: $failures of 2 case(s) did not hold."; exit 1 }
-    Write-Host "OK - self-test passed: all 2 cases, $expected fixture flags as expected and as strict mode throws."
+    $failures = @(@(-not $want.Count -or $wrong.Count) + @(-not $canaryOk) + @([bool] $untrue.Count) | Where-Object { $_ }).Count
+    if ($failures) { Write-Host "FAILED - self-test: $failures of 3 case(s) did not hold."; exit 1 }
+    Write-Host "OK - self-test passed: all 3 cases, $expected fixture flags as expected and as strict mode throws."
     exit 0
 }
 
