@@ -108,14 +108,16 @@
     tree (grado-factorio-tools#366): no one tree passed. The tree ids decide; where git cannot
     diff them, as after a prune of the start tree's objects, the run still fails and says it
     could not name the paths. A changed file git cannot read makes no tree, so nothing is
-    compared, recorded or skipped, and the run says so before its last line. A run that ends in
+    compared or skipped, the record is deleted, an earlier pass's too, and the run says so
+    before its last line. A run that ends in
     FAILED deletes the record; one cut short, by an error or Ctrl-C,
     leaves it. A record that does not hold both trees and a time, such as an empty file, is no
     record. With -SkipIfPassed, as the hook runs it, a tree that matches the record runs nothing,
     and the run says so, naming both trees and when they passed. A skip shows that this same tree
     passed once; it cannot see what is outside the tree: an ignored file, the pwsh or git in use,
     the loopback port fetch-mods.ps1 needs, or a self-test that passes only sometimes. CI runs
-    without the switch. -SelfTest holds this against a scratch repository, and this check runs
+    without the switch. -SelfTest holds the record and its reading, not the skip, against a
+    scratch repository, and this check runs
     it like the others (grado-factorio-tools#176's review); a file made unreadable off Windows
     needs a user other than root.
 
@@ -131,16 +133,17 @@
     Run nothing when the record says this tree passed, as above.
 
 .PARAMETER SelfTest
-    Run the cases that hold the record and the skip, in a scratch repository, and those that hold
-    the functions each script and each self-test's run are judged by, on strings and on files
+    Run the cases that hold the record and its reading, in a scratch repository, and those that
+    hold the functions each script and each self-test's run are judged by, on strings and on files
     outside it, and those that hold the two loops, Test-ScriptFolder and Invoke-SelfTestRun, over
     a folder of fixture scripts outside it with lists of their own, some of them run as
     self-tests, and the one that holds Get-ReadmeProblem over a fixture script and README there;
     and nothing else. The run's own call of each loop and of Get-ReadmeProblem, with this folder,
     this README and this script's lists, is not run, nor its run of param-check.ps1 and
     variable-case-check.ps1 over this folder: a run that stopped making a call, or passed it a
-    list less, would still pass. Nor is its call of Complete-Run, or its exit with the code that
-    returns: the cases hold the code, not that the run exits with it. Needs git, and no game.
+    list less, would still pass. Nor is its -SkipIfPassed branch, its call of Complete-Run, or
+    its exit with the code that returns: the cases hold the record and the code, not that the run
+    skips on the one or exits with the other. Needs git, and no game.
 
 .EXAMPLE
     pwsh -File scripts/check.ps1
@@ -224,7 +227,7 @@ function Get-TreeChange {
 
 # The end of a run, as its exit code and the lines it prints. A tree changed since $Tree, the tree
 # at the start, is a failure beside $Failed, naming each changed path. A failed run deletes the
-# record; a pass records $Tree, unless no tree could be compared, and then the run says so.
+# record, and so does one where no tree could be compared, which says so; a pass records $Tree.
 function Complete-Run {
     param([string] $Root, [string] $Record, [string] $Tree, [string[]] $Failed, [string] $Pass)
     $failures = @($Failed | Where-Object { $_ })
@@ -236,10 +239,9 @@ function Complete-Run {
     elseif ($change.Changed) {
         $failures += $change.Paths ? "the tree changed while it was read: $($change.Paths -join ', ')" : 'the tree changed while it was read, and git could not name the paths'
     }
-    if ($failures) {
-        if ($Record) { Remove-Item -LiteralPath $Record -Force -ErrorAction SilentlyContinue }
-        return @{ Code = 1; Lines = $lines + "FAILED - check: $($failures -join '; ')." }
-    }
+    # A failed run, and one that compared nothing, leave no record, not even an earlier pass's.
+    if ($Record -and ($failures -or -not $change.Compared)) { Remove-Item -LiteralPath $Record -Force -ErrorAction SilentlyContinue }
+    if ($failures) { return @{ Code = 1; Lines = $lines + "FAILED - check: $($failures -join '; ')." } }
     if ($Record -and $change.Compared) {
         Set-Content -LiteralPath $Record -Value "$Tree $([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ', [cultureinfo]::InvariantCulture))"
     }
@@ -414,22 +416,26 @@ if ($SelfTest) {
                 Set-Content -LiteralPath $rec -Value $base.Split(' ')[0]; $short = Read-PassRecord $rec
                 Remove-Item -LiteralPath $rec
                 $null -eq $empty -and $null -eq $short -and $null -eq (Read-PassRecord $rec) }
-            'a changed file git cannot read, and a directory outside a repository, make no tree; a run with none, at its start or its end, is not compared and records nothing' = {
+            'a changed file git cannot read, and a directory outside a repository, make no tree; a run with none, at its start or its end, is not compared and keeps no record' = {
+                # A record of an earlier pass, each time, so that one kept or written is seen.
+                $seed = { Set-Content -LiteralPath $rec -Value "$base 2026-01-01T00:00:00Z" }
                 $path = Join-Path $repo 'a.txt'; & $file 'a.txt' 'two'
                 # Locked on Windows; unreadable elsewhere, which needs a user other than root.
                 $lock = if ($IsWindows) { [IO.File]::Open($path, 'Open', 'Read', 'None') } else { chmod 000 $path; $null }
                 try {
                     $unread = Get-CheckedTree -Root $repo
-                    $atEnd = Complete-Run -Root $repo -Record $rec -Tree $base -Pass 'OK'
+                    & $seed; $atEnd = Complete-Run -Root $repo -Record $rec -Tree $base -Pass 'OK'
+                    $keptAtEnd = Test-Path -LiteralPath $rec
                 }
                 finally { if ($lock) { $lock.Dispose() } else { chmod 644 $path } }
                 & $file 'a.txt' 'one'
-                $atStart = Complete-Run -Root $repo -Record $rec -Tree '' -Pass 'OK'
+                & $seed; $atStart = Complete-Run -Root $repo -Record $rec -Tree '' -Pass 'OK'
+                $keptAtStart = Test-Path -LiteralPath $rec
                 $notCompared = { param($end) $end.Code -eq 0 -and ($end.Lines -join '|') -match '^check: [^|]*not compared[^|]*\|OK$' }
                 # Said once, and of the run, not of a pass, where the run failed too.
                 $failedToo = Complete-Run -Root $repo -Record $rec -Tree '' -Failed 'x broke' -Pass 'OK'
                 $unread -eq '' -and (Get-CheckedTree -Root $outside) -eq '' -and
-                    (& $notCompared $atEnd) -and (& $notCompared $atStart) -and -not (Test-Path -LiteralPath $rec) -and
+                    (& $notCompared $atEnd) -and (& $notCompared $atStart) -and -not $keptAtEnd -and -not $keptAtStart -and
                     $failedToo.Code -eq 1 -and $failedToo.Lines[0] -match 'not compared' -and $failedToo.Lines[0] -notmatch 'this pass' -and $failedToo.Lines[-1] -eq 'FAILED - check: x broke.' }
             'a comment or header line over the limit is named; code, a here-string, .EXAMPLE and an address are not' = {
                 $long = 'word ' * 20 + 'x'; $script = Join-Path $outside 'long.ps1'
