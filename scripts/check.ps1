@@ -141,11 +141,11 @@
     a folder of fixture scripts outside it with lists of their own, some of them run as
     self-tests, and the one that holds Get-ReadmeProblem over a fixture script and README there;
     and nothing else. The run's own call of each loop and of Get-ReadmeProblem, with this folder,
-    this README and this script's lists, is not run, nor its run of param-check.ps1 and
-    variable-case-check.ps1 over this folder: a run that stopped making a call, or passed it a
-    list less, would still pass. Nor is its -SkipIfPassed branch, its call of Complete-Run, or
-    its exit with the code that returns: the cases hold the record and the code, not that the run
-    skips on the one or exits with the other. Needs git, and no game.
+    this README and this script's lists, is not run, nor its run of param-check.ps1,
+    variable-case-check.ps1 and help-check.ps1 over this folder: a run that stopped making a
+    call, or passed it a list less, would still pass. Nor is its -SkipIfPassed branch, its call
+    of Complete-Run, or its exit with the code that returns: the cases hold the record and the
+    code, not that the run skips on the one or exits with the other. Needs git, and no game.
 
 .EXAMPLE
     pwsh -File scripts/check.ps1
