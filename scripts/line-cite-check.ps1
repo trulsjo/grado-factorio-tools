@@ -74,8 +74,6 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-# git's paths are UTF-8; read in the console's code page, a non-ASCII name names no file.
-[Console]::OutputEncoding = [Text.Encoding]::UTF8
 # A list handed through pwsh -File arrives as one string.
 $Path = @($Path | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $Own = @($Own | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
@@ -90,6 +88,8 @@ $OWN_CONT = '`:(\d+(?:-\d+)?)`'
 function Invoke-LineCiteCheck {
     param([Parameter(Mandatory)] [string] $Root, [Parameter(Mandatory)] [string[]] $Path,
         [Parameter(Mandatory)] [string[]] $Own, [string] $Foreign = '', [int] $MinCitations = 0, [int] $MinContinuations = 0)
+    # git's paths are UTF-8; read in the console's code page, a non-ASCII name names no file.
+    [Console]::OutputEncoding = [Text.Encoding]::UTF8
     $list = { param([string[]] $specs) @("$(git -C $Root -c core.quotePath=false ls-files -z -- @($specs | ForEach-Object { ":(glob)$_" }))".Split("`0") | Where-Object { $_ }) }
     $files = & $list $Path
     if ($LASTEXITCODE) { throw "git could not list the files of $Root." }
@@ -177,7 +177,9 @@ if ($SelfTest) {
             'a .json path is a citation, a non-ASCII name is read, a tracked file gone from disk is not counted, and a floor-only failure gives no renaming advice (#374)' = {
                 & $file 'docs/a.md' 'start'; & $file 'mod/table.json' '{}'; & $file 'docs/bløkk ø.md' 'See mod/table.json:4.'
                 & $file 'docs/gone.md' 'x'; git -C $repo add -A; Remove-Item -LiteralPath (Join-Path $repo 'docs/gone.md')
-                $end = & $run
+                # A code page in which git's UTF-8 is read wrong, as a Windows console's is.
+                $was = [Console]::OutputEncoding; [Console]::OutputEncoding = [Text.Encoding]::Latin1
+                try { $end = & $run } finally { [Console]::OutputEncoding = $was }
                 $floor = & $run -Own 'none/**' -MinCitations 5
                 git -C $repo rm --cached --quiet mod/table.json 'docs/bløkk ø.md' docs/gone.md
                 Remove-Item -LiteralPath (Join-Path $repo 'mod/table.json'), (Join-Path $repo 'docs/bløkk ø.md')

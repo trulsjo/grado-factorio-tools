@@ -65,8 +65,6 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-# git's paths are UTF-8; read in the console's code page, a non-ASCII name names no file.
-[Console]::OutputEncoding = [Text.Encoding]::UTF8
 # A list handed through pwsh -File arrives as one string.
 $Path = @($Path | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $Exempt = @($Exempt | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
@@ -77,7 +75,9 @@ $HASH_WORD = '(?<![0-9A-Za-z_])[0-9a-fA-F]{7,40}(?![0-9A-Za-z_])'
 function Invoke-CitedCommitCheck {
     param([Parameter(Mandatory)] [string] $Root, [Parameter(Mandatory)] [string[]] $Path,
         [AllowEmptyCollection()] [string[]] $Exempt = @(), [Parameter(Mandatory)] [string] $Main)
-    $fail = { param([string] $why) @{ Code = 1; Lines = @("FAILED - cited-commit-check: $why") } }
+    # git's paths are UTF-8; read in the console's code page, a non-ASCII name names no file.
+    [Console]::OutputEncoding = [Text.Encoding]::UTF8
+    $fail ={ param([string] $why) @{ Code = 1; Lines = @("FAILED - cited-commit-check: $why") } }
     if ((git -C $Root rev-parse --is-shallow-repository 2>$null) -ne 'false') {
         return & $fail "$Root is a shallow clone, or no repository, so a commit on $Main cannot be told from one whose history was cut off. Fetch the whole history."
     }
@@ -130,7 +130,9 @@ if ($SelfTest) {
     $git = { git -C $repo -c user.name=selftest -c user.email=selftest@example.invalid -c core.autocrlf=false -c commit.gpgsign=false @args
         if ($LASTEXITCODE) { throw "git $args failed; the self-test needs git." } }
     $file = { param($name, [string[]] $text) Set-Content -LiteralPath (Join-Path $repo $name) -Value $text }
-    $run = { param([string[]] $Path = @('**/*.md', '**/*.lua', '**/*.ps1', '**/*.py', '**/*.js'), [string[]] $Exempt = @(), [string] $Main = 'main') Invoke-CitedCommitCheck -Root $repo -Path $Path -Exempt $Exempt -Main $Main }
+    # The script's own default -Path, so a case holds the default it ships with.
+    $defaultPath = $Path
+    $run = { param([string[]] $Path = $defaultPath, [string[]] $Exempt = @(), [string] $Main = 'main') Invoke-CitedCommitCheck -Root $repo -Path $Path -Exempt $Exempt -Main $Main }
     try {
         & $git init --quiet --initial-branch=main
         & $file 'docs/a.md' 'start'; & $git add -A; & $git commit --quiet -m one
@@ -165,7 +167,9 @@ if ($SelfTest) {
                 & $file 'docs/b.ps1' '# ```', "# $offMain"
                 & $file 'docs/bløkk ø.md' "Cites $offMain."
                 & $file 'docs/gone.md' 'x'; & $git add -A; Remove-Item -LiteralPath (Join-Path $repo 'docs/gone.md')
-                $end = & $run
+                # A code page in which git's UTF-8 is read wrong, as a Windows console's is.
+                $was = [Console]::OutputEncoding; [Console]::OutputEncoding = [Text.Encoding]::Latin1
+                try { $end = & $run } finally { [Console]::OutputEncoding = $was }
                 & $git rm --cached --quiet docs/b.ps1 'docs/bløkk ø.md' docs/gone.md
                 Remove-Item -LiteralPath (Join-Path $repo 'docs/b.ps1'), (Join-Path $repo 'docs/bløkk ø.md')
                 ($end.Lines[0..1] -join '|') -match '^docs/b\.ps1:2: cites commit .*\|docs/bløkk ø\.md:1: cites commit ' -and
