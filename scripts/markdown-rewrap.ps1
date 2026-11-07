@@ -27,6 +27,9 @@
     block quote's `>` is kept on each line. A line is never started with what would make it a
     list item, a heading, a block quote, a table row, a fence or an HTML block: the word before
     goes down with it. Since every break is at a space, no emphasis delimiter changes its sides.
+    Nor is a space with a digit before it and exactly three digits after it a break, so a figure
+    grouped in thousands, "580 000", stays on one line (grado-factorio-tools#345), in a comment
+    too. That is wider than what the check fails: "in 2026 100 lines" is kept together here.
     A paragraph ends at a blank line, a line that starts another block, or a hard line break. The
     file is written back with its line endings and byte-order mark as they were, to the working
     tree only, never staged (ruling 14). A second run changes nothing.
@@ -117,9 +120,15 @@ $OPENS = '^(?:[-*+]|\d+[.)]|#{1,6}|=+|-+|>.*|\|.*|```.*|~~~.*|<[a-zA-Z/!].*)$'
 
 function Split-Token {
     <#  The tokens of $Text. An HTML comment is one, and stays beside the word before it because
-        $OPENS keeps it from starting a line.  #>
+        $OPENS keeps it from starting a line. A figure grouped in thousands is one too: a space
+        with a digit before it and exactly three digits after it is no place to break
+        (grado-factorio-tools#345), so "580 000" is one token. That is wider than what
+        markdown-check.ps1 fails, as "in 2026 100 lines" is kept together here too.  #>
     param([AllowEmptyString()] [string] $Text)
-    , @([regex]::Matches($Text, $TOKEN) | ForEach-Object Value)
+    # Held by a character that is no whitespace while the tokens are found, then put back.
+    $glue = [string] [char] 0x2063
+    $glued = [regex]::Replace($Text, '(?<=\d) (?=\d{3}(?!\d))', $glue)
+    , @([regex]::Matches($glued, $TOKEN) | ForEach-Object { $_.Value.Replace($glue, ' ') })
 }
 
 function Join-Greedy {
@@ -314,6 +323,9 @@ function Invoke-SelfTest {
             $row = '| a cell holding a great many words | and another cell holding more |'
             $in = @('A prose line that runs well past the limit of forty.', '', '| head | head |', '|---|---|', $row)
             -not ((& $naive $in) -ccontains $row) -and (& $holds $in { param($l) $l -ccontains $row }) }
+        'a figure grouped in thousands is never split across a line end (#345)' = {
+            $in = @('The count went up from a few to the 580 000 rows in all of it.')
+            @(& $naive $in | Where-Object { $_ -match ' 580$' }) -and (& $holds $in { param($l) @($l | Where-Object { $_.Contains('580 000') }).Count -eq 1 }) }
         'a code span is never broken' = {
             $in = @('One two three four five six `base >= 2.1.0` here.')
             @(& $naive $in | Where-Object { ($_.Split('`').Count - 1) % 2 }) -and (& $holds $in { param($l) @($l | Where-Object { $_.Contains('`base >= 2.1.0`') }).Count -eq 1 }) }
