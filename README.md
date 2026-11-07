@@ -569,8 +569,9 @@ of a sibling, is said to be unchecked and passes. What else it cannot see is in 
 A rebase merge leaves a branch's own commits reachable from no ref, and a page that cites one
 points at nothing once `git gc` runs. `scripts/cited-commit-check.ps1` asks the body check's
 question of the whole tree (#346): each word of 7 to 40 hexadecimal characters in the tracked
-files `-Path` names, `**/*.md` unless said, fenced code aside, that names a commit `-Main` does not
-reach, `origin/main` unless said, fails with its file and line. `-Exempt` names the records,
+files `-Path` names, the `.md`, `.lua`, `.ps1`, `.py` and `.js` files unless said, a Markdown
+fence aside, that names a commit `-Main` does not reach, `origin/main` unless said, fails with its
+file and line. `-Exempt` names the records,
 pages that cite such a commit on purpose. A shallow clone fails rather than passing.
 
     pwsh -File scripts/cited-commit-check.ps1 -Exempt 'docs/measurements.md,docs/agents/code-review-evidence.md'
