@@ -34,7 +34,7 @@
     WHAT IT CANNOT SEE. An edit not staged. In a file that is not PowerShell, whether a # line is
     a comment, and a block comment of another language. What the PowerShell rule cannot see is in
     check.ps1's header, under A COMMENT OR HEADER LINE. -SelfTest runs the reading and the rule
-    on a scratch repository; the script's own call of them, and its exit, are not run.
+    on a scratch repository, and the script once through pwsh -File with a comma list.
 
 .PARAMETER Path
     The git pathspecs to read, as globs from the repository root. scripts/*.ps1 unless given.
@@ -64,7 +64,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-# A list handed through pwsh -File arrives as one string.
+# git's paths are UTF-8; read in the console's code page, a non-ASCII name names no file.
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+# A list handed through pwsh -File arrives as one string, as the hook and a sibling hand it.
 $Path = @($Path | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 . "$PSScriptRoot/comment-line-lib.ps1"
 
@@ -130,7 +132,7 @@ if ($SelfTest) {
             'a hook''s or a workflow''s # line over the limit is named; a shebang, code, an address and a line at the limit are not' = {
                 $got = @(Get-LongHashLine -Limit 100 -Lines @(
                         "#!/bin/sh $long", "# $long", "echo $long", "      # $long", "        run: pwsh $long",
-                        "# https://example.com/$('x' * 101)", ('# ' + 'y' * 98), ''))
+                        "# https://example.com/$('x' * 101)", ('# ' + ('ab ' * 33).Substring(0, 98)), ''))
                 "$got" -eq '2 4' }
             'the staged scripts are read as staged: a fix not staged still fails, by file and line, and a long line not staged passes' = {
                 & $file 'scripts/b.ps1' '$b = 1', "# $long"; & $git add scripts/b.ps1
@@ -169,6 +171,19 @@ if ($SelfTest) {
                     $commands -contains "pwsh -NoProfile -File $rewrap -Comment -MaxLineLength 100 -Path scripts/a.ps1" -and
                     $commands -contains "pwsh -NoProfile -File $rewrap -Comment -MaxLineLength 100 -Path scripts/b.ps1" -and
                     ($end.Lines -join ' ') -match 'stages with it any edit that was not staged' }
+            'a staged deletion is not read, a non-ASCII name is, and -Path handed through pwsh -File as one comma list reads each (#374)' = {
+                & $file 'scripts/gone.ps1' '# short'; & $git add -A; & $git commit --quiet -m gone
+                & $git rm --quiet scripts/gone.ps1
+                & $file 'scripts/sær ø.ps1' "# $long"; & $file '.githooks/pre-commit' "# $long"; & $git add -A
+                Push-Location $repo
+                try { $said = @(& pwsh -NoProfile -File $PSCommandPath -Path 'scripts/*.ps1, .githooks/*' 2>&1 | ForEach-Object { "$_" }); $code = $LASTEXITCODE }
+                finally { Pop-Location }
+                $end = @{ Code = $code; Lines = $said }
+                & $git rm --cached --quiet -f 'scripts/sær ø.ps1' .githooks/pre-commit; & $git commit --quiet -m clean
+                Remove-Item -LiteralPath (Join-Path $repo 'scripts/sær ø.ps1'), (Join-Path $repo '.githooks/pre-commit')
+                $end.Code -eq 1 -and $end.Lines -contains 'scripts/sær ø.ps1: comment lines over 100 characters, line 1.' -and
+                    $end.Lines -contains '.githooks/pre-commit: comment lines over 100 characters, line 1.' -and
+                    $end.Lines[-1] -eq 'FAILED - comment-line check, as staged: 2 of 2 file(s) read have a comment line over 100.' }
             '-Limit sets the width: a 103-character line fails at 100 and passes at 110' = {
                 & $file 'scripts/d.ps1' "# $long"; & $git add -A
                 $at100 = & $run; $at110 = & $run -Limit 110
