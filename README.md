@@ -606,6 +606,22 @@ PowerShell runs it there.
 `Get-Variable` or a string, nor a dot-sourced file's; the rest is in its header. `-SelfTest`
 proves it can fail.
 
+## Checking strict-mode reads of a command result
+
+Under `Set-StrictMode -Version Latest`, `.Count` off a command that gave nothing or one object
+throws, and so do `.Id` and `.Name` off nothing; it shows only on the run that finds nothing or
+one. `scripts/strict-list-check.ps1`, lifted from true-nukes-refreshed (#343), reads each
+strict-mode script under each `-Path` given and fails on each such read, naming the fix: wrap the
+command in `@(...)` for `.Count`, take `.Id` or `.Name` with `ForEach-Object`, or mark a
+statement that always gives one object `# strict-lists: one`.
+
+    pwsh -File scripts/strict-list-check.ps1 scripts
+
+`-SelfTest` runs it on its fixtures in `scripts/strict-list-check/`, and runs those under strict
+mode to prove each flagged read throws and no other does. `scripts/check.ps1` runs the self-test
+only: over `scripts/` it flags 35 reads here, not yet sorted (Truls, on #343). What it cannot see,
+and what it flags wrongly, are in its header.
+
 ## Checking that a script's help is read
 
 When PowerShell cannot read a comment-based help block it drops it without a word.
@@ -720,6 +736,7 @@ scripts/     PowerShell entry points, one job each, and the libraries they
              self-test-halves.ps1, the runner a -SelfTest hands its halves to,
              and hook-matcher.ps1, which reads a session hook's matcher;
              grado-count/, the counting mod count-resources.ps1 loads;
+             strict-list-check/, the fixtures strict-list-check.ps1 -SelfTest reads;
              commonmark-examples.json, CommonMark's examples, which
              markdown-check.ps1 -SelfTest reads (CC BY-SA 4.0)
 .githooks/   this repo's own pre-commit (the staged Markdown and scripts), commit-msg and
