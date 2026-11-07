@@ -26,7 +26,8 @@
 
     WHAT FAILS WITH NOTHING ASKED. A shallow clone, or one where -Main does not resolve: there a
     commit on main cannot be told from one whose history was cut off, so the run fails rather
-    than passing. So does a -Path that names no tracked file. CI checks out with fetch-depth 0.
+    than passing. So does a -Path that names no tracked file, or none on disk. CI checks out
+    with fetch-depth 0.
 
     WHERE IT RUNS. In CI only (#319 ruling 8): a commit is never on origin/main before it is
     pushed, so a run before then would report the branch's own commits.
@@ -36,8 +37,9 @@
     clone that made the commit is not. A prefix two objects share. A hash of 6 characters or
     fewer. -Main as this clone last fetched it. Whether a commit on main is the one the prose
     means. A hash in a fence, in an exempt page, or in a file -Path does not name. A fence opened
-    inside a block quote or a list is read as a fence all the same. -SelfTest runs the reading
-    on a scratch repository; the script's own call of it, and its exit, are not run.
+    after a > or a list marker on its line is not seen as one, so the lines in it are read.
+    -SelfTest runs the reading on a scratch repository, and the script once through pwsh from a
+    folder whose name is not ASCII; its exit code is not held.
 
 .PARAMETER Path
     The git pathspecs of the files to read, as globs from the repository root. The tracked .md,
@@ -105,6 +107,7 @@ function Invoke-CitedCommitCheck {
             foreach ($m in [regex]::Matches($line, $HASH_WORD)) { $words.Add(@{ File = $f; Line = $n; Hash = $m.Value }) }
         }
     }
+    if (-not $read) { return & $fail "none of the $($files.Count) tracked file(s) for $($Path -join ', ') is on disk, so nothing was read." }
     $unique = @($words | ForEach-Object { $_.Hash } | Sort-Object -Unique)
     $named = @{}
     if ($unique) {
@@ -125,7 +128,8 @@ function Invoke-CitedCommitCheck {
 
 if ($SelfTest) {
     $temp = Join-Path ([IO.Path]::GetTempPath()) "cited-commit-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
-    $repo = Join-Path $temp 'repo'
+    # Not ASCII, so the run through pwsh holds the root read in UTF-8.
+    $repo = Join-Path $temp 'repø'
     New-Item -ItemType Directory -Path (Join-Path $repo 'docs'), (Join-Path $temp 'shallow') -Force | Out-Null
     $git = { git -C $repo -c user.name=selftest -c user.email=selftest@example.invalid -c core.autocrlf=false -c commit.gpgsign=false @args
         if ($LASTEXITCODE) { throw "git $args failed; the self-test needs git." } }
@@ -162,28 +166,39 @@ if ($SelfTest) {
                 & $git rm --cached --quiet docs/b.ps1; Remove-Item -LiteralPath (Join-Path $repo 'docs/b.ps1')
                 $exempt.Code -eq 1 -and $exempt.Lines[-1] -match 'no tracked file for \*\*/\*\.md' -and
                     $wide.Code -eq 1 -and $wide.Lines[0] -match '^docs/b\.ps1:1: cites commit ' -and $wide.Lines.Count -eq 2 }
-            'by default a script is read too, fences and all; a ~~~ does not close a ``` fence; a non-ASCII name is read; a tracked file gone from disk is not counted (#374)' = {
+            'by default a script of each kind is read too, fences and all; a ~~~ does not close a ``` fence; a non-ASCII name is read; a tracked file gone from disk is not counted (#374)' = {
                 & $file 'docs/a.md' '```', '~~~', $offMain, '```'
                 & $file 'docs/b.ps1' '# ```', "# $offMain"
                 & $file 'docs/bløkk ø.md' "Cites $offMain."
+                & $file 'docs/c.lua' "-- $offMain"; & $file 'docs/d.py' "# $offMain"; & $file 'docs/e.js' "// $offMain"
                 & $file 'docs/gone.md' 'x'; & $git add -A; Remove-Item -LiteralPath (Join-Path $repo 'docs/gone.md')
                 # A code page in which git's UTF-8 is read wrong, as a Windows console's is.
                 $was = [Console]::OutputEncoding; [Console]::OutputEncoding = [Text.Encoding]::Latin1
                 try { $end = & $run } finally { [Console]::OutputEncoding = $was }
-                & $git rm --cached --quiet docs/b.ps1 'docs/bløkk ø.md' docs/gone.md
-                Remove-Item -LiteralPath (Join-Path $repo 'docs/b.ps1'), (Join-Path $repo 'docs/bløkk ø.md')
-                ($end.Lines[0..1] -join '|') -match '^docs/b\.ps1:2: cites commit .*\|docs/bløkk ø\.md:1: cites commit ' -and
-                    $end.Lines[-1] -eq 'FAILED - cited-commit-check: 2 of 2 word(s) read in 3 file(s) cite a commit main does not reach.' }
-            'a shallow clone, a -Main that does not resolve, and a -Path that names no tracked file each fail' = {
+                $planted = 'docs/b.ps1', 'docs/bløkk ø.md', 'docs/c.lua', 'docs/d.py', 'docs/e.js'
+                & $git rm --cached --quiet @planted docs/gone.md
+                Remove-Item -LiteralPath @($planted | ForEach-Object { Join-Path $repo $_ })
+                (@($end.Lines[0..4] | ForEach-Object { $_ -replace ':\d+: cites commit .*$', '' }) -join '|') -eq ($planted -join '|') -and
+                    $end.Lines[-1] -eq 'FAILED - cited-commit-check: 5 of 5 word(s) read in 6 file(s) cite a commit main does not reach.' }
+            'a shallow clone, a -Main that does not resolve, a -Path that names no tracked file, and one whose files are all gone from disk each fail' = {
                 & $file 'docs/a.md' 'nothing'
                 $shallow = Join-Path $temp 'shallow/clone'
                 git clone --quiet --depth 1 "file://$($repo -replace '\\', '/')" $shallow 2>$null
                 $cut = Invoke-CitedCommitCheck -Root $shallow -Path '*.md' -Main 'origin/main'
                 $nomain = & $run -Main 'no-such-ref'
                 $none = & $run -Path '*.txt'
+                & $file 'docs/gone.md' 'x'; & $git add -A; Remove-Item -LiteralPath (Join-Path $repo 'docs/gone.md')
+                $gone = & $run -Path 'docs/gone.md'
+                & $git rm --cached --quiet docs/gone.md
                 $cut.Code -eq 1 -and $cut.Lines[0] -match 'shallow clone' -and
                     $nomain.Code -eq 1 -and $nomain.Lines[0] -match 'cannot resolve no-such-ref' -and
-                    $none.Code -eq 1 -and $none.Lines[0] -match 'no tracked file for \*\.txt' }
+                    $none.Code -eq 1 -and $none.Lines[0] -match 'no tracked file for \*\.txt' -and
+                    $gone.Code -eq 1 -and $gone.Lines[0] -eq 'FAILED - cited-commit-check: none of the 1 tracked file(s) for docs/gone.md is on disk, so nothing was read.' }
+            'the script, run through pwsh from a folder whose name is not ASCII in a code page that reads git''s UTF-8 wrong, finds its repository (#374)' = {
+                Push-Location $repo
+                try { $said = @(& pwsh -NoProfile -Command "[Console]::OutputEncoding = [Text.Encoding]::Latin1; & '$PSCommandPath' -Main main -Path 'docs/a.md'" 2>&1 | ForEach-Object { "$_" }) }
+                finally { Pop-Location }
+                $said[-1] -eq 'OK - cited-commit-check: 0 word(s) read in 1 file(s); each that names a commit here names one main reaches.' }
         }
         $failures = 0; $n = 0
         foreach ($name in $cases.Keys) {
@@ -200,6 +215,8 @@ if ($SelfTest) {
     exit 0
 }
 
+# Before the root is read: git gives it in UTF-8 too.
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
 $root = git rev-parse --show-toplevel 2>$null
 if ($LASTEXITCODE -or -not $root) { Write-Host 'FAILED - cited-commit-check: not in a git repository, so nothing was read.'; exit 1 }
 $end = Invoke-CitedCommitCheck -Root $root -Path $Path -Exempt $Exempt -Main $Main
