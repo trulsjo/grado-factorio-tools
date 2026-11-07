@@ -64,8 +64,6 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-# git's paths are UTF-8; read in the console's code page, a non-ASCII name names no file.
-[Console]::OutputEncoding = [Text.Encoding]::UTF8
 # A list handed through pwsh -File arrives as one string, as the hook and a sibling hand it.
 $Path = @($Path | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 . "$PSScriptRoot/comment-line-lib.ps1"
@@ -74,6 +72,8 @@ $Path = @($Path | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() 
 function Invoke-CommentLineCheck {
     param([Parameter(Mandatory)] [string] $Root, [Parameter(Mandatory)] [string[]] $Path,
         [Parameter(Mandatory)] [int] $Limit, [switch] $All)
+    # git's paths are UTF-8; read in the console's code page, a non-ASCII name names no file.
+    [Console]::OutputEncoding = [Text.Encoding]::UTF8
     $specs = @($Path | ForEach-Object { ":(glob)$_" })
     $listed = if ($All) { git -C $Root -c core.quotePath=false ls-files -z -- @specs }
     else { git -C $Root -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR -z -- @specs }
@@ -179,11 +179,15 @@ if ($SelfTest) {
                 try { $said = @(& pwsh -NoProfile -File $PSCommandPath -Path 'scripts/*.ps1, .githooks/*' 2>&1 | ForEach-Object { "$_" }); $code = $LASTEXITCODE }
                 finally { Pop-Location }
                 $end = @{ Code = $code; Lines = $said }
+                # In-process, in a code page that reads git's UTF-8 wrong, as Windows' can.
+                $was = [Console]::OutputEncoding; [Console]::OutputEncoding = [Text.Encoding]::Latin1
+                try { $latin = & $run } finally { [Console]::OutputEncoding = $was }
                 & $git rm --cached --quiet -f 'scripts/sær ø.ps1' .githooks/pre-commit; & $git commit --quiet -m clean
                 Remove-Item -LiteralPath (Join-Path $repo 'scripts/sær ø.ps1'), (Join-Path $repo '.githooks/pre-commit')
                 $end.Code -eq 1 -and $end.Lines -contains 'scripts/sær ø.ps1: comment lines over 100 characters, line 1.' -and
                     $end.Lines -contains '.githooks/pre-commit: comment lines over 100 characters, line 1.' -and
-                    $end.Lines[-1] -eq 'FAILED - comment-line check, as staged: 2 of 2 file(s) read have a comment line over 100.' }
+                    $end.Lines[-1] -eq 'FAILED - comment-line check, as staged: 2 of 2 file(s) read have a comment line over 100.' -and
+                    $latin.Code -eq 1 -and $latin.Lines[0] -eq 'scripts/sær ø.ps1: comment lines over 100 characters, line 1.' }
             '-Limit sets the width: a 103-character line fails at 100 and passes at 110' = {
                 & $file 'scripts/d.ps1' "# $long"; & $git add -A
                 $at100 = & $run; $at110 = & $run -Limit 110
