@@ -34,7 +34,8 @@
     WHAT IT CANNOT SEE. An edit not staged. In a file that is not PowerShell, whether a # line is
     a comment, and a block comment of another language. What the PowerShell rule cannot see is in
     check.ps1's header, under A COMMENT OR HEADER LINE. -SelfTest runs the reading and the rule
-    on a scratch repository, and the script once through pwsh -File with a comma list.
+    on a scratch repository, and the script once through pwsh with a comma list, from a folder
+    whose name is not ASCII.
 
 .PARAMETER Path
     The git pathspecs to read, as globs from the repository root. scripts/*.ps1 unless given.
@@ -110,7 +111,8 @@ function Invoke-CommentLineCheck {
 
 if ($SelfTest) {
     $temp = Join-Path ([IO.Path]::GetTempPath()) "comment-line-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
-    $repo = Join-Path $temp 'repo'
+    # Not ASCII, so the run through pwsh holds the root read in UTF-8.
+    $repo = Join-Path $temp 'repø'
     New-Item -ItemType Directory -Path (Join-Path $repo 'scripts'), (Join-Path $repo '.githooks'), (Join-Path $repo '.github/workflows') -Force | Out-Null
     $long = 'word ' * 20 + 'x'
     # Its directory made first: git rm takes an emptied one away.
@@ -119,7 +121,9 @@ if ($SelfTest) {
         Set-Content -LiteralPath $at -Value $text }
     $git = { git -C $repo -c user.name=selftest -c user.email=selftest@example.invalid -c core.autocrlf=false -c commit.gpgsign=false @args | Out-Null
         if ($LASTEXITCODE) { throw "git $args failed; the self-test needs git." } }
-    $run = { param([string[]] $Path = @('scripts/*.ps1'), [switch] $All, [int] $Limit = 100)
+    # The script's own default -Path, the one the pre-commit hook runs, so a case holds it.
+    $defaultPath = $Path
+    $run = { param([string[]] $Path = $defaultPath, [switch] $All, [int] $Limit = 100)
         Invoke-CommentLineCheck -Root $repo -Path $Path -Limit $Limit -All:$All }
     $rewrap = [IO.Path]::GetRelativePath($repo, (Join-Path $PSScriptRoot 'markdown-rewrap.ps1')) -replace '\\', '/'
     try {
@@ -171,12 +175,12 @@ if ($SelfTest) {
                     $commands -contains "pwsh -NoProfile -File $rewrap -Comment -MaxLineLength 100 -Path scripts/a.ps1" -and
                     $commands -contains "pwsh -NoProfile -File $rewrap -Comment -MaxLineLength 100 -Path scripts/b.ps1" -and
                     ($end.Lines -join ' ') -match 'stages with it any edit that was not staged' }
-            'a staged deletion is not read, a non-ASCII name is, and -Path handed through pwsh -File as one comma list reads each (#374)' = {
+            'a staged deletion is not read, a non-ASCII name is, and -Path handed through pwsh as one comma list reads each, from a folder whose name is not ASCII in a code page that reads git''s UTF-8 wrong (#374)' = {
                 & $file 'scripts/gone.ps1' '# short'; & $git add -A; & $git commit --quiet -m gone
                 & $git rm --quiet scripts/gone.ps1
                 & $file 'scripts/sær ø.ps1' "# $long"; & $file '.githooks/pre-commit' "# $long"; & $git add -A
                 Push-Location $repo
-                try { $said = @(& pwsh -NoProfile -File $PSCommandPath -Path 'scripts/*.ps1, .githooks/*' 2>&1 | ForEach-Object { "$_" }); $code = $LASTEXITCODE }
+                try { $said = @(& pwsh -NoProfile -Command "[Console]::OutputEncoding = [Text.Encoding]::Latin1; & '$PSCommandPath' -Path 'scripts/*.ps1, .githooks/*'; exit `$LASTEXITCODE" 2>&1 | ForEach-Object { "$_" }); $code = $LASTEXITCODE }
                 finally { Pop-Location }
                 $end = @{ Code = $code; Lines = $said }
                 # In-process, in a code page that reads git's UTF-8 wrong, as Windows' can.
@@ -209,6 +213,8 @@ if ($SelfTest) {
     exit 0
 }
 
+# Before the root is read: git gives it in UTF-8 too.
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
 $root = git rev-parse --show-toplevel 2>$null
 if ($LASTEXITCODE -or -not $root) { Write-Host 'FAILED - comment-line check: not in a git repository, so nothing was read.'; exit 1 }
 $end = Invoke-CommentLineCheck -Root $root -Path $Path -Limit $Limit -All:$All
