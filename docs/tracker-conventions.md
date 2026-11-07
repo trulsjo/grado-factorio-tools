@@ -132,9 +132,9 @@ comments, it closes with the issue. In trulsjo/grado-factorio-tools, Truls ruled
 ([the comment](https://github.com/trulsjo/grado-factorio-tools/issues/335#issuecomment-6697515371))
 that a lift's pull request cannot name its own commit on `main`, and at #336's triage that each
 lift's pull request fills in every earlier lift's commit. The ruling stood only in #335's
-comments and the briefs of #336 to #341, closed by its PRs #367 and #368, and none of the lifts
-#342 to #363 held it. It now stands on that repository's `docs/extraction-plan.md`, *From the map of
-shared agent practices*.
+comments and the briefs of #336 to #341, #335 closed by PR #367 and those tickets by PR #368,
+and none of the lifts #342 to #363 held it. It now stands on that repository's
+`docs/extraction-plan.md`, *From the map of shared agent practices*.
 
 ## The bar for a follow-up ticket
 

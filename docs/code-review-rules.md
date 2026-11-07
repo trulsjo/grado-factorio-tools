@@ -61,8 +61,10 @@ keeps its own prose checks beside its link to this page; these are shared.
   change.** A check that reads none of what the change touched passes whatever the change does,
   and citing it is a finding, even with its passing run shown. For code a revert answers the
   question. For help text, prose or configuration no revert applies, so the reviewer names what
-  the check reads and whether that includes the change. On trulsjo/grado-factorio-tools's
-  PR #368 the body cited `pr-body-check.ps1 -SelfTest` for an edit to that script's help text,
-  and the self-test reads no help text. All three panel reviewers found it
+  the check reads, whether that includes the change, and what in the change it would have
+  refused: a check that reads the file and refuses nothing the edit could break is no evidence.
+  On trulsjo/grado-factorio-tools's PR #368 the body cited `pr-body-check.ps1 -SelfTest` for an
+  edit to that script's help text, and the self-test reads no help text. All three panel
+  reviewers found it
   ([their comment](https://github.com/trulsjo/grado-factorio-tools/pull/368#issuecomment-6703616741),
   finding G), and the PR's own review did not.
