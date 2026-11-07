@@ -21,5 +21,7 @@ running.
 - **Clear**: what `panel.py reset` sends to start a new conversation; empty means `/clear`. A clear
   keeps the program and its model: after editing a Command, run `panel.py up --restart`.
 
-Codex cannot start `pwsh` 7 from its sandbox, so a finding of its that hangs on how PowerShell
-behaves is confirmed by another reviewer's run or the session's own.
+Codex's sandbox starts `pwsh` 7 from the MSI install, `C:\Program Files\PowerShell\7`, and not
+from the Microsoft Store's, which it cannot reach. On a machine with the Store copy alone, Codex's
+shell is Windows PowerShell 5.1: a finding of its that hangs on how PowerShell behaves is then
+confirmed by another reviewer's run or the session's own.
