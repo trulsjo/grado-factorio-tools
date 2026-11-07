@@ -1,17 +1,16 @@
 #Requires -Version 7
 <#
-    The width rule for a script's comment and header lines, which check.ps1 and the pre-commit
-    hook both load, so the rule they hold a script to is one (grado-factorio-tools#225). A line
-    of a block comment, or one that begins with #, over the limit fails; a help block's .EXAMPLE
-    section and a line of one word after its indent and comment marker are exempt. Moved out of
-    check.ps1 unchanged, Get-LongCommentLine's rule and its exemptions with it; what the rule
-    cannot see is in check.ps1's header, under A COMMENT OR HEADER LINE. The limit is the
-    caller's: check.ps1 holds it, and the hook reads it from there.
+    The width rules for comment and header lines, which check.ps1 and comment-line-check.ps1 both
+    load, so the rule they hold a file to is one (grado-factorio-tools#225, #344). A line of a
+    PowerShell block comment, or one that begins with #, over the limit fails; a help block's
+    .EXAMPLE section and a line of one word after its indent and comment marker are exempt. In a
+    file that is not PowerShell, such as a hook or a workflow, a line that begins with # is the
+    comment line, a shebang aside, as markdown-rewrap.ps1 -Comment reads one. What the PowerShell
+    rule cannot see is in check.ps1's header, under A COMMENT OR HEADER LINE. The limit is the
+    caller's.
 
-    Invoke-StagedCommentCheck reads the staged scripts/*.ps1, as the commit will commit them,
-    from the index git hands the hook. It cannot see a script outside scripts/, which check.ps1
-    does not read either, nor an edit not staged. Dot-source it; it has no -SelfTest of its own:
-    check.ps1's holds both functions.
+    Dot-source it; it has no -SelfTest of its own: check.ps1's holds Get-LongCommentLine, and
+    comment-line-check.ps1's holds Get-LongHashLine.
 #>
 
 # The numbers of a script's comment and header lines over $Limit characters: each line of a <# #>
@@ -41,26 +40,16 @@ function Get-LongCommentLine {
     }
 }
 
-# Each staged scripts/*.ps1 of the repository at $Root held to Get-LongCommentLine, read from the
-# index: written out by checkout-index, byte for byte, into a scratch directory, so the working
-# tree is neither read nor touched. Prints a line for each script that fails and one that sums
-# up, and returns the exit code: 1 when one failed, 0 otherwise, a commit staging none included.
-function Invoke-StagedCommentCheck {
-    param([Parameter(Mandatory)] [string] $Root, [Parameter(Mandatory)] [int] $Limit)
-    $staged = @("$(git -C $Root diff --cached --name-only --diff-filter=ACMR -z -- ':(glob)scripts/*.ps1')".Split("`0") | Where-Object { $_ })
-    if ($LASTEXITCODE) { throw "git could not list the staged scripts of $Root." }
-    if (-not $staged) { Write-Host 'OK - comment-line check: no script is staged, so none was read.'; return 0 }
-    $scratch = Join-Path ([IO.Path]::GetTempPath()) "staged-comments-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
-    try {
-        git -C $Root checkout-index "--prefix=$scratch/" -- @staged
-        if ($LASTEXITCODE) { throw "git could not write the staged scripts of $Root out." }
-        $failed = foreach ($path in $staged) {
-            $long = @(Get-LongCommentLine -Path (Join-Path $scratch $path) -Limit $Limit)
-            if ($long) { "$path has comment lines over $Limit characters, line $($long -join ', ')" }
-        }
+# The numbers of the comment lines over $Limit characters in a file that is not PowerShell, as a
+# hook or a workflow: a line that begins, after its indent, with #, less a shebang. A line of one
+# word after its marker is exempt, as for a script. Whether the line is a comment is not asked: a
+# line of a here-document or of a workflow's run: block that begins with # is read as one.
+function Get-LongHashLine {
+    param([Parameter(Mandatory)] [AllowEmptyCollection()] [AllowEmptyString()] [string[]] $Lines,
+        [Parameter(Mandatory)] [int] $Limit)
+    for ($n = 1; $n -le $Lines.Count; $n++) {
+        $line = $Lines[$n - 1]
+        if ($line -match '^\s*#' -and $line -notmatch '^#!' -and $line.Length -gt $Limit -and
+            $line -notmatch '^\s*(#+\s*)?\S+\s*$') { $n }
     }
-    finally { Remove-Item -LiteralPath $scratch -Recurse -Force -ErrorAction SilentlyContinue }
-    if ($failed) { Write-Host "FAILED - comment-line check, as staged: $($failed -join '; ')."; return 1 }
-    Write-Host "OK - comment-line check: $($staged.Count) staged script(s), no comment line over $Limit."
-    0
 }

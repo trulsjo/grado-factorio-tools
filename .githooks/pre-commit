@@ -4,9 +4,9 @@
 #
 # - scripts/markdown-check.ps1 -All (grado-factorio-tools#182), which reads every tracked Markdown
 #   file as staged;
-# - the comment-line rule check.ps1 holds every script to, Invoke-StagedCommentCheck in
-#   scripts/comment-line-lib.ps1 (grado-factorio-tools#225), which reads each staged
-#   scripts/*.ps1 as staged, and says so when none is staged.
+# - the comment-line rule check.ps1 holds every script to, scripts/comment-line-check.ps1
+#   (grado-factorio-tools#225, #344), which reads each staged scripts/*.ps1 as staged, and says
+#   so when none is staged.
 #
 # This file is only the wiring, as commit-msg is, and is installed by the same one step:
 #
@@ -43,10 +43,10 @@ else
     echo "pre-commit: scripts/markdown-check.ps1 not found, so the Markdown was NOT checked." >&2
 fi
 
-if [ -f scripts/comment-line-lib.ps1 ]; then
-    pwsh -NoProfile -Command ". ./scripts/comment-line-lib.ps1; exit (Invoke-StagedCommentCheck -Root . -Limit $LIMIT)" || STATUS=1
+if [ -f scripts/comment-line-check.ps1 ]; then
+    pwsh -NoProfile -File scripts/comment-line-check.ps1 -Limit "$LIMIT" || STATUS=1
 else
-    echo "pre-commit: scripts/comment-line-lib.ps1 not found, so the scripts were NOT checked." >&2
+    echo "pre-commit: scripts/comment-line-check.ps1 not found, so the scripts were NOT checked." >&2
 fi
 
 exit $STATUS

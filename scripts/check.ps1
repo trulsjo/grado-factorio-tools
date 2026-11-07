@@ -50,8 +50,9 @@
     grado-factorio-tools#181). Not read: a code line, and a # comment after code on one, however
     long; a block comment opened after code is read from its first line, code and all; and
     characters are counted as UTF-16 units, so a character outside the Basic Multilingual Plane
-    counts as two. The rule is in comment-line-lib.ps1, which the pre-commit hook loads too, to
-    hold the staged scripts to it before a commit (grado-factorio-tools#225).
+    counts as two. The rule is in comment-line-lib.ps1, which comment-line-check.ps1 loads too,
+    and the pre-commit hook runs that on the staged scripts before a commit
+    (grado-factorio-tools#225, #344).
 
     README.MD NAMES EVERY SCRIPT PARAMETER (grado-factorio-tools#194). CLAUDE.md says README says
     what each script does, and PR #192 added markdown-check.ps1 -Path with no line there. Each
@@ -153,7 +154,7 @@
 param([switch] $SkipIfPassed, [switch] $SelfTest)
 $ErrorActionPreference = 'Stop'
 
-$SELF_TESTS = @('check.ps1', 'commit-check.ps1', 'compare-resource-counts.ps1', 'dump-diff.ps1', 'dump-keys.ps1', 'dump-planets.ps1', 'dump-shared-names.ps1', 'fetch-mods.ps1',
+$SELF_TESTS = @('check.ps1', 'comment-line-check.ps1', 'commit-check.ps1', 'compare-resource-counts.ps1', 'dump-diff.ps1', 'dump-keys.ps1', 'dump-planets.ps1', 'dump-shared-names.ps1', 'fetch-mods.ps1',
     'follow-pin.ps1', 'get-dump.ps1', 'hook-matcher.ps1', 'markdown-check.ps1', 'markdown-rewrap.ps1', 'mod-info.ps1', 'pack-mods.ps1', 'param-check.ps1', 'pin-measure.ps1', 'pr-body-check.ps1',
     'refuse-backtick-substitution.ps1', 'refuse-cd-into-mod-cache.ps1', 'refuse-git-discard.ps1', 'refuse-git-hook-skip.ps1', 'refuse-pr-body.ps1', 'refuse-python-heredoc.ps1', 'resolve-modpack.ps1', 'revert-run.ps1', 'self-test-halves.ps1',
     'variable-case-check.ps1')
@@ -248,8 +249,7 @@ function Complete-Run {
     @{ Code = 0; Lines = $lines + $Pass }
 }
 
-# Get-LongCommentLine, the width rule, and Invoke-StagedCommentCheck, which the pre-commit hook
-# runs, live where the hook loads them too.
+# Get-LongCommentLine, the width rule, lives where comment-line-check.ps1 loads it too.
 . "$PSScriptRoot/comment-line-lib.ps1"
 
 # Whether a self-test's output says it ran no case: it never says `self-test`, or it passed
@@ -446,18 +446,6 @@ if ($SelfTest) {
                     '<#', '.EXAMPLE', "    $long", '.PARAMETER Name', "    $long", '.NET reads this', "    $long", '#>')
                 $got = @(Get-LongCommentLine -Path $script -Limit 100)
                 "$got" -eq '3 7 9 18 25 27' }
-            'the staged scripts are held to the rule as staged: a fix not staged still fails, a long line not staged passes, none staged says so' = {
-                $run = { $out = @(Invoke-StagedCommentCheck -Root $repo -Limit 100 6>&1); @{ Code = $out[-1]; Said = "$($out[0..($out.Count - 2)])" } }
-                $none = & $run
-                New-Item -ItemType Directory -Path (Join-Path $repo 'scripts') | Out-Null
-                $long = "# $('word ' * 20)x"
-                & $file 'scripts/b.ps1' @('$b = 1', $long); git -C $repo add scripts/b.ps1
-                & $file 'scripts/b.ps1' @('$b = 1', '# short'); $fixedUnstaged = & $run
-                git -C $repo add scripts/b.ps1; & $file 'scripts/b.ps1' @('$b = 1', $long); $longUnstaged = & $run
-                git -C $repo rm --cached --quiet -f scripts/b.ps1; Remove-Item -LiteralPath (Join-Path $repo 'scripts') -Recurse
-                $none.Code -eq 0 -and $none.Said -match 'no script is staged' -and
-                $fixedUnstaged.Code -eq 1 -and $fixedUnstaged.Said -match 'FAILED.*scripts/b\.ps1 has comment lines over 100 characters, line 2\.' -and
-                $longUnstaged.Code -eq 0 -and $longUnstaged.Said -match 'OK - comment-line check: 1 staged script' }
             'a self-test whose output says it ran no case is not a pass' = {
                 (Test-RanNoCase 'OK - self-test passed: all 0 cases.') -and (Test-RanNoCase 'nothing said') -and
                 (Test-RanNoCase 'OK - self-test passed: 0 of 2 cases; 2 skipped off Windows') -and
