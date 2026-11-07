@@ -1,12 +1,12 @@
 <#
 .SYNOPSIS
     Parses every script under scripts/, holds their comment lines to a width, reads their list
-    parameters with param-check.ps1 and their variables' spelling with variable-case-check.ps1,
-    holds README.md to naming each of their parameters, runs every self-test that needs neither
-    the game nor the network, holds the agent pages to their size limits, and runs
-    markdown-check.ps1 over the tracked Markdown. Exit 0 means all of that held, on a tree that
-    did not change while it was read, or one git could write no tree of, which it says. With
-    -SkipIfPassed, as the pre-push hook runs it, exit 0 may instead mean that nothing ran,
+    parameters with param-check.ps1, their variables' spelling with variable-case-check.ps1 and
+    their help with help-check.ps1, holds README.md to naming each of their parameters, runs every
+    self-test that needs neither the game nor the network, holds the agent pages to their size
+    limits, and runs markdown-check.ps1 over the tracked Markdown. Exit 0 means all of that held, on
+    a tree that did not change while it was read, or one git could write no tree of, which it says.
+    With -SkipIfPassed, as the pre-push hook runs it, exit 0 may instead mean that nothing ran,
     because a run recorded that this same tree passed it; the run then says so.
 
 .DESCRIPTION
@@ -24,7 +24,8 @@
     self-test reaches, and in the libraries that have no self-test. Then param-check.ps1 over the
     same scripts, for a list parameter that `pwsh -File` would hand over as one string
     (grado-factorio-tools#163), and variable-case-check.ps1, for one scope spelling a variable
-    two ways that differ only in case (grado-factorio-tools#285). Then -SelfTest of each script
+    two ways that differ only in case (grado-factorio-tools#285), and help-check.ps1, for a help
+    block PowerShell does not read (grado-factorio-tools#342). Then -SelfTest of each script
     in $SELF_TESTS, each in a pwsh of its own, so one script's `exit` does not end the run, and
     -SelfTest -NoGame of each in $NO_GAME_CASES: the cases of a script that needs the game which
     read no game's output but a log written for them (grado-factorio-tools#175). They run four at
@@ -50,8 +51,9 @@
     grado-factorio-tools#181). Not read: a code line, and a # comment after code on one, however
     long; a block comment opened after code is read from its first line, code and all; and
     characters are counted as UTF-16 units, so a character outside the Basic Multilingual Plane
-    counts as two. The rule is in comment-line-lib.ps1, which the pre-commit hook loads too, to
-    hold the staged scripts to it before a commit (grado-factorio-tools#225).
+    counts as two. The rule is in comment-line-lib.ps1, which comment-line-check.ps1 loads too,
+    and the pre-commit hook runs that on the staged scripts before a commit
+    (grado-factorio-tools#225, #344).
 
     README.MD NAMES EVERY SCRIPT PARAMETER (grado-factorio-tools#194). CLAUDE.md says README says
     what each script does, and PR #192 added markdown-check.ps1 -Path with no line there. Each
@@ -153,9 +155,9 @@
 param([switch] $SkipIfPassed, [switch] $SelfTest)
 $ErrorActionPreference = 'Stop'
 
-$SELF_TESTS = @('check.ps1', 'commit-check.ps1', 'compare-resource-counts.ps1', 'dump-diff.ps1', 'dump-keys.ps1', 'dump-planets.ps1', 'dump-shared-names.ps1', 'fetch-mods.ps1',
-    'follow-pin.ps1', 'get-dump.ps1', 'hook-matcher.ps1', 'markdown-check.ps1', 'markdown-rewrap.ps1', 'mod-info.ps1', 'pack-mods.ps1', 'param-check.ps1', 'pin-measure.ps1', 'pr-body-check.ps1',
-    'refuse-backtick-substitution.ps1', 'refuse-cd-into-mod-cache.ps1', 'refuse-git-discard.ps1', 'refuse-git-hook-skip.ps1', 'refuse-pr-body.ps1', 'refuse-python-heredoc.ps1', 'resolve-modpack.ps1', 'revert-run.ps1', 'self-test-halves.ps1',
+$SELF_TESTS = @('check.ps1', 'cited-commit-check.ps1', 'comment-line-check.ps1', 'commit-check.ps1', 'compare-resource-counts.ps1', 'dump-diff.ps1', 'dump-keys.ps1', 'dump-planets.ps1', 'dump-shared-names.ps1', 'fetch-mods.ps1',
+    'follow-pin.ps1', 'get-dump.ps1', 'help-check.ps1', 'hook-matcher.ps1', 'line-cite-check.ps1', 'markdown-check.ps1', 'markdown-rewrap.ps1', 'mod-info.ps1', 'pack-mods.ps1', 'param-check.ps1', 'pin-measure.ps1', 'pr-body-check.ps1',
+    'refuse-backtick-substitution.ps1', 'refuse-cd-into-mod-cache.ps1', 'refuse-git-discard.ps1', 'refuse-git-hook-skip.ps1', 'refuse-pr-body.ps1', 'refuse-python-heredoc.ps1', 'resolve-modpack.ps1', 'revert-run.ps1', 'self-test-halves.ps1', 'strict-list-check.ps1',
     'variable-case-check.ps1')
 # Has a self-test this does not run, and why: it needs Factorio installed.
 $NEEDS_GAME = @('dump-walk.ps1', 'load-harness.ps1', 'locale-check.ps1', 'trace-definitions.ps1', 'tree-viewer.ps1')
@@ -248,8 +250,7 @@ function Complete-Run {
     @{ Code = 0; Lines = $lines + $Pass }
 }
 
-# Get-LongCommentLine, the width rule, and Invoke-StagedCommentCheck, which the pre-commit hook
-# runs, live where the hook loads them too.
+# Get-LongCommentLine, the width rule, lives where comment-line-check.ps1 loads it too.
 . "$PSScriptRoot/comment-line-lib.ps1"
 
 # Whether a self-test's output says it ran no case: it never says `self-test`, or it passed
@@ -446,18 +447,6 @@ if ($SelfTest) {
                     '<#', '.EXAMPLE', "    $long", '.PARAMETER Name', "    $long", '.NET reads this', "    $long", '#>')
                 $got = @(Get-LongCommentLine -Path $script -Limit 100)
                 "$got" -eq '3 7 9 18 25 27' }
-            'the staged scripts are held to the rule as staged: a fix not staged still fails, a long line not staged passes, none staged says so' = {
-                $run = { $out = @(Invoke-StagedCommentCheck -Root $repo -Limit 100 6>&1); @{ Code = $out[-1]; Said = "$($out[0..($out.Count - 2)])" } }
-                $none = & $run
-                New-Item -ItemType Directory -Path (Join-Path $repo 'scripts') | Out-Null
-                $long = "# $('word ' * 20)x"
-                & $file 'scripts/b.ps1' @('$b = 1', $long); git -C $repo add scripts/b.ps1
-                & $file 'scripts/b.ps1' @('$b = 1', '# short'); $fixedUnstaged = & $run
-                git -C $repo add scripts/b.ps1; & $file 'scripts/b.ps1' @('$b = 1', $long); $longUnstaged = & $run
-                git -C $repo rm --cached --quiet -f scripts/b.ps1; Remove-Item -LiteralPath (Join-Path $repo 'scripts') -Recurse
-                $none.Code -eq 0 -and $none.Said -match 'no script is staged' -and
-                $fixedUnstaged.Code -eq 1 -and $fixedUnstaged.Said -match 'FAILED.*scripts/b\.ps1 has comment lines over 100 characters, line 2\.' -and
-                $longUnstaged.Code -eq 0 -and $longUnstaged.Said -match 'OK - comment-line check: 1 staged script' }
             'a self-test whose output says it ran no case is not a pass' = {
                 (Test-RanNoCase 'OK - self-test passed: all 0 cases.') -and (Test-RanNoCase 'nothing said') -and
                 (Test-RanNoCase 'OK - self-test passed: 0 of 2 cases; 2 skipped off Windows') -and
@@ -598,6 +587,17 @@ Write-Host "check: variable-case-check.ps1 scripts -- $($bad ? 'FAILED' : 'ok') 
 if ($bad) {
     $said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
     $failed.Add('variable-case-check.ps1 found a variable spelt two ways in one scope')
+}
+
+# From the root, so each script is named by its path from there.
+$clock.Restart()
+Push-Location $root
+try { $said = & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'help-check.ps1') scripts 2>&1 | Out-String } finally { Pop-Location }
+$bad = $LASTEXITCODE -or $said -notmatch '(?m)^OK - help-check: '
+Write-Host "check: help-check.ps1 scripts -- $($bad ? 'FAILED' : 'ok') $(& $took)"
+if ($bad) {
+    $said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
+    $failed.Add('help-check.ps1 found help PowerShell does not read, or a script that does not parse')
 }
 
 $clock.Restart()

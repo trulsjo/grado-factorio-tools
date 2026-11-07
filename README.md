@@ -483,10 +483,11 @@ passes. `-SelfTest` proves it can fail. What it lets through is in its header.
 
 ## Checking Markdown
 
-`scripts/markdown-check.ps1` reads Markdown for three things a machine can decide: emphasis or a
+`scripts/markdown-check.ps1` reads Markdown for four things a machine can decide: emphasis or a
 code span left open at the end of its paragraph, or a `*` that can only close with nothing open
-to close; a table row whose column count differs from its header's; and a link to a file git
-does not track, in exact case, or to a heading its file does not have. It knows nothing of Factorio.
+to close; a table row whose column count differs from its header's; a link to a file git does
+not track, in exact case, or to a heading its file does not have; and a figure grouped in
+thousands, as `580 000`, split across a line end (#345). It knows nothing of Factorio.
 
     pwsh -File scripts/markdown-check.ps1
     pwsh -File scripts/markdown-check.ps1 -Range origin/main...HEAD
@@ -510,22 +511,22 @@ as what, and what it cannot see, is in its header.
 
     pwsh -File scripts/markdown-check.ps1 -All -MaxLineLength 100
 
-Handed `-MaxLineLength`, it also reports a prose line longer than that; without it, it is silent
-on length. `scripts/check.ps1` hands it 100 here. Neither sibling is asked to: counted on
-2026-10-09 by a throwaway script, `grado-factorio-modpack` had 326 such lines and
+Handed `-MaxLineLength`, it also reports a prose line longer than that; without it, it is silent on
+length. `scripts/check.ps1` hands it 100 here. Neither sibling is asked to: counted on 2026-10-09
+by a throwaway script, `grado-factorio-modpack` had 326 lines over 100 and
 `realistic-fusion-refreshed` 3,091.
 
     pwsh -File scripts/markdown-rewrap.ps1 -MaxLineLength 100
     pwsh -File scripts/markdown-rewrap.ps1 -Comment -Path .github/workflows/check.yml -MaxLineLength 100
 
 `scripts/markdown-rewrap.ps1` repairs what that reports (#215): each paragraph holding a line
-over the limit is rewrapped from that line to its end, never inside a code span, a link or an
-HTML comment, and never into a line that starts a list item, a heading or another block. It takes
-the check's `-Range`, `-All` and `-Path`, and with none the staged files; it writes the working
-tree only, and never stages. Which lines are prose and which are over is the check's own reading,
-through `scripts/markdown-lib.ps1`, which both load. `-Comment` does the same for a script's or a
-workflow's comment lines over the limit, a `#` block or a paragraph of a block comment, found by
-length. `-SelfTest` needs no git and no game.
+over the limit is rewrapped from that line to its end, never inside a code span, a link, an HTML
+comment or a figure grouped in thousands, and never into a line that starts a list item, a heading
+or another block. It takes the check's `-Range`, `-All` and `-Path`, and with none the staged files;
+it writes the working tree only, and never stages. Which lines are prose and which are over is the
+check's own reading, through `scripts/markdown-lib.ps1`, which both load. `-Comment` does the same
+for a script's or a workflow's comment lines over the limit, a `#` block or a paragraph of a block
+comment, found by length. `-SelfTest` needs no git and no game.
 
 ## Checking a pull request body
 
@@ -563,6 +564,39 @@ here, and again when the body is edited. A word that names no commit in the clon
 of a sibling, is said to be unchecked and passes. What else it cannot see is in its header.
 `-SelfTest` proves it can fail.
 
+## Checking that the commits the tree cites are on main
+
+A rebase merge leaves a branch's own commits reachable from no ref, and a page that cites one
+points at nothing once `git gc` runs. `scripts/cited-commit-check.ps1` asks the body check's
+question of the whole tree (#346): each word of 7 to 40 hexadecimal characters in the tracked
+files `-Path` names, the `.md`, `.lua`, `.ps1`, `.py` and `.js` files unless said, a Markdown
+fence aside, that names a commit `-Main` does not reach, `origin/main` unless said, fails with its
+file and line. `-Exempt` names the records,
+pages that cite such a commit on purpose. A shallow clone fails rather than passing.
+
+    pwsh -File scripts/cited-commit-check.ps1 -Exempt 'docs/measurements.md,docs/agents/code-review-evidence.md'
+
+CI runs it so, and nothing earlier does: a commit is on `origin/main` only once pushed. A word
+that names no commit in the clone passes; the rest it cannot see is in its header. `-SelfTest`
+runs it on a scratch repository.
+
+## Checking that prose cites code by name, not line
+
+A line number goes stale silently when a line is added above what it points at.
+`scripts/line-cite-check.ps1` (#347), the matcher of realistic-fusion-refreshed's section 7,
+fails a citation of our own code by line in the tracked files `-Path` names: a path and a line, as
+`scripts/example.ps1:12`, or a backticked line number after a path on the same line. A
+citation is ours when its path resolves to exactly one file `-Own` names, every tracked file
+unless said; a line `-Foreign` matches is left alone, for an ancestor's, vanilla's or the game's
+own lines. `-MinCitations` and `-MinContinuations` are floors that fail a run whose pattern found
+too little.
+
+    pwsh -File scripts/line-cite-check.ps1
+
+CI runs it so. Before it did, on 2026-11-07, it read 83 files here and failed on 1 citation, a
+quoted specimen it took for ours, which was reworded. Prose that writes "lines 196-197" with no
+path is not seen; the rest is in its header. `-SelfTest` runs it on a scratch repository.
+
 ## Checking that list parameters are split
 
 Under `pwsh -File`, a `[string[]]` parameter gets `-With a,b` as one string, `"a,b"`.
@@ -589,6 +623,52 @@ PowerShell runs it there.
 `scripts/check.ps1` runs it on `scripts/`. It cannot see a variable reached through
 `Get-Variable` or a string, nor a dot-sourced file's; the rest is in its header. `-SelfTest`
 proves it can fail.
+
+## Checking strict-mode reads of a command result
+
+Under `Set-StrictMode -Version Latest`, `.Count` off a command that gave nothing or one object
+throws, and so do `.Id` and `.Name` off nothing; it shows only on the run that finds nothing or
+one. `scripts/strict-list-check.ps1`, lifted from true-nukes-refreshed (#343), reads each
+strict-mode script under each `-Path` given and fails on each such read, naming the fix: wrap the
+command in `@(...)` for `.Count`, take `.Id` or `.Name` with `ForEach-Object`, or mark a
+statement that always gives one object `# strict-lists: one`.
+
+    pwsh -File scripts/strict-list-check.ps1 scripts
+
+`-SelfTest` runs it on its fixtures in `scripts/strict-list-check/`, and runs those under strict
+mode to prove each flagged read throws and no other does. `scripts/check.ps1` runs the self-test
+only: over `scripts/` it flags 35 reads here, not yet sorted (Truls, on #343). What it cannot see,
+and what it flags wrongly, are in its header.
+
+## Checking that a script's help is read
+
+When PowerShell cannot read a comment-based help block it drops it without a word.
+`scripts/help-check.ps1` reads each script under each `-Path` given, a directory with its
+subdirectories, and fails on a help block PowerShell does not read, naming each cause it sees: a
+line that starts with a dot and is no help keyword, or a `#Requires` line above the block (#342).
+It fails, too, on a `#Requires` line straight after a block, which is read as help text, and on a
+script that does not parse.
+
+    pwsh -File scripts/help-check.ps1 scripts
+
+`scripts/check.ps1` runs it on `scripts/`. It finds a help block by its `.SYNOPSIS` line, so a
+script with no help passes; the rest it cannot see is in its header. `-SelfTest` proves it can
+fail.
+
+## Checking comment line widths
+
+`scripts/comment-line-check.ps1` holds comment lines to a width, `-Limit`, 100 unless said
+(#344): in a script, each line of a block comment and each `#` line, a help block's `.EXAMPLE`
+exempt; in a hook or a workflow, each line that begins with `#`. It reads the files `-Path` names,
+git pathspecs from the repository root, `scripts/*.ps1` unless said, as staged: the staged ones,
+or with `-All` every tracked one. A refusal names the `markdown-rewrap.ps1 -Comment` command that
+rewraps each refused file. The `pre-commit` hook runs it on the staged scripts; a sibling that
+also reads its hooks and workflows passes them:
+
+    pwsh -File scripts/comment-line-check.ps1 -All -Path 'scripts/*.ps1,.githooks/*,.github/workflows/*.yml'
+
+`-All` that reads no file fails. What it cannot see is in its header. `-SelfTest` runs it on a
+scratch repository.
 
 ## Running a review's reverts
 
@@ -645,11 +725,12 @@ no network.
 ## Checking this repository
 
 `scripts/check.ps1` is the one command before a push. It parses every script here, runs each
-self-test that needs neither the game nor the network, runs `param-check.ps1` and
-`variable-case-check.ps1` over `scripts/` and `markdown-check.ps1` over the tracked Markdown,
+self-test that needs neither the game nor the network, runs `param-check.ps1`,
+`variable-case-check.ps1` and `help-check.ps1` over `scripts/` and `markdown-check.ps1` over the
+tracked Markdown,
 holds the agent pages to their size limits, and fails on a script parameter this README never
 names as `-<Name>` (#194), or a script's comment line over 100 characters; the `pre-commit` hook
-holds the staged scripts to that rule too, loaded from `scripts/comment-line-lib.ps1` (#225). CI
+holds the staged scripts to that rule too, through `scripts/comment-line-check.ps1` (#225). CI
 runs it, and so does the `pre-push` hook, with `-SkipIfPassed`, which runs nothing when a
 recorded run passed this same tree. What it cannot see is in its header.
 
@@ -667,11 +748,13 @@ scripts/     PowerShell entry points, one job each, and the libraries they
              dot-source: load-harness-lib.ps1, dump-lib.ps1, game-mods.ps1,
              mod-info.ps1, which reads a mod's info.json for four of them,
              markdown-lib.ps1, the reading markdown-check.ps1 and markdown-rewrap.ps1 share,
-             comment-line-lib.ps1, the comment-line rule check.ps1 and pre-commit share,
+             comment-line-lib.ps1, the comment-line rule check.ps1 and
+             comment-line-check.ps1 share,
              breaking-lib.ps1, the rule for a pin move's breaking commits pin-measure.ps1 loads,
              self-test-halves.ps1, the runner a -SelfTest hands its halves to,
              and hook-matcher.ps1, which reads a session hook's matcher;
              grado-count/, the counting mod count-resources.ps1 loads;
+             strict-list-check/, the fixtures strict-list-check.ps1 -SelfTest reads;
              commonmark-examples.json, CommonMark's examples, which
              markdown-check.ps1 -SelfTest reads (CC BY-SA 4.0)
 .githooks/   this repo's own pre-commit (the staged Markdown and scripts), commit-msg and
