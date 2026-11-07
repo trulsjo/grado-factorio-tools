@@ -590,6 +590,21 @@ PowerShell runs it there.
 `Get-Variable` or a string, nor a dot-sourced file's; the rest is in its header. `-SelfTest`
 proves it can fail.
 
+## Checking comment line widths
+
+`scripts/comment-line-check.ps1` holds comment lines to a width, `-Limit`, 100 unless said
+(#344): in a script, each line of a block comment and each `#` line, a help block's `.EXAMPLE`
+exempt; in a hook or a workflow, each line that begins with `#`. It reads the files `-Path` names,
+git pathspecs from the repository root, `scripts/*.ps1` unless said, as staged: the staged ones,
+or with `-All` every tracked one. A refusal names the `markdown-rewrap.ps1 -Comment` command that
+rewraps each refused file. The `pre-commit` hook runs it on the staged scripts; a sibling that
+also reads its hooks and workflows passes them:
+
+    pwsh -File scripts/comment-line-check.ps1 -All -Path 'scripts/*.ps1,.githooks/*,.github/workflows/*.yml'
+
+`-All` that reads no file fails. What it cannot see is in its header. `-SelfTest` runs it on a
+scratch repository.
+
 ## Running a review's reverts
 
 A review reverts each claim of a script on a copy and runs its self-test, as
@@ -649,7 +664,7 @@ self-test that needs neither the game nor the network, runs `param-check.ps1` an
 `variable-case-check.ps1` over `scripts/` and `markdown-check.ps1` over the tracked Markdown,
 holds the agent pages to their size limits, and fails on a script parameter this README never
 names as `-<Name>` (#194), or a script's comment line over 100 characters; the `pre-commit` hook
-holds the staged scripts to that rule too, loaded from `scripts/comment-line-lib.ps1` (#225). CI
+holds the staged scripts to that rule too, through `scripts/comment-line-check.ps1` (#225). CI
 runs it, and so does the `pre-push` hook, with `-SkipIfPassed`, which runs nothing when a
 recorded run passed this same tree. What it cannot see is in its header.
 
@@ -667,7 +682,8 @@ scripts/     PowerShell entry points, one job each, and the libraries they
              dot-source: load-harness-lib.ps1, dump-lib.ps1, game-mods.ps1,
              mod-info.ps1, which reads a mod's info.json for four of them,
              markdown-lib.ps1, the reading markdown-check.ps1 and markdown-rewrap.ps1 share,
-             comment-line-lib.ps1, the comment-line rule check.ps1 and pre-commit share,
+             comment-line-lib.ps1, the comment-line rule check.ps1 and
+             comment-line-check.ps1 share,
              breaking-lib.ps1, the rule for a pin move's breaking commits pin-measure.ps1 loads,
              self-test-halves.ps1, the runner a -SelfTest hands its halves to,
              and hook-matcher.ps1, which reads a session hook's matcher;
