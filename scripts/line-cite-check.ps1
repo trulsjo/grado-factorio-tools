@@ -19,8 +19,9 @@
          before it on the same line. The backticks are required: bare, a colon and a number cannot
          be told from a page range, a ratio or a time.
     A citation is of our own code only when its path resolves to exactly one of the files -Own
-    names: the path itself, or one ending in / and the path. A bare name that several files
-    share is left, as which is meant cannot be decided here.
+    names: the path itself, or one ending in / and the path, in any case, as Windows finds a
+    file. A bare name that several files share is left, as which is meant cannot be decided here.
+    A run whose -Path names no tracked file, or none on disk, fails, having read nothing.
 
     WHAT IS LEFT ALONE. A line -Foreign matches, whole, which is how a repository passes the
     lines that quote an ancestor, vanilla or the game's own output, and with it any continuation
@@ -35,7 +36,8 @@
     take a third party's continuation for ours, where a path of ours stands before it on the
     line. A citation in a file -Path does not name, or not tracked. Whether a cited line is still
     the one meant: it fails every own citation, stale or not. -SelfTest runs the matcher on a
-    scratch repository; the script's own call of it, and its exit, are not run.
+    scratch repository, and the script once through pwsh from a folder whose name is not ASCII;
+    its exit code is not held.
 
     WHERE IT RUNS. In CI, a whole-tree check (#319 ruling 8).
 
@@ -95,8 +97,9 @@ function Invoke-LineCiteCheck {
     if ($LASTEXITCODE) { throw "git could not list the files of $Root." }
     if (-not $files) { return @{ Code = 1; Lines = @("FAILED - line-cite-check: no tracked file for $($Path -join ', '), so nothing was read.") } }
     $owned = & $list $Own
-    # A path is ours when exactly one own file is it or ends in / and it.
-    $ours = { param([string] $p) @($owned | Where-Object { $_ -ceq $p -or $_.EndsWith('/' + $p, [StringComparison]::Ordinal) }).Count -eq 1 }
+    # A path is ours when exactly one own file is it or ends in / and it, in any case, as Windows
+    # finds a file: realistic-fusion-refreshed's whole-path -eq, and its suffix made the same.
+    $ours = { param([string] $p) @($owned | Where-Object { $_ -eq $p -or $_.EndsWith('/' + $p, [StringComparison]::OrdinalIgnoreCase) }).Count -eq 1 }
     $found = [System.Collections.Generic.List[string]]::new()
     $cites = 0; $conts = 0; $read = 0
     foreach ($f in $files) {
@@ -121,6 +124,7 @@ function Invoke-LineCiteCheck {
             }
         }
     }
+    if (-not $read) { return @{ Code = 1; Lines = @("FAILED - line-cite-check: none of the $($files.Count) tracked file(s) for $($Path -join ', ') is on disk, so nothing was read.") } }
     $short = @()
     if ($cites -lt $MinCitations) { $short += "it found $cites path-and-line citation(s), under the floor of $MinCitations, so the pattern may have stopped matching" }
     if ($conts -lt $MinContinuations) { $short += "it found $conts backticked continuation(s), under the floor of $MinContinuations, so the pattern may have stopped matching" }
@@ -134,11 +138,14 @@ function Invoke-LineCiteCheck {
 
 if ($SelfTest) {
     $temp = Join-Path ([IO.Path]::GetTempPath()) "line-cite-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
-    $repo = Join-Path $temp 'repo'
+    # Not ASCII, so the run through pwsh holds the root read in UTF-8.
+    $repo = Join-Path $temp 'repø'
     $file = { param($name, [string[]] $text)
         $at = Join-Path $repo $name; New-Item -ItemType Directory -Path (Split-Path $at) -Force | Out-Null
         Set-Content -LiteralPath $at -Value $text }
-    $run = { param([string[]] $Path = @('**/*.md', '**/*.lua', '**/*.ps1'), [string[]] $Own = @('**'), [string] $Foreign = '', [int] $MinCitations = 0, [int] $MinContinuations = 0)
+    # The script's own default -Path, so a case holds the default it ships with.
+    $defaultPath = $Path
+    $run = { param([string[]] $Path = $defaultPath, [string[]] $Own = @('**'), [string] $Foreign = '', [int] $MinCitations = 0, [int] $MinContinuations = 0)
         Invoke-LineCiteCheck -Root $repo -Path $Path -Own $Own -Foreign $Foreign -MinCitations $MinCitations -MinContinuations $MinContinuations }
     try {
         New-Item -ItemType Directory -Path $repo -Force | Out-Null
@@ -186,9 +193,29 @@ if ($SelfTest) {
                 $end.Lines[0] -eq 'docs/bløkk ø.md:1: cites mod/table.json:4 by line number' -and
                     $end.Lines[-1] -eq 'FAILED - line-cite-check: 1 citation(s) of our own code by line number in 6 file(s).' -and
                     $floor.Code -eq 1 -and -not ($floor.Lines -match '^Name the function') }
-            'a -Path that names no tracked file fails, saying it read nothing' = {
+            'a -Path that names no tracked file fails, saying it read nothing, and so does one whose files are all gone from disk' = {
                 $end = & $run -Path '**/*.txt'
-                $end.Code -eq 1 -and $end.Lines[0] -eq 'FAILED - line-cite-check: no tracked file for **/*.txt, so nothing was read.' }
+                & $file 'docs/gone.md' 'x'; git -C $repo add -A; Remove-Item -LiteralPath (Join-Path $repo 'docs/gone.md')
+                $gone = & $run -Path 'docs/gone.md'
+                git -C $repo rm --cached --quiet docs/gone.md
+                $end.Code -eq 1 -and $end.Lines[0] -eq 'FAILED - line-cite-check: no tracked file for **/*.txt, so nothing was read.' -and
+                    $gone.Code -eq 1 -and $gone.Lines[0] -eq 'FAILED - line-cite-check: none of the 1 tracked file(s) for docs/gone.md is on disk, so nothing was read.' }
+            'by default a citation is found in each of the five kinds of file, and a path in another case is ours; the script, run through pwsh from a folder whose name is not ASCII in a code page that reads git''s UTF-8 wrong, finds its repository (#374)' = {
+                & $file 'mod/c.lua' '-- see mod/probe-entry.lua:1'; & $file 'tools/a.py' '# see mod/probe-entry.lua:2'
+                & $file 'tools/b.js' '// see mod/probe-entry.lua:3'; & $file 'tools/c.ps1' '# see MOD/Probe-Entry.lua:4'
+                git -C $repo add -A
+                $end = & $run
+                git -C $repo rm --cached --quiet mod/c.lua tools/a.py tools/b.js tools/c.ps1
+                Remove-Item -LiteralPath (Join-Path $repo 'mod/c.lua'), (Join-Path $repo 'tools') -Recurse
+                Push-Location $repo
+                try { $said = @(& pwsh -NoProfile -Command "[Console]::OutputEncoding = [Text.Encoding]::Latin1; & '$PSCommandPath' -Path 'docs/a.md'" 2>&1 | ForEach-Object { "$_" }) }
+                finally { Pop-Location }
+                $end.Lines -contains 'mod/c.lua:1: cites mod/probe-entry.lua:1 by line number' -and
+                    $end.Lines -contains 'tools/a.py:1: cites mod/probe-entry.lua:2 by line number' -and
+                    $end.Lines -contains 'tools/b.js:1: cites mod/probe-entry.lua:3 by line number' -and
+                    $end.Lines -contains 'tools/c.ps1:1: cites MOD/Probe-Entry.lua:4 by line number' -and
+                    $end.Lines[-1] -match '^FAILED - line-cite-check: 4 citation\(s\)' -and
+                    $said[-1] -eq 'OK - line-cite-check: 1 file(s) read, 0 path-and-line citation(s) and 0 continuation(s) found, none of our own code.' }
         }
         $failures = 0; $n = 0
         foreach ($name in $cases.Keys) {
@@ -205,6 +232,8 @@ if ($SelfTest) {
     exit 0
 }
 
+# Before the root is read: git gives it in UTF-8 too.
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
 $root = git rev-parse --show-toplevel 2>$null
 if ($LASTEXITCODE -or -not $root) { Write-Host 'FAILED - line-cite-check: not in a git repository, so nothing was read.'; exit 1 }
 $end = Invoke-LineCiteCheck -Root $root -Path $Path -Own $Own -Foreign $Foreign -MinCitations $MinCitations -MinContinuations $MinContinuations
