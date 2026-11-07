@@ -1,5 +1,5 @@
 # What .githooks/pre-push runs, for a clone that never opted into the hooks, plus what a hook
-# does not run: the commits the tracked Markdown cites, which reach origin/main only once pushed;
+# does not run: the commits the tracked files cite, which reach origin/main only once pushed;
 # a citation of our own code by line number, read over the whole tree; the pull request's title;
 # and its body, for the commits it cites, for a closing keyword
 # outside a `Closes #N` line, and for the pr template's three headings. `edited` is listed so a
@@ -48,7 +48,7 @@ jobs:
       # A whole-tree check, run here and not by pre-push (grado-factorio-tools#346, #319 ruling
       # 8): a commit is on origin/main only once pushed. The two pages are records, which may
       # cite a branch's commits on purpose.
-      - name: Check that each commit the Markdown cites is on main
+      - name: Check that each commit the tree cites is on main
         run: pwsh -NoProfile -File scripts/cited-commit-check.ps1 -Exempt 'docs/measurements.md,docs/agents/code-review-evidence.md'
 
       # A whole-tree check too (grado-factorio-tools#347, #319 ruling 8). Before it was switched
