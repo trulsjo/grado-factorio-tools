@@ -323,6 +323,8 @@ function Invoke-SelfTest {
             $row = '| a cell holding a great many words | and another cell holding more |'
             $in = @('A prose line that runs well past the limit of forty.', '', '| head | head |', '|---|---|', $row)
             -not ((& $naive $in) -ccontains $row) -and (& $holds $in { param($l) $l -ccontains $row }) }
+        'a space is glued only with a digit before it and exactly three digits after (#345)' = {
+            ((Split-Token 'in 2026 1000 rows 580 000 and 1 565 019') -join '|') -ceq 'in|2026|1000|rows|580 000|and|1 565 019' }
         'a figure grouped in thousands is never split across a line end (#345)' = {
             $in = @('The count went up from a few to the 580 000 rows in all of it.')
             @(& $naive $in | Where-Object { $_ -match ' 580$' }) -and (& $holds $in { param($l) @($l | Where-Object { $_.Contains('580 000') }).Count -eq 1 }) }

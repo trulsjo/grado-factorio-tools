@@ -483,10 +483,11 @@ passes. `-SelfTest` proves it can fail. What it lets through is in its header.
 
 ## Checking Markdown
 
-`scripts/markdown-check.ps1` reads Markdown for three things a machine can decide: emphasis or a
+`scripts/markdown-check.ps1` reads Markdown for four things a machine can decide: emphasis or a
 code span left open at the end of its paragraph, or a `*` that can only close with nothing open
-to close; a table row whose column count differs from its header's; and a link to a file git
-does not track, in exact case, or to a heading its file does not have. It knows nothing of Factorio.
+to close; a table row whose column count differs from its header's; a link to a file git does
+not track, in exact case, or to a heading its file does not have; and a figure grouped in
+thousands, as `580 000`, split across a line end (#345). It knows nothing of Factorio.
 
     pwsh -File scripts/markdown-check.ps1
     pwsh -File scripts/markdown-check.ps1 -Range origin/main...HEAD
@@ -510,11 +511,10 @@ as what, and what it cannot see, is in its header.
 
     pwsh -File scripts/markdown-check.ps1 -All -MaxLineLength 100
 
-Handed `-MaxLineLength`, it also reports a prose line longer than that, and a figure grouped in
-thousands, as `580 000`, split across a line end (#345); without it, it is silent on both.
-`scripts/check.ps1` hands it 100 here. Neither sibling is asked to: counted on 2026-10-09 by a
-throwaway script, `grado-factorio-modpack` had 326 such lines and `realistic-fusion-refreshed`
-3,091.
+Handed `-MaxLineLength`, it also reports a prose line longer than that; without it, it is silent on
+length. `scripts/check.ps1` hands it 100 here. Neither sibling is asked to: counted on 2026-10-09
+by a throwaway script, `grado-factorio-modpack` had 326 lines over 100 and
+`realistic-fusion-refreshed` 3,091.
 
     pwsh -File scripts/markdown-rewrap.ps1 -MaxLineLength 100
     pwsh -File scripts/markdown-rewrap.ps1 -Comment -Path .github/workflows/check.yml -MaxLineLength 100

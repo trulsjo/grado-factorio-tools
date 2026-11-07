@@ -364,11 +364,11 @@ function Test-Markdown {
         }
         elseif (-not $paragraph.Count) { $numbered = $false }
         if (-not $paragraph.Count) { $start = $i + 1 }
-        # A figure grouped in thousands split across a line end, where a limit says the page is
-        # wrapped (grado-factorio-tools#345, from realistic-fusion-refreshed's #662): the line
-        # before, of this paragraph, ends in one to three digits, or those and groups of three,
-        # with no letter, digit, #, ., , or - before them, and this one opens with three digits.
-        elseif ($MaxLineLength -gt 0 -and $line -match '^\s*(\d{3})(?!\d)') {
+        # A figure grouped in thousands split across a line end, with a limit or none (Truls, on
+        # grado-factorio-tools#345; from realistic-fusion-refreshed's #662): the line before, of
+        # this paragraph, ends in one to three digits, or those and groups of three, with no
+        # letter, digit, #, ., , or - before them, and this one opens with three digits.
+        elseif ($line -match '^\s*(\d{3})(?!\d)') {
             $tail = $Matches[1]
             if ($paragraph[$paragraph.Count - 1].TrimEnd() -match '(?<![\w#.,-])(\d{1,3}(?: \d{3})*)$') {
                 @{ Line = $i; Message = "the line ends in a number and the next opens with three digits, which reads as the figure $($Matches[1]) $tail split across the line end; if they are two numbers, break the line a word earlier or later" }
