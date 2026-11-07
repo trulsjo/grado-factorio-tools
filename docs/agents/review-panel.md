@@ -11,7 +11,7 @@ running.
 
 | Agent | Command | Clear |
 |---|---|---|
-| codex | `codex --no-daemon` | `/new` |
+| codex | `codex --no-daemon` | `/clear` |
 | antigravity | `agy` | `/clear` |
 | fable | `claude --model claude-fable-5-1` | `/clear` |
 
