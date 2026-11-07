@@ -12,7 +12,9 @@ as ruled in
 [*Rulings: tracker and ticket conventions*](https://github.com/trulsjo/grado-factorio-tools/issues/325)
 (rulings 2 to 6) and
 [*Rulings: confirm the proposed leaves*](https://github.com/trulsjo/grado-factorio-tools/issues/330)
-(item 4). An incident is told as the page it came from tells it, and names that repository.
+(item 4). *Before closing*'s rule on a ruling that binds later work was ruled by Truls at the
+triage of [#371](https://github.com/trulsjo/grado-factorio-tools/issues/371#issuecomment-6704507809),
+2026-11-07. An incident is told as the page it came from tells it, and names that repository.
 
 ## Read an issue with `--json`, not `--comments`
 
@@ -122,6 +124,17 @@ leaves open. While that ruling is open, `ready-for-agent` comes off `<m>`. On 20
 trulsjo/grado-factorio-tools#210 was closed as a duplicate of trulsjo/grado-factorio-tools#208
 with a ruling open, first by `gh issue close --reason "not planned"` and then set to duplicate
 through `gh api`.
+
+**Put a ruling that binds later work on the page that work edits**, before closing. A ruling in
+the issue's comments binds later work when it names work that no open ticket under this one
+carries. It goes on the page that work will edit, citing the comment that made it; left in the
+comments, it closes with the issue. In trulsjo/grado-factorio-tools, Truls ruled on #335
+([the comment](https://github.com/trulsjo/grado-factorio-tools/issues/335#issuecomment-6697515371))
+that a lift's pull request cannot name its own commit on `main`, and at #336's triage that each
+lift's pull request fills in every earlier lift's commit. The ruling stood only in #335's
+comments and the briefs of #336 to #341, all closed by its PR #368, and none of the lifts #342
+to #363 held it. It now stands on that repository's `docs/extraction-plan.md`, *From the map of
+shared agent practices*.
 
 ## The bar for a follow-up ticket
 
