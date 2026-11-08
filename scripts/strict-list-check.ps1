@@ -19,14 +19,20 @@
     finds nothing or one, often minutes into a real check; it happened six times on 2026-11-05.
 
     The fixes differ by property. For .Count, wrap the command in @(...), which always gives an
-    array. For .Id and .Name, take them with ForEach-Object Id or ForEach-Object Name, which gives
-    nothing for nothing; @(...) does not help there, since an empty array has no .Name.
+    array. Off a dictionary, read .PSBase.Count, which no key can take over. And @() round a call
+    that returns its list as one object, , $list, nests that list, so its count is always 1:
+    wrap the variable the call was assigned to instead, as Split-TableRow's callers do. For .Id
+    and .Name, take them with ForEach-Object Id or ForEach-Object Name, which gives nothing for
+    nothing; @(...) does not help there, since an empty array has no .Name.
     A statement that always outputs exactly one object, such as one calling Start-Process
     -PassThru, is right for .Id and .Name: put the comment # strict-lists: one straight after it,
-    on the line where it ends (a ; or another comment between is fine). One object still has no
-    .Count, so the marker never makes a .Count read safe. In $a, $b = ... only the first variable
-    gets the one object. A marker after a line with several unsafe reads covers none of them; nor
-    does a marker after a string cover a statement inside it.
+    on the line where it ends (a ; or another comment between is fine). The marker never makes a
+    .Count read safe, because what one object's .Count gives depends on its type. On PowerShell
+    7.6.9 under Set-StrictMode -Version Latest (2026-11-08), a hashtable has one, counting its keys
+    unless a key named Count takes it over, and a PSCustomObject has one that is always 1; a
+    string, a number, a file, a folder, a Process and $null throw. In $a, $b = ... only the first
+    variable gets the one object. A marker after a line with several unsafe reads covers none of
+    them; nor does a marker after a string cover a statement inside it.
 
     It parses each .ps1 that calls Set-StrictMode and gives each value a state:
       bare      a command result as PowerShell hands it over: Get-Thing, (Get-Thing),
@@ -102,6 +108,10 @@ if ($Path) { $Path = @($Path | ForEach-Object { $_ -split ',' } | ForEach-Object
 
 $properties = 'Count', 'Id', 'Name'
 $marker = '^#\s*strict-lists:\s*one\b'
+# The advice for a flagged .Count (#396).
+$countFix = 'wrap the command in @(...); off a dictionary, read .PSBase.Count; @() round a call ' +
+    'that returns its list as one object, , $list, nests it, so its count is always 1: wrap the ' +
+    'variable the call was assigned to instead'
 $fixtures = Join-Path $PSScriptRoot 'strict-list-check'
 # What each script is named relative to.
 $root = (Get-Location).Path
@@ -356,7 +366,8 @@ function Invoke-Check([IO.FileInfo[]] $Files) {
                 $mine = @($inline | Where-Object { $_.Read -eq $r })
                 if (-not $mine.Count) { continue }
                 # A marked statement around the read covers it if it holds no other unsafe read,
-                # and only for .Id and .Name: its one object has no .Count.
+                # and only for .Id and .Name: what its one object's .Count gives depends on its
+                # type.
                 $covered = $false
                 for ($s = $r.Parent; $s -and -not $covered -and -not (Test-Unsafe 'one' $prop); $s = $s.Parent) {
                     if ($s -is [StatementAst] -and $markedEnds.Contains($s.Extent.EndOffset)) {
@@ -369,7 +380,7 @@ function Invoke-Check([IO.FileInfo[]] $Files) {
                 }
             }
             if (-not $why) { continue }
-            $fix = if ($prop -eq 'Count') { 'wrap the command in @(...)' } else {
+            $fix = if ($prop -eq 'Count') { $countFix } else {
                 "take it with ForEach-Object $prop, or end a statement that always outputs one object with # strict-lists: one"
             }
             $line = $r.Extent.StartLineNumber
@@ -493,12 +504,12 @@ if ($SelfTest) {
     $flags = Test-FixtureFlags $fixtureFiles
     $fixtureHits = $flags.Hits
     $expected = $flags.Expected
-    Write-Host "self-test 1/8: the check flags each fixture line as often as its # expect: flag says -- $(if ($flags.Failed) { 'FAILED' } else { 'ok' })"
+    Write-Host "self-test 1/9: the check flags each fixture line as often as its # expect: flag says -- $(if ($flags.Failed) { 'FAILED' } else { 'ok' })"
     $flags.Wrong | ForEach-Object { Write-Host "    $_" }
     # That the comparison can fail: the fixtures all match, so case 1 alone cannot show it.
     $canary = @(Get-FixtureMismatch @{ 'a.ps1:3' = 1; 'a.ps1:5' = 2 } @{ 'a.ps1:5' = 2; 'a.ps1:9' = 1 })
     $canaryOk = ($canary -join '|') -eq 'a.ps1:3: flagged 0 time(s), expected 1|a.ps1:9: flagged 1 time(s), expected 0'
-    Write-Host "self-test 2/8: a line flagged less, or more, than its # expect: says is named -- $(if ($canaryOk) { 'ok' } else { 'FAILED' })"
+    Write-Host "self-test 2/9: a line flagged less, or more, than its # expect: says is named -- $(if ($canaryOk) { 'ok' } else { 'FAILED' })"
 
     # Then PowerShell itself: run each strict-mode fixture and require, read by read, that every
     # read runs and that exactly the flagged ones throw, so a fixture cannot pin a wrong belief
@@ -544,7 +555,7 @@ if ($SelfTest) {
         }
     }
     $untrue = @(Get-FixtureUntruth $fixtureFiles $fixtureHits)
-    Write-Host "self-test 3/8: each strict-mode fixture, run, throws on exactly the reads the check flags -- $(if ($untrue.Count) { 'FAILED' } else { 'ok' })"
+    Write-Host "self-test 3/9: each strict-mode fixture, run, throws on exactly the reads the check flags -- $(if ($untrue.Count) { 'FAILED' } else { 'ok' })"
     $untrue | ForEach-Object { Write-Host "    $_" }
 
     # Then a run over paths of its own, in a pwsh of its own, as a gate runs it: one that read no
@@ -588,40 +599,52 @@ if ($SelfTest) {
         New-Item -ItemType Directory -Path $noExpect -Force | Out-Null
         Set-Content -LiteralPath (Join-Path $noExpect 'plain.ps1') -Value 'Set-StrictMode -Version Latest', '@(1).Count'
         $noExpectFlags = Test-FixtureFlags @(Get-Files $noExpect)
+        # A flagged .Count, for the advice printed with it.
+        $advice = Join-Path $temp 'advice'
+        New-Item -ItemType Directory -Path $advice -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path $advice 'count.ps1') -Value 'Set-StrictMode -Version Latest', '$x = Get-ChildItem', '$x.Count'
+        $adviceSaid = @(Invoke-Check @(Get-Files $advice) | ForEach-Object Text)
     } finally { Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue }
     # The run over the strict folder alone passes, so the two below fail for what they hold.
     $noneOk = $alone.Code -eq 0 -and $none.Code -eq 1 -and
         $none.Text -match '(?m)^FAILED - strict-list-check: none of the 1 script\(s\) read sets strict mode'
-    Write-Host "self-test 4/8: a run that read no strict-mode script fails, saying so -- $(if ($noneOk) { 'ok' } else { 'FAILED' })"
+    Write-Host "self-test 4/9: a run that read no strict-mode script fails, saying so -- $(if ($noneOk) { 'ok' } else { 'FAILED' })"
     if (-not $noneOk) { "$($alone.Text)$($none.Text)".TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" } }
     $besideOk = $alone.Code -eq 0 -and $beside.Code -eq 1 -and $named.Code -eq 1 -and
         $named.Text -match "(?m)^FAILED - strict-list-check: .*notes\.md holds no script" -and
         $beside.Text -match "(?m)^FAILED - strict-list-check: $([regex]::Escape($empty)) holds no script" -and
         $beside.Text -notmatch "(?m)^FAILED - strict-list-check: $([regex]::Escape($strict)) holds"
-    Write-Host "self-test 5/8: a -Path that holds no script, a folder or a file named, beside one that does, fails, naming it -- $(if ($besideOk) { 'ok' } else { 'FAILED' })"
+    Write-Host "self-test 5/9: a -Path that holds no script, a folder or a file named, beside one that does, fails, naming it -- $(if ($besideOk) { 'ok' } else { 'FAILED' })"
     if (-not $besideOk) { "$($beside.Text)$($named.Text)".TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" } }
     # A run given the fixture folder alone skips it; a script that does not parse is named (#376).
     $skipOk = $fixtureOnly.Code -eq 1 -and $fixtureOnly.Text -match '(?m)^FAILED - strict-list-check: .* holds no script outside the fixture folder' -and
         $unparsed.Code -eq 1 -and $unparsed.Text -match '(?m)broken\.ps1: does not parse: '
-    Write-Host "self-test 6/8: a run skips the fixture folder, and names a script that does not parse -- $(if ($skipOk) { 'ok' } else { 'FAILED' })"
+    Write-Host "self-test 6/9: a run skips the fixture folder, and names a script that does not parse -- $(if ($skipOk) { 'ok' } else { 'FAILED' })"
     if (-not $skipOk) { "$($fixtureOnly.Text)$($unparsed.Text)".TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" } }
     # Each scratch fixture is named for its own fault, so a guard of the runner that stopped
     # holding would let a fixture prove nothing (#376).
     $wantSaid = @($badFixtures.Keys | ForEach-Object { $badFixtures[$_][1] })
     $missed = @($wantSaid | Where-Object { $w = $_; -not @($badSaid | Where-Object { $_.StartsWith($w) }).Count })
     $runnerOk = -not $missed.Count -and $badSaid.Count -eq $wantSaid.Count
-    Write-Host "self-test 7/8: the fixture run names a read that never ran, an error, an early end, a stale or stray tag, a tag of the other kind, a read in a read and another error -- $(if ($runnerOk) { 'ok' } else { 'FAILED' })"
+    Write-Host "self-test 7/9: the fixture run names a read that never ran, an error, an early end, a stale or stray tag, a tag of the other kind, a read in a read and another error -- $(if ($runnerOk) { 'ok' } else { 'FAILED' })"
     if (-not $runnerOk) { $missed | ForEach-Object { Write-Host "    not named: $_" }; $badSaid | ForEach-Object { Write-Host "    said: $_" } }
     # Case 1's comparison fails a fixture set that says # expect: flag nowhere, though nothing in
     # it mismatches (#397).
     $noExpectOk = $noExpectFlags.Failed -and -not $noExpectFlags.Wrong.Count -and $noExpectFlags.Expected -eq 0
-    Write-Host "self-test 8/8: case 1's comparison fails a fixture set with no # expect: flag line -- $(if ($noExpectOk) { 'ok' } else { 'FAILED' })"
+    Write-Host "self-test 8/9: case 1's comparison fails a fixture set with no # expect: flag line -- $(if ($noExpectOk) { 'ok' } else { 'FAILED' })"
     if (-not $noExpectOk) { $noExpectFlags.Wrong | ForEach-Object { Write-Host "    $_" } }
+    # The advice for a .Count names each fix, written out here so that a change to it fails (#396).
+    $wantAdvice = 'count.ps1:3: .Count off $x, assigned an unwrapped command result on line 2; wrap the command in @(...); ' +
+        'off a dictionary, read .PSBase.Count; @() round a call that returns its list as one object, , $list, nests it, ' +
+        'so its count is always 1: wrap the variable the call was assigned to instead'
+    $adviceOk = $adviceSaid.Count -eq 1 -and ($adviceSaid[0] -split "`n")[0].EndsWith("$([IO.Path]::DirectorySeparatorChar)$wantAdvice", [StringComparison]::Ordinal)
+    Write-Host "self-test 9/9: a flagged .Count names @(...), .PSBase.Count for a dictionary, and the nesting of a , `$list result -- $(if ($adviceOk) { 'ok' } else { 'FAILED' })"
+    if (-not $adviceOk) { $adviceSaid | ForEach-Object { Write-Host "    said: $_" } }
     Write-Host ''
     $failures = @(@([bool] $flags.Failed) + @(-not $canaryOk) + @([bool] $untrue.Count) + @(-not $noneOk) + @(-not $besideOk) +
-        @(-not $skipOk) + @(-not $runnerOk) + @(-not $noExpectOk) | Where-Object { $_ }).Count
-    if ($failures) { Write-Host "FAILED - self-test: $failures of 8 case(s) did not hold."; exit 1 }
-    Write-Host "OK - self-test passed: all 8 cases, $expected fixture flags as expected and as strict mode throws."
+        @(-not $skipOk) + @(-not $runnerOk) + @(-not $noExpectOk) + @(-not $adviceOk) | Where-Object { $_ }).Count
+    if ($failures) { Write-Host "FAILED - self-test: $failures of 9 case(s) did not hold."; exit 1 }
+    Write-Host "OK - self-test passed: all 9 cases, $expected fixture flags as expected and as strict mode throws."
     exit 0
 }
 
