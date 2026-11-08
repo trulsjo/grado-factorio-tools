@@ -51,6 +51,9 @@ if ($false) { $mixed = @(Get-None) } else {
     $mixed = Get-Item .  # strict-lists: one
 }
 $mixed.Count                                        # expect: flag
+# A copy joins the two into one state, which must still be unsafe for .Count.
+$mixedCopy = $mixed
+$mixedCopy.Count                                    # expect: flag
 
 # A marker alone on its line follows no statement, so it marks none.
 $ownLine = Get-None
