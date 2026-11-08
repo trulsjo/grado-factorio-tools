@@ -4,11 +4,13 @@ The words a review's session hands each lane, written once so that every lane is
 (#140). How a review is run is in [code-review.md](code-review.md), and the prose rules in
 [code-review-prose.md](code-review-prose.md). This page carries three of `code-review.md`'s rules
 to the lane, what the bug scan does not load, when the check is not run again, and the
-read-nothing rule, and adds none of its own: a rule is changed there. How a lane runs a command a
-rule names, and what of its output it reports, is the brief's (Truls, 2026-10-26, #232), and so
-is how the bug scan applies the read-nothing rule, step by step (#383). The session fills the
-blanks, written `<like this>`, with what is particular to the change, and sends the rest as it
-stands. A lane that runs both reviews is sent both *Reads first* lines.
+read-nothing rule, and adds one rule of its own: to `code-review.md`'s, that a revert that fails
+nothing is a finding, an exception, a default revert the pull request lists with why it passes
+(#390). Any other rule is changed there. How a lane runs a command a rule names, and what of its
+output it reports, is the brief's (Truls, 2026-10-26, #232), and so is how the bug scan applies
+the read-nothing rule, step by step (#383). The session fills the blanks, written `<like this>`,
+with what is particular to the change, and sends the rest as it stands. A lane that runs both
+reviews is sent both *Reads first* lines.
 
 ---
 
@@ -45,9 +47,14 @@ of the commit per review, outside the repository, a clone, since a self-test may
 `git clone -q https://github.com/trulsjo/grado-factorio-tools <empty scratch folder>`, then
 `git -C <copy> checkout -q <full SHA>`. It writes the reverts as a list and runs them with
 `pwsh -File scripts/revert-run.ps1 -Copy <copy> -List <list>` (#284); the list's shape and what
-each result means are in that script's header. It reports the runner's table. A revert that
-fails nothing is a finding. With "none", it reverts nothing. The session answering a review's
-findings runs its reverts the same way.
+each result means are in that script's header. For each script whose `param()` block the change
+adds, or whose defaults it edits, it also runs
+`pwsh -File scripts/revert-run.ps1 -Copy <copy> -Defaults <scripts>`, which writes those
+scripts' default reverts itself (#382, #390); what a default revert is, and which defaults it
+writes none for, are in that script's header too. It reports each run's table. A revert that
+fails nothing is a finding, unless it is a default revert the pull request lists with why it
+passes, as PR #389 listed `line-cite-check.ps1 -Foreign`. With "none", it reverts nothing. The
+session answering a review's findings runs its reverts the same way.
 
 **What reads nothing.** The bug scan applies `code-review.md`'s
 [read-nothing rule](code-review.md#how-a-review-is-run) step by step, not to the whole set at
