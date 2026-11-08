@@ -23,10 +23,11 @@
     - with -OnDisk, as for a caller that reads the working tree, keeps the files on disk. Without
       it, as for a caller that reads the index, the list is as git gives it.
 
-    WHAT IT RETURNS. A hashtable: Root, the repository's root as git gives it, with / between
-    its folders; Files, the paths from the root, in git's order; Listed, how many files the
-    listing gave after -Exempt and before -OnDisk; and Failure, $null or the line to print, which
-    opens `FAILED - <Name>: `.
+    WHAT IT RETURNS. A hashtable: Root, with no -Root the repository's root as git gives it,
+    with / between its folders, and with -Root that as it was given, not checked to be the top
+    of a repository, so a subfolder given reads its pathspecs from that subfolder; Files, the
+    paths from the root, in git's order; Listed, how many files the listing gave after -Exempt
+    and before -OnDisk; and Failure, $null or the line to print, which opens `FAILED - <Name>: `.
 
     WHAT FAILS. A run that leaves nothing to read fails, and Failure names the step that emptied
     it: not in a git repository; no file for -Path; every file for -Path exempt; or, with
@@ -107,7 +108,8 @@ if ($MyInvocation.InvocationName -ne '.' -and $args -contains '-SelfTest') {
     $get = { param([hashtable] $more = @{}) Get-CheckInput -Name 'demo' -Root $repo @more }
     try {
         & $git init --quiet
-        & $file 'docs/a.md'; & $file 'docs/b.md'; & $file 'docs/c.ps1'
+        New-Item -ItemType Directory -Path (Join-Path $repo 'docs/deep') -Force | Out-Null
+        & $file 'docs/a.md'; & $file 'docs/b.md'; & $file 'docs/c.ps1'; & $file 'top.md'; & $file 'docs/deep/d.md'
         & $git add -A; & $git commit --quiet -m one
         $cases = [ordered]@{
             'the tracked files -Path names are listed and counted, in git''s order, less those -Exempt names' = {
@@ -115,6 +117,12 @@ if ($MyInvocation.InvocationName -ne '.' -and $args -contains '-SelfTest') {
                 $less = & $get @{ Path = 'docs/*.md', 'docs/*.ps1'; Exempt = 'docs/b.md' }
                 -not $all.Failure -and ($all.Files -join '|') -eq 'docs/a.md|docs/b.md' -and $all.Listed -eq 2 -and
                     -not $less.Failure -and ($less.Files -join '|') -eq 'docs/a.md|docs/c.ps1' -and $less.Listed -eq 2 }
+            'each pathspec, and each exempt one, is a glob: * stays in its folder, ** crosses folders (#389)' = {
+                $top = & $get @{ Path = '*.md' }
+                $every = & $get @{ Path = '**/*.md' }
+                $less = & $get @{ Path = '**/*.md'; Exempt = 'docs/*.md' }
+                ($top.Files -join '|') -eq 'top.md' -and ($every.Files -join '|') -eq 'docs/a.md|docs/b.md|docs/deep/d.md|top.md' -and
+                    ($less.Files -join '|') -eq 'docs/deep/d.md|top.md' }
             'a -Path that names no tracked file fails, naming that step' = {
                 $got = & $get @{ Path = '*.txt', 'none/*' }
                 $got.Failure -eq 'FAILED - demo: no tracked file for *.txt, none/*, so nothing was read.' -and -not $got.Files }
@@ -132,9 +140,9 @@ if ($MyInvocation.InvocationName -ne '.' -and $args -contains '-SelfTest') {
                 -not $some.Failure -and ($some.Files -join '|') -eq 'docs/b.md' -and $some.Listed -eq 2 -and
                     $gone.Failure -eq 'FAILED - demo: none of the 1 tracked file(s) for docs/a.md is on disk, so nothing was read.' -and
                     -not $index.Failure -and ($index.Files -join '|') -eq 'docs/a.md' }
-            'with -Staged, the staged files are listed, and nothing staged is no failure; every staged file exempt is one' = {
+            'with -Staged, the staged files are listed, a staged deletion not among them, and nothing staged is no failure; every staged file exempt is one' = {
                 $none = & $get @{ Path = 'docs/*'; Staged = $true }
-                & $file 'docs/a.md' 'edited'; & $file 'docs/new.md'; & $git add -A
+                & $file 'docs/a.md' 'edited'; & $file 'docs/new.md'; & $git add -A; & $git rm --quiet --cached docs/b.md
                 try {
                     $some = & $get @{ Path = 'docs/*.md'; Staged = $true }
                     $exempt = & $get @{ Path = 'docs/*.md'; Exempt = 'docs/*'; Staged = $true }
@@ -148,6 +156,9 @@ if ($MyInvocation.InvocationName -ne '.' -and $args -contains '-SelfTest') {
                 try { $got = & $latin { & $get @{ Path = 'docs/b*.md'; OnDisk = $true } } }
                 finally { & $git rm --cached --quiet 'docs/bløkk ø.md'; Remove-Item -LiteralPath (Join-Path $repo 'docs/bløkk ø.md') }
                 -not $got.Failure -and ($got.Files -join '|') -eq 'docs/b.md|docs/bløkk ø.md' }
+            'a -Root that is no repository throws, as a git listing that fails does (#389)' = {
+                try { $null = Get-CheckInput -Name 'demo' -Root $outside -Path '*' 2>$null; $false }
+                catch { $_.Exception.Message -eq "git could not list the tracked files of $outside." } }
             'with no -Root, the root is found from a folder whose name is not ASCII, in that code page; outside a repository the run fails, naming that step' = {
                 Push-Location (Join-Path $repo 'docs')
                 try { $got = & $latin { Get-CheckInput -Name 'demo' -Path 'docs/a.md' -OnDisk } }
