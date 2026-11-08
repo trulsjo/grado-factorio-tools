@@ -26,15 +26,16 @@
     WHAT IT RETURNS. A hashtable: Root, with no -Root the repository's root as git gives it,
     with / between its folders, and with -Root that as it was given, not checked to be the top
     of a repository, so a subfolder given reads its pathspecs from that subfolder; Files, the
-    paths from the root, in git's order; Listed, how many files the listing gave after -Exempt
-    and before -OnDisk; and Failure, $null or the line to print, which opens `FAILED - <Name>: `.
+    paths from Root, tracked or staged alike, in git's order; Listed, how many files the listing
+    gave after -Exempt and before -OnDisk; and Failure, $null or the line to print, which opens
+    `FAILED - <Name>: `.
 
     WHAT FAILS. A run that leaves nothing to read fails, and Failure names the step that emptied
     it: not in a git repository; no file for -Path; every file for -Path exempt; or, with
-    -OnDisk, none of them on disk. The one empty run that is not a failure: -Staged with nothing
-    staged for -Path, which returns no Files and no Failure, and the caller says it read nothing,
-    as docs/agents/code-review.md's read-nothing rule allows. With -Staged, every staged file
-    exempt is a failure. A git listing that fails throws.
+    -OnDisk, none of them on disk. The empty runs that are not a failure: with -Staged, nothing
+    staged for -Path, or every staged file exempt, as a commit that stages only a page -Exempt
+    names; each returns no Files and no Failure, and the caller says it read nothing, as
+    docs/agents/code-review.md's read-nothing rule allows. A git listing that fails throws.
 
     WHAT IT CANNOT SEE. What the caller then reads of each file: a file read as empty, or one
     the caller's own filter drops, as an extension, is the caller's to count. A file staged for
@@ -65,7 +66,8 @@ function Get-CheckInput {
     $kind = if ($Staged) { 'staged' } else { 'tracked' }
     $named = $Path -join ', '
     $list = { param([string[]] $specs)
-        $out = if ($Staged) { git -C $Root -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR -z -- @specs }
+        # --relative, so a subfolder given as -Root lists from it, as ls-files does.
+        $out = if ($Staged) { git -C $Root -c core.quotePath=false diff --cached --name-only --relative --diff-filter=ACMR -z -- @specs }
         else { git -C $Root -c core.quotePath=false ls-files -z -- @specs }
         if ($LASTEXITCODE) { throw "git could not list the $kind files of $Root." }
         @("$out".Split("`0") | Where-Object { $_ }) }
@@ -78,6 +80,8 @@ function Get-CheckInput {
     $files = $matched
     if ($Exempt) {
         $files = @(& $list ($include + @($Exempt | ForEach-Object { ":(glob,exclude)$_" })))
+        # Staged, every match exempt is a commit with nothing to check, as nothing staged is.
+        if (-not $files -and $Staged) { return & $end @() 0 '' }
         if (-not $files) { return & $end @() 0 "all $($matched.Count) $kind file(s) for $named are exempt by $($Exempt -join ', '), so nothing was read." }
     }
     $listed = $files.Count
@@ -138,19 +142,24 @@ if ($MyInvocation.InvocationName -ne '.' -and $args -contains '-SelfTest') {
                 }
                 finally { & $git checkout --quiet -- docs/a.md }
                 -not $some.Failure -and ($some.Files -join '|') -eq 'docs/b.md' -and $some.Listed -eq 2 -and
-                    $gone.Failure -eq 'FAILED - demo: none of the 1 tracked file(s) for docs/a.md is on disk, so nothing was read.' -and
+                    $gone.Failure -eq 'FAILED - demo: none of the 1 tracked file(s) for docs/a.md is on disk, so nothing was read.' -and $gone.Listed -eq 1 -and -not $gone.Files -and
                     -not $index.Failure -and ($index.Files -join '|') -eq 'docs/a.md' }
-            'with -Staged, the staged files are listed, a staged deletion not among them, and nothing staged is no failure; every staged file exempt is one' = {
+            'with -Staged, the staged files are listed, a staged deletion not among them, and neither nothing staged nor every staged file exempt is a failure; a subfolder as -Root lists from it, staged or tracked (PR #389)' = {
                 $none = & $get @{ Path = 'docs/*'; Staged = $true }
                 & $file 'docs/a.md' 'edited'; & $file 'docs/new.md' 'new'; & $git add -A; & $git rm --quiet --cached docs/b.md
                 try {
                     $some = & $get @{ Path = 'docs/*.md'; Staged = $true }
                     $exempt = & $get @{ Path = 'docs/*.md'; Exempt = 'docs/*'; Staged = $true }
+                    $sub = Join-Path $repo 'docs'
+                    $subStaged = Get-CheckInput -Name 'demo' -Root $sub -Path '*.md' -Staged -OnDisk
+                    $subTracked = Get-CheckInput -Name 'demo' -Root $sub -Path '*.md' -OnDisk
                 }
                 finally { & $git reset --quiet; & $git checkout --quiet -- docs/a.md; Remove-Item -LiteralPath (Join-Path $repo 'docs/new.md') }
                 -not $none.Failure -and -not $none.Files -and $none.Listed -eq 0 -and
                     -not $some.Failure -and ($some.Files -join '|') -eq 'docs/a.md|docs/new.md' -and
-                    $exempt.Failure -eq 'FAILED - demo: all 2 staged file(s) for docs/*.md are exempt by docs/*, so nothing was read.' }
+                    -not $exempt.Failure -and -not $exempt.Files -and
+                    -not $subStaged.Failure -and ($subStaged.Files -join '|') -eq 'a.md|new.md' -and
+                    -not $subTracked.Failure -and ($subTracked.Files -join '|') -eq 'a.md|new.md' }
             'a non-ASCII file name is listed, and found on disk, with the console in a code page that reads git''s UTF-8 wrong' = {
                 & $file 'docs/bløkk ø.md'; & $git add -A
                 try { $got = & $latin { & $get @{ Path = 'docs/b*.md'; OnDisk = $true } } }
