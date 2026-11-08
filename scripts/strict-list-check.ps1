@@ -2,7 +2,9 @@
 .SYNOPSIS
     Reads each strict-mode script under the paths it is given and fails on a property read
     strict mode can throw on: .Count off a command result that can be $null or one object, or .Id
-    or .Name off any command result. Exit 0 means no such read was found in them.
+    or .Name off any command result. Exit 0 means each path given held a script outside the
+    fixture folder, at least one script read sets strict mode, and no such read was found in
+    them (#375).
 
 .DESCRIPTION
     WHERE IT CAME FROM (grado-factorio-tools#343, #316 rulings 2 and 5). true-nukes-refreshed's
@@ -53,7 +55,9 @@
     it flags each line exactly that often. Then it runs each strict-mode fixture and requires,
     read by read, that every read runs and that exactly the flagged ones throw, so a fixture
     cannot pin a wrong belief about strict mode; a line marked "known false hit" or "known miss"
-    excuses the one disagreement it names. A run with -Path skips that folder.
+    excuses the one disagreement it names. A run with -Path skips that folder. Last, it runs
+    itself in a pwsh of its own over scratch folders: one holding no strict-mode script, and one
+    holding none beside one that does, each of which must fail, naming why.
 
     What it cannot see: a command result passed in as a parameter, a variable assigned in one
     function and read in another, a copy made inside a loop of a variable assigned later in that
@@ -472,12 +476,12 @@ if ($SelfTest) {
     }
     $wrong = @(Get-FixtureMismatch $want $got)
     $expected = ($want.Values | Measure-Object -Sum).Sum
-    Write-Host "self-test 1/3: the check flags each fixture line as often as its # expect: flag says -- $(if (-not $want.Count -or $wrong.Count) { 'FAILED' } else { 'ok' })"
+    Write-Host "self-test 1/5: the check flags each fixture line as often as its # expect: flag says -- $(if (-not $want.Count -or $wrong.Count) { 'FAILED' } else { 'ok' })"
     $wrong | ForEach-Object { Write-Host "    $_" }
     # That the comparison can fail: the fixtures all match, so case 1 alone cannot show it.
     $canary = @(Get-FixtureMismatch @{ 'a.ps1:3' = 1; 'a.ps1:5' = 2 } @{ 'a.ps1:5' = 2; 'a.ps1:9' = 1 })
     $canaryOk = ($canary -join '|') -eq 'a.ps1:3: flagged 0 time(s), expected 1|a.ps1:9: flagged 1 time(s), expected 0'
-    Write-Host "self-test 2/3: a line flagged less, or more, than its # expect: says is named -- $(if ($canaryOk) { 'ok' } else { 'FAILED' })"
+    Write-Host "self-test 2/5: a line flagged less, or more, than its # expect: says is named -- $(if ($canaryOk) { 'ok' } else { 'FAILED' })"
 
     # Then PowerShell itself: run each strict-mode fixture and require, read by read, that every
     # read runs and that exactly the flagged ones throw, so a fixture cannot pin a wrong belief
@@ -519,27 +523,62 @@ if ($SelfTest) {
                 }
             }
         })
-    Write-Host "self-test 3/3: each strict-mode fixture, run, throws on exactly the reads the check flags -- $(if ($untrue.Count) { 'FAILED' } else { 'ok' })"
+    Write-Host "self-test 3/5: each strict-mode fixture, run, throws on exactly the reads the check flags -- $(if ($untrue.Count) { 'FAILED' } else { 'ok' })"
     $untrue | ForEach-Object { Write-Host "    $_" }
+
+    # Then a run over paths of its own, in a pwsh of its own, as a gate runs it: one that read no
+    # strict-mode script, and a -Path that holds no script beside one that does (#375).
+    $temp = Join-Path ([IO.Path]::GetTempPath()) "strict-list-check-$([guid]::NewGuid().ToString('N'))"
+    $lax = Join-Path $temp 'lax'; $strict = Join-Path $temp 'strict'; $empty = Join-Path $temp 'empty'
+    foreach ($d in $lax, $strict, $empty) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
+    Set-Content -LiteralPath (Join-Path $lax 'lax.ps1') -Value "'no strict mode here'"
+    Set-Content -LiteralPath (Join-Path $strict 'strict.ps1') -Value 'Set-StrictMode -Version Latest'
+    $run = { param([string] $Paths) $said = & pwsh -NoProfile -File $PSCommandPath $Paths 2>&1 | Out-String; @{ Code = $LASTEXITCODE; Text = $said } }
+    try {
+        $alone = & $run $strict
+        $none = & $run $lax
+        $beside = & $run "$strict,$empty"
+    } finally { Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue }
+    # The run over the strict folder alone passes, so the two below fail for what they hold.
+    $noneOk = $alone.Code -eq 0 -and $none.Code -eq 1 -and
+        $none.Text -match '(?m)^FAILED - strict-list-check: none of the 1 script\(s\) read sets strict mode'
+    Write-Host "self-test 4/5: a run that read no strict-mode script fails, saying so -- $(if ($noneOk) { 'ok' } else { 'FAILED' })"
+    if (-not $noneOk) { "$($alone.Text)$($none.Text)".TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" } }
+    $besideOk = $alone.Code -eq 0 -and $beside.Code -eq 1 -and
+        $beside.Text -match "(?m)^FAILED - strict-list-check: $([regex]::Escape($empty)) holds no script" -and
+        $beside.Text -notmatch [regex]::Escape("$strict ")
+    Write-Host "self-test 5/5: a -Path that holds no script, beside one that does, fails, naming it -- $(if ($besideOk) { 'ok' } else { 'FAILED' })"
+    if (-not $besideOk) { $beside.Text.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" } }
     Write-Host ''
-    $failures = @(@(-not $want.Count -or $wrong.Count) + @(-not $canaryOk) + @([bool] $untrue.Count) | Where-Object { $_ }).Count
-    if ($failures) { Write-Host "FAILED - self-test: $failures of 3 case(s) did not hold."; exit 1 }
-    Write-Host "OK - self-test passed: all 3 cases, $expected fixture flags as expected and as strict mode throws."
+    $failures = @(@(-not $want.Count -or $wrong.Count) + @(-not $canaryOk) + @([bool] $untrue.Count) + @(-not $noneOk) + @(-not $besideOk) |
+            Where-Object { $_ }).Count
+    if ($failures) { Write-Host "FAILED - self-test: $failures of 5 case(s) did not hold."; exit 1 }
+    Write-Host "OK - self-test passed: all 5 cases, $expected fixture flags as expected and as strict mode throws."
     exit 0
 }
 
 $script:checked = 0
 $fixtureRoot = (Resolve-Path $fixtures).Path.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
-$given = @(Get-Files $Path)
-$files = @($given | Where-Object { -not $_.FullName.StartsWith($fixtureRoot, [StringComparison]::OrdinalIgnoreCase) })
-if (-not $files.Count) {
-    Write-Host "FAILED - strict-list-check: no script under $($Path -join ', ') outside the fixture folder, so nothing was read."
+$files = [System.Collections.Generic.List[IO.FileInfo]]::new()
+# Each -Path is held to a script of its own: one that holds none, beside one that does, would
+# pass unread (#375).
+$holdsNone = @(foreach ($p in $Path) {
+        $mine = @(Get-Files $p | Where-Object { -not $_.FullName.StartsWith($fixtureRoot, [StringComparison]::OrdinalIgnoreCase) })
+        if (-not $mine.Count) { $p; continue }
+        $files.AddRange([IO.FileInfo[]] $mine)
+    })
+if ($holdsNone.Count) {
+    foreach ($p in $holdsNone) { Write-Host "FAILED - strict-list-check: $p holds no script outside the fixture folder, so nothing there was read." }
     exit 1
 }
-$found = @(Invoke-Check $files)
+$found = @(Invoke-Check $files.ToArray())
 if ($found.Count) {
     $found | ForEach-Object { Write-Host "$($_.Text)" }
     Write-Host "FAILED - strict-list-check: $($found.Count) read(s) strict mode can throw on, in $script:checked strict-mode script(s)."
+    exit 1
+}
+if (-not $script:checked) {
+    Write-Host "FAILED - strict-list-check: none of the $($files.Count) script(s) read sets strict mode, so no read was checked."
     exit 1
 }
 Write-Host "OK - strict-list-check: no unsafe .$($properties -join '/.') read in $script:checked strict-mode script(s)."
