@@ -86,7 +86,7 @@ function Invoke-CitedCommitCheck {
     # A shallow clone and an unresolved -Main are named before what the listing found.
     $fail ={ param([string] $why) @{ Code = 1; Lines = @("FAILED - cited-commit-check: $why") } }
     if ((git -C $Root rev-parse --is-shallow-repository 2>$null) -ne 'false') {
-        return & $fail "$Root is a shallow clone, or no repository, so a commit on $Main cannot be told from one whose history was cut off. Fetch the whole history."
+        return & $fail "$Root is a shallow clone, so a commit on $Main cannot be told from one whose history was cut off. Fetch the whole history."
     }
     $null = git -C $Root rev-parse --verify --quiet "$Main^{commit}" 2>$null
     if ($LASTEXITCODE) { return & $fail "git cannot resolve $Main, so no cited commit can be checked against it. Fetch it." }
