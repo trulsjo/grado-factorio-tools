@@ -1,7 +1,9 @@
 <#
 .SYNOPSIS
     A hook for agent sessions: refuses `gh pr create` or `gh pr edit` whose body
-    pr-body-check.ps1 fails, or whose body this cannot read from a file. Exit 2 refuses the
+    pr-body-check.ps1 fails, or whose body this cannot read from a file, and `gh pr comment`,
+    `gh issue create` or `gh issue comment` whose body file markdown-check.ps1 -Body fails.
+    Exit 2 refuses the
     command before it runs, with the check's report or what to write instead on stderr; exit 0
     lets it run, and means only that each body file this checked passed: a call with `--help` or
     `-h` is not checked. Exit 1 says on stderr that the command could not be checked, as where
@@ -12,7 +14,9 @@
     session ran `pr-body-check.ps1 ... 2>&1 | tail -4 && gh pr create ...`: the pipe's exit code
     was tail's, 0, so `&&` went on. docs/agents/issue-tracker.md asks for that chain without a
     pipe, and the session's memory held that a pipe hides an exit code; neither stopped it. CI
-    checks the body only once the pull request exists.
+    checks the body only once the pull request exists. Of a comment or an issue (#386): in PR
+    #374's session a review comment was posted after its check refused the file, and six tickets
+    were filed with no check run.
 
     HOW IT IS WIRED. In .claude/settings.json, a PreToolUse hook on the two shell tools, matcher
     `Bash|PowerShell`, as refuse-git-hook-skip.ps1 is. This repository's own tracked settings
@@ -22,7 +26,7 @@
     pr-body-check.ps1 unchanged, after the body file; this repository passes -CiteSiblings
     -RequireSummaryVisual, as CI and the create command do. The check runs in `cwd`, since it
     asks git about the commits a body cites. The `case` keeps PowerShell from starting before
-    every shell command: whatever is refused holds `gh` and `pr`.
+    every shell command: whatever is refused holds `gh` and `pr`, or `gh` and `issue`.
 
     WHAT IT REFUSES, for each `gh pr create` and `gh pr edit` in the command (Truls's rulings on
     #259, 2026-10-26):
@@ -34,19 +38,25 @@
     - a path, taken against `cwd` where it is relative, that names no file;
     - a body file pr-body-check.ps1 fails, with that check's report.
 
+    For each `gh pr comment`, `gh issue create` and `gh issue comment`, only a `--body-file` or
+    `-F` whose file markdown-check.ps1 -Body fails, with that check's report; the wiring's
+    arguments are pr-body-check.ps1's and do not reach it. A body it cannot read is let through:
+    inline, from standard input, by no path, through the shell or from a file not there (#386).
+
     WHAT IT LETS THROUGH. A `gh pr create` or `gh pr edit` each of whose body files passes the
     check; a `gh pr edit` that touches no body, as `--title` or `--add-label` alone; any of them
     with `--help` or `-h`; every other gh command. A Git Bash path, `/c/...`, is read as `C:/...`
     on Windows. The title is not checked (ruling 4).
 
     WHAT IT CANNOT SEE. A command inside a quoted string, as `sh -c` or `pwsh -Command`, a
-    script, an alias, or a variable; a body written by `gh api` or any other way than these
-    two subcommands; a body file in a cluster of short options, as `-dF body.md`, which on
-    `gh pr create` is refused as no body file and on `gh pr edit` goes unchecked; a person's own
-    terminal: this is a session's hook. A file the command itself writes before gh runs, as
-    `... > body.md && gh pr create -F body.md`, is checked as it stands when the hook runs. And
-    whether the settings still reach it, unless -SelfTest is run, which reads the wired
-    command and the matcher of its entry, and nothing else of the settings.
+    script, an alias, or a variable; a body written by `gh api`, `gh issue edit`, a
+    `--comment` on `gh issue close` or any other way than these five subcommands; a comment's or
+    an issue's body it lets through, above; a body file in a cluster of short options, as
+    `-dF body.md`, which on `gh pr create` is refused as no body file and on `gh pr edit` goes
+    unchecked; a person's own terminal: this is a session's hook. A file the command itself writes
+    before gh runs, as `... > body.md && gh pr create -F body.md`, is checked as it stands when the
+    hook runs. And whether the settings still reach it, unless -SelfTest is run, which reads the
+    wired command and the matcher of its entry, and nothing else of the settings.
 
     WHAT IT REFUSES WRONGLY. It reads the command as text and does not parse the shell, so text
     that names `gh pr create` or `gh pr edit` outside quotes is read as a command: in a heredoc,
@@ -76,7 +86,7 @@
     The wired command: the PreToolUse hook in this repository's .claude/settings.json, as HOW IT
     IS WIRED says.
 
-        i=$(cat); case $i in *gh*pr*) printf '%s' "$i" | pwsh -NoProfile -File "$CLAUDE_PROJECT_DIR/scripts/refuse-pr-body.ps1" -CiteSiblings -RequireSummaryVisual;; esac
+        i=$(cat); case $i in *gh*pr*|*gh*issue*) printf '%s' "$i" | pwsh -NoProfile -File "$CLAUDE_PROJECT_DIR/scripts/refuse-pr-body.ps1" -CiteSiblings -RequireSummaryVisual;; esac
 
 .EXAMPLE
     To check it. The first is refused with exit 2, the second passes with exit 0:
@@ -117,9 +127,13 @@ function Get-PrBodyRefusal {
 
     foreach ($words in $commands) {
         for ($i = 0; $i + 2 -lt $words.Count; $i++) {
-            if ($words[$i] -notmatch '^(?:.*[\\/])?gh(?:\.exe)?$' -or $words[$i + 1] -ne 'pr' -or
-                $words[$i + 2] -notin 'create', 'edit') { continue }
-            $sub = $words[$i + 2]
+            if ($words[$i] -notmatch '^(?:.*[\\/])?gh(?:\.exe)?$') { continue }
+            # A pull request's body is held to pr-body-check.ps1; a comment's or an issue's, to
+            # markdown-check.ps1 -Body (#386).
+            $prose = $words[$i + 1] -eq 'pr' -and $words[$i + 2] -eq 'comment' -or
+                $words[$i + 1] -eq 'issue' -and $words[$i + 2] -in 'create', 'comment'
+            if (-not $prose -and ($words[$i + 1] -ne 'pr' -or $words[$i + 2] -notin 'create', 'edit')) { continue }
+            $sub = "$($words[$i + 1]) $($words[$i + 2])"
             $files = [System.Collections.Generic.List[object]]::new()
             $inline = $help = $false
             for ($j = $i + 3; $j -lt $words.Count; $j++) {
@@ -130,19 +144,33 @@ function Get-PrBodyRefusal {
                 elseif ($w -cin '--help', '-h') { $help = $true }
             }
             if ($help) { continue }
-            if ($inline) { return "gh pr $sub gives its body inline, which the check cannot read. Write the body to a file and pass --body-file <path>." }
-            if ($sub -eq 'create' -and -not $files.Count) { return 'gh pr create is given no --body-file, so its body cannot be checked. Write the body to a file and pass --body-file <path>.' }
+            # An inline body, or none, of a comment or an issue is let through: it is not seen.
+            if ($inline -and -not $prose) { return "gh $sub gives its body inline, which the check cannot read. Write the body to a file and pass --body-file <path>." }
+            if ($sub -eq 'pr create' -and -not $files.Count) { return 'gh pr create is given no --body-file, so its body cannot be checked. Write the body to a file and pass --body-file <path>.' }
             foreach ($f in $files) {
-                if (-not $f) { return "gh pr $sub is given --body-file with no path. Pass the body file's path." }
-                if ($f -eq '-') { return "gh pr $sub reads its body from standard input, which the check cannot read. Pass --body-file <path>." }
-                if ($f -match '[$%`]|^~') { return "gh pr $sub's body file, $f, is named through the shell, which this cannot expand. Write its path in full." }
+                # A comment's or an issue's body file this cannot read, as no path, standard
+                # input, a path through the shell or one not there, is let through, as an inline
+                # body is: #386 asks for a refusal only where the check fails.
+                if ($prose) {
+                    if (-not $f -or $f -eq '-' -or $f -match '[$%`]|^~') { continue }
+                    $path = if ($IsWindows -and $f -match '^/([a-zA-Z])(/.*)?$') { "$($Matches[1]):$($Matches[2] ?? '/')" } else { $f }
+                    if (-not [IO.Path]::IsPathRooted($path)) { $path = Join-Path $Cwd $path }
+                    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
+                }
+                if (-not $f) { return "gh $sub is given --body-file with no path. Pass the body file's path." }
+                if ($f -eq '-') { return "gh $sub reads its body from standard input, which the check cannot read. Pass --body-file <path>." }
+                if ($f -match '[$%`]|^~') { return "gh $sub's body file, $f, is named through the shell, which this cannot expand. Write its path in full." }
                 $path = if ($IsWindows -and $f -match '^/([a-zA-Z])(/.*)?$') { "$($Matches[1]):$($Matches[2] ?? '/')" } else { $f }
                 if (-not [IO.Path]::IsPathRooted($path)) { $path = Join-Path $Cwd $path }
-                if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return "gh pr $sub's body file, $f, is not there ($path). Write it first, then run gh." }
+                if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return "gh $sub's body file, $f, is not there ($path). Write it first, then run gh." }
+                $check = if ($prose) { 'markdown-check.ps1 -Body' } else { "pr-body-check.ps1 $($CheckArgs -join ' ')".TrimEnd() }
                 Push-Location -LiteralPath $Cwd
-                try { $report = pwsh -NoProfile -File (Join-Path $PSScriptRoot 'pr-body-check.ps1') $path @CheckArgs 2>&1 | Out-String }
+                try {
+                    $report = if ($prose) { pwsh -NoProfile -File (Join-Path $PSScriptRoot 'markdown-check.ps1') -Body $path 2>&1 | Out-String }
+                    else { pwsh -NoProfile -File (Join-Path $PSScriptRoot 'pr-body-check.ps1') $path @CheckArgs 2>&1 | Out-String }
+                }
                 finally { Pop-Location }
-                if ($LASTEXITCODE -ne 0) { return "gh pr $sub's body, $f, fails pr-body-check.ps1 $($CheckArgs -join ' '). Fix the body and run gh again.`n$($report.TrimEnd())" }
+                if ($LASTEXITCODE -ne 0) { return "gh $sub's body, $f, fails $check. Fix the body and run gh again.`n$($report.TrimEnd())" }
             }
         }
     }
@@ -151,7 +179,9 @@ function Get-PrBodyRefusal {
 
 if ($SelfTest) {
     $root = Split-Path $PSScriptRoot -Parent
-    $tmp = Join-Path ([IO.Path]::GetTempPath()) "refuse-pr-body-$PID"
+    # A name without "pr", so the wired case's gh issue command reaches the hook by the wiring's
+    # pattern for gh issue, not by its path.
+    $tmp = Join-Path ([IO.Path]::GetTempPath()) "refuse-body-$PID"
     New-Item -ItemType Directory -Force -Path $tmp | Out-Null
     $body = "## Summary`n`n{0}`n`n## Evidence`n`n**Before:** none`n`n**After:** none`n`n## Merge Danger`n`n**Door:** none`n`n**Blast Radius:** none`n"
     $good = Join-Path $tmp 'good.md'
@@ -160,6 +190,12 @@ if ($SelfTest) {
     Set-Content -LiteralPath $plain -NoNewline -Value ($body -f 'No visual.')
     $bad = Join-Path $tmp 'bad.md'
     Set-Content -LiteralPath $bad -NoNewline -Value 'No headings at all.'
+    # A comment's or an issue's body: one markdown-check.ps1 -Body passes, and one it fails, for
+    # a relative link, which GitHub resolves against the page.
+    $note = Join-Path $tmp 'note.md'
+    Set-Content -LiteralPath $note -Value 'A plain comment, with [an address](https://example.com/).'
+    $linked = Join-Path $tmp 'linked.md'
+    Set-Content -LiteralPath $linked -Value 'See [the page](docs/page.md).'
     $rel = [IO.Path]::GetRelativePath($root, $good) -replace '\\', '/'
     $msys = $good -replace '\\', '/' -replace '^([a-zA-Z]):', { '/' + $_.Groups[1].Value.ToLower() }
     $visual = '-CiteSiblings', '-RequireSummaryVisual'
@@ -195,6 +231,18 @@ if ($SelfTest) {
         @('gh pr create --help', @(), $null),
         @('gh pr create -h', @(), $null),
         @("gh pr edit 5 --title t; git commit -F `"$bad`"", @(), $null),
+        @("gh issue create --title t --body-file `"$linked`"", $visual, 'fails markdown-check\.ps1 -Body'),
+        @("gh issue create --title t -F `"$note`"", $visual, $null),
+        @("gh pr comment 5 --body-file `"$linked`"", $visual, 'fails markdown-check\.ps1 -Body'),
+        @("gh pr comment 5 -F `"$note`"", $visual, $null),
+        @("gh issue comment 5 -F`"$linked`"", $visual, 'fails markdown-check\.ps1 -Body'),
+        @("gh issue comment 5 --body-file=`"$note`"", $visual, $null),
+        @('gh issue comment 5 --body "inline, not seen"', @(), $null),
+        @('gh issue create --title t -b text', @(), $null),
+        @('gh issue create --title t --body-file $S/x.md', @(), $null),
+        @('gh issue comment 5 -F -', @(), $null),
+        @("gh pr comment 5 --body-file `"$tmp/missing.md`"", @(), $null),
+        @("gh issue view 5; gh issue close 5 --comment x", @(), $null),
         @('gh pr view 5 --json body', @(), $null),
         @('git status', @(), $null),
         @('', @(), $null)
@@ -213,10 +261,10 @@ if ($SelfTest) {
         if (-not $ok) { $failures++ }
     }
     Pop-Location
-    Remove-Item -LiteralPath $tmp -Recurse -Force
     # The wiring as the session runs it: the command the settings file wires for this script,
-    # through sh, with the tool call on stdin. Exit 2 and the reason for an inline body, exit 0
-    # and silence for the others.
+    # through sh, with the tool call on stdin. Exit 2 and the reason for an inline body and for an
+    # issue's body file the check fails, so the wiring hands it gh issue commands; exit 0 and
+    # silence for the others.
     $n++
     $Settings = (Resolve-Path -LiteralPath ($Settings ? $Settings : (Join-Path $PSScriptRoot '../.claude/settings.json'))).Path
     $names = [regex]::Escape((Split-Path $PSCommandPath -Leaf))
@@ -235,13 +283,16 @@ if ($SelfTest) {
     if (-not $wired) { $ok = $false; Write-Host "    $Settings wires no command that names this script" }
     else {
         $refused = & $through 'gh pr create --body text'
+        $issue = & $through "gh issue create --title t --body-file `"$linked`""
         $edit = & $through 'gh pr edit 1 --title t'
         $other = & $through 'git status'
         $ok = $refused.Code -eq 2 -and $refused.Text -match 'Refused' -and $refused.Text -match '--body-file' -and
+            $issue.Code -eq 2 -and $issue.Text -match 'Refused: gh issue create''s body' -and
             $edit.Code -eq 0 -and -not $edit.Text.Trim() -and $other.Code -eq 0 -and -not $other.Text.Trim()
-        if (-not $ok) { foreach ($r in $refused, $edit, $other) { Write-Host "    $($r.Code) $($r.Text)" } }
+        if (-not $ok) { foreach ($r in $refused, $issue, $edit, $other) { Write-Host "    $($r.Code) $($r.Text)" } }
     }
-    Write-Host ("self-test {0}/{1}: the wired hook refuses an inline body with exit 2 and a reason, and passes an edit of the title and a plain command -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
+    Remove-Item -LiteralPath $tmp -Recurse -Force
+    Write-Host ("self-test {0}/{1}: the wired hook refuses an inline body, and an issue's body file the check fails, with exit 2 and a reason, and passes an edit of the title and a plain command -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++ }
     # A tool call it cannot read: exit 1 and a line on stderr, not a refusal.
     $n++

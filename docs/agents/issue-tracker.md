@@ -47,6 +47,10 @@ setup template's core and this repository's own parts.
   `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'`
   with appropriate `--label` and `--state` filters.
 - **Comment on an issue**: `gh issue comment <number> --body "..."`
+- **The `refuse-pr-body.ps1` hook checks `gh issue create`, `gh issue comment` and
+  `gh pr comment` too**: it runs `markdown-check.ps1 -Body` on the `--body-file` or `-F` and
+  refuses the command where that fails (#386). An inline `--body` it does not see, nor a file
+  named through the shell, as `$S/body.md`: run the check on those yourself.
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
 - **Close**: `gh issue close <number> --comment "..."`, after the shared page's *Before closing*.
 
