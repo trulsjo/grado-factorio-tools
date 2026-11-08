@@ -8,8 +8,9 @@
     WHY (grado-factorio-tools#346, #319 rulings 4 and 8). A rebase merge puts a reworded or
     rebased copy of each commit on main, and the branch's own commits are then reachable from no
     ref: git gc can lose them, and a reader who follows a cited one finds nothing. On
-    realistic-fusion-refreshed's #815 a skill cited the pre-reword copy of #811's first commit,
-    and only a reviewer running git branch -a --contains caught it (its #817). This is that
+    realistic-fusion-refreshed's #815 a skill cited the pre-reword copy of
+    realistic-fusion-refreshed#811's first commit, and only a reviewer running git branch -a
+    --contains caught it (its #817). This is that
     repository's ship-check.ps1 section 17, at 4de346d, over the whole tree; pr-body-check.ps1
     asks the same of a pull request's body.
 
