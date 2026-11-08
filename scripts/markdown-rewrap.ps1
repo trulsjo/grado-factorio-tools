@@ -38,7 +38,10 @@
     their length, and rewraps each from that line to the end of its block: a run of lines with
     the same indent, `#` and one space, ended by a line of that prefix alone or another prefix;
     or a paragraph of a PowerShell block comment, between its opening and closing marks, ended by
-    a blank line, a help keyword line such as `.SYNOPSIS`, or a change of indent. A keyword is
+    a blank line, a help keyword line such as `.SYNOPSIS`, or a change of indent. In either, a
+    line whose text opens with a section lead, ALL-CAPS words with an optional parenthesis and
+    then a full stop, as `WHY.` or `WHAT IT READS (#1).`, starts a paragraph (#377); an ALL-CAPS
+    word with no full stop after its lead, or one mid-line, does not. A keyword is
     a `.` and upper-case letters, matched with case (#254): a line opening `.github/` is prose of
     its paragraph. The indent is kept on each line written, and lines under `.EXAMPLE` are left as
     they are. A shebang and code are never touched.
@@ -210,6 +213,9 @@ function Invoke-CommentRewrap {
     # What each line is: in a block comment, and under which help keyword. A keyword is matched
     # in upper case, as PowerShell writes .SYNOPSIS: a line opening .github is prose.
     $HELP_KEYWORD = '^\s*\.([A-Z]+)\b'
+    # A header's section lead, `WHY.` or `WHAT IT READS (#1).`: ALL-CAPS words, an optional
+    # parenthesis, a full stop. It opens a paragraph of its own (#377).
+    $SECTION_LEAD = "^[A-Z]{2,}[A-Z'-]*(?: [A-Z][A-Z'-]*)*(?: \([^)]*\))?\.(?:\s|$)"
     $read = {
         param([string[]] $l)
         $inBlock = @($false) * $l.Count; $section = @('') * $l.Count
@@ -241,6 +247,7 @@ function Invoke-CommentRewrap {
             while ($e + 1 -lt $Lines.Count -and $inBlock[$e + 1] -and $Lines[$e] -notmatch '#>\s*$') {
                 $n = $Lines[$e + 1]
                 if ($n -notmatch '\S' -or $n -cmatch $HELP_KEYWORD -or $n -match '^\s*#>' -or [regex]::Match($n, '^\s*').Length -ne $rest.Length) { break }
+                if ($n.Substring($rest.Length) -cmatch $SECTION_LEAD) { break }
                 $e++
             }
         }
@@ -251,7 +258,8 @@ function Invoke-CommentRewrap {
             $first = $hash.Value + [regex]::Match($Lines[$f].Substring($hash.Length), '^\s*').Value
             $rest = $first
             $e = $f
-            while ($e + 1 -lt $Lines.Count -and $Lines[$e + 1].StartsWith($first) -and $Lines[$e + 1].Substring($first.Length) -match '^\S') { $e++ }
+            while ($e + 1 -lt $Lines.Count -and $Lines[$e + 1].StartsWith($first) -and $Lines[$e + 1].Substring($first.Length) -match '^\S' -and
+                $Lines[$e + 1].Substring($first.Length) -cnotmatch $SECTION_LEAD) { $e++ }
         }
         # Each line less its prefix: the `# ` of a `#` block, or the `<#` that opens a block
         # comment.
@@ -368,6 +376,17 @@ function Invoke-SelfTest {
             $r = (Invoke-CommentRewrap -Lines $in -Max $max).Lines
             ($r -ccontains '    Second paragraph.') -and ($r -ccontains '.NOTES') -and ($r -ccontains '    After.') -and ($r -ccontains '        Deeper.') -and
                 ($r -join ' ') -match ' # in it' -and -not @($r | Where-Object { $_.Length -gt $max }) }
+        'a line opening with an ALL-CAPS lead and a full stop starts a paragraph, in a block comment and a # block (#377)' = {
+            $in = @('<#', '.DESCRIPTION', '    WHY. One sentence here that runs past forty.', '    WHAT IT READS. Another short one.',
+                '    WHERE IT CAME FROM (#343). A third.', '#>', '# WHY. A hash line that runs past the forty.', '# WHAT IT READS. Short.')
+            $r = (Invoke-CommentRewrap -Lines $in -Max $max).Lines
+            ($r -ccontains '    WHAT IT READS. Another short one.') -and ($r -ccontains '    WHERE IT CAME FROM (#343). A third.') -and
+                ($r -ccontains '# WHAT IT READS. Short.') -and -not @($r | Where-Object { $_.Length -gt $max }) }
+        'a line with an ALL-CAPS word mid-line, or an ALL-CAPS lead with no full stop, is still joined (#377)' = {
+            # Each joined, the lead fills the line before: as a paragraph, it would stand alone.
+            $mid = (Invoke-CommentRewrap -Lines @('<#', '.DESCRIPTION', '    A help line that is well over the limit.', '    SEE the NOTE.', '#>') -Max $max).Lines
+            $lead = (Invoke-CommentRewrap -Lines @('<#', '.DESCRIPTION', '    A help line that is well over the limit.', '    THE SELF-TEST runs.', '#>') -Max $max).Lines
+            ($mid -ccontains '    limit. SEE the NOTE.') -and ($lead -ccontains '    limit. THE SELF-TEST runs.') }
         'a doc comment opened and closed on its paragraph keeps <# and #>' = {
             $in = @('    <#  A doc comment that is well over the limit.  #>')
             $r = (Invoke-CommentRewrap -Lines $in -Max $max).Lines
