@@ -31,18 +31,21 @@
     is, for a list default, one per element, that element dropped from it: `$Path = @('a', 'b')`
     gives `$Path = @('b')` and `$Path = @('a')`, and a lone element dropped gives `@()`. A
     default is a list where it is written as one, `@()` of constants comma-separated or one to a
-    line, or a parenthesised comma list of them, or where the parameter's type is an array and
-    its default one constant, in parentheses or not. A constant is a number or a string with nothing
-    expanded in it. For a scalar default it is one revert, another value put in its place: a string
-    gets -reverted after it, a number 1 added, $true or $false the other. Each is named
+    line, or a parenthesised comma list of them, or where the parameter's type is a list, an
+    array as [string[]] or [array] (#394), and its default one constant, in parentheses or not.
+    Parentheses round a list, a hashtable or $null are read through, so (@('a')) and
+    (('a', 'b')) are lists and ($null) is $null. A constant is a number or a string with nothing
+    expanded in it. For a scalar default it is one revert, another value put in its place: a
+    string gets -reverted after it, a number 1 added, $true or $false the other. Each is named
     `default -<Name> ...`, edits the text from the parameter's variable to the end of its default,
     its Find running from the script's param( so that a self-test's runner that repeats the default
     does not make it occur twice (as two did in the first run for #382's pull request), and runs the
     script's own -SelfTest with no Args, as a list's revert is run and in the same table. The run
     prints how many it wrote for each script, and a line for each default it wrote none for: one
     computed at run time, as `(Get-Date)`, `"$x"` or a list holding either, on any parameter; $null,
-    on any parameter; an empty list; and a shape it does not read, with its text: a hashtable, or
-    one value in parentheses on a parameter whose type is not an array (#391). A script it writes no
+    on any parameter; an empty list; and a shape it does not read, with its text: a hashtable, in
+    parentheses or not, or one written-out value in parentheses, a constant, $true or $false, on a
+    parameter whose type is not a list (#391, #394). A script it writes no
     revert for, or that does not parse, fails the run, exit 1 and nothing run, as a step that read
     nothing.
 
@@ -75,8 +78,10 @@
     in a sibling. A revert across two files,
     or by a pattern. A self-test that changes a tracked file and puts it back.
     Of -Defaults: a default computed at run time, which it names and writes no revert for; a
-    hashtable, and one value in parentheses on a parameter whose type is not an array, shapes it
-    does not read, which it names with their text and writes no revert for; a
+    hashtable, in parentheses or not, and one constant, $true or $false in parentheses on a
+    parameter whose type is not a list, shapes it does not read, which it names with their text
+    and writes no revert for; a list type other than an array and [array], as a generic list,
+    whose default is read as a scalar's; a
     parameter with no param() default, as one the script's body sets when it is not given, which
     it does not name; a function's parameters; which of a scalar's other values matter, as it
     tries one; and a default revert whose self-test needs Args, as -NoGame.
@@ -157,11 +162,26 @@ function Get-DefaultRevert {
         # command or a variable, is computed at run time, and no revert is written.
         # $null, on a typed parameter as on an untyped one, and a hashtable, named before the
         # list's reading, which would take either for computed (#391).
+        # Parentheses round a list, a hashtable or $null are read through, so (@('a')) is a list
+        # and ($null) is $null; a line names the default as written (#394).
+        $shown = $default.Extent.Text
+        while ($default -is [System.Management.Automation.Language.ParenExpressionAst]) {
+            $pipe = $default.Pipeline
+            $inner = if ($pipe -is [System.Management.Automation.Language.PipelineAst] -and @($pipe.PipelineElements).Count -eq 1 -and
+                $pipe.PipelineElements[0] -is [System.Management.Automation.Language.CommandExpressionAst]) { $pipe.PipelineElements[0].Expression }
+            $through = $inner -is [System.Management.Automation.Language.ParenExpressionAst] -or $inner -is [System.Management.Automation.Language.ArrayExpressionAst] -or
+                $inner -is [System.Management.Automation.Language.HashtableAst] -or
+                ($inner -is [System.Management.Automation.Language.VariableExpressionAst] -and $inner.VariablePath.UserPath -eq 'null')
+            if (-not $through) { break }
+            $default = $inner
+        }
+        # [array] is a list type too, though its IsArray is false (#394).
+        $isList = $p.StaticType.IsArray -or $p.StaticType -eq [array]
         if ($default -is [System.Management.Automation.Language.VariableExpressionAst] -and $default.VariablePath.UserPath -eq 'null') {
             $unwritten.Add("-${name}: its default is `$null, which is no value"); continue
         }
         if ($default -is [System.Management.Automation.Language.HashtableAst]) {
-            $unwritten.Add("-${name}: its default is a hashtable, $($default.Extent.Text), a shape -Defaults does not read"); continue
+            $unwritten.Add("-${name}: its default is a hashtable, $shown, a shape -Defaults does not read"); continue
         }
         $elements = $null
         $computed = $false
@@ -178,13 +198,18 @@ function Get-DefaultRevert {
                 })
             # A parenthesised default is a list as a comma list, or as one element on an
             # array-typed parameter; one element on another is a value in parentheses.
-            $single = $default -is [System.Management.Automation.Language.ParenExpressionAst] -and $elements.Count -lt 2 -and -not $p.StaticType.IsArray
+            $single = $default -is [System.Management.Automation.Language.ParenExpressionAst] -and $elements.Count -lt 2 -and -not $isList
         }
-        elseif ($p.StaticType.IsArray) { $elements = @($default) }
+        elseif ($isList) { $elements = @($default) }
+        # One written-out value in parentheses, a constant, $true or $false, is named by its
+        # shape before the computed test, which reads $true as a variable (#394).
+        $isBool = { param($e) $e -is [System.Management.Automation.Language.VariableExpressionAst] -and $e.VariablePath.UserPath -in 'true', 'false' }
+        if ($single -and -not $computed -and $elements.Count -eq 1 -and ((& $isConstant $elements[0]) -or (& $isBool $elements[0]))) {
+            $unwritten.Add("-${name}: its default is a value in parentheses, $shown, a shape -Defaults does not read"); continue
+        }
         if ($null -ne $elements -and ($computed -or @($elements | Where-Object { -not (& $isConstant $_) }))) {
             $unwritten.Add("-${name}: its default is computed at run time"); continue
         }
-        if ($single) { $unwritten.Add("-${name}: its default is a value in parentheses, $($default.Extent.Text), a shape -Defaults does not read"); continue }
         if ($null -ne $elements) {
             if (-not $elements) { $unwritten.Add("-${name}: its default is an empty list, with no element to drop"); continue }
             for ($i = 0; $i -lt $elements.Count; $i++) {
@@ -381,7 +406,8 @@ function Invoke-SelfTest {
         '    ),'
         '    [string[]] $Listed = (Get-ChildItem -Name), [string[]] $Expand = "$PSScriptRoot/x",'
         '    $Map = @{ k = 1 }, [string[]] $OneParen = (''o''), [string[]] $TypedNil = $null, $Bare = (''v''),'
-        '    $Loose = @(''u''))'
+        '    $Loose = @(''u''), $PT = ($true), $PN = ($null), $PH = (@{ k = 1 }), $PA = (@(''a'')), $PL = ((''a'', ''b'')),'
+        '    [array] $PX = (''x''))'
         '# A runner that repeats two defaults, as a self-test''s does: the Find still occurs once.'
         '$run = { param([string[]] $Kinds = @(''a'', ''b''), [int] $Count = 3) }'
         "if (`$Kinds -contains 'a' -and `$Main -eq 'main') { Write-Host 'OK - self-test passed: all 1 cases.'; exit 0 }"
@@ -416,12 +442,16 @@ function Invoke-SelfTest {
                 "default -Paren drops 'p' => `$Paren = @('q')", "default -Paren drops 'q' => `$Paren = @('p')",
                 "default -Wrapped drops 'w1' => `$Wrapped = @('w2')", "default -Wrapped drops 'w2' => `$Wrapped = @('w1')",
                 "default -Stacked drops 'k1' => `$Stacked = @('k2')", "default -Stacked drops 'k2' => `$Stacked = @('k1')",
-                "default -OneParen drops 'o' => `$OneParen = @()", "default -Loose drops 'u' => `$Loose = @()")
+                "default -OneParen drops 'o' => `$OneParen = @()", "default -Loose drops 'u' => `$Loose = @()",
+                "default -PA drops 'a' => `$PA = @()", "default -PL drops 'a' => `$PL = @('b')", "default -PL drops 'b' => `$PL = @('a')",
+                "default -PX drops 'x' => `$PX = @()")
             $unwritten = @('-When: its default is computed at run time', '-Nil: its default is $null, which is no value',
                 '-Empty: its default is an empty list, with no element to drop', '-Piped: its default is computed at run time',
                 '-Listed: its default is computed at run time', '-Expand: its default is computed at run time',
                 '-Map: its default is a hashtable, @{ k = 1 }, a shape -Defaults does not read', '-TypedNil: its default is $null, which is no value',
-                "-Bare: its default is a value in parentheses, ('v'), a shape -Defaults does not read")
+                "-Bare: its default is a value in parentheses, ('v'), a shape -Defaults does not read",
+                '-PT: its default is a value in parentheses, ($true), a shape -Defaults does not read', '-PN: its default is $null, which is no value',
+                '-PH: its default is a hashtable, (@{ k = 1 }), a shape -Defaults does not read')
             # The lines each default spans, which its revert may change.
             $spans = @($written.Reverts | ForEach-Object { "$($_.Name.Split(' ')[1])=$($_.Lines)" } | Sort-Object -Unique)
             $got = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Defaults 'defaults.ps1' 2>&1 | Out-String
@@ -431,16 +461,16 @@ function Invoke-SelfTest {
             $printed = @([regex]::Matches($got, '(?m)^revert-run: defaults\.ps1, not written: (.+)\.\r?$') | ForEach-Object { $_.Groups[1].Value })
             ($said -join '|') -ceq ($want -join '|') -and ($written.Unwritten -join '|') -ceq ($unwritten -join '|') -and
                 ($printed -join '|') -ceq ($unwritten -join '|') -and
-                ($spans -join ' ') -ceq '-Count=1 -Kinds=1 -Loose=1 -Main=1 -On=1 -One=1 -OneParen=1 -Paren=1 -Quoted=1 -Single=1 -Stacked=4 -Wrapped=2' -and
+                ($spans -join ' ') -ceq '-Count=1 -Kinds=1 -Loose=1 -Main=1 -On=1 -One=1 -OneParen=1 -PA=1 -Paren=1 -PL=1 -PX=1 -Quoted=1 -Single=1 -Stacked=4 -Wrapped=2' -and
                 @($written.Reverts | Where-Object { -not $_.Find.StartsWith('param([switch] $SelfTest, ') -or $_.SelfTest -ne 'defaults.ps1' }).Count -eq 0 -and
-                $code -eq 0 -and $got -match '(?m)^revert-run: 16 default revert\(s\) written for defaults\.ps1\.' -and
+                $code -eq 0 -and $got -match '(?m)^revert-run: 20 default revert\(s\) written for defaults\.ps1\.' -and
                 ($rows -join '|') -ceq ((@($want | ForEach-Object { $_ -replace ' => .*$' }) | ForEach-Object {
                             "$($_): $(if ($_ -like '*Kinds drops ''a''' -or $_ -like '*-Main *') { 'fails' } else { 'passes' })" }) -join '|') -and (& $same) } }
         @{ Name = '-Defaults reads a comma list, and fails, exit 1 and nothing run, a script that yields no revert or does not parse (#389)'; Test = {
             $none = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Defaults 'defaults.ps1,nodefault.ps1' 2>&1 | Out-String; $noneCode = $LASTEXITCODE
             $broken = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Defaults 'broken.ps1' 2>&1 | Out-String; $brokenCode = $LASTEXITCODE
             Write-Host (($none + $broken).TrimEnd() -replace '(?m)^', '    ')
-            $noneCode -eq 1 -and $none -match '(?m)^revert-run: 16 default revert\(s\) written for defaults\.ps1\.' -and
+            $noneCode -eq 1 -and $none -match '(?m)^revert-run: 20 default revert\(s\) written for defaults\.ps1\.' -and
                 $none -match '-Defaults names nodefault\.ps1, for which no default revert could be written, so no revert was run' -and
                 $none -notmatch '(?m)^revert-run: default ' -and
                 $brokenCode -eq 1 -and $broken -match 'broken\.ps1 does not parse, so its defaults cannot be read' -and (& $same) } }
