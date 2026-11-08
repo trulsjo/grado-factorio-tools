@@ -40,8 +40,10 @@
     or a paragraph of a PowerShell block comment, between its opening and closing marks, ended by
     a blank line, a help keyword line such as `.SYNOPSIS`, or a change of indent. In either, a
     line whose text opens with a section lead, ALL-CAPS words with an optional parenthesis and
-    then a full stop, as `WHY.` or `WHAT IT READS (#1).`, starts a paragraph (#377); an ALL-CAPS
-    word with no full stop after its lead, or one mid-line, does not. A keyword is
+    then a full stop, as `WHY.` or `WHAT IT READS (#1).`, starts a paragraph (#377) where the line
+    before it ends in a full stop; one after a line that does not, as `see the` and then
+    `DESCRIPTION.`, is prose that wrapped there and stays in its paragraph (#398). An ALL-CAPS
+    word with no full stop after its lead, or one mid-line, does not start one. A keyword is
     a `.` and upper-case letters, matched with case (#254): a line opening `.github/` is prose of
     its paragraph. The indent is kept on each line written, and lines under `.EXAMPLE` are left as
     they are. A shebang and code are never touched.
@@ -62,7 +64,10 @@
     continues lazily into a line the check reads as something else. In -Comment mode, a block
     comment's opening or closing mark inside a string, which is taken as the block's edge, and a
     hanging indent such as a help paragraph's term and its text, whose flagged line is rewrapped to
-    its own indent. A prose line in a block comment opening with `.` and upper-case letters, as
+    its own indent. A section lead after a line that ends other than in a full stop, as in a colon,
+    which is joined to that line's paragraph; and a prose line that wraps to open with an ALL-CAPS
+    word and a full stop after a line that ends a sentence, which starts a paragraph (#398). A
+    prose line in a block comment opening with `.` and upper-case letters, as
     `.NET`, which is taken for a keyword: it is left, and named where over, and under `.EXAMPLE`
     it ends that section, so a command after it is rewrapped, where the lib's closed list of
     keywords ends none. A block comment opened after code on its line, which is not read as one,
@@ -215,8 +220,11 @@ function Invoke-CommentRewrap {
     $HELP_KEYWORD = '^\s*\.([A-Z]+)\b'
     # A header's section lead, `WHY.`, `EACH REVERT, IN ORDER.` or `WHAT IT READS (#1).`:
     # ALL-CAPS words, which may hold a digit and be split by commas, an optional parenthesis, a
-    # full stop. It opens a paragraph of its own (#377).
+    # full stop. It opens a paragraph of its own (#377) where the line before it ends in a full
+    # stop: a prose line that only wraps to open with an ALL-CAPS word and a full stop stays in its
+    # paragraph (#398).
     $SECTION_LEAD = "^[A-Z]{2,}[A-Z0-9'-]*(?:,? [A-Z][A-Z0-9'-]*)*(?: \([^)]*\))?\.(?:\s|$)"
+    $leads = { param([string] $Before, [string] $Text) $Before.TrimEnd().EndsWith('.') -and $Text -cmatch $SECTION_LEAD }
     $read = {
         param([string[]] $l)
         $inBlock = @($false) * $l.Count; $section = @('') * $l.Count
@@ -248,7 +256,7 @@ function Invoke-CommentRewrap {
             while ($e + 1 -lt $Lines.Count -and $inBlock[$e + 1] -and $Lines[$e] -notmatch '#>\s*$') {
                 $n = $Lines[$e + 1]
                 if ($n -notmatch '\S' -or $n -cmatch $HELP_KEYWORD -or $n -match '^\s*#>' -or [regex]::Match($n, '^\s*').Length -ne $rest.Length) { break }
-                if ($n.Substring($rest.Length) -cmatch $SECTION_LEAD) { break }
+                if (& $leads $Lines[$e] $n.Substring($rest.Length)) { break }
                 $e++
             }
         }
@@ -260,7 +268,7 @@ function Invoke-CommentRewrap {
             $rest = $first
             $e = $f
             while ($e + 1 -lt $Lines.Count -and $Lines[$e + 1].StartsWith($first) -and $Lines[$e + 1].Substring($first.Length) -match '^\S' -and
-                $Lines[$e + 1].Substring($first.Length) -cnotmatch $SECTION_LEAD) { $e++ }
+                -not (& $leads $Lines[$e] $Lines[$e + 1].Substring($first.Length))) { $e++ }
         }
         # Each line less its prefix: the `# ` of a `#` block, or the `<#` that opens a block
         # comment.
@@ -394,6 +402,24 @@ function Invoke-SelfTest {
             $mid = (Invoke-CommentRewrap -Lines @('<#', '.DESCRIPTION', '    A help line that is well over the limit.', '    SEE the NOTE.', '#>') -Max $max).Lines
             $lead = (Invoke-CommentRewrap -Lines @('<#', '.DESCRIPTION', '    A help line that is well over the limit.', '    THE SELF-TEST runs.', '#>') -Max $max).Lines
             ($mid -ccontains '    limit. SEE the NOTE.') -and ($lead -ccontains '    limit. THE SELF-TEST runs.') }
+        'a line that only wraps to open with an ALL-CAPS word and a full stop stays in its paragraph (#398)' = {
+            # realistic-fusion-refreshed's two at fccbcc9, each first line made long enough to
+            # rewrap.
+            $p1 = '-- see the', 'DESCRIPTION.'
+            $p2 = 'THE FRAMES SHOT INSIDE IT CANNOT BE COMMITTED, AND THAT IS SETTLED BEFORE THEY ARE TAKEN RATHER, and more',
+                'THAN AFTER. ADR 0029: the borrowed base "is used locally and never redistributed, and no derivative of it is either."'
+            $long = 'Converters in the `long` row. Deliberately well past what one heater can keep busy, far past it '
+            $in = @('<#', '.PARAMETER Converters', "    $long$($p1[0])", "    $($p1[1])", '', "    $($p2[0])", "    $($p2[1])", '#>',
+                "# $long$($p1[0])", "# $($p1[1])")
+            $want = @('<#', '.PARAMETER Converters',
+                '    Converters in the `long` row. Deliberately well past what one heater can keep busy, far past it',
+                '    -- see the DESCRIPTION.', '',
+                '    THE FRAMES SHOT INSIDE IT CANNOT BE COMMITTED, AND THAT IS SETTLED BEFORE THEY ARE TAKEN RATHER,',
+                '    and more THAN AFTER. ADR 0029: the borrowed base "is used locally and never redistributed, and',
+                '    no derivative of it is either."', '#>',
+                '# Converters in the `long` row. Deliberately well past what one heater can keep busy, far past it --',
+                '# see the DESCRIPTION.')
+            ((Invoke-CommentRewrap -Lines $in -Max 100).Lines -join "`n") -ceq ($want -join "`n") }
         'a doc comment opened and closed on its paragraph keeps <# and #>' = {
             $in = @('    <#  A doc comment that is well over the limit.  #>')
             $r = (Invoke-CommentRewrap -Lines $in -Max $max).Lines
