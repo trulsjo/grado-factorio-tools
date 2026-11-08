@@ -12,6 +12,7 @@ resource-counts
 markdown-check
 param-check
 cited-commit-check
+check-input
 comment-line-check
 help-check
 line-cite-check
