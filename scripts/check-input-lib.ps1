@@ -142,7 +142,7 @@ if ($MyInvocation.InvocationName -ne '.' -and $args -contains '-SelfTest') {
                     -not $index.Failure -and ($index.Files -join '|') -eq 'docs/a.md' }
             'with -Staged, the staged files are listed, a staged deletion not among them, and nothing staged is no failure; every staged file exempt is one' = {
                 $none = & $get @{ Path = 'docs/*'; Staged = $true }
-                & $file 'docs/a.md' 'edited'; & $file 'docs/new.md'; & $git add -A; & $git rm --quiet --cached docs/b.md
+                & $file 'docs/a.md' 'edited'; & $file 'docs/new.md' 'new'; & $git add -A; & $git rm --quiet --cached docs/b.md
                 try {
                     $some = & $get @{ Path = 'docs/*.md'; Staged = $true }
                     $exempt = & $get @{ Path = 'docs/*.md'; Exempt = 'docs/*'; Staged = $true }
