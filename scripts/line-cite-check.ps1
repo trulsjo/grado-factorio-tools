@@ -22,7 +22,8 @@
     names: the path itself, or one ending in / and the path, in any case, as Windows finds a
     file. A bare name that several files share is left, as which is meant cannot be decided here.
     A run whose -Path names no tracked file, or none on disk, fails, having read nothing, as
-    check-input-lib.ps1's Get-CheckInput, which lists the files, names it.
+    check-input-lib.ps1's Get-CheckInput, which lists the files, names it. So does a run whose
+    -Own names no tracked file, naming its pathspecs: no citation could be ours (#379).
 
     WHAT IS LEFT ALONE. A line -Foreign matches, whole, which is how a repository passes the
     lines that quote an ancestor, vanilla or the game's own output, and with it any continuation
@@ -48,7 +49,7 @@
 
 .PARAMETER Own
     The git pathspecs of the files that are our own code, which a citation must resolve to one of
-    to fail. Every tracked file unless given.
+    to fail. Every tracked file unless given. Pathspecs that name no tracked file fail the run.
 
 .PARAMETER Foreign
     A regular expression; a line it matches is left alone. None unless given.
@@ -96,9 +97,12 @@ function Invoke-LineCiteCheck {
     $in = Get-CheckInput -Name 'line-cite-check' -Root $Root -Path $Path -OnDisk
     if ($in.Failure) { return @{ Code = 1; Lines = @($in.Failure) } }
     $Root = $in.Root
-    # An -Own that names no tracked file is no failure, so its Failure is not read: nothing is
-    # ours, and a citation is counted toward the floors and passes.
-    $owned = (Get-CheckInput -Name 'line-cite-check' -Root $Root -Path $Own).Files
+    # An -Own that names no tracked file makes every citation not ours, so a run would pass
+    # having checked nothing of its kind (#379).
+    $owned = @((Get-CheckInput -Name 'line-cite-check' -Root $Root -Path $Own).Files)
+    if (-not $owned.Count) {
+        return @{ Code = 1; Lines = @("FAILED - line-cite-check: -Own names no tracked file, for $($Own -join ', '), so no citation could be ours.") }
+    }
     # A path is ours when exactly one own file is it or ends in / and it, in any case, as Windows
     # finds a file: realistic-fusion-refreshed's whole-path -eq, and its suffix made the same.
     $ours = { param([string] $p) @($owned | Where-Object { $_ -eq $p -or $_.EndsWith('/' + $p, [StringComparison]::OrdinalIgnoreCase) }).Count -eq 1 }
@@ -186,12 +190,19 @@ if ($SelfTest) {
                 # A code page in which git's UTF-8 is read wrong, as a Windows console's is.
                 $was = [Console]::OutputEncoding; [Console]::OutputEncoding = [Text.Encoding]::Latin1
                 try { $end = & $run } finally { [Console]::OutputEncoding = $was }
-                $floor = & $run -Own 'none/**' -MinCitations 5
+                $floor = & $run -Own 'old/**' -MinCitations 5
                 git -C $repo rm --cached --quiet mod/table.json 'docs/bløkk ø.md' docs/gone.md
                 Remove-Item -LiteralPath (Join-Path $repo 'mod/table.json'), (Join-Path $repo 'docs/bløkk ø.md')
                 $end.Lines[0] -eq 'docs/bløkk ø.md:1: cites mod/table.json:4 by line number' -and
                     $end.Lines[-1] -eq 'FAILED - line-cite-check: 1 citation(s) of our own code by line number in 6 file(s).' -and
                     $floor.Code -eq 1 -and -not ($floor.Lines -match '^Name the function') }
+            'an -Own that names no tracked file fails, naming its pathspecs, where one that names a file passes (#379)' = {
+                & $file 'docs/a.md' 'See mod/probe-entry.lua:12.'; git -C $repo add -A
+                $none = & $run -Own 'no-such/**', 'nor/**'
+                $some = & $run -Own 'old/**'
+                & $file 'docs/a.md' 'start'; git -C $repo add -A
+                $none.Code -eq 1 -and $none.Lines[-1] -eq 'FAILED - line-cite-check: -Own names no tracked file, for no-such/**, nor/**, so no citation could be ours.' -and
+                    $some.Code -eq 0 }
             'a -Path that names no tracked file fails, saying it read nothing, and so does one whose files are all gone from disk' = {
                 $end = & $run -Path '**/*.txt'
                 & $file 'docs/gone.md' 'x'; git -C $repo add -A; Remove-Item -LiteralPath (Join-Path $repo 'docs/gone.md')

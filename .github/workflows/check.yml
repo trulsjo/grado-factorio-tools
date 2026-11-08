@@ -55,8 +55,11 @@ jobs:
       # on, `pwsh -File scripts/line-cite-check.ps1` read 83 files on 2026-11-07 and found 9
       # path-and-line citations and 1 continuation, and failed on 1: a false positive, a quoted
       # specimen in docs/research/scripts-checks.md, reworded. Nothing here is foreign code.
+      # The floors fail a run whose patterns stopped matching (#379): on 2026-11-08, on branch
+      # 373-394-strict-list-and-review-slips, the same command read 86 files and found 67
+      # path-and-line citations and 6 continuations, none of our own code.
       - name: Check that no prose cites our own code by line number
-        run: pwsh -NoProfile -File scripts/line-cite-check.ps1
+        run: pwsh -NoProfile -File scripts/line-cite-check.ps1 -MinCitations 50 -MinContinuations 4
 
       # Through the environment, never pasted into the command: a title is text somebody typed.
       - name: Check the pull request title
