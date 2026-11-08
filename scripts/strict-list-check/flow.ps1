@@ -102,3 +102,30 @@ foreach ($i in 1..2) {
 # A script block that a command runs repeatedly is not a loop.
 $piped = @()
 1..2 | ForEach-Object { $piped.Count; $piped = Get-None }    # known miss
+
+# An assignment in one branch never reaches a read in another, past a safe value before the if.
+$apart2 = @()
+if (-not $c) { $apart2 = Get-None } else { $apart2.Count }
+
+# A catch block may not run, so it hides nothing from the finally block.
+$late = Get-None
+try { $null = 1 } catch { $late = @() } finally { $late.Count }    # expect: flag
+
+# A try or a switch used as a value is unrolled, as an if is.
+$triedValue = try { Get-None } catch { }
+$triedValue.Count                                   # expect: flag
+$switched = switch (1) { 2 { 'x' } }
+$switched.Count                                     # expect: flag
+
+# The right side of || may not run.
+$chained = Get-None
+$true || ($chained = @())
+$chained.Count                                      # expect: flag
+
+# A trap's body runs only on an error.
+function Test-Trap {
+    $trapped = Get-None
+    trap { $trapped = @(); continue }
+    $trapped.Count                                  # expect: flag
+}
+Test-Trap

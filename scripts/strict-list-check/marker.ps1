@@ -35,3 +35,24 @@ Join-Path ((Get-Item .).Name) 'x'  # strict-lists: one
 "$((Get-None).Count) and $((Get-Item .).Name)"  # strict-lists: one  # expect: flag 2  # known false hit
 "$($inString = Get-None)"  # strict-lists: one
 $inString.Count                                     # expect: flag
+
+# A marker inside a string's $( ) is read there: the tokens inside strings are read too.
+"$($inside = Get-Item .  # strict-lists: one
+)"
+$inside.Name
+
+# $( ) round a marked variable is still the one object, with no .Count.
+$dir = Get-Item .  # strict-lists: one
+$subOne = $($dir)
+$subOne.Count                                       # expect: flag
+
+# A wrapped value and a marked one can both reach a read: as either, a .Count is unsafe.
+if ($false) { $mixed = @(Get-None) } else {
+    $mixed = Get-Item .  # strict-lists: one
+}
+$mixed.Count                                        # expect: flag
+
+# A marker alone on its line follows no statement, so it marks none.
+$ownLine = Get-None
+# strict-lists: one
+$ownLine.Name                                       # expect: flag
