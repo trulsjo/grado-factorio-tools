@@ -81,7 +81,7 @@
     hashtable, in parentheses or not, and one constant, $true or $false in parentheses on a
     parameter whose type is not a list, shapes it does not read, which it names with their text
     and writes no revert for; a list type other than an array and [array], as a generic list,
-    whose default is read as a scalar's; a
+    whose default, if one constant not in parentheses, is read as a scalar's; a
     parameter with no param() default, as one the script's body sets when it is not given, which
     it does not name; a function's parameters; which of a scalar's other values matter, as it
     tries one; and a default revert whose self-test needs Args, as -NoGame.
