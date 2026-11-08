@@ -592,7 +592,7 @@ $getReleases = {
     }
 }
 
-Write-Host "resolve-modpack: line $Line on build $Build, $($packs.Keys.Count) pack(s), from $PortalBaseUrl"
+Write-Host "resolve-modpack: line $Line on build $Build, $($packs.PSBase.Count) pack(s), from $PortalBaseUrl"
 $results = @(Resolve-Packs -Packs $packs -GetReleases $getReleases -Line $Line -Build $Build)
 $pass = Write-Report -Results $results
 
