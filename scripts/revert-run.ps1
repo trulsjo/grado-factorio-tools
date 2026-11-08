@@ -549,8 +549,8 @@ function Invoke-SelfTest {
     [IO.File]::WriteAllText((Join-Path $repo 'nodefault.ps1'), "param([switch] `$SelfTest, [string] `$Name)`n")
     [IO.File]::WriteAllText((Join-Path $repo 'broken.ps1'), "param([string] `$Name = 'x'`n")
     # A script with a condition of each shape -Conditions reads, two of them on twin lines whose
-    # Find occurs twice: it passes unless 'b' leaves -in, [int] a type list, or the -or loses
-    # its first operand.
+    # Find occurs twice, and two shapes it must not read: it passes unless 'b' leaves -in, [int] a
+    # type list, or the -or loses its first operand.
     $conditions = @(
         'param([switch] $SelfTest)'
         "`$x = 'b'"
@@ -563,6 +563,9 @@ function Invoke-SelfTest {
         '$typed = $k -in [string], [int]'
         "`$d = `$x -eq 'd' -or `$x -eq 'b'"
         "`$d = `$x -eq 'd' -or `$x -eq 'b'"
+        # Neither a comma list on the right of another operator, nor -in a lone value, is read.
+        "`$eq = `$x -eq 'q', 'r'"
+        "`$lone = `$x -in 'b'"
         "if (@(`$ok, `$hit, `$no, `$or, `$typed, (`$types -contains `$k)) -notcontains `$false) { Write-Host 'OK - self-test passed: all 1 cases.'; exit 0 }"
         "Write-Host 'FAILED - self-test: 1 of 1 case(s) did not hold.'"
         'exit 1'
