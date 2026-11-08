@@ -509,6 +509,14 @@ emphasis findings than the spec's HTML shows literal marks; they are in
 `scripts/commonmark-examples.json`, under the spec's licence (see Licence below). What it reads
 as what, and what it cannot see, is in its header.
 
+    pwsh -File scripts/markdown-check.ps1 -Body <file> -MaxLineLength 100
+
+`-Body` reads one file, inside the repository or out, as a pull request's or issue's body (#384):
+the prose rules hold it, and with `-MaxLineLength` the length, but a link is read as GitHub reads
+it in a body, where a relative link leads nowhere. So a link fails unless it is a full address or
+a `#fragment` to one of the body's own headings. It fails beside `-Path`, `-All` or `-Range`, and
+its summary line says it read a body.
+
     pwsh -File scripts/markdown-check.ps1 -All -MaxLineLength 100
 
 Handed `-MaxLineLength`, it also reports a prose line longer than that; without it, it is silent on

@@ -232,7 +232,10 @@ function Test-Markdown {
         [Parameter(Mandatory)] [string] $Path,
         [Parameter(Mandatory)] [scriptblock] $Exists,
         [Parameter(Mandatory)] [scriptblock] $Anchors,
-        [int] $MaxLineLength = 0
+        [int] $MaxLineLength = 0,
+        # Read as a pull request's or issue's body: a link with no scheme and no lone #fragment
+        # fails, and $Exists and $Anchors are not asked.
+        [switch] $Body
     )
 
     # The links on one line, dot-sourced, so that $prose, the line less its code spans, is left
@@ -249,7 +252,12 @@ function Test-Markdown {
             if ($t.StartsWith('#')) {
                 if (-not $fragment) { continue }
                 if ($null -eq $own) { $own = Get-HeadingAnchor -Lines $Lines }
-                if (-not $own.Contains($fragment)) { @{ Line = $linkAt + 1; Message = "the link to $t names no heading of this file" } }
+                if (-not $own.Contains($fragment)) { @{ Line = $linkAt + 1; Message = "the link to $t names no heading of this $(if ($Body) { 'body' } else { 'file' })" } }
+                continue
+            }
+            # On GitHub a relative link in a body resolves against the page's own address.
+            if ($Body) {
+                @{ Line = $linkAt + 1; Message = "the link to $t is relative, and in a pull request's or issue's body a relative link resolves against the page's address, not the repository's tree, so it leads nowhere: give a full https:// address" }
                 continue
             }
             $file = [uri]::UnescapeDataString(($t -replace '[#?].*$'))

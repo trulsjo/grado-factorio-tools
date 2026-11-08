@@ -6,7 +6,10 @@
     a heading, that is not there; and a figure grouped in thousands split across a line end.
     Handed -MaxLineLength, a fifth: a prose line longer than that. Exit 0 means none was found in
     the files read, with -All alone that there was at least one to read, and with -Path that each
-    file named was read; exit 1 names each as <file>:<line>: <what>.
+    file named was read; exit 1 names each as <file>:<line>: <what>. With -Body it reads one file,
+    in the repository or out, as a pull request's or issue's body, where a link that is not a
+    full address or a fragment of the body's own fails; exit 0 means that file was read and
+    nothing was found.
 
 .DESCRIPTION
     A PRE-COMMIT CHECK (grado-factorio-modpack#149, where it was written). Run with no arguments,
@@ -33,6 +36,16 @@
     it cannot read as this repository's Markdown fails the run before anything is read, and says
     why.
 
+    WITH -Body (grado-factorio-tools#384, ruled by Truls on 2026-11-08) it reads one file as a
+    body that GitHub renders on a pull request or an issue: as it is on disk, inside the
+    repository or out, and asks git nothing, so it may be run outside any repository. -Path
+    keeps refusing a file outside the repository, as its links are read as the tree's. Every rule
+    below that is not about the tree holds a body: emphasis and code spans, table rows, a figure
+    split across a line end, and with -MaxLineLength the line length. Its links are read as A
+    LINK IN A BODY says, below. A finding names the file as it was given, and the summary line
+    says it read a body. Beside -Path, -All or -Range, or naming no file, it fails before
+    anything is read, and says why.
+
     WHAT IT READS AS WHAT. A paragraph ends at a blank line, a heading, a list item, a table or a
     fenced or indented code block; nothing inside either is read, no emphasis and no link
     (grado-factorio-tools#261), and a fence never closed is reported. A
@@ -56,6 +69,11 @@
     punctuation such as `_`, `-` and spaces dropped and each space made a hyphen; a repeat takes
     -1, -2 and on. A heading is a `#` line or a line alone after a blank one and underlined with
     `=` or `-`.
+    A LINK IN A BODY, read with -Body, is read as GitHub reads it there, where a relative link
+    resolves against the page's own address and not the repository's tree, so it leads nowhere.
+    A target with a scheme is not checked, as on a page; a `#name` alone must be the anchor of a
+    heading of the body, by the anchor rule above; and any other target, in prose or on a
+    `[label]: target` line, fails, saying it wants a full https:// address.
     A BARE ADDRESS, `https://...` with no brackets, is not read for emphasis, and ends where
     GitHub's renderer ends one, asked 2026-10-12 (grado-factorio-tools#124; the answers are in
     docs/measurements.md, with what the GitHub Flavored Markdown spec says, read the same day).
@@ -122,6 +140,10 @@
     file or heading a commit deletes or renames, unless the linking file is staged too: -All sees
     it. A link into a submodule is asked of the working tree, so neither its case nor whether git
     tracks it is checked; into one not initialised it is said to be unchecked, and passes.
+    What a body is not held to: whether a full address leads anywhere, so a link to a file of
+    the repository by its https:// address is not checked, nor a fragment after one; what GitHub
+    makes of a body's own forms, an @name, a #number or a task list; and whether the file is the
+    body that is posted. A body given inline, as gh's --body, or on standard input, is not read.
 
 .PARAMETER Range
     Check the Markdown files changed in a commit range, as they are at its end:
@@ -140,6 +162,10 @@
     Check these Markdown files as they are on disk, named from the current directory and split
     on commas: -Path README.md,docs/note.md. What that reads as there is under WITH -Path above.
     Not with -All or -Range.
+
+.PARAMETER Body
+    Check this one file as a pull request's or issue's body, inside the repository or out, as WITH
+    -Body above says. Not with -Path, -All or -Range.
 
 .PARAMETER MaxLineLength
     Also report a prose line longer than this many characters, 1 or more. Without it, length is
@@ -167,6 +193,9 @@
 
 .EXAMPLE
     pwsh -File scripts/markdown-check.ps1 -Path README.md,docs/note.md -MaxLineLength 100
+
+.EXAMPLE
+    pwsh -File scripts/markdown-check.ps1 -Body C:/scratch/pr-body.md -MaxLineLength 100
 #>
 
 #Requires -Version 7
@@ -175,6 +204,7 @@ param(
     [string] $Range,
     [switch] $All,
     [string[]] $Path,
+    [string] $Body,
     [int] $MaxLineLength = 0,
     [switch] $SelfTest
 )
@@ -664,6 +694,55 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
                 $ok = $ok -and $held
             }
             $ok } }
+        @{ Name = '-Body reads one file outside the repository, as a body: a figure split across a line end fails, the same file without one passes, and the summary says it read a body (#384)'; Test = {
+            $own = Join-Path $temp 'body'
+            New-Item -ItemType Directory -Path $own | Out-Null
+            git -C $own init --quiet
+            Set-Content -LiteralPath (Join-Path $temp 'split.md') -Value "The run moved 580`n000 tonnes."
+            Set-Content -LiteralPath (Join-Path $temp 'whole.md') -Value "The run moved 580 000`ntonnes."
+            $split = & $run $own @('-Body', '../split.md')
+            $whole = & $run $own @('-Body', '../whole.md')
+            ($split.Text + $whole.Text).TrimEnd() -replace '(?m)^', '    ' | Write-Host
+            $split.Code -eq 1 -and $split.Text -match '(?m)^\.\./split\.md:1: the line ends in a number and the next opens with three digits' -and
+                $split.Text -match '(?m)^FAILED - markdown-check: 1 finding\(s\) in \.\./split\.md, read as a body\.' -and
+                $whole.Code -eq 0 -and $whole.Text -match '(?m)^OK - markdown-check: \.\./whole\.md read as a body, nothing found\.' } }
+        @{ Name = '-Body fails a relative link, a [label]: path line and a #fragment that names no heading of the body, each with a body''s message, and passes a full address and a #fragment to its own heading (#384)'; Test = {
+            $own = Join-Path $temp 'body-links'
+            New-Item -ItemType Directory -Path (Join-Path $own 'docs') -Force | Out-Null
+            git -C $own init --quiet
+            # Each target is a tracked file, so the tree's rule would pass it.
+            Set-Content -LiteralPath (Join-Path $own 'docs/x.md') -Value '# X'
+            Set-Content -LiteralPath (Join-Path $own 'notes.md') -Value '# Notes'
+            git -C $own add -A
+            Set-Content -LiteralPath (Join-Path $own 'body.md') -Value ("# Results`n`n[full](https://example.com/a), [own](#results), [none](#no-such) and [rel](docs/x.md)`n`n" +
+                "[label]: notes.md")
+            $got = & $run $own @('-Body', 'body.md')
+            Write-Host ($got.Text.TrimEnd() -replace '(?m)^', '    ')
+            $relative = "is relative, and in a pull request's or issue's body a relative link resolves against the page's address, not the repository's tree, so it leads nowhere: give a full https:// address"
+            $findings = @($got.Text -split '\r?\n' | Where-Object { $_ -like 'body.md:*' })
+            $got.Code -eq 1 -and ($findings -join '|') -ceq ("body.md:3: the link to #no-such names no heading of this body|body.md:3: the link to docs/x.md $relative|" +
+                "body.md:5: the link to notes.md $relative") } }
+        @{ Name = '-Body refuses -Path, -All or -Range beside it, and a file that is missing, reading nothing; -MaxLineLength holds a body as a page (#384)'; Test = {
+            $own = Join-Path $temp 'body-refusals'
+            New-Item -ItemType Directory -Path $own | Out-Null
+            git -C $own init --quiet
+            Set-Content -LiteralPath (Join-Path $own 'page.md') -Value 'and *open'
+            Set-Content -LiteralPath (Join-Path $own 'long.md') -Value ('word ' * 6).Trim()
+            $said = @(
+                @{ Run = & $run $own @('-Body', 'page.md', '-Path', 'page.md'); Want = '-Body cannot be combined with -Path, -All or -Range' }
+                @{ Run = & $run $own @('-Body', 'page.md', '-All'); Want = '-Body cannot be combined with -Path, -All or -Range' }
+                @{ Run = & $run $own @('-Body', 'page.md', '-Range', 'HEAD~1..HEAD'); Want = '-Body cannot be combined with -Path, -All or -Range' }
+                @{ Run = & $run $own @('-Body', 'missing.md'); Want = '-Body names missing\.md, which is no file, so nothing was checked' }
+            )
+            $ok = $true
+            foreach ($s in $said) {
+                $held = $s.Run.Code -eq 1 -and $s.Run.Text -match $s.Want -and $s.Run.Text -notmatch '(?m)^page\.md:'
+                if (-not $held) { Write-Host ($s.Run.Text.TrimEnd() -replace '(?m)^', '    ') }
+                $ok = $ok -and $held
+            }
+            $long = & $run $own @('-Body', 'long.md', '-MaxLineLength', '20')
+            $free = & $run $own @('-Body', 'long.md')
+            $ok -and $long.Code -eq 1 -and $long.Text -match '(?m)^long\.md:1: the line is 29 characters, over the limit of 20' -and $free.Code -eq 0 } }
         @{ Name = '-Path takes a tracked file in git''s case, so a link in another case still fails and a finding names the file as git holds it (#193)'; Test = {
             $own = Join-Path $temp 'case'
             New-Item -ItemType Directory -Path $own | Out-Null
@@ -733,6 +812,28 @@ $named = $PSBoundParameters.ContainsKey('Path')
 $Path = @($Path -split ',' | Where-Object { $_ })
 # A limit that came out as 0 must not pass for a limit that was never asked for.
 if ($PSBoundParameters.ContainsKey('MaxLineLength') -and $MaxLineLength -lt 1) { throw '-MaxLineLength must be 1 or more. Leave it out for no limit.' }
+
+# A body is one file, wherever it is, and no tree is read for it, so git is not asked.
+if ($PSBoundParameters.ContainsKey('Body')) {
+    $refused = if ($named -or $All -or $Range) { '-Body cannot be combined with -Path, -All or -Range: it names its one file itself' }
+    elseif (-not $Body) { '-Body named no file' }
+    elseif (-not (Test-Path -LiteralPath $Body -PathType Leaf)) { "-Body names $Body, which is no file" }
+    if ($refused) { Write-Host "FAILED - markdown-check: $refused, so nothing was checked."; exit 1 }
+    $reader = [IO.StringReader]::new([Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $Body).ProviderPath)))
+    $lines = @(while ($null -ne ($l = $reader.ReadLine())) { $l })
+    $found = 0
+    foreach ($finding in Test-Markdown -Lines $lines -Path $Body -Body -Exists { $false } -Anchors { $null } -MaxLineLength $MaxLineLength | Sort-Object { $_.Line }) {
+        Write-Host "${Body}:$($finding.Line): $($finding.Message)"
+        $found++
+    }
+    if ($found) {
+        Write-Host ''
+        Write-Host "FAILED - markdown-check: $found finding(s) in $Body, read as a body. What it reads as what: the header of markdown-check.ps1, under WITH -Body."
+        exit 1
+    }
+    Write-Host "OK - markdown-check: $Body read as a body, nothing found."
+    exit 0
+}
 
 # git lists and reads from the root, so every path is the one it has there, whatever directory this
 # is run in: ls-files and ls-tree would otherwise answer for the current directory only.
