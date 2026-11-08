@@ -4,11 +4,11 @@ The words a review's session hands each lane, written once so that every lane is
 (#140). How a review is run is in [code-review.md](code-review.md), and the prose rules in
 [code-review-prose.md](code-review-prose.md). This page carries three of `code-review.md`'s rules
 to the lane, what the bug scan does not load, when the check is not run again, and the
-read-nothing rule, which it has the bug scan apply at each step (#383), and adds none of its own:
-a rule is changed there. How a lane runs a command a rule names, and what of its output
-it reports, is the brief's (Truls, 2026-10-26, #232). The session fills the blanks, written
-`<like this>`, with what is particular to the change, and sends the rest as it stands. A lane
-that runs both reviews is sent both *Reads first* lines.
+read-nothing rule, and adds none of its own: a rule is changed there. How a lane runs a command a
+rule names, and what of its output it reports, is the brief's (Truls, 2026-10-26, #232), and so
+is how the bug scan applies the read-nothing rule, step by step (#383). The session fills the
+blanks, written `<like this>`, with what is particular to the change, and sends the rest as it
+stands. A lane that runs both reviews is sent both *Reads first* lines.
 
 ---
 
@@ -54,7 +54,9 @@ findings runs its reverts the same way.
 once. It names each step between what a check is given and what it reads: a pathspec, the files
 on disk, the exempt ones, an extension, a marker it looks for, a scope parameter. For each, the
 run where that step alone leaves nothing must fail, and a self-test case must hold that run; one
-that passes, or that no case holds, is a finding. PR #374's checks passed on nothing five times,
+that passes, or that no case holds, is a finding. The rule's own exception stands: a run that
+only has nothing to check this time, as a commit that stages none of the files, may pass, and
+says it read nothing. PR #374's checks passed on nothing five times,
 each at one such step, and no one review found them all (#383's table).
 
 **Read-only.** Edit no file in the repository, commit nothing, push nothing, and post nothing to
