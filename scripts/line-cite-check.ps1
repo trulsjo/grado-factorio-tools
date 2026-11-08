@@ -201,7 +201,7 @@ if ($SelfTest) {
                     $gone.Code -eq 1 -and $gone.Lines[0] -eq 'FAILED - line-cite-check: none of the 1 tracked file(s) for docs/gone.md is on disk, so nothing was read.' }
             'by default a citation is found in each of the five kinds of file, and a path in another case is ours; the script, run through pwsh from a folder whose name is not ASCII in a code page that reads git''s UTF-8 wrong, finds its repository (#374)' = {
                 & $file 'mod/c.lua' '-- see mod/probe-entry.lua:1'; & $file 'tools/a.py' '# see mod/probe-entry.lua:2'
-                & $file 'tools/b.js' '// see mod/probe-entry.lua:3'; & $file 'tools/c.ps1' '# see MOD/Probe-Entry.lua:4'
+                & $file 'tools/b.js' '// see mod/probe-entry.lua:3'; & $file 'tools/c.ps1' '# see MOD/Probe-Entry.lua:4', '# see Probe-Entry.lua:5'
                 git -C $repo add -A
                 $end = & $run
                 git -C $repo rm --cached --quiet mod/c.lua tools/a.py tools/b.js tools/c.ps1
@@ -212,8 +212,8 @@ if ($SelfTest) {
                 $end.Lines -contains 'mod/c.lua:1: cites mod/probe-entry.lua:1 by line number' -and
                     $end.Lines -contains 'tools/a.py:1: cites mod/probe-entry.lua:2 by line number' -and
                     $end.Lines -contains 'tools/b.js:1: cites mod/probe-entry.lua:3 by line number' -and
-                    $end.Lines -contains 'tools/c.ps1:1: cites MOD/Probe-Entry.lua:4 by line number' -and
-                    $end.Lines[-1] -match '^FAILED - line-cite-check: 4 citation\(s\)' -and
+                    $end.Lines -contains 'tools/c.ps1:1: cites MOD/Probe-Entry.lua:4 by line number' -and $end.Lines -contains 'tools/c.ps1:2: cites Probe-Entry.lua:5 by line number' -and
+                    $end.Lines[-1] -match '^FAILED - line-cite-check: 5 citation\(s\)' -and
                     $said[-1] -eq 'OK - line-cite-check: 1 file(s) read, 0 path-and-line citation(s) and 0 continuation(s) found, none of our own code.' }
         }
         $failures = 0; $n = 0
