@@ -21,7 +21,8 @@
     A citation is of our own code only when its path resolves to exactly one of the files -Own
     names: the path itself, or one ending in / and the path, in any case, as Windows finds a
     file. A bare name that several files share is left, as which is meant cannot be decided here.
-    A run whose -Path names no tracked file, or none on disk, fails, having read nothing.
+    A run whose -Path names no tracked file, or none on disk, fails, having read nothing, as
+    check-input-lib.ps1's Get-CheckInput, which lists the files, names it.
 
     WHAT IS LEFT ALONE. A line -Foreign matches, whole, which is how a repository passes the
     lines that quote an ancestor, vanilla or the game's own output, and with it any continuation
@@ -85,27 +86,26 @@ $Own = @($Own | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } 
 # with no line, so no .json citation was seen (PR #374's review, bug finding 6).
 $OWN_PATH = '(?<![\w./-])([\w./-]+\.(?:lua|ps1|py|json|js|md)(?!\w))(:\d+(?:-\d+)?)?'
 $OWN_CONT = '`:(\d+(?:-\d+)?)`'
+. "$PSScriptRoot/check-input-lib.ps1"
 
-# The check over the repository at $Root, as its exit code and the lines it prints.
+# The check over the repository at $Root, or with none the one the current location is in, as
+# its exit code and the lines it prints.
 function Invoke-LineCiteCheck {
-    param([Parameter(Mandatory)] [string] $Root, [Parameter(Mandatory)] [string[]] $Path,
+    param([string] $Root = '', [Parameter(Mandatory)] [string[]] $Path,
         [Parameter(Mandatory)] [string[]] $Own, [string] $Foreign = '', [int] $MinCitations = 0, [int] $MinContinuations = 0)
-    # git's paths are UTF-8; read in the console's code page, a non-ASCII name names no file.
-    [Console]::OutputEncoding = [Text.Encoding]::UTF8
-    $list = { param([string[]] $specs) @("$(git -C $Root -c core.quotePath=false ls-files -z -- @($specs | ForEach-Object { ":(glob)$_" }))".Split("`0") | Where-Object { $_ }) }
-    $files = & $list $Path
-    if ($LASTEXITCODE) { throw "git could not list the files of $Root." }
-    if (-not $files) { return @{ Code = 1; Lines = @("FAILED - line-cite-check: no tracked file for $($Path -join ', '), so nothing was read.") } }
-    $owned = & $list $Own
+    $in = Get-CheckInput -Name 'line-cite-check' -Root $Root -Path $Path -OnDisk
+    if ($in.Failure) { return @{ Code = 1; Lines = @($in.Failure) } }
+    $Root = $in.Root
+    # An -Own that names no tracked file is no failure, so its Failure is not read: nothing is
+    # ours, and a citation is counted toward the floors and passes.
+    $owned = (Get-CheckInput -Name 'line-cite-check' -Root $Root -Path $Own).Files
     # A path is ours when exactly one own file is it or ends in / and it, in any case, as Windows
     # finds a file: realistic-fusion-refreshed's whole-path -eq, and its suffix made the same.
     $ours = { param([string] $p) @($owned | Where-Object { $_ -eq $p -or $_.EndsWith('/' + $p, [StringComparison]::OrdinalIgnoreCase) }).Count -eq 1 }
     $found = [System.Collections.Generic.List[string]]::new()
-    $cites = 0; $conts = 0; $read = 0
-    foreach ($f in $files) {
+    $cites = 0; $conts = 0; $read = $in.Files.Count
+    foreach ($f in $in.Files) {
         $full = Join-Path $Root $f
-        if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { continue }
-        $read++
         $n = 0
         foreach ($line in [IO.File]::ReadAllLines($full)) {
             $n++
@@ -124,7 +124,6 @@ function Invoke-LineCiteCheck {
             }
         }
     }
-    if (-not $read) { return @{ Code = 1; Lines = @("FAILED - line-cite-check: none of the $($files.Count) tracked file(s) for $($Path -join ', ') is on disk, so nothing was read.") } }
     $short = @()
     if ($cites -lt $MinCitations) { $short += "it found $cites path-and-line citation(s), under the floor of $MinCitations, so the pattern may have stopped matching" }
     if ($conts -lt $MinContinuations) { $short += "it found $conts backticked continuation(s), under the floor of $MinContinuations, so the pattern may have stopped matching" }
@@ -232,10 +231,6 @@ if ($SelfTest) {
     exit 0
 }
 
-# Before the root is read: git gives it in UTF-8 too.
-[Console]::OutputEncoding = [Text.Encoding]::UTF8
-$root = git rev-parse --show-toplevel 2>$null
-if ($LASTEXITCODE -or -not $root) { Write-Host 'FAILED - line-cite-check: not in a git repository, so nothing was read.'; exit 1 }
-$end = Invoke-LineCiteCheck -Root $root -Path $Path -Own $Own -Foreign $Foreign -MinCitations $MinCitations -MinContinuations $MinContinuations
+$end = Invoke-LineCiteCheck -Path $Path -Own $Own -Foreign $Foreign -MinCitations $MinCitations -MinContinuations $MinContinuations
 $end.Lines | ForEach-Object { Write-Host $_ }
 exit $end.Code

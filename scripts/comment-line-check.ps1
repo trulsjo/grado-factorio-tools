@@ -14,8 +14,9 @@
 
     WHAT IT READS. The files git lists for each pathspec in -Path, a glob from the repository
     root, as staged: with no -All the staged ones, added, copied, modified or renamed, which is
-    what the commit will hold; with -All every tracked one. They are written out of the index by
-    checkout-index into a scratch directory, so the working tree is neither read nor touched. It
+    what the commit will hold; with -All every tracked one. check-input-lib.ps1's Get-CheckInput
+    lists them, and names what a run that read nothing failed at. They are written out of the index
+    by checkout-index into a scratch directory, so the working tree is neither read nor touched. It
     may be run from anywhere in the repository.
 
     THE RULE is comment-line-lib.ps1's. A .ps1 file is read by Get-LongCommentLine, from the
@@ -68,23 +69,19 @@ $ErrorActionPreference = 'Stop'
 # A list handed through pwsh -File arrives as one string, as the hook and a sibling hand it.
 $Path = @($Path | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 . "$PSScriptRoot/comment-line-lib.ps1"
+. "$PSScriptRoot/check-input-lib.ps1"
 
-# The check over the repository at $Root, as its exit code and the lines it prints.
+# The check over the repository at $Root, or with none the one the current location is in, as
+# its exit code and the lines it prints.
 function Invoke-CommentLineCheck {
-    param([Parameter(Mandatory)] [string] $Root, [Parameter(Mandatory)] [string[]] $Path,
+    param([string] $Root = '', [Parameter(Mandatory)] [string[]] $Path,
         [Parameter(Mandatory)] [int] $Limit, [switch] $All)
-    # git's paths are UTF-8; read in the console's code page, a non-ASCII name names no file.
-    [Console]::OutputEncoding = [Text.Encoding]::UTF8
-    $specs = @($Path | ForEach-Object { ":(glob)$_" })
-    $listed = if ($All) { git -C $Root -c core.quotePath=false ls-files -z -- @specs }
-    else { git -C $Root -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR -z -- @specs }
-    if ($LASTEXITCODE) { throw "git could not list the files of $Root." }
-    $files = @("$listed".Split("`0") | Where-Object { $_ })
-    $named = $Path -join ', '
-    if (-not $files -and $All) {
-        return @{ Code = 1; Lines = @("FAILED - comment-line check: -All found no tracked file for $named, so nothing was read.") }
-    }
-    if (-not $files) { return @{ Code = 0; Lines = @("OK - comment-line check: no file for $named is staged, so none was read.") } }
+    # The index is read, not the disk, so no -OnDisk.
+    $in = Get-CheckInput -Name 'comment-line check' -Root $Root -Path $Path -Staged:(-not $All)
+    if ($in.Failure) { return @{ Code = 1; Lines = @($in.Failure) } }
+    $Root = $in.Root
+    $files = $in.Files
+    if (-not $files) { return @{ Code = 0; Lines = @("OK - comment-line check: no file for $($Path -join ', ') is staged, so none was read.") } }
     $scratch = Join-Path ([IO.Path]::GetTempPath()) "comment-lines-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
     try {
         git -C $Root checkout-index "--prefix=$scratch/" -- @files
@@ -131,7 +128,7 @@ if ($SelfTest) {
         $cases = [ordered]@{
             'with nothing tracked, -All fails and says it read nothing; with nothing staged, the run passes and says so' = {
                 $all = & $run -All; $none = & $run
-                $all.Code -eq 1 -and $all.Lines[-1] -eq 'FAILED - comment-line check: -All found no tracked file for scripts/*.ps1, so nothing was read.' -and
+                $all.Code -eq 1 -and $all.Lines[-1] -eq 'FAILED - comment-line check: no tracked file for scripts/*.ps1, so nothing was read.' -and
                     $none.Code -eq 0 -and $none.Lines[-1] -eq 'OK - comment-line check: no file for scripts/*.ps1 is staged, so none was read.' }
             'a hook''s or a workflow''s # line over the limit is named; a shebang, code, an address and a line at the limit are not' = {
                 $got = @(Get-LongHashLine -Limit 100 -Lines @(
@@ -213,10 +210,6 @@ if ($SelfTest) {
     exit 0
 }
 
-# Before the root is read: git gives it in UTF-8 too.
-[Console]::OutputEncoding = [Text.Encoding]::UTF8
-$root = git rev-parse --show-toplevel 2>$null
-if ($LASTEXITCODE -or -not $root) { Write-Host 'FAILED - comment-line check: not in a git repository, so nothing was read.'; exit 1 }
-$end = Invoke-CommentLineCheck -Root $root -Path $Path -Limit $Limit -All:$All
+$end = Invoke-CommentLineCheck -Path $Path -Limit $Limit -All:$All
 $end.Lines | ForEach-Object { Write-Host $_ }
 exit $end.Code

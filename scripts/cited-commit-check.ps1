@@ -26,8 +26,9 @@
 
     WHAT FAILS WITH NOTHING ASKED. A shallow clone, or one where -Main does not resolve: there a
     commit on main cannot be told from one whose history was cut off, so the run fails rather
-    than passing. So does a -Path that names no tracked file, or none on disk. CI checks out
-    with fetch-depth 0.
+    than passing. So does a -Path that names no tracked file, every one exempt, or none on disk,
+    each named as check-input-lib.ps1's Get-CheckInput, which lists the files, names it. CI
+    checks out with fetch-depth 0.
 
     WHERE IT RUNS. In CI only (#319 ruling 8): a commit is never on origin/main before it is
     pushed, so a run before then would report the branch's own commits.
@@ -72,30 +73,29 @@ $Path = @($Path | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() 
 $Exempt = @($Exempt | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 
 $HASH_WORD = '(?<![0-9A-Za-z_])[0-9a-fA-F]{7,40}(?![0-9A-Za-z_])'
+. "$PSScriptRoot/check-input-lib.ps1"
 
-# The check over the repository at $Root, as its exit code and the lines it prints.
+# The check over the repository at $Root, or with none the one the current location is in, as
+# its exit code and the lines it prints.
 function Invoke-CitedCommitCheck {
-    param([Parameter(Mandatory)] [string] $Root, [Parameter(Mandatory)] [string[]] $Path,
+    param([string] $Root = '', [Parameter(Mandatory)] [string[]] $Path,
         [AllowEmptyCollection()] [string[]] $Exempt = @(), [Parameter(Mandatory)] [string] $Main)
-    # git's paths are UTF-8; read in the console's code page, a non-ASCII name names no file.
-    [Console]::OutputEncoding = [Text.Encoding]::UTF8
+    $in = Get-CheckInput -Name 'cited-commit-check' -Root $Root -Path $Path -Exempt $Exempt -OnDisk
+    if (-not $in.Root) { return @{ Code = 1; Lines = @($in.Failure) } }
+    $Root = $in.Root
+    # A shallow clone and an unresolved -Main are named before what the listing found.
     $fail ={ param([string] $why) @{ Code = 1; Lines = @("FAILED - cited-commit-check: $why") } }
     if ((git -C $Root rev-parse --is-shallow-repository 2>$null) -ne 'false') {
         return & $fail "$Root is a shallow clone, or no repository, so a commit on $Main cannot be told from one whose history was cut off. Fetch the whole history."
     }
     $null = git -C $Root rev-parse --verify --quiet "$Main^{commit}" 2>$null
     if ($LASTEXITCODE) { return & $fail "git cannot resolve $Main, so no cited commit can be checked against it. Fetch it." }
-    $specs = @($Path | ForEach-Object { ":(glob)$_" }) + @($Exempt | ForEach-Object { ":(glob,exclude)$_" })
-    $files = @("$(git -C $Root -c core.quotePath=false ls-files -z -- @specs)".Split("`0") | Where-Object { $_ })
-    if ($LASTEXITCODE) { throw "git could not list the files of $Root." }
-    if (-not $files) { return & $fail "no tracked file for $($Path -join ', '), so nothing was read." }
+    if ($in.Failure) { return @{ Code = 1; Lines = @($in.Failure) } }
 
     $words = [System.Collections.Generic.List[object]]::new()
-    $read = 0
-    foreach ($f in $files) {
+    $read = $in.Files.Count
+    foreach ($f in $in.Files) {
         $full = Join-Path $Root $f
-        if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { continue }
-        $read++
         $fence = $null
         $n = 0
         foreach ($line in [IO.File]::ReadAllLines($full)) {
@@ -107,7 +107,6 @@ function Invoke-CitedCommitCheck {
             foreach ($m in [regex]::Matches($line, $HASH_WORD)) { $words.Add(@{ File = $f; Line = $n; Hash = $m.Value }) }
         }
     }
-    if (-not $read) { return & $fail "none of the $($files.Count) tracked file(s) for $($Path -join ', ') is on disk, so nothing was read." }
     $unique = @($words | ForEach-Object { $_.Hash } | Sort-Object -Unique)
     $named = @{}
     if ($unique) {
@@ -164,7 +163,7 @@ if ($SelfTest) {
                 $exempt = & $run -Path '**/*.md' -Exempt 'docs/a.md'
                 $wide = & $run -Exempt 'docs/a.md'
                 & $git rm --cached --quiet docs/b.ps1; Remove-Item -LiteralPath (Join-Path $repo 'docs/b.ps1')
-                $exempt.Code -eq 1 -and $exempt.Lines[-1] -match 'no tracked file for \*\*/\*\.md' -and
+                $exempt.Code -eq 1 -and $exempt.Lines[-1] -eq 'FAILED - cited-commit-check: all 1 tracked file(s) for **/*.md are exempt by docs/a.md, so nothing was read.' -and
                     $wide.Code -eq 1 -and $wide.Lines[0] -match '^docs/b\.ps1:1: cites commit ' -and $wide.Lines.Count -eq 2 }
             'by default a script of each kind is read too, fences and all; a ~~~ does not close a ``` fence; a non-ASCII name is read; a tracked file gone from disk is not counted (#374)' = {
                 & $file 'docs/a.md' '```', '~~~', $offMain, '```'
@@ -215,10 +214,6 @@ if ($SelfTest) {
     exit 0
 }
 
-# Before the root is read: git gives it in UTF-8 too.
-[Console]::OutputEncoding = [Text.Encoding]::UTF8
-$root = git rev-parse --show-toplevel 2>$null
-if ($LASTEXITCODE -or -not $root) { Write-Host 'FAILED - cited-commit-check: not in a git repository, so nothing was read.'; exit 1 }
-$end = Invoke-CitedCommitCheck -Root $root -Path $Path -Exempt $Exempt -Main $Main
+$end = Invoke-CitedCommitCheck -Path $Path -Exempt $Exempt -Main $Main
 $end.Lines | ForEach-Object { Write-Host $_ }
 exit $end.Code
