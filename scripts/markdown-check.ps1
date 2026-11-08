@@ -78,7 +78,7 @@
     `://` and a host, as `https://example.com`, or `mailto:`. A `#name` must be the anchor of a
     heading of the body, by the anchor rule above. Any other target fails, saying it wants a full
     https:// address: so a drive letter, as `C:/x`, `//host`, `https:x` with no `//`, a
-    `/path` from the site's root, `README.md:12` and a bare `#` fail in a body.
+    `/path` from the site's root, `notes.md:12` and a bare `#` fail in a body.
     A BARE ADDRESS, `https://...` with no brackets, is not read for emphasis, and ends where
     GitHub's renderer ends one, asked 2026-10-12 (grado-factorio-tools#124; the answers are in
     docs/measurements.md, with what the GitHub Flavored Markdown spec says, read the same day).
@@ -722,7 +722,7 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             git -C $own add -A
             Set-Content -LiteralPath (Join-Path $own 'body.md') -Value ("# Results`n`n[full](https://example.com/a), [own](#results), [none](#no-such) and [rel](docs/x.md)`n`n" +
                 "[label]: notes.md`n`n[disk](C:/src/x.md), [host](//example.com/x) and [mail](mailto:a@example.invalid)`n`n" +
-                "[d]() [c](#) [a](https:docs/a.md) [b](README.md:12) <a href=`"docs/h.md`">h</a> [esc](https\://example.com) [ent](https&#58;//example.com)`n`n" +
+                "[d]() [c](#) [a](https:docs/a.md) [b](notes.md:12) <a href=`"docs/h.md`">h</a> [esc](https\://example.com) [ent](https&#58;//example.com)`n`n" +
                 "[r]:`n  docs/y.md")
             $got = & $run $own @('-Body', 'body.md')
             Write-Host ($got.Text.TrimEnd() -replace '(?m)^', '    ')
@@ -731,7 +731,7 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             $got.Code -eq 1 -and ($findings -join '|') -ceq ("body.md:3: the link to #no-such names no heading of this body|body.md:3: the link to docs/x.md $relative|" +
                 "body.md:5: the link to notes.md $relative|body.md:7: the link to C:/src/x.md $relative|body.md:7: the link to //example.com/x $relative|" +
                 "body.md:9: the link to an empty target $relative|body.md:9: the link to # $relative|body.md:9: the link to https:docs/a.md $relative|" +
-                "body.md:9: the link to README.md:12 $relative|body.md:9: the link to docs/h.md $relative|body.md:11: the link to docs/y.md $relative") } }
+                "body.md:9: the link to notes.md:12 $relative|body.md:9: the link to docs/h.md $relative|body.md:11: the link to docs/y.md $relative") } }
         @{ Name = '-Body asks git nothing: it reads a body from a folder in no repository (PR #389''s panel review)'; Test = {
             $none = Join-Path ([IO.Path]::GetTempPath()) "markdown-check-norepo-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
             New-Item -ItemType Directory -Path $none | Out-Null
