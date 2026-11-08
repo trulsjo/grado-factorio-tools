@@ -20,7 +20,8 @@
     - lists, with -z, every tracked file -Path names, or with -Staged the staged ones, added,
       copied, modified or renamed, as git diff --cached gives them;
     - drops those -Exempt names;
-    - with -OnDisk, as for a caller that reads the working tree, keeps the files on disk. Without
+    - with -OnDisk, as for a caller that reads the working tree, keeps the files on disk, a
+      folder standing where git lists a file not among them. Without
       it, as for a caller that reads the index, the list is as git gives it.
 
     WHAT IT RETURNS. A hashtable: Root, with no -Root the repository's root as git gives it,
@@ -28,7 +29,7 @@
     of a repository, so a subfolder given reads its pathspecs from that subfolder; Files, the
     paths from Root, tracked or staged alike, in git's order; Listed, how many files the listing
     gave after -Exempt and before -OnDisk; and Failure, $null or the line to print, which opens
-    `FAILED - <Name>: `.
+    `FAILED - <Name>: `. On the not-in-a-repository failure Root is '', Files empty, Listed 0.
 
     WHAT FAILS. A run that leaves nothing to read fails, and Failure names the step that emptied
     it: not in a git repository; no file for -Path; every file for -Path exempt; or, with
@@ -60,15 +61,17 @@ function Get-CheckInput {
     $end = { param([string[]] $files, [int] $listed, [string] $why)
         @{ Root = $Root; Files = @($files); Listed = $listed; Failure = $(if ($why) { "FAILED - ${Name}: $why" } else { $null }) } }
     if (-not $Root) {
+        # Empty where git finds no repository, so Root is '' in that failure's answer.
         $Root = "$(git rev-parse --show-toplevel 2>$null)"
-        if ($LASTEXITCODE -or -not $Root) { $Root = ''; return & $end @() 0 'not in a git repository, so nothing was read.' }
+        if (-not $Root) { return & $end @() 0 'not in a git repository, so nothing was read.' }
     }
     $kind = if ($Staged) { 'staged' } else { 'tracked' }
     $named = $Path -join ', '
     $list = { param([string[]] $specs)
-        # --relative, so a subfolder given as -Root lists from it, as ls-files does.
-        $out = if ($Staged) { git -C $Root -c core.quotePath=false diff --cached --name-only --relative --diff-filter=ACMR -z -- @specs }
-        else { git -C $Root -c core.quotePath=false ls-files -z -- @specs }
+        # --relative, so a subfolder given as -Root lists from it, as ls-files does. Under -z git
+        # quotes no path, so core.quotePath is not set.
+        $out = if ($Staged) { git -C $Root diff --cached --name-only --relative --diff-filter=ACMR -z -- @specs }
+        else { git -C $Root ls-files -z -- @specs }
         if ($LASTEXITCODE) { throw "git could not list the $kind files of $Root." }
         @("$out".Split("`0") | Where-Object { $_ }) }
     $include = @($Path | ForEach-Object { ":(glob)$_" })
@@ -133,7 +136,7 @@ if ($MyInvocation.InvocationName -ne '.' -and $args -contains '-SelfTest') {
             'a -Path whose every file is exempt fails, naming that step' = {
                 $got = & $get @{ Path = 'docs/*.md'; Exempt = 'docs/a.md', 'docs/b.md' }
                 $got.Failure -eq 'FAILED - demo: all 2 tracked file(s) for docs/*.md are exempt by docs/a.md, docs/b.md, so nothing was read.' -and -not $got.Files }
-            'with -OnDisk, a file gone from disk is dropped and a run whose files are all gone fails, naming that step; without it, the list is git''s' = {
+            'with -OnDisk, a file gone from disk, or a folder in its place, is dropped and a run whose files are all gone fails, naming that step; without it, the list is git''s' = {
                 Remove-Item -LiteralPath (Join-Path $repo 'docs/a.md')
                 try {
                     $some = & $get @{ Path = 'docs/*.md'; OnDisk = $true }
@@ -141,9 +144,14 @@ if ($MyInvocation.InvocationName -ne '.' -and $args -contains '-SelfTest') {
                     $index = & $get @{ Path = 'docs/a.md' }
                 }
                 finally { & $git checkout --quiet -- docs/a.md }
+                # A folder where git lists a file, as a checkout of another branch can leave.
+                Remove-Item -LiteralPath (Join-Path $repo 'docs/b.md'); New-Item -ItemType Directory -Path (Join-Path $repo 'docs/b.md') | Out-Null
+                try { $folder = & $get @{ Path = 'docs/b.md'; OnDisk = $true } }
+                finally { Remove-Item -LiteralPath (Join-Path $repo 'docs/b.md') -Recurse; & $git checkout --quiet -- docs/b.md }
                 -not $some.Failure -and ($some.Files -join '|') -eq 'docs/b.md' -and $some.Listed -eq 2 -and
                     $gone.Failure -eq 'FAILED - demo: none of the 1 tracked file(s) for docs/a.md is on disk, so nothing was read.' -and $gone.Listed -eq 1 -and -not $gone.Files -and
-                    -not $index.Failure -and ($index.Files -join '|') -eq 'docs/a.md' }
+                    -not $index.Failure -and ($index.Files -join '|') -eq 'docs/a.md' -and
+                    $folder.Failure -eq 'FAILED - demo: none of the 1 tracked file(s) for docs/b.md is on disk, so nothing was read.' }
             'with -Staged, the staged files are listed, a staged deletion not among them, and neither nothing staged nor every staged file exempt is a failure; a subfolder as -Root lists from it, staged or tracked (PR #389)' = {
                 $none = & $get @{ Path = 'docs/*'; Staged = $true }
                 & $file 'docs/a.md' 'edited'; & $file 'docs/new.md' 'new'; & $git add -A; & $git rm --quiet --cached docs/b.md
@@ -177,7 +185,8 @@ if ($MyInvocation.InvocationName -ne '.' -and $args -contains '-SelfTest') {
                 finally { Pop-Location }
                 # git is asked outside any repository, by the ceiling, wherever the scratch is.
                 -not $got.Failure -and $got.Root.EndsWith('/repø') -and ($got.Files -join '|') -eq 'docs/a.md' -and
-                    $none.Failure -eq 'FAILED - demo: not in a git repository, so nothing was read.' }
+                    $none.Failure -eq 'FAILED - demo: not in a git repository, so nothing was read.' -and $none.Root -eq '' -and
+                    -not $none.Files -and $none.Listed -eq 0 }
         }
         $failures = 0; $n = 0
         $was = $env:GIT_CEILING_DIRECTORIES; $env:GIT_CEILING_DIRECTORIES = $temp
