@@ -71,11 +71,14 @@
     -1, -2 and on. A heading is a `#` line or a line alone after a blank one and underlined with
     `=` or `-`.
     A LINK IN A BODY, read with -Body, is read as GitHub reads it there, where a link that is no
-    full address resolves against the page's own address and not the repository's tree. A
-    target with a scheme of two characters or more is not checked, as on a page; a `#name` alone
-    must be the anchor of a heading of the body, by the anchor rule above; and any other target,
-    in prose or on a `[label]: target` line, fails, saying it wants a full https:// address. So a
-    drive letter, as `C:/x`, a `//host` target and a `/path` from the site's root fail in a body.
+    full address resolves against the page's own address and not the repository's tree. Its
+    targets are those of a page, and also an empty one, `[x]()`, a `[label]:` line's target on
+    the line after it, and a raw `<a href="...">`'s, each with its backslash escapes and
+    character references undone, as GitHub reads them. A full address is not checked: a scheme,
+    `://` and a host, as `https://example.com`, or `mailto:`. A `#name` must be the anchor of a
+    heading of the body, by the anchor rule above. Any other target fails, saying it wants a full
+    https:// address: so a drive letter, as `C:/x`, `//host`, `https:x` with no `//`, a
+    `/path` from the site's root, `README.md:12` and a bare `#` fail in a body.
     A BARE ADDRESS, `https://...` with no brackets, is not read for emphasis, and ends where
     GitHub's renderer ends one, asked 2026-10-12 (grado-factorio-tools#124; the answers are in
     docs/measurements.md, with what the GitHub Flavored Markdown spec says, read the same day).
@@ -144,8 +147,9 @@
     tracks it is checked; into one not initialised it is said to be unchecked, and passes.
     What a body is not held to: whether a full address leads anywhere, so a link to a file of
     the repository by its https:// address is not checked, nor a fragment after one; what GitHub
-    makes of a body's own forms, an @name, a #number or a task list; and whether the file is the
-    body that is posted. A body given inline, as gh's --body, or on standard input, is not read.
+    makes of a body's own forms, an @name, a #number or a task list; a link in raw HTML other
+    than an `<a href>` on one line, as an `<img src>`; and whether the file is the body that is
+    posted. A body given inline, as gh's --body, or on standard input, is not read.
 
 .PARAMETER Range
     Check the Markdown files changed in a commit range, as they are at its end:
@@ -708,7 +712,7 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             $split.Code -eq 1 -and $split.Text -match '(?m)^\.\./split\.md:1: the line ends in a number and the next opens with three digits' -and
                 $split.Text -match '(?m)^FAILED - markdown-check: 1 finding\(s\) in \.\./split\.md, read as a body\.' -and
                 $whole.Code -eq 0 -and $whole.Text -match '(?m)^OK - markdown-check: \.\./whole\.md read as a body, nothing found\.' } }
-        @{ Name = '-Body fails a relative link, a [label]: path line and a #fragment that names no heading of the body, each with a body''s message, and passes a full address and a #fragment to its own heading (#384)'; Test = {
+        @{ Name = '-Body fails a relative link, a [label]: path line, one on the line after it, an empty target, a bare #, a scheme with no //, a raw <a href>, and a #fragment that names no heading of the body, each with a body''s message, and passes a full address, one escaped, and a #fragment to its own heading (#384, PR #389)'; Test = {
             $own = Join-Path $temp 'body-links'
             New-Item -ItemType Directory -Path (Join-Path $own 'docs') -Force | Out-Null
             git -C $own init --quiet
@@ -717,13 +721,30 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             Set-Content -LiteralPath (Join-Path $own 'notes.md') -Value '# Notes'
             git -C $own add -A
             Set-Content -LiteralPath (Join-Path $own 'body.md') -Value ("# Results`n`n[full](https://example.com/a), [own](#results), [none](#no-such) and [rel](docs/x.md)`n`n" +
-                "[label]: notes.md`n`n[disk](C:/src/x.md), [host](//example.com/x) and [mail](mailto:a@example.invalid)")
+                "[label]: notes.md`n`n[disk](C:/src/x.md), [host](//example.com/x) and [mail](mailto:a@example.invalid)`n`n" +
+                "[d]() [c](#) [a](https:docs/a.md) [b](README.md:12) <a href=`"docs/h.md`">h</a> [esc](https\://example.com) [ent](https&#58;//example.com)`n`n" +
+                "[r]:`n  docs/y.md")
             $got = & $run $own @('-Body', 'body.md')
             Write-Host ($got.Text.TrimEnd() -replace '(?m)^', '    ')
             $relative = "is no full address: in a pull request's or issue's body a link that is not resolves against the page's address, not the repository's tree; give a full https:// address, or a #fragment of the body's own"
             $findings = @($got.Text -split '\r?\n' | Where-Object { $_ -like 'body.md:*' })
             $got.Code -eq 1 -and ($findings -join '|') -ceq ("body.md:3: the link to #no-such names no heading of this body|body.md:3: the link to docs/x.md $relative|" +
-                "body.md:5: the link to notes.md $relative|body.md:7: the link to C:/src/x.md $relative|body.md:7: the link to //example.com/x $relative") } }
+                "body.md:5: the link to notes.md $relative|body.md:7: the link to C:/src/x.md $relative|body.md:7: the link to //example.com/x $relative|" +
+                "body.md:9: the link to an empty target $relative|body.md:9: the link to # $relative|body.md:9: the link to https:docs/a.md $relative|" +
+                "body.md:9: the link to README.md:12 $relative|body.md:9: the link to docs/h.md $relative|body.md:11: the link to docs/y.md $relative") } }
+        @{ Name = '-Body asks git nothing: it reads a body from a folder in no repository (PR #389''s panel review)'; Test = {
+            $none = Join-Path ([IO.Path]::GetTempPath()) "markdown-check-norepo-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+            New-Item -ItemType Directory -Path $none | Out-Null
+            Set-Content -LiteralPath (Join-Path $none 'body.md') -Value 'A body.'
+            # git looks no higher than the folder, wherever the temp directory is.
+            $was = $env:GIT_CEILING_DIRECTORIES; $env:GIT_CEILING_DIRECTORIES = (Split-Path $none -Parent)
+            try {
+                $inRepo = git -C $none rev-parse --is-inside-work-tree 2>$null
+                $got = & $run $none @('-Body', 'body.md')
+            }
+            finally { $env:GIT_CEILING_DIRECTORIES = $was; Remove-Item -LiteralPath $none -Recurse -Force -ErrorAction SilentlyContinue }
+            Write-Host ($got.Text.TrimEnd() -replace '(?m)^', '    ')
+            -not $inRepo -and $got.Code -eq 0 -and $got.Text -match '(?m)^OK - markdown-check: body\.md read as a body, nothing found\.' } }
         @{ Name = '-Body refuses -Path, -All or -Range beside it, a file that is missing, a folder, no name and a file with no text, reading nothing; -MaxLineLength holds a body as a page; a byte-order mark hides no heading (#384, #389)'; Test = {
             $own = Join-Path $temp 'body-refusals'
             New-Item -ItemType Directory -Path $own | Out-Null
