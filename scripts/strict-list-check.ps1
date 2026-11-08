@@ -26,8 +26,8 @@
     nothing; @(...) does not help there, since an empty array has no .Name.
     A statement that always outputs exactly one object, such as one calling Start-Process
     -PassThru, is right for .Id and .Name: put the comment # strict-lists: one straight after it,
-    on the line where it ends (a ; or another comment between is fine). The marker never makes a
-    .Count read safe, because what one object's .Count gives depends on its type. On PowerShell
+    on the line where it ends (a ; or another comment between is fine). The marker never makes
+    a read of .Count safe, because what one object's .Count gives depends on its type. On PowerShell
     7.6.9 under Set-StrictMode -Version Latest (2026-11-08), a hashtable has one, counting its keys
     unless a key named Count takes it over, and a PSCustomObject has one that is always 1; a
     string, a number, a file, a folder, a Process and $null throw. In $a, $b = ... only the first
@@ -67,7 +67,8 @@
     folder with no script beside one with a script, the fixture folder alone, and a script that does
     not parse. Last, it runs scratch fixtures, each untrue in one way, and requires each to be named
     for that way (#376), and runs the first comparison on scratch fixtures with no # expect: flag
-    line, which must fail (#397).
+    line, and on scratch fixtures with a line flagged other than it says, each of which must fail
+    (#397).
 
     What it cannot see: a command result passed in as a parameter, a variable assigned in one
     function and read in another, a copy made inside a loop of a variable assigned later in that
@@ -599,6 +600,12 @@ if ($SelfTest) {
         New-Item -ItemType Directory -Path $noExpect -Force | Out-Null
         Set-Content -LiteralPath (Join-Path $noExpect 'plain.ps1') -Value 'Set-StrictMode -Version Latest', '@(1).Count'
         $noExpectFlags = Test-FixtureFlags @(Get-Files $noExpect)
+        # And one with an # expect: flag line the check does not flag, which only the mismatch
+        # fails.
+        $mismatch = Join-Path $temp 'mismatch'
+        New-Item -ItemType Directory -Path $mismatch -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path $mismatch 'unflagged.ps1') -Value 'Set-StrictMode -Version Latest', '@(1).Count  # expect: flag'
+        $mismatchFlags = Test-FixtureFlags @(Get-Files $mismatch)
         # A flagged .Count, for the advice printed with it.
         $advice = Join-Path $temp 'advice'
         New-Item -ItemType Directory -Path $advice -Force | Out-Null
@@ -630,9 +637,10 @@ if ($SelfTest) {
     if (-not $runnerOk) { $missed | ForEach-Object { Write-Host "    not named: $_" }; $badSaid | ForEach-Object { Write-Host "    said: $_" } }
     # Case 1's comparison fails a fixture set that says # expect: flag nowhere, though nothing in
     # it mismatches (#397).
-    $noExpectOk = $noExpectFlags.Failed -and -not $noExpectFlags.Wrong.Count -and $noExpectFlags.Expected -eq 0
-    Write-Host "self-test 8/9: case 1's comparison fails a fixture set with no # expect: flag line -- $(if ($noExpectOk) { 'ok' } else { 'FAILED' })"
-    if (-not $noExpectOk) { $noExpectFlags.Wrong | ForEach-Object { Write-Host "    $_" } }
+    $noExpectOk = $noExpectFlags.Failed -and -not $noExpectFlags.Wrong.Count -and $noExpectFlags.Expected -eq 0 -and
+        $mismatchFlags.Failed -and ($mismatchFlags.Wrong -join '|') -ceq 'unflagged.ps1:2: flagged 0 time(s), expected 1'
+    Write-Host "self-test 8/9: case 1's comparison fails a fixture set with no # expect: flag line, and one with a line flagged other than it says -- $(if ($noExpectOk) { 'ok' } else { 'FAILED' })"
+    if (-not $noExpectOk) { @($noExpectFlags.Wrong) + @($mismatchFlags.Wrong) | ForEach-Object { Write-Host "    $_" } }
     # The advice for a .Count names each fix, written out here so that a change to it fails (#396).
     $wantAdvice = 'count.ps1:3: .Count off $x, assigned an unwrapped command result on line 2; wrap the command in @(...); ' +
         'off a dictionary, read .PSBase.Count; @() round a call that returns its list as one object, , $list, nests it, ' +
