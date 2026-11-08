@@ -703,6 +703,13 @@ be left out.
 
     pwsh -File scripts/revert-run.ps1 -Copy <copy> -Defaults scripts/<script>
 
+`-Conditions` names scripts whose condition reverts it writes and runs after those (#400): one
+revert per operand of an `-and` or `-or` chain, that operand dropped, and one per element of a
+comma list on the right of `-in` or `-notin`, or of a list of type literals. `-Base <ref>` limits
+it to the lines `git diff <ref>` changes.
+
+    pwsh -File scripts/revert-run.ps1 -Copy <copy> -Conditions scripts/<script> -Base origin/main
+
 It exits 0 once every revert was run or refused, and 1 only when it could not run, as for a copy
 left dirty. The list's shape, and what it cannot see, are in its header. `-SelfTest` runs it on a
 scratch repository.
