@@ -69,11 +69,12 @@
     punctuation such as `_`, `-` and spaces dropped and each space made a hyphen; a repeat takes
     -1, -2 and on. A heading is a `#` line or a line alone after a blank one and underlined with
     `=` or `-`.
-    A LINK IN A BODY, read with -Body, is read as GitHub reads it there, where a relative link
-    resolves against the page's own address and not the repository's tree, so it leads nowhere.
-    A target with a scheme is not checked, as on a page; a `#name` alone must be the anchor of a
-    heading of the body, by the anchor rule above; and any other target, in prose or on a
-    `[label]: target` line, fails, saying it wants a full https:// address.
+    A LINK IN A BODY, read with -Body, is read as GitHub reads it there, where a link that is no
+    full address resolves against the page's own address and not the repository's tree. A
+    target with a scheme of two characters or more is not checked, as on a page; a `#name` alone
+    must be the anchor of a heading of the body, by the anchor rule above; and any other target,
+    in prose or on a `[label]: target` line, fails, saying it wants a full https:// address. So a
+    drive letter, as `C:/x`, a `//host` target and a `/path` from the site's root fail in a body.
     A BARE ADDRESS, `https://...` with no brackets, is not read for emphasis, and ends where
     GitHub's renderer ends one, asked 2026-10-12 (grado-factorio-tools#124; the answers are in
     docs/measurements.md, with what the GitHub Flavored Markdown spec says, read the same day).
@@ -715,13 +716,13 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             Set-Content -LiteralPath (Join-Path $own 'notes.md') -Value '# Notes'
             git -C $own add -A
             Set-Content -LiteralPath (Join-Path $own 'body.md') -Value ("# Results`n`n[full](https://example.com/a), [own](#results), [none](#no-such) and [rel](docs/x.md)`n`n" +
-                "[label]: notes.md")
+                "[label]: notes.md`n`n[disk](C:/src/x.md), [host](//example.com/x) and [mail](mailto:a@example.invalid)")
             $got = & $run $own @('-Body', 'body.md')
             Write-Host ($got.Text.TrimEnd() -replace '(?m)^', '    ')
-            $relative = "is relative, and in a pull request's or issue's body a relative link resolves against the page's address, not the repository's tree, so it leads nowhere: give a full https:// address"
+            $relative = "is no full address: in a pull request's or issue's body a link that is not resolves against the page's address, not the repository's tree; give a full https:// address, or a #fragment of the body's own"
             $findings = @($got.Text -split '\r?\n' | Where-Object { $_ -like 'body.md:*' })
             $got.Code -eq 1 -and ($findings -join '|') -ceq ("body.md:3: the link to #no-such names no heading of this body|body.md:3: the link to docs/x.md $relative|" +
-                "body.md:5: the link to notes.md $relative") } }
+                "body.md:5: the link to notes.md $relative|body.md:7: the link to C:/src/x.md $relative|body.md:7: the link to //example.com/x $relative") } }
         @{ Name = '-Body refuses -Path, -All or -Range beside it, and a file that is missing, reading nothing; -MaxLineLength holds a body as a page (#384)'; Test = {
             $own = Join-Path $temp 'body-refusals'
             New-Item -ItemType Directory -Path $own | Out-Null

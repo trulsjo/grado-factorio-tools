@@ -247,7 +247,9 @@ function Test-Markdown {
         $targets = @(foreach ($m in [regex]::Matches($prose, '\]\(\s*(?:<([^>]*)>|([^)\s]+))')) { $m.Groups[1].Value + $m.Groups[2].Value })
         if ($prose -match '^\s{0,3}\[[^\]^][^\]]*\]:\s*<?([^\s>]+)') { $targets += $Matches[1] }
         foreach ($t in $targets) {
-            if ($t -match '^([a-zA-Z][a-zA-Z0-9+.-]*:|//)') { continue }
+            # In a body a drive letter, as C:/x, and //host are no full address, so neither is
+            # taken for a scheme there.
+            if ($t -match $(if ($Body) { '^[a-zA-Z][a-zA-Z0-9+.-]+:' } else { '^([a-zA-Z][a-zA-Z0-9+.-]*:|//)' })) { continue }
             $fragment = if ($t.Contains('#')) { [uri]::UnescapeDataString(($t -replace '^[^#]*#')) } else { '' }
             if ($t.StartsWith('#')) {
                 if (-not $fragment) { continue }
@@ -257,7 +259,7 @@ function Test-Markdown {
             }
             # On GitHub a relative link in a body resolves against the page's own address.
             if ($Body) {
-                @{ Line = $linkAt + 1; Message = "the link to $t is relative, and in a pull request's or issue's body a relative link resolves against the page's address, not the repository's tree, so it leads nowhere: give a full https:// address" }
+                @{ Line = $linkAt + 1; Message = "the link to $t is no full address: in a pull request's or issue's body a link that is not resolves against the page's address, not the repository's tree; give a full https:// address, or a #fragment of the body's own" }
                 continue
             }
             $file = [uri]::UnescapeDataString(($t -replace '[#?].*$'))
