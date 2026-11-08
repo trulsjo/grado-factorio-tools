@@ -29,9 +29,9 @@
 
     WHAT A REFUSAL NAMES. Each refused file with its lines, and the markdown-rewrap.ps1 -Comment
     command that rewraps it at the limit, by its path from the repository root, each path in
-    single quotes so the command runs as printed from the root (#378). The rewrap reads
-    the working tree, not what this read, so the refusal warns that staging the file again stages
-    any edit to it that was not staged.
+    single quotes so the command runs as printed in PowerShell from the root (#378). The rewrap
+    reads the working tree, not what this read, so the refusal warns that staging the file again
+    stages any edit to it that was not staged.
 
     WHAT IT CANNOT SEE. An edit not staged. In a file that is not PowerShell, whether a # line is
     a comment, and a block comment of another language. What the PowerShell rule cannot see is in
@@ -102,9 +102,9 @@ function Invoke-CommentLineCheck {
     $rewrap = [IO.Path]::GetRelativePath($Root, (Join-Path $PSScriptRoot 'markdown-rewrap.ps1')) -replace '\\', '/'
     $lines = @($refused | ForEach-Object { "$($_.File): comment lines over $Limit characters, line $($_.Lines -join ', ')." })
     $lines += 'Rewrap each with its command, then stage it again. The rewrap reads the file on disk, so staging it again stages with it any edit that was not staged:'
-    # Each path quoted for PowerShell, an apostrophe doubled, so the command runs as printed for
-    # any path git lists (#378).
-    $quote = { param([string] $s) "'$($s -replace "'", "''")'" }
+    # Each path quoted for PowerShell, each kind of single quote it reads doubled, the curly
+    # ones too, so the command runs as printed for any path git lists (#378).
+    $quote = { param([string] $s) "'$([System.Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent($s))'" }
     $lines += @($refused | ForEach-Object { "    pwsh -NoProfile -File $(& $quote $rewrap) -Comment -MaxLineLength $Limit -Path $(& $quote $_.File)" })
     $lines += "FAILED - comment-line check$($as): $($refused.Count) of $($files.Count) file(s) read have a comment line over $Limit."
     @{ Code = 1; Lines = $lines }
@@ -176,17 +176,18 @@ if ($SelfTest) {
                     $commands -contains "pwsh -NoProfile -File '$rewrap' -Comment -MaxLineLength 100 -Path 'scripts/a.ps1'" -and
                     $commands -contains "pwsh -NoProfile -File '$rewrap' -Comment -MaxLineLength 100 -Path 'scripts/b.ps1'" -and
                     ($end.Lines -join ' ') -match 'stages with it any edit that was not staged' }
-            'a refusal''s command, run as printed from the root, rewraps a file whose path holds a space or an apostrophe (#378)' = {
-                & $file 'scripts/my file.ps1' "# $long"; & $file "scripts/it's.ps1" "# $long"; & $git add -A
+            'a refusal''s command, run as printed from the root, rewraps a file whose path holds a space, an apostrophe or a curly one (#378)' = {
+                $curly = "scripts/it$([char] 0x2019)s smart.ps1"
+                & $file 'scripts/my file.ps1' "# $long"; & $file "scripts/it's.ps1" "# $long"; & $file $curly "# $long"; & $git add -A
                 $end = & $run
                 $commands = @($end.Lines | Where-Object { $_ -match 'markdown-rewrap\.ps1' } | ForEach-Object { $_.Trim() })
                 Push-Location $repo
                 try { foreach ($c in $commands) { & pwsh -NoProfile -Command $c 2>&1 | Out-Null } } finally { Pop-Location }
-                $wrapped = @('scripts/my file.ps1', "scripts/it's.ps1" | Where-Object {
+                $wrapped = @('scripts/my file.ps1', "scripts/it's.ps1", $curly | Where-Object {
                         $l = [IO.File]::ReadAllLines((Join-Path $repo $_)); $l.Count -eq 2 -and -not @($l | Where-Object { $_.Length -gt 100 }) })
-                & $git rm --cached --quiet -f 'scripts/my file.ps1' "scripts/it's.ps1"
-                Remove-Item -LiteralPath (Join-Path $repo 'scripts/my file.ps1'), (Join-Path $repo "scripts/it's.ps1")
-                $end.Code -eq 1 -and $commands.Count -eq 2 -and $wrapped.Count -eq 2 }
+                & $git rm --cached --quiet -f 'scripts/my file.ps1' "scripts/it's.ps1" $curly
+                Remove-Item -LiteralPath (Join-Path $repo 'scripts/my file.ps1'), (Join-Path $repo "scripts/it's.ps1"), (Join-Path $repo $curly)
+                $end.Code -eq 1 -and $commands.Count -eq 3 -and $wrapped.Count -eq 3 }
             'a staged deletion is not read, a non-ASCII name is, and -Path handed through pwsh as one comma list reads each, from a folder whose name is not ASCII in a code page that reads git''s UTF-8 wrong (#374)' = {
                 & $file 'scripts/gone.ps1' '# short'; & $git add -A; & $git commit --quiet -m gone
                 & $git rm --quiet scripts/gone.ps1
