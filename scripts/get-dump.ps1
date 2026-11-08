@@ -113,7 +113,8 @@ function Get-CachedDump {
     $rows = @(Get-HarnessMods -Path $ModsDirectory)
     # Refused, because the set is keyed by what is enabled: a misspelt name would disable nothing
     # and be served the whole set's dump.
-    $unknown = @($Disabled | Where-Object { $_ -cnotin $rows.Name -and $_ -cnotin $Available })
+    $names = @($rows | ForEach-Object Name)
+    $unknown = @($Disabled | Where-Object { $_ -cnotin $names -and $_ -cnotin $Available })
     if ($unknown) { throw "Not in ${ModsDirectory}, nor bundled with the game: $($unknown -join ', '). Names match case exactly." }
     $Bundled = @($Bundled | Where-Object { $_ -cnotin $Disabled })
 
@@ -123,8 +124,8 @@ function Get-CachedDump {
         foreach ($r in $rows | Where-Object { $_.Name -cnotin $Disabled }) {
             # ponytail: sizes, not contents. An edit that keeps the count and the bytes is not seen;
             # hash the files if mods ever get edited in place.
-            $size = Get-ChildItem -LiteralPath $r.Path -Recurse -File -Force | Measure-Object Length -Sum
-            "$($r.Name) $($r.Version) $($r.Kind), $($size.Count) file(s), $([long] $size.Sum) bytes"
+            $files = @(Get-ChildItem -LiteralPath $r.Path -Recurse -File -Force)
+            "$($r.Name) $($r.Version) $($r.Kind), $($files.Count) file(s), $([long] ($files | Measure-Object Length -Sum).Sum) bytes"
         }
     ) -join "`n"
     $id = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($key))).Substring(0, 12).ToLower()
@@ -230,7 +231,7 @@ function Invoke-SelfTest {
             $list = @((Get-Content (Join-Path $dir 'mod-list.json') -Raw | ConvertFrom-Json).mods)
             $entry = { param($n) @($list | Where-Object { $_.name -ceq $n }) }
             ($on -join ',') -ceq 'elevated-rails,quality,space-age' -and
-                (& $entry 'space-age').enabled -eq $true -and (& $entry 'quality').Count -eq 1 -and (& $entry 'quality')[0].enabled -eq $false -and
+                (& $entry 'space-age').enabled -eq $true -and @(& $entry 'quality').Count -eq 1 -and (& $entry 'quality')[0].enabled -eq $false -and
                 (& $entry 'alpha').enabled -eq $true -and (& $entry 'recycler')[0].enabled -eq $false } }
         @{ Name = 'another bundled selection is not served, and is in the name'; Test = {
             $r = & $ask @{ Bundled = 'space-age', 'quality' }

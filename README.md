@@ -649,9 +649,9 @@ statement that always gives one object `# strict-lists: one`.
     pwsh -File scripts/strict-list-check.ps1 scripts
 
 `-SelfTest` runs it on its fixtures in `scripts/strict-list-check/`, and runs those under strict
-mode to prove each flagged read throws and no other does. `scripts/check.ps1` runs the self-test
-only: over `scripts/` it flags 35 reads here, not yet sorted (Truls, on #343). What it cannot see,
-and what it flags wrongly, are in its header.
+mode to prove each flagged read throws and no other does. `scripts/check.ps1` runs the self-test,
+and the check over `scripts/` (#373). What it cannot see, and what it flags wrongly, are in its
+header.
 
 ## Checking that a script's help is read
 
@@ -746,13 +746,13 @@ no network.
 
 `scripts/check.ps1` is the one command before a push. It parses every script here, runs each
 self-test that needs neither the game nor the network, runs `param-check.ps1`,
-`variable-case-check.ps1` and `help-check.ps1` over `scripts/` and `markdown-check.ps1` over the
-tracked Markdown,
-holds the agent pages to their size limits, and fails on a script parameter this README never
-names as `-<Name>` (#194), or a script's comment line over 100 characters; the `pre-commit` hook
-holds the staged scripts to that rule too, through `scripts/comment-line-check.ps1` (#225). CI
-runs it, and so does the `pre-push` hook, with `-SkipIfPassed`, which runs nothing when a
-recorded run passed this same tree. What it cannot see is in its header.
+`variable-case-check.ps1`, `help-check.ps1` and `strict-list-check.ps1` over `scripts/` and
+`markdown-check.ps1` over the tracked Markdown, holds the agent pages to their size limits, and
+fails on a script parameter this README never names as `-<Name>` (#194), or a script's comment
+line over 100 characters; the `pre-commit` hook holds the staged scripts to that rule too, through
+`scripts/comment-line-check.ps1` (#225). CI runs it, and so does the `pre-push` hook, with
+`-SkipIfPassed`, which runs nothing when a recorded run passed this same tree. What it cannot see
+is in its header.
 
     pwsh -File scripts/check.ps1
 

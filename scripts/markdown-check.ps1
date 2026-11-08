@@ -475,7 +475,7 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
         @{ Name = 'a heading in a fence, in front matter or indented as code makes no anchor; one after an opening rule does'; Test = {
             $got = Get-HeadingAnchor -Lines '---', 'title: x', '# a yaml comment', '---', '', '```', '# Fenced', '```', '', '    # Code', '', 'text', '', '# Real'
             $rule = Get-HeadingAnchor -Lines '---', '', '# Kept', '', '---'
-            $got.Count -eq 1 -and $got.Contains('real') -and $rule.Contains('kept') } }
+            @($got).Count -eq 1 -and $got.Contains('real') -and $rule.Contains('kept') } }
         @{ Name = 'a < that opens no tag is text in a heading, and an autolink keeps its address'; Test = {
             $got = Get-HeadingAnchor -Lines '## A <-> B', '', '## See <https://example.com>', '', '## <b>Bold</b> <br/> end'
             @($got) -join ' ' -ceq 'a---b see-httpsexamplecom bold--end' } }

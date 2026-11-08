@@ -325,7 +325,7 @@ function Invoke-RevertRun {
     $rows = [System.Collections.Generic.List[object]]::new()
     try {
         foreach ($r in $all) {
-            $row = Invoke-Revert -Root $Root -Revert $r
+            $row = Invoke-Revert -Root $Root -Revert $r # strict-lists: one
             $rows.Add($row)
             Write-Host "revert-run: $($row.Name) -- $($row.Result)$(if ($row.Exit) { " (exit $($row.Exit))" }): $($row.Summary)"
             $left = @(Get-DirtyPath -Root $Root)

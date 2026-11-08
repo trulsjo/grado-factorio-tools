@@ -220,7 +220,7 @@ exit 0
         @{ Name = 'Get-ModLinks maps each name to its directory under the root, and refuses a missing one'; Test = {
             $links = Get-ModLinks -Root (Join-Path $temp 'src') -Mods 'harness-good', 'harness-broken'
             $missing = try { Get-ModLinks -Root (Join-Path $temp 'src') -Mods 'harness-good', 'no-such-mod' | Out-Null; '' } catch { $_.Exception.Message }
-            $links.Count -eq 2 -and $links['harness-good'] -eq $good -and $missing -match 'Mod directory not found: .*no-such-mod' } }
+            $links.Keys.Count -eq 2 -and $links['harness-good'] -eq $good -and $missing -match 'Mod directory not found: .*no-such-mod' } }
         @{ Name = 'Get-LocaleFailure finds an engine error inside a value, a foreign placeholder unless -EngineOnly, and nothing in a name or in no value'; Test = {
             (Get-LocaleFailure 'Canary Unknown key: "item-name.x"') -ceq 'Unknown key:' -and
                 (Get-LocaleFailure 'a [Unknown control sequence: X] b' -EngineOnly) -ceq 'Unknown control sequence:' -and
