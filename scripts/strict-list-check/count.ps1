@@ -96,3 +96,15 @@ $prefixed.Count                                     # expect: flag
 # A typed variable in a list of targets is still set: past the first, it can be $null.
 $firstOf, [object] $secondOf = Get-Item .
 $secondOf.Count                                     # expect: flag
+
+# $( ) unrolls a wrapped value, so an empty one is $null.
+$subWrapped = $(@(Get-None))
+$subWrapped.Count                                   # expect: flag
+
+# The script:, private: and global: prefixes name the same variable too.
+$script:scriptScoped = Get-None
+$scriptScoped.Count                                 # expect: flag
+$private:privateScoped = Get-None
+$privateScoped.Count                                # expect: flag
+$global:globalScoped = Get-None
+$globalScoped.Count                                 # expect: flag

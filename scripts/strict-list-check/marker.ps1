@@ -67,3 +67,7 @@ $ownLine.Name                                       # expect: flag
 # marker covering the one inline read beside it.
 $besideRead = Get-None
 if ((Get-Item .).Name -eq $besideRead.Name) { }  # strict-lists: one  # expect: flag
+
+# A comment between the statement and the marker is skipped, as a ; is.
+$twoComments = Get-Item .  <# a note #>  # strict-lists: one
+$twoComments.Name

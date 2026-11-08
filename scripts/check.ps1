@@ -611,7 +611,7 @@ $bad = $LASTEXITCODE -or $said -notmatch '(?m)^OK - strict-list-check: '
 Write-Host "check: strict-list-check.ps1 scripts -- $($bad ? 'FAILED' : 'ok') $(& $took)"
 if ($bad) {
     $said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
-    $failed.Add('strict-list-check.ps1 found a read strict mode can throw on')
+    $failed.Add('strict-list-check.ps1 found a read strict mode can throw on, or read no strict-mode script')
 }
 
 $clock.Restart()
