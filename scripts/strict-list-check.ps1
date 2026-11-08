@@ -23,10 +23,10 @@
     nothing for nothing; @(...) does not help there, since an empty array has no .Name.
     A statement that always outputs exactly one object, such as one calling Start-Process
     -PassThru, is right for .Id and .Name: put the comment # strict-lists: one straight after it,
-    on the line where it ends (a ; between is fine). One object still has no .Count, so the
-    marker never makes a .Count read safe. In $a, $b = ... only the first variable gets the one
-    object. A marker after a line with several unsafe reads covers none of them; nor does a
-    marker after a string cover a statement inside it.
+    on the line where it ends (a ; or another comment between is fine). One object still has no
+    .Count, so the marker never makes a .Count read safe. In $a, $b = ... only the first variable
+    gets the one object. A marker after a line with several unsafe reads covers none of them; nor
+    does a marker after a string cover a statement inside it.
 
     It parses each .ps1 that calls Set-StrictMode and gives each value a state:
       bare      a command result as PowerShell hands it over: Get-Thing, (Get-Thing),
@@ -177,13 +177,13 @@ function Test-Inside([Ast] $Node, [Ast] $Outer) {
 
 function Test-Direct([Ast] $Node, [Ast] $Outer) {
     # Whether the node surely runs, and runs first, whenever $Outer is reached: no branch, loop
-    # or script block between them. Reaching $Outer through a branch, a switch clause, a try,
-    # catch or finally block, or a for loop's iterator (which runs after the body) is not direct;
-    # through a condition it is.
+    # or script block between them. Reaching $Outer through a switch clause, a try, catch or
+    # finally block, or a for loop's iterator (which runs after the body) is not direct; through
+    # a condition it is. An if's branch never reaches here: Get-Reaching sets it apart first.
     $child = $Node
     for ($p = $Node.Parent; $p; $p = $p.Parent) {
         if ($p -eq $Outer) {
-            if ($p -is [IfStatementAst] -or $p -is [SwitchStatementAst] -or $p -is [TryStatementAst]) {
+            if ($p -is [SwitchStatementAst] -or $p -is [TryStatementAst]) {
                 return $child -isnot [StatementBlockAst] -and $child -isnot [CatchClauseAst]
             }
             if ($p -is [ForStatementAst] -and $child -eq $p.Iterator) { return $false }
@@ -268,7 +268,7 @@ function Invoke-Check([IO.FileInfo[]] $Files) {
         $lines = @(Get-Content -LiteralPath $file.FullName)
 
         # Where each marker attaches: the end of the token right before it on its line, skipping
-        # ; and line continuations. A statement ending exactly there is marked. With the tokens
+        # ; and comments. A statement ending exactly there is marked. With the tokens
         # inside strings included, a statement inside a string ends before the string does.
         $flat = @(Get-FlatTokens $tokens)
         $markedEnds = [System.Collections.Generic.HashSet[int]]::new()
@@ -276,7 +276,7 @@ function Invoke-Check([IO.FileInfo[]] $Files) {
             $anchor = $null
             foreach ($t in $flat) {
                 if ($t.Extent.EndOffset -le $m.Extent.StartOffset -and
-                    $t.Kind -notin 'Semi', 'LineContinuation', 'NewLine', 'Comment' -and
+                    $t.Kind -notin 'Semi', 'Comment' -and
                     (-not $anchor -or $t.Extent.EndOffset -gt $anchor.Extent.EndOffset)) { $anchor = $t }
             }
             if ($anchor -and $anchor.Extent.EndLineNumber -eq $m.Extent.StartLineNumber) {
@@ -320,7 +320,7 @@ function Invoke-Check([IO.FileInfo[]] $Files) {
                     # += and the like keep what the variable held; a command added to a value
                     # no command produced makes an array that can be empty.
                     $prev = Join-State @(Get-Reaching $assigned[$key].ToArray() $a | ForEach-Object State)
-                    $state = if ($prev -in 'bare', 'wrapped') { $prev } elseif ($source) { 'wrapped' } else { $prev }
+                    $state = if ($prev -eq 'bare') { $prev } elseif ($source) { 'wrapped' } else { $prev }
                 }
                 @{ Key = $key; Record = [pscustomobject]@{ Ast = $a; Line = $a.Extent.StartLineNumber; State = $state } }
             }
@@ -444,7 +444,7 @@ function Get-Files([string[]] $From) {
     @($From | ForEach-Object {
             if (Test-Path -LiteralPath $_ -PathType Container) {
                 Get-ChildItem -LiteralPath $_ -Recurse -Filter '*.ps1' -File
-            } else { Get-Item -LiteralPath $_ }
+            } else { Get-Item -LiteralPath $_ | Where-Object Extension -eq '.ps1' }
         })
 }
 
@@ -564,6 +564,7 @@ if ($SelfTest) {
         $alone = & $run $strict
         $none = & $run $lax
         $beside = & $run "$strict,$empty"
+        $named = & $run "$strict,$(Join-Path $empty 'notes.md')"
         $fixtureOnly = & $run $fixtures
         $unparsed = & $run $broken
         $badFiles = @(Get-Files $bad)
@@ -574,11 +575,12 @@ if ($SelfTest) {
         $none.Text -match '(?m)^FAILED - strict-list-check: none of the 1 script\(s\) read sets strict mode'
     Write-Host "self-test 4/7: a run that read no strict-mode script fails, saying so -- $(if ($noneOk) { 'ok' } else { 'FAILED' })"
     if (-not $noneOk) { "$($alone.Text)$($none.Text)".TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" } }
-    $besideOk = $alone.Code -eq 0 -and $beside.Code -eq 1 -and
+    $besideOk = $alone.Code -eq 0 -and $beside.Code -eq 1 -and $named.Code -eq 1 -and
+        $named.Text -match "(?m)^FAILED - strict-list-check: .*notes\.md holds no script" -and
         $beside.Text -match "(?m)^FAILED - strict-list-check: $([regex]::Escape($empty)) holds no script" -and
         $beside.Text -notmatch "(?m)^FAILED - strict-list-check: $([regex]::Escape($strict)) holds"
-    Write-Host "self-test 5/7: a -Path that holds no script, beside one that does, fails, naming it -- $(if ($besideOk) { 'ok' } else { 'FAILED' })"
-    if (-not $besideOk) { $beside.Text.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" } }
+    Write-Host "self-test 5/7: a -Path that holds no script, a folder or a file named, beside one that does, fails, naming it -- $(if ($besideOk) { 'ok' } else { 'FAILED' })"
+    if (-not $besideOk) { "$($beside.Text)$($named.Text)".TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" } }
     # A run given the fixture folder alone skips it; a script that does not parse is named (#376).
     $skipOk = $fixtureOnly.Code -eq 1 -and $fixtureOnly.Text -match '(?m)^FAILED - strict-list-check: .* holds no script outside the fixture folder' -and
         $unparsed.Code -eq 1 -and $unparsed.Text -match '(?m)broken\.ps1: does not parse: '

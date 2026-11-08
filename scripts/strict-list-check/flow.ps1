@@ -134,3 +134,17 @@ Test-Trap
 $blocked = Get-None
 Get-None | ForEach-Object { $blocked = @() }
 $blocked.Count                                      # expect: flag
+
+# A switch clause may not run, so it hides nothing after the switch.
+$switchSet = Get-None
+switch (1) { 2 { $switchSet = @() } }
+$switchSet.Count                                    # expect: flag
+
+# A try block may stop before an assignment in it.
+$trySet = Get-None
+try { throw 'skip'; $trySet = @() } catch { }
+$trySet.Count                                       # expect: flag
+
+# One switch clause does not run before another on the same item.
+$clauseSet = Get-None
+switch (2) { 1 { $clauseSet = @() } 2 { $clauseSet.Count } }    # expect: flag
