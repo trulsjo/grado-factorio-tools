@@ -52,15 +52,16 @@
 
     THE SELF-TEST runs the check on the fixtures in strict-list-check/, where each line it must
     flag carries the comment # expect: flag, or # expect: flag 2 for two reads, and fails unless
-    it flags each line exactly that often. Then it runs each strict-mode fixture and requires,
-    read by read, that every read runs and that exactly the flagged ones throw, so a fixture
-    cannot pin a wrong belief about strict mode; a line marked "known false hit" or "known miss"
-    excuses the one disagreement it names, and only of that kind. A run with -Path skips that
-    folder. Then it runs itself in a pwsh of its own, as a gate does, over paths that must each
-    fail, naming why: a folder whose one script sets no strict mode, a folder with no script
-    beside one with a script, the fixture folder alone, and a script that does not parse. Last,
-    it runs scratch fixtures, each untrue in one way, and requires each to be named for that way
-    (#376).
+    it flags each line exactly that often, or where no line says # expect: flag. Then it runs each
+    strict-mode fixture and requires, read by read, that every read runs and that exactly the
+    flagged ones throw, so a fixture cannot pin a wrong belief about strict mode; a line marked
+    "known false hit" or "known miss" excuses the one disagreement it names, and only of that kind.
+    A run with -Path skips that folder. Then it runs itself in a pwsh of its own, as a gate does,
+    over paths that must each fail, naming why: a folder whose one script sets no strict mode, a
+    folder with no script beside one with a script, the fixture folder alone, and a script that does
+    not parse. Last, it runs scratch fixtures, each untrue in one way, and requires each to be named
+    for that way (#376), and runs the first comparison on scratch fixtures with no # expect: flag
+    line, which must fail (#397).
 
     What it cannot see: a command result passed in as a parameter, a variable assigned in one
     function and read in another, a copy made inside a loop of a variable assigned later in that
@@ -454,21 +455,6 @@ if ($SelfTest) {
     # First the fixtures: the check must flag exactly the lines marked # expect: flag, as many
     # times as # expect: flag <n> says (once without a number).
     $script:checked = 0
-    $fixtureFiles = Get-Files $fixtures
-    $want = @{}
-    foreach ($f in $fixtureFiles) {
-        $n = 0
-        foreach ($l in Get-Content -LiteralPath $f.FullName) {
-            $n++
-            if ($l -match '#\s*expect:\s*flag(?:\s+(\d+))?\b') { $want["$($f.Name):$n"] = if ($Matches[1]) { [int] $Matches[1] } else { 1 } }
-        }
-    }
-    $got = @{}
-    $fixtureHits = @(Invoke-Check $fixtureFiles)
-    foreach ($hit in $fixtureHits) {
-        $k = "$(Split-Path $hit.File -Leaf):$($hit.Line)"
-        $got[$k] = 1 + $(if ($got.ContainsKey($k)) { $got[$k] } else { 0 })
-    }
     # Each line flagged other than its # expect: says, by name and line.
     function Get-FixtureMismatch([hashtable] $Want, [hashtable] $Got) {
         @(@($Want.Keys) + @($Got.Keys) | Sort-Object -Unique | ForEach-Object {
@@ -477,14 +463,42 @@ if ($SelfTest) {
                 if ($w -ne $g) { "$($_): flagged $g time(s), expected $w" }
             })
     }
-    $wrong = @(Get-FixtureMismatch $want $got)
-    $expected = ($want.Values | Measure-Object -Sum).Sum
-    Write-Host "self-test 1/7: the check flags each fixture line as often as its # expect: flag says -- $(if (-not $want.Count -or $wrong.Count) { 'FAILED' } else { 'ok' })"
-    $wrong | ForEach-Object { Write-Host "    $_" }
+    # Case 1's comparison, a function so that case 8 runs it on scratch fixtures: it fails where a
+    # line is flagged other than its # expect: says, and where no line says # expect: flag, as a
+    # fixture set whose markers stopped matching, or that lost its files, would read (#397).
+    function Test-FixtureFlags([IO.FileInfo[]] $Files) {
+        $want = @{}
+        foreach ($f in $Files) {
+            $n = 0
+            foreach ($l in Get-Content -LiteralPath $f.FullName) {
+                $n++
+                if ($l -match '#\s*expect:\s*flag(?:\s+(\d+))?\b') { $want["$($f.Name):$n"] = if ($Matches[1]) { [int] $Matches[1] } else { 1 } }
+            }
+        }
+        $got = @{}
+        $hits = @(Invoke-Check $Files)
+        foreach ($hit in $hits) {
+            $k = "$(Split-Path $hit.File -Leaf):$($hit.Line)"
+            $got[$k] = 1 + $(if ($got.ContainsKey($k)) { $got[$k] } else { 0 })
+        }
+        $wrong = @(Get-FixtureMismatch $want $got)
+        [pscustomobject]@{
+            Hits     = $hits
+            Wrong    = $wrong
+            Expected = [int] ($want.Values | Measure-Object -Sum).Sum
+            Failed   = -not $want.Count -or $wrong.Count
+        }
+    }
+    $fixtureFiles = Get-Files $fixtures
+    $flags = Test-FixtureFlags $fixtureFiles
+    $fixtureHits = $flags.Hits
+    $expected = $flags.Expected
+    Write-Host "self-test 1/8: the check flags each fixture line as often as its # expect: flag says -- $(if ($flags.Failed) { 'FAILED' } else { 'ok' })"
+    $flags.Wrong | ForEach-Object { Write-Host "    $_" }
     # That the comparison can fail: the fixtures all match, so case 1 alone cannot show it.
     $canary = @(Get-FixtureMismatch @{ 'a.ps1:3' = 1; 'a.ps1:5' = 2 } @{ 'a.ps1:5' = 2; 'a.ps1:9' = 1 })
     $canaryOk = ($canary -join '|') -eq 'a.ps1:3: flagged 0 time(s), expected 1|a.ps1:9: flagged 1 time(s), expected 0'
-    Write-Host "self-test 2/7: a line flagged less, or more, than its # expect: says is named -- $(if ($canaryOk) { 'ok' } else { 'FAILED' })"
+    Write-Host "self-test 2/8: a line flagged less, or more, than its # expect: says is named -- $(if ($canaryOk) { 'ok' } else { 'FAILED' })"
 
     # Then PowerShell itself: run each strict-mode fixture and require, read by read, that every
     # read runs and that exactly the flagged ones throw, so a fixture cannot pin a wrong belief
@@ -530,7 +544,7 @@ if ($SelfTest) {
         }
     }
     $untrue = @(Get-FixtureUntruth $fixtureFiles $fixtureHits)
-    Write-Host "self-test 3/7: each strict-mode fixture, run, throws on exactly the reads the check flags -- $(if ($untrue.Count) { 'FAILED' } else { 'ok' })"
+    Write-Host "self-test 3/8: each strict-mode fixture, run, throws on exactly the reads the check flags -- $(if ($untrue.Count) { 'FAILED' } else { 'ok' })"
     $untrue | ForEach-Object { Write-Host "    $_" }
 
     # Then a run over paths of its own, in a pwsh of its own, as a gate runs it: one that read no
@@ -569,35 +583,45 @@ if ($SelfTest) {
         $unparsed = & $run $broken
         $badFiles = @(Get-Files $bad)
         $badSaid = @(Get-FixtureUntruth $badFiles @(Invoke-Check $badFiles))
+        # A fixture set with no # expect: flag line, whose one read is safe, so nothing mismatches.
+        $noExpect = Join-Path $temp 'no-expect'
+        New-Item -ItemType Directory -Path $noExpect -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path $noExpect 'plain.ps1') -Value 'Set-StrictMode -Version Latest', '@(1).Count'
+        $noExpectFlags = Test-FixtureFlags @(Get-Files $noExpect)
     } finally { Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue }
     # The run over the strict folder alone passes, so the two below fail for what they hold.
     $noneOk = $alone.Code -eq 0 -and $none.Code -eq 1 -and
         $none.Text -match '(?m)^FAILED - strict-list-check: none of the 1 script\(s\) read sets strict mode'
-    Write-Host "self-test 4/7: a run that read no strict-mode script fails, saying so -- $(if ($noneOk) { 'ok' } else { 'FAILED' })"
+    Write-Host "self-test 4/8: a run that read no strict-mode script fails, saying so -- $(if ($noneOk) { 'ok' } else { 'FAILED' })"
     if (-not $noneOk) { "$($alone.Text)$($none.Text)".TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" } }
     $besideOk = $alone.Code -eq 0 -and $beside.Code -eq 1 -and $named.Code -eq 1 -and
         $named.Text -match "(?m)^FAILED - strict-list-check: .*notes\.md holds no script" -and
         $beside.Text -match "(?m)^FAILED - strict-list-check: $([regex]::Escape($empty)) holds no script" -and
         $beside.Text -notmatch "(?m)^FAILED - strict-list-check: $([regex]::Escape($strict)) holds"
-    Write-Host "self-test 5/7: a -Path that holds no script, a folder or a file named, beside one that does, fails, naming it -- $(if ($besideOk) { 'ok' } else { 'FAILED' })"
+    Write-Host "self-test 5/8: a -Path that holds no script, a folder or a file named, beside one that does, fails, naming it -- $(if ($besideOk) { 'ok' } else { 'FAILED' })"
     if (-not $besideOk) { "$($beside.Text)$($named.Text)".TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" } }
     # A run given the fixture folder alone skips it; a script that does not parse is named (#376).
     $skipOk = $fixtureOnly.Code -eq 1 -and $fixtureOnly.Text -match '(?m)^FAILED - strict-list-check: .* holds no script outside the fixture folder' -and
         $unparsed.Code -eq 1 -and $unparsed.Text -match '(?m)broken\.ps1: does not parse: '
-    Write-Host "self-test 6/7: a run skips the fixture folder, and names a script that does not parse -- $(if ($skipOk) { 'ok' } else { 'FAILED' })"
+    Write-Host "self-test 6/8: a run skips the fixture folder, and names a script that does not parse -- $(if ($skipOk) { 'ok' } else { 'FAILED' })"
     if (-not $skipOk) { "$($fixtureOnly.Text)$($unparsed.Text)".TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" } }
     # Each scratch fixture is named for its own fault, so a guard of the runner that stopped
     # holding would let a fixture prove nothing (#376).
     $wantSaid = @($badFixtures.Keys | ForEach-Object { $badFixtures[$_][1] })
     $missed = @($wantSaid | Where-Object { $w = $_; -not @($badSaid | Where-Object { $_.StartsWith($w) }).Count })
     $runnerOk = -not $missed.Count -and $badSaid.Count -eq $wantSaid.Count
-    Write-Host "self-test 7/7: the fixture run names a read that never ran, an error, an early end, a stale or stray tag, a tag of the other kind, a read in a read and another error -- $(if ($runnerOk) { 'ok' } else { 'FAILED' })"
+    Write-Host "self-test 7/8: the fixture run names a read that never ran, an error, an early end, a stale or stray tag, a tag of the other kind, a read in a read and another error -- $(if ($runnerOk) { 'ok' } else { 'FAILED' })"
     if (-not $runnerOk) { $missed | ForEach-Object { Write-Host "    not named: $_" }; $badSaid | ForEach-Object { Write-Host "    said: $_" } }
+    # Case 1's comparison fails a fixture set that says # expect: flag nowhere, though nothing in
+    # it mismatches (#397).
+    $noExpectOk = $noExpectFlags.Failed -and -not $noExpectFlags.Wrong.Count -and $noExpectFlags.Expected -eq 0
+    Write-Host "self-test 8/8: case 1's comparison fails a fixture set with no # expect: flag line -- $(if ($noExpectOk) { 'ok' } else { 'FAILED' })"
+    if (-not $noExpectOk) { $noExpectFlags.Wrong | ForEach-Object { Write-Host "    $_" } }
     Write-Host ''
-    $failures = @(@(-not $want.Count -or $wrong.Count) + @(-not $canaryOk) + @([bool] $untrue.Count) + @(-not $noneOk) + @(-not $besideOk) +
-        @(-not $skipOk) + @(-not $runnerOk) | Where-Object { $_ }).Count
-    if ($failures) { Write-Host "FAILED - self-test: $failures of 7 case(s) did not hold."; exit 1 }
-    Write-Host "OK - self-test passed: all 7 cases, $expected fixture flags as expected and as strict mode throws."
+    $failures = @(@([bool] $flags.Failed) + @(-not $canaryOk) + @([bool] $untrue.Count) + @(-not $noneOk) + @(-not $besideOk) +
+        @(-not $skipOk) + @(-not $runnerOk) + @(-not $noExpectOk) | Where-Object { $_ }).Count
+    if ($failures) { Write-Host "FAILED - self-test: $failures of 8 case(s) did not hold."; exit 1 }
+    Write-Host "OK - self-test passed: all 8 cases, $expected fixture flags as expected and as strict mode throws."
     exit 0
 }
 
