@@ -765,7 +765,8 @@ scripts/     PowerShell entry points, one job each, and the libraries they
              markdown-lib.ps1, the reading markdown-check.ps1 and markdown-rewrap.ps1 share,
              comment-line-lib.ps1, the comment-line rule check.ps1 and
              comment-line-check.ps1 share,
-             check-input-lib.ps1, which lists the files a check is given, with
+             check-input-lib.ps1, which lists the files cited-commit-check.ps1,
+             line-cite-check.ps1 and comment-line-check.ps1 are given, with
              its own -SelfTest,
              breaking-lib.ps1, the rule for a pin move's breaking commits pin-measure.ps1 loads,
              self-test-halves.ps1, the runner a -SelfTest hands its halves to,
