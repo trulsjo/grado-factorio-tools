@@ -682,6 +682,13 @@ with the file restored before the next.
 
     pwsh -File scripts/revert-run.ps1 -Copy <copy> -List <list>
 
+`-Defaults` names scripts whose default reverts it writes itself and runs after the list's (#382):
+for each parameter its `param()` block gives a default, one revert per element of a list default,
+that element dropped, and one for a scalar default, another value in its place. `-List` may then
+be left out.
+
+    pwsh -File scripts/revert-run.ps1 -Copy <copy> -Defaults scripts/<script>
+
 It exits 0 once every revert was run or refused, and 1 only when it could not run, as for a copy
 left dirty. The list's shape, and what it cannot see, are in its header. `-SelfTest` runs it on a
 scratch repository.
