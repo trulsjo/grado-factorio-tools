@@ -246,20 +246,35 @@ function Test-Markdown {
         $prose = [regex]::Replace($linkLine, '(`+)(?:(?!\1).)+?\1', '')
         $targets = @(foreach ($m in [regex]::Matches($prose, '\]\(\s*(?:<([^>]*)>|([^)\s]+))')) { $m.Groups[1].Value + $m.Groups[2].Value })
         if ($prose -match '^\s{0,3}\[[^\]^][^\]]*\]:\s*<?([^\s>]+)') { $targets += $Matches[1] }
+        if ($Body) {
+            # Every target GitHub makes a link of in a body: an empty one, a definition's on the
+            # line after it, and a raw <a href>; each as GitHub reads it, its backslash escapes
+            # and character references undone (PR #389's panel review).
+            $targets = @(foreach ($m in [regex]::Matches($prose, '\]\(\s*(?:<([^>]*)>|([^)\s]*))')) { $m.Groups[1].Value + $m.Groups[2].Value })
+            if ($prose -match '^\s{0,3}\[[^\]^][^\]]*\]:\s*<?([^\s>]+)') { $targets += $Matches[1] }
+            elseif ($prose -match '^\s{0,3}\[[^\]^][^\]]*\]:\s*$' -and $linkAt + 1 -lt $Lines.Count -and $Lines[$linkAt + 1] -match '^\s*<?([^\s>]+)') { $targets += $Matches[1] }
+            $targets += @(foreach ($m in [regex]::Matches($prose, '<a\s[^>]*?\bhref\s*=\s*(?:"([^"]*)"|''([^'']*)'')', 'IgnoreCase')) { $m.Groups[1].Value + $m.Groups[2].Value })
+            $targets = @($targets | ForEach-Object { [Net.WebUtility]::HtmlDecode(($_ -replace '\\([!-/:-@\[-`{-~])', '$1')) })
+        }
         foreach ($t in $targets) {
-            # In a body a drive letter, as C:/x, and //host are no full address, so neither is
-            # taken for a scheme there.
-            if ($t -match $(if ($Body) { '^[a-zA-Z][a-zA-Z0-9+.-]+:' } else { '^([a-zA-Z][a-zA-Z0-9+.-]*:|//)' })) { continue }
+            # In a body, a full address is a scheme and :// and a host, or mailto:; a #name is
+            # one of the body's own headings; anything else resolves against the page's address.
+            if ($Body) {
+                if ($t -match '^(?:[a-zA-Z][a-zA-Z0-9+.-]*://[^/\s]|mailto:\S)') { continue }
+                if ($t -match '^#.') {
+                    if ($null -eq $own) { $own = Get-HeadingAnchor -Lines $Lines }
+                    if (-not $own.Contains([uri]::UnescapeDataString($t.Substring(1)))) { @{ Line = $linkAt + 1; Message = "the link to $t names no heading of this body" } }
+                    continue
+                }
+                @{ Line = $linkAt + 1; Message = "the link to $(if ($t) { $t } else { 'an empty target' }) is no full address: in a pull request's or issue's body a link that is not resolves against the page's address, not the repository's tree; give a full https:// address, or a #fragment of the body's own" }
+                continue
+            }
+            if ($t -match '^([a-zA-Z][a-zA-Z0-9+.-]*:|//)') { continue }
             $fragment = if ($t.Contains('#')) { [uri]::UnescapeDataString(($t -replace '^[^#]*#')) } else { '' }
             if ($t.StartsWith('#')) {
                 if (-not $fragment) { continue }
                 if ($null -eq $own) { $own = Get-HeadingAnchor -Lines $Lines }
-                if (-not $own.Contains($fragment)) { @{ Line = $linkAt + 1; Message = "the link to $t names no heading of this $(if ($Body) { 'body' } else { 'file' })" } }
-                continue
-            }
-            # On GitHub a relative link in a body resolves against the page's own address.
-            if ($Body) {
-                @{ Line = $linkAt + 1; Message = "the link to $t is no full address: in a pull request's or issue's body a link that is not resolves against the page's address, not the repository's tree; give a full https:// address, or a #fragment of the body's own" }
+                if (-not $own.Contains($fragment)) { @{ Line = $linkAt + 1; Message = "the link to $t names no heading of this file" } }
                 continue
             }
             $file = [uri]::UnescapeDataString(($t -replace '[#?].*$'))
