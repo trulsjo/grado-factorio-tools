@@ -2,8 +2,8 @@
 .SYNOPSIS
     Holds the comment lines of the files it is given to a width: in a PowerShell script each line
     of a block comment and each # line, and in any other file, a hook or a workflow, each line
-    that begins with #. Exit 0 means no line it read is over the limit, or, with no -All, that
-    nothing -Path names is staged, which it says.
+    that begins with #, a shebang aside. Exit 0 means no line it read is over the limit, or, with
+    no -All, that nothing -Path names is staged, which it says.
 
 .DESCRIPTION
     WHY (grado-factorio-tools#344, #316 ruling 4). Two checks held comment lines to 100
