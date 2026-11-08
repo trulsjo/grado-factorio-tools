@@ -404,13 +404,18 @@ call's `cwd`, where the check runs too. A `gh pr edit` that touches no body pass
 not checked. Text that names `gh pr create` outside quotes, as in a heredoc, is read as a
 command and may be refused: its header's WHAT IT REFUSES WRONGLY says where.
 
+It checks a `gh pr comment`, `gh issue create` or `gh issue comment` too (#386): one whose body
+file `markdown-check.ps1 -Body` fails, or that it cannot read or that is not there, is refused;
+one with an inline body, or no body file, is let through. The wiring's `case` hands it commands
+holding `gh` and `issue` for these.
+
 This repository wires it in its tracked `.claude/settings.json`, with the arguments CI hands the
 check. A consumer adds it to its own, with the arguments its own gate uses:
 
 ```json
 {
   "type": "command",
-  "command": "i=$(cat); case $i in *gh*pr*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-pr-body.ps1\" -CiteSiblings;; esac"
+  "command": "i=$(cat); case $i in *gh*pr*|*gh*issue*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-pr-body.ps1\" -CiteSiblings;; esac"
 }
 ```
 

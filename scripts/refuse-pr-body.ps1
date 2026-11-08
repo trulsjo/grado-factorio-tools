@@ -2,12 +2,11 @@
 .SYNOPSIS
     A hook for agent sessions: refuses `gh pr create` or `gh pr edit` whose body
     pr-body-check.ps1 fails, or whose body this cannot read from a file, and `gh pr comment`,
-    `gh issue create` or `gh issue comment` whose body file markdown-check.ps1 -Body fails.
-    Exit 2 refuses the
-    command before it runs, with the check's report or what to write instead on stderr; exit 0
-    lets it run, and means only that each body file this checked passed: a call with `--help` or
-    `-h` is not checked. Exit 1 says on stderr that the command could not be checked, as where
-    the tool call cannot be read; the command still runs.
+    `gh issue create` or `gh issue comment` whose body file markdown-check.ps1 -Body fails, or
+    that this cannot read. Exit 2 refuses the command before it runs, with the check's report or
+    what to write instead on stderr; exit 0 lets it run, and means only that each body file this
+    checked passed: a call with `--help` or `-h` is not checked. Exit 1 says on stderr that the
+    command could not be checked, as where the tool call cannot be read; the command still runs.
 
 .DESCRIPTION
     WHY (grado-factorio-tools#259). PR #252 was opened with a body the check failed. The
@@ -38,20 +37,23 @@
     - a path, taken against `cwd` where it is relative, that names no file;
     - a body file pr-body-check.ps1 fails, with that check's report.
 
-    For each `gh pr comment`, `gh issue create` and `gh issue comment`, only a `--body-file` or
-    `-F` whose file markdown-check.ps1 -Body fails, with that check's report; the wiring's
-    arguments are pr-body-check.ps1's and do not reach it. A body it cannot read is let through:
-    inline, from standard input, by no path, through the shell or from a file not there (#386).
+    For each `gh pr comment`, `gh issue create` and `gh issue comment` (#386): a body file given
+    no path, `-`, a path through the shell, or one that names no file, as for a pull request's
+    body; and a body file markdown-check.ps1 -Body fails, with that check's report. The wiring's
+    arguments are pr-body-check.ps1's and do not reach it. An inline body, and a command with no
+    body file, as one that opens an editor, are let through (Truls's ruling 3 on #386).
 
     WHAT IT LETS THROUGH. A `gh pr create` or `gh pr edit` each of whose body files passes the
-    check; a `gh pr edit` that touches no body, as `--title` or `--add-label` alone; any of them
-    with `--help` or `-h`; every other gh command. A Git Bash path, `/c/...`, is read as `C:/...`
+    check; a `gh pr edit` that touches no body, as `--title` or `--add-label` alone; a
+    `gh pr comment`, `gh issue create` or `gh issue comment` each of whose body files passes
+    markdown-check.ps1 -Body, or that has an inline body or no body file; any of the five with
+    `--help` or `-h`; every other gh command. A Git Bash path, `/c/...`, is read as `C:/...`
     on Windows. The title is not checked (ruling 4).
 
     WHAT IT CANNOT SEE. A command inside a quoted string, as `sh -c` or `pwsh -Command`, a
     script, an alias, or a variable; a body written by `gh api`, `gh issue edit`, a
     `--comment` on `gh issue close` or any other way than these five subcommands; a comment's or
-    an issue's body it lets through, above; a body file in a cluster of short options, as
+    an issue's inline body; a body file in a cluster of short options, as
     `-dF body.md`, which on `gh pr create` is refused as no body file and on `gh pr edit` goes
     unchecked; a person's own terminal: this is a session's hook. A file the command itself writes
     before gh runs, as `... > body.md && gh pr create -F body.md`, is checked as it stands when the
@@ -59,7 +61,7 @@
     wired command and the matcher of its entry, and nothing else of the settings.
 
     WHAT IT REFUSES WRONGLY. It reads the command as text and does not parse the shell, so text
-    that names `gh pr create` or `gh pr edit` outside quotes is read as a command: in a heredoc,
+    that names one of the five subcommands outside quotes is read as a command: in a heredoc,
     in an `echo`, in a comment, between backticks, or after a lone apostrophe in a here-string.
     A value of another option that begins `-b`, as `--title '-bump deps'`, reads as an inline
     body. Write such text to a file and pass the file.
@@ -144,19 +146,10 @@ function Get-PrBodyRefusal {
                 elseif ($w -cin '--help', '-h') { $help = $true }
             }
             if ($help) { continue }
-            # An inline body, or none, of a comment or an issue is let through: it is not seen.
+            # An inline body, or none, of a comment or an issue is let through (#386's ruling 3).
             if ($inline -and -not $prose) { return "gh $sub gives its body inline, which the check cannot read. Write the body to a file and pass --body-file <path>." }
             if ($sub -eq 'pr create' -and -not $files.Count) { return 'gh pr create is given no --body-file, so its body cannot be checked. Write the body to a file and pass --body-file <path>.' }
             foreach ($f in $files) {
-                # A comment's or an issue's body file this cannot read, as no path, standard
-                # input, a path through the shell or one not there, is let through, as an inline
-                # body is: #386 asks for a refusal only where the check fails.
-                if ($prose) {
-                    if (-not $f -or $f -eq '-' -or $f -match '[$%`]|^~') { continue }
-                    $path = if ($IsWindows -and $f -match '^/([a-zA-Z])(/.*)?$') { "$($Matches[1]):$($Matches[2] ?? '/')" } else { $f }
-                    if (-not [IO.Path]::IsPathRooted($path)) { $path = Join-Path $Cwd $path }
-                    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
-                }
                 if (-not $f) { return "gh $sub is given --body-file with no path. Pass the body file's path." }
                 if ($f -eq '-') { return "gh $sub reads its body from standard input, which the check cannot read. Pass --body-file <path>." }
                 if ($f -match '[$%`]|^~') { return "gh $sub's body file, $f, is named through the shell, which this cannot expand. Write its path in full." }
@@ -239,9 +232,11 @@ if ($SelfTest) {
         @("gh issue comment 5 --body-file=`"$note`"", $visual, $null),
         @('gh issue comment 5 --body "inline, not seen"', @(), $null),
         @('gh issue create --title t -b text', @(), $null),
-        @('gh issue create --title t --body-file $S/x.md', @(), $null),
-        @('gh issue comment 5 -F -', @(), $null),
-        @("gh pr comment 5 --body-file `"$tmp/missing.md`"", @(), $null),
+        @('gh issue create --title t --body-file $S/x.md', @(), 'in full'),
+        @('gh issue comment 5 -F -', @(), 'standard input'),
+        @('gh issue comment 5 -F', @(), 'no path'),
+        @("gh pr comment 5 --body-file `"$tmp/missing.md`"", @(), 'not there'),
+        @('gh issue create --title t', @(), $null),
         @("gh issue view 5; gh issue close 5 --comment x", @(), $null),
         @('gh pr view 5 --json body', @(), $null),
         @('git status', @(), $null),
