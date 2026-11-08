@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
-    Runs a list of reverts, and with -Defaults the default reverts it writes, on a copy of the
-    repository, one at a time, and reports each as failing, passing or crashed its self-test, or
+    Runs a list of reverts, and with -Defaults and -Conditions the reverts it writes, on a copy of
+    the repository, one at a time, and reports each as failing, passing or crashed its self-test, or
     as refused. Exit 0 means every revert was run or refused; it says nothing of what they found,
     which the report does.
 
@@ -49,6 +49,23 @@
     revert for, or that does not parse, fails the run, exit 1 and nothing run, as a step that read
     nothing.
 
+    THE CONDITION REVERTS (grado-factorio-tools#400). On PR #395 the panel found 14 guards whose
+    reverts passed the self-test after two hand-written lists of 40 and 101; 12 were of three
+    shapes a parser can find. With -Conditions, for each script it names, a path from the copy's
+    root, the run writes, after the default reverts, one revert per operand of an -and or -or
+    chain, that operand dropped with the operator beside it, and one per element of a comma list
+    on the right of -in or -notin, or of a comma list of type literals elsewhere, that element
+    dropped with its comma. A chain is read whole: in
+    `$a -and $b -and $c` each of the three is dropped once, and a chain inside an operand, in
+    parentheses or of the other operator, is a chain of its own. Each Find is the whole lines the
+    chain or list spans, and Lines is their count; each is named
+    `condition <file>:<line> <operator> drops <text>`, or `type list` for the operator, and runs
+    the script's own -SelfTest with no Args. A shape whose Find occurs other than once is named
+    with its line, and no revert written for it. With -Base <ref>, only an operand or element on a
+    line `git -C <copy> diff -U0 <ref>` adds or changes is dropped. As with -Defaults, a script
+    it writes no revert for, -Base or not, or that does not parse, fails the run, exit 1 and
+    nothing run.
+
     File and SelfTest are paths from the copy's root. Args is optional, handed to the self-test
     after -SelfTest. Lines is optional, 1 unless given. Find and Replace are exact text, matched
     with case; a line break in either, LF or CRLF, is read as the file's own.
@@ -85,16 +102,32 @@
     parameter with no param() default, as one the script's body sets when it is not given, which
     it does not name; a function's parameters; which of a scalar's other values matter, as it
     tries one; and a default revert whose self-test needs Args, as -NoGame.
+    Of -Conditions: a regex alternation, as `a|b`; how many times a loop runs; a condition built
+    in more than one statement, as `$x = $a; if ($x -and $b)`, whose $a it does not drop; a list
+    on the right of -in in parentheses or @(), or held in a variable; -cin and -cnotin,
+    which match with case; -contains, -xor, -not and the comparison operators; a type list that
+    holds anything but type literals; a condition revert whose self-test needs Args; and with -Base,
+    a condition the diff deletes, which leaves nothing to drop, or one it changes by a line outside
+    the operand, as the `if (` above it.
 
 .PARAMETER Copy
     The git working tree to revert in.
 
 .PARAMETER List
-    The .psd1 file of reverts. None unless given; -List, -Defaults or both must be.
+    The .psd1 file of reverts. None unless given; -List, -Defaults, -Conditions or more than one
+    must be.
 
 .PARAMETER Defaults
     The scripts, as paths from the copy's root, whose default reverts are written and run after
     the list's. None unless given.
+
+.PARAMETER Conditions
+    The scripts, as paths from the copy's root, whose condition reverts are written and run after
+    the default reverts. None unless given.
+
+.PARAMETER Base
+    A ref of the copy: -Conditions then writes reverts only on the lines `git diff <ref>`
+    changes. Only with -Conditions.
 
 .PARAMETER SelfTest
     Run the cases that hold the runner to what this header says, on a scratch repository, naming
@@ -105,6 +138,9 @@
 
 .EXAMPLE
     pwsh -File scripts/revert-run.ps1 -Copy C:/scratch/copy -Defaults 'scripts/a.ps1,scripts/b.ps1'
+
+.EXAMPLE
+    pwsh -File scripts/revert-run.ps1 -Copy C:/scratch/copy -Conditions scripts/a.ps1 -Base origin/main
 #>
 
 #Requires -Version 7
@@ -113,6 +149,8 @@ param(
     [Parameter(ParameterSetName = 'Run', Mandatory)] [string] $Copy,
     [Parameter(ParameterSetName = 'Run')] [string] $List = '',
     [Parameter(ParameterSetName = 'Run')] [string[]] $Defaults = @(),
+    [Parameter(ParameterSetName = 'Run')] [string[]] $Conditions = @(),
+    [Parameter(ParameterSetName = 'Run')] [string] $Base = '',
     [Parameter(ParameterSetName = 'SelfTest', Mandatory)] [switch] $SelfTest
 )
 
@@ -120,6 +158,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 # A list handed through pwsh -File arrives as one string.
 $Defaults = @($Defaults | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+$Conditions = @($Conditions | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 
 # The default reverts of the script at $Script, a path from $Root: for each parameter whose
 # param() block gives a default, one revert per element of a list default, that element dropped,
@@ -238,6 +277,87 @@ function Get-DefaultRevert {
     @{ Reverts = @($reverts); Unwritten = @($unwritten) }
 }
 
+# The condition reverts of the script at $Script, a path from $Root (#400): one per operand of an
+# -and or -or chain, that operand dropped with its operator, and one per element of a comma list
+# on the right of -in or -notin, or of a comma list of type literals, that element dropped with
+# its comma. Each Find is the whole lines the chain or list spans. With $Since, only an operand or
+# element on a line `git diff $Since` changes. Unwritten names each shape whose Find occurs other
+# than once.
+function Get-ConditionRevert {
+    param([Parameter(Mandatory)] [string] $Root, [Parameter(Mandatory)] [string] $Script, [string] $Since = '')
+    $file = $Script -replace '\\', '/'
+    $path = Join-Path $Root $file
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "-Conditions names $Script, which is not a file in the copy." }
+    $tokens = $null; $errors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref] $tokens, [ref] $errors)
+    if ($errors) { throw "$Script does not parse, so its conditions cannot be read: $($errors[0].Message)" }
+    $text = $ast.Extent.Text
+    $origin = $ast.Extent.StartOffset
+    $changed = $null
+    if ($Since) {
+        $hunks = @(git -C $Root diff -U0 $Since -- $file 2>$null)
+        if ($LASTEXITCODE) { throw "-Base $Since is not a ref git can diff in the copy." }
+        $changed = [System.Collections.Generic.HashSet[int]]::new()
+        foreach ($h in $hunks) {
+            if ($h -match '^@@ -\S+ \+(\d+)(?:,(\d+))? @@') {
+                $count = if ($Matches[2]) { [int] $Matches[2] } else { 1 }
+                for ($l = [int] $Matches[1]; $l -lt [int] $Matches[1] + $count; $l++) { [void] $changed.Add($l) }
+            }
+        }
+    }
+    # Each shape: the node whose lines are the Find, the operator named, and the parts to drop.
+    $shapes = [System.Collections.Generic.List[hashtable]]::new()
+    $inLists = [System.Collections.Generic.HashSet[object]]::new()
+    $isLink = { param($n, $op) $n -is [System.Management.Automation.Language.BinaryExpressionAst] -and $n.Operator -eq $op }
+    foreach ($b in @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.BinaryExpressionAst] }, $true))) {
+        $op = $b.Operator
+        if ($op -eq 'And' -or $op -eq 'Or') {
+            # A link inside a longer chain of the same operator is read with that chain.
+            if (& $isLink $b.Parent $op) { continue }
+            $parts = [System.Collections.Generic.List[object]]::new()
+            $walk = { param($n) if (& $isLink $n $op) { & $walk $n.Left; & $walk $n.Right } else { $parts.Add($n) } }
+            & $walk $b
+            $shapes.Add(@{ Node = $b; Op = $b.ErrorPosition.Text; Parts = @($parts) })
+        }
+        elseif (($op -eq 'Iin' -or $op -eq 'Inotin') -and $b.Right -is [System.Management.Automation.Language.ArrayLiteralAst]) {
+            [void] $inLists.Add($b.Right)
+            $shapes.Add(@{ Node = $b.Right; Op = $b.ErrorPosition.Text; Parts = @($b.Right.Elements) })
+        }
+    }
+    foreach ($l in @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.ArrayLiteralAst] }, $true))) {
+        if ($inLists.Contains($l) -or @($l.Elements | Where-Object { $_ -isnot [System.Management.Automation.Language.TypeExpressionAst] })) { continue }
+        $shapes.Add(@{ Node = $l; Op = 'type list'; Parts = @($l.Elements) })
+    }
+    $reverts = [System.Collections.Generic.List[hashtable]]::new()
+    $unwritten = [System.Collections.Generic.List[string]]::new()
+    foreach ($s in @($shapes | Sort-Object { $_.Node.Extent.StartOffset })) {
+        $parts = $s.Parts
+        $drops = @(for ($i = 0; $i -lt $parts.Count; $i++) {
+                $lines = $parts[$i].Extent.StartLineNumber..$parts[$i].Extent.EndLineNumber
+                if ($null -eq $changed -or @($lines | Where-Object { $changed.Contains($_) })) { $i }
+            })
+        if (-not $drops) { continue }
+        # The whole lines the shape spans, so that the Find is more likely to occur once.
+        $start = $s.Node.Extent.StartOffset - $origin; $end = $s.Node.Extent.EndOffset - $origin
+        $from = $start - [regex]::Match($text.Substring(0, $start), '[^\r\n]*$').Length
+        $to = $end + [regex]::Match($text.Substring($end), '^[^\r\n]*').Length
+        $find = $text.Substring($from, $to - $from)
+        $line = $s.Node.Extent.StartLineNumber
+        $count = Get-OccurrenceCount -Text $text -Find $find
+        if ($count -ne 1) { $unwritten.Add("line $line, a $($s.Op) whose Find occurs $count times"); continue }
+        foreach ($i in $drops) {
+            # The first part goes with the operator or comma after it; any other, with the one
+            # before.
+            $cut = if ($i -eq 0) { @($parts[0].Extent.StartOffset, $parts[1].Extent.StartOffset) } else { @($parts[$i - 1].Extent.EndOffset, $parts[$i].Extent.EndOffset) }
+            $a = $cut[0] - $origin - $from; $z = $cut[1] - $origin - $from
+            $shown = $parts[$i].Extent.Text -replace '\s+', ' '
+            $reverts.Add(@{ Name = "condition ${file}:$($parts[$i].Extent.StartLineNumber) $($s.Op) drops $shown"; File = $file; Find = $find
+                    Replace = $find.Substring(0, $a) + $find.Substring($z); SelfTest = $file; Lines = @($find -split '\r?\n').Count })
+        }
+    }
+    @{ Reverts = @($reverts); Unwritten = @($unwritten) }
+}
+
 # What is uncommitted or untracked in the copy, one path to a line, or nothing.
 function Get-DirtyPath {
     param([Parameter(Mandatory)] [string] $Root)
@@ -325,8 +445,9 @@ function Format-RevertTable {
 # The run over $ListPath in $Root: the rows, printed as they go and as a table; throws where it
 # cannot run.
 function Invoke-RevertRun {
-    param([Parameter(Mandatory)] [string] $Root, [string] $ListPath = '', [string[]] $Defaults = @())
-    if (-not $ListPath -and -not $Defaults) { throw 'give -List, -Defaults or both, so there is a revert to run.' }
+    param([Parameter(Mandatory)] [string] $Root, [string] $ListPath = '', [string[]] $Defaults = @(), [string[]] $Conditions = @(), [string] $Since = '')
+    if (-not $ListPath -and -not $Defaults -and -not $Conditions) { throw 'give -List, -Defaults, -Conditions or more than one, so there is a revert to run.' }
+    if ($Since -and -not $Conditions) { throw '-Base limits -Conditions, which is not given.' }
     $dirty = @(Get-DirtyPath -Root $Root)
     if ($dirty) { throw "the copy $Root has uncommitted changes, so no revert was run: $($dirty -join ', ')" }
     $all = [System.Collections.Generic.List[object]]::new()
@@ -347,7 +468,15 @@ function Invoke-RevertRun {
         if (-not $written.Reverts) { throw "-Defaults names $script, for which no default revert could be written, so no revert was run." }
         foreach ($r in $written.Reverts) { $all.Add($r) }
     }
-    $rows = [System.Collections.Generic.List[object]]::new()
+    foreach ($script in $Conditions) {
+        $written = Get-ConditionRevert -Root $Root -Script $script -Since $Since
+        Write-Host "revert-run: $($written.Reverts.Count) condition revert(s) written for $script$(if ($Since) { ", on lines changed since $Since" })."
+        foreach ($u in $written.Unwritten) { Write-Host "revert-run: $script, not written: $u." }
+        # As for -Defaults, a script named that yields no revert read nothing.
+        if (-not $written.Reverts) { throw "-Conditions names $script, for which no condition revert could be written, so no revert was run." }
+        foreach ($r in $written.Reverts) { $all.Add($r) }
+    }
+    $rows =[System.Collections.Generic.List[object]]::new()
     try {
         foreach ($r in $all) {
             $row = Invoke-Revert -Root $Root -Revert $r # strict-lists: one
@@ -419,7 +548,27 @@ function Invoke-SelfTest {
     # One whose param() block gives no default, and one that does not parse.
     [IO.File]::WriteAllText((Join-Path $repo 'nodefault.ps1'), "param([switch] `$SelfTest, [string] `$Name)`n")
     [IO.File]::WriteAllText((Join-Path $repo 'broken.ps1'), "param([string] `$Name = 'x'`n")
-    & $git add stub.ps1 bin.dat .gitignore defaults.ps1 nodefault.ps1 broken.ps1
+    # A script with a condition of each shape -Conditions reads, two of them on twin lines whose
+    # Find occurs twice: it passes unless 'b' leaves -in, [int] a type list, or the -or loses
+    # its first operand.
+    $conditions = @(
+        'param([switch] $SelfTest)'
+        "`$x = 'b'"
+        '$k = [int]'
+        "`$ok = `$x -ne 'a' -and `$x -ne 'z'"
+        "`$hit = `$x -in 'a', 'b'"
+        "`$no = `$x -notin 'q', 'r'"
+        '$types = [string], [int]'
+        "`$or = `$x -eq 'b' -or `$x -eq 'y' -or `$x -eq 'w'"
+        '$typed = $k -in [string], [int]'
+        "`$d = `$x -eq 'd' -or `$x -eq 'b'"
+        "`$d = `$x -eq 'd' -or `$x -eq 'b'"
+        "if (@(`$ok, `$hit, `$no, `$or, `$typed, (`$types -contains `$k)) -notcontains `$false) { Write-Host 'OK - self-test passed: all 1 cases.'; exit 0 }"
+        "Write-Host 'FAILED - self-test: 1 of 1 case(s) did not hold.'"
+        'exit 1'
+    ) -join "`n"
+    [IO.File]::WriteAllText((Join-Path $repo 'conditions.ps1'), "$conditions`n")
+    & $git add stub.ps1 bin.dat .gitignore defaults.ps1 nodefault.ps1 broken.ps1 conditions.ps1
     & $git commit --quiet -m stub
     $list = { param([string] $name, [string] $text) $p = Join-Path $temp "$name.psd1"; Set-Content -LiteralPath $p -Value $text; $p }
     $one = { param([string] $Find, [string] $Replace, [string] $More = '') "@{ Name = 'R'; File = 'stub.ps1'; Find = '$Find'; Replace = '$Replace'; SelfTest = 'stub.ps1'$More }" }
@@ -480,10 +629,60 @@ function Invoke-SelfTest {
                 $none -match '-Defaults names nodefault\.ps1, for which no default revert could be written, so no revert was run' -and
                 $none -notmatch '(?m)^revert-run: default ' -and
                 $brokenCode -eq 1 -and $broken -match 'broken\.ps1 does not parse, so its defaults cannot be read' -and (& $same) } }
-        @{ Name = 'with neither -List nor -Defaults, and with -Defaults naming no file of the copy, the run fails, exit 1, and runs nothing'; Test = {
+        @{ Name = '-Conditions writes one revert per operand of an -and or -or chain and per element of an -in, -notin or type list, names a shape whose Find is not unique, and runs them as a list''s (#400)'; Test = {
+            $written = Get-ConditionRevert -Root $repo -Script 'conditions.ps1'
+            $said = @($written.Reverts | ForEach-Object { "$($_.Name) => $($_.Replace)" })
+            $c = 'condition conditions.ps1'
+            $want = @(
+                "${c}:4 -and drops `$x -ne 'a' => `$ok = `$x -ne 'z'", "${c}:4 -and drops `$x -ne 'z' => `$ok = `$x -ne 'a'",
+                "${c}:5 -in drops 'a' => `$hit = `$x -in 'b'", "${c}:5 -in drops 'b' => `$hit = `$x -in 'a'",
+                "${c}:6 -notin drops 'q' => `$no = `$x -notin 'r'", "${c}:6 -notin drops 'r' => `$no = `$x -notin 'q'",
+                "${c}:7 type list drops [string] => `$types = [int]", "${c}:7 type list drops [int] => `$types = [string]",
+                "${c}:8 -or drops `$x -eq 'b' => `$or = `$x -eq 'y' -or `$x -eq 'w'",
+                "${c}:8 -or drops `$x -eq 'y' => `$or = `$x -eq 'b' -or `$x -eq 'w'",
+                "${c}:8 -or drops `$x -eq 'w' => `$or = `$x -eq 'b' -or `$x -eq 'y'",
+                "${c}:9 -in drops [string] => `$typed = `$k -in [int]", "${c}:9 -in drops [int] => `$typed = `$k -in [string]")
+            $unwritten = @('line 10, a -or whose Find occurs 2 times', 'line 11, a -or whose Find occurs 2 times')
+            $failing = @("${c}:5 -in drops 'b'", "${c}:7 type list drops [int]", "${c}:8 -or drops `$x -eq 'b'", "${c}:9 -in drops [int]")
+            $got = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'conditions.ps1' 2>&1 | Out-String
+            $code = $LASTEXITCODE
+            Write-Host ($got.TrimEnd() -replace '(?m)^', '    ')
+            $rows = @([regex]::Matches($got, '(?m)^\| (condition [^|]+) \| (\w+) \|') | ForEach-Object { "$($_.Groups[1].Value.Trim()): $($_.Groups[2].Value)" })
+            $printed = @([regex]::Matches($got, '(?m)^revert-run: conditions\.ps1, not written: (.+)\.\r?$') | ForEach-Object { $_.Groups[1].Value })
+            ($said -join '|') -ceq ($want -join '|') -and ($written.Unwritten -join '|') -ceq ($unwritten -join '|') -and
+                ($printed -join '|') -ceq ($unwritten -join '|') -and $code -eq 0 -and
+                @($written.Reverts | Where-Object { $_.File -ne 'conditions.ps1' -or $_.SelfTest -ne 'conditions.ps1' -or $_.Lines -ne 1 }).Count -eq 0 -and
+                $got -match '(?m)^revert-run: 13 condition revert\(s\) written for conditions\.ps1\.' -and
+                ($rows -join '|') -ceq ((@($want | ForEach-Object { $_ -replace ' => .*$' }) | ForEach-Object {
+                            "$($_): $(if ($_ -in $failing) { 'fails' } else { 'passes' })" }) -join '|') -and (& $same) } }
+        @{ Name = '-Conditions fails, exit 1 and nothing run, a script that yields no revert, does not parse or is not in the copy (#400)'; Test = {
+            $none = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'nodefault.ps1' 2>&1 | Out-String; $noneCode = $LASTEXITCODE
+            $broken = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'conditions.ps1,broken.ps1' 2>&1 | Out-String; $brokenCode = $LASTEXITCODE
+            $missing = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'no-such.ps1' 2>&1 | Out-String; $missingCode = $LASTEXITCODE
+            Write-Host (($none + $broken + $missing).TrimEnd() -replace '(?m)^', '    ')
+            $noneCode -eq 1 -and $none -match '-Conditions names nodefault\.ps1, for which no condition revert could be written, so no revert was run' -and
+                $brokenCode -eq 1 -and $broken -match 'broken\.ps1 does not parse, so its conditions cannot be read' -and
+                $broken -match '(?m)^revert-run: 13 condition revert\(s\) written for conditions\.ps1\.' -and $broken -notmatch '(?m)^revert-run: condition ' -and
+                $missingCode -eq 1 -and $missing -match '-Conditions names no-such\.ps1, which is not a file in the copy' -and (& $same) } }
+        @{ Name = '-Base writes condition reverts only on the lines git diff <ref> changes, a hunk of one line or more, and fails with no -Conditions or a ref git cannot diff (#400)'; Test = {
+            # Lines 5 and 6 changed in one hunk, and line 9 in a hunk of its own.
+            $lines = [IO.File]::ReadAllText((Join-Path $repo 'conditions.ps1')) -split "`n"
+            $lines[4] = "`$hit = `$x -in 'a', 'b', 'c'"; $lines[5] = "`$no = `$x -notin 'q', 'r', 's'"; $lines[8] = '$typed = $k -in [string], [int], [char]'
+            [IO.File]::WriteAllText((Join-Path $repo 'conditions.ps1'), ($lines -join "`n"))
+            & $git commit --quiet -am 'base'
+            $written = Get-ConditionRevert -Root $repo -Script 'conditions.ps1' -Since 'HEAD~1'
+            $said = @($written.Reverts | ForEach-Object { $_.Name -replace '^condition conditions\.ps1:' })
+            $alone = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -List (& $list 'base' "@{ Reverts = @( $(& $one "`$b = ''beta''" "`$b = ''other''") ) }") -Base 'HEAD~1' 2>&1 | Out-String
+            $aloneCode = $LASTEXITCODE
+            $badRef = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'conditions.ps1' -Base 'no-such-ref' 2>&1 | Out-String; $badRefCode = $LASTEXITCODE
+            Write-Host (($alone + $badRef).TrimEnd() -replace '(?m)^', '    ')
+            ($said -join '|') -ceq "5 -in drops 'a'|5 -in drops 'b'|5 -in drops 'c'|6 -notin drops 'q'|6 -notin drops 'r'|6 -notin drops 's'|9 -in drops [string]|9 -in drops [int]|9 -in drops [char]" -and
+                -not $written.Unwritten -and $aloneCode -eq 1 -and $alone -match '-Base limits -Conditions, which is not given' -and
+                $badRefCode -eq 1 -and $badRef -match '-Base no-such-ref is not a ref git can diff in the copy' -and (& $same) } }
+        @{ Name = 'with neither -List, -Defaults nor -Conditions, and with -Defaults naming no file of the copy, the run fails, exit 1, and runs nothing'; Test = {
             $neither = & pwsh -NoProfile -File $PSCommandPath -Copy $repo 2>&1 | Out-String; $neitherCode = $LASTEXITCODE
             $missing = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Defaults 'no-such.ps1' 2>&1 | Out-String; $missingCode = $LASTEXITCODE
-            $neitherCode -eq 1 -and $neither -match 'give -List, -Defaults or both' -and
+            $neitherCode -eq 1 -and $neither -match 'give -List, -Defaults, -Conditions or more than one' -and
                 $missingCode -eq 1 -and $missing -match '-Defaults names no-such\.ps1, which is not a file in the copy' -and (& $same) } }
         @{ Name = 'Find occurring 0 times, twice, or only ignoring case is refused with the count, and so is an edit that changes no line; the file is unchanged'; Test = {
             $p = & $list 'count' "@{ Reverts = @( $(& $one 'zzz' 'y'), $(& $one "''alpha''" "''other''"), $(& $one "`$A = ''ALPHA''" 'y'), $(& $one "`$b = ''beta''" "`$b = ''beta''") ) }"
@@ -586,7 +785,7 @@ function Invoke-SelfTest {
 
 if ($SelfTest) { Invoke-SelfTest }
 
-try { $rows = @(Invoke-RevertRun -Root (Resolve-Path -LiteralPath $Copy).Path -ListPath $List -Defaults $Defaults) }
+try { $rows = @(Invoke-RevertRun -Root (Resolve-Path -LiteralPath $Copy).Path -ListPath $List -Defaults $Defaults -Conditions $Conditions -Since $Base) }
 catch { Write-Host "FAILED - revert-run: $($_.Exception.Message)"; exit 1 }
 $counts = ($rows | ForEach-Object { $_.Result } | Group-Object | Sort-Object Name | ForEach-Object { "$($_.Count) $($_.Name)" }) -join ', '
 Write-Host "OK - revert-run: $($rows.Count) revert(s) run or refused: $counts."
