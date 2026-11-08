@@ -88,3 +88,11 @@ Get-Inner
 
 # An assignment inside the read.
 ($inline = Get-None).Count                          # known miss
+
+# A scope prefix names the same variable as the plain name.
+$local:prefixed = Get-None
+$prefixed.Count                                     # expect: flag
+
+# A typed variable in a list of targets is still set: past the first, it can be $null.
+$firstOf, [object] $secondOf = Get-Item .
+$secondOf.Count                                     # expect: flag

@@ -129,3 +129,8 @@ function Test-Trap {
     $trapped.Count                                  # expect: flag
 }
 Test-Trap
+
+# A script block may not run, as ForEach-Object's does not when nothing is piped in.
+$blocked = Get-None
+Get-None | ForEach-Object { $blocked = @() }
+$blocked.Count                                      # expect: flag

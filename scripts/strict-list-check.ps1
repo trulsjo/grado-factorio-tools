@@ -55,13 +55,12 @@
     it flags each line exactly that often. Then it runs each strict-mode fixture and requires,
     read by read, that every read runs and that exactly the flagged ones throw, so a fixture
     cannot pin a wrong belief about strict mode; a line marked "known false hit" or "known miss"
-    excuses the one disagreement it names. A run with -Path skips that folder. Then it runs
-    itself in a pwsh of its own over scratch folders: one holding no strict-mode script, one
-    holding none beside one that does, the fixture folder alone, and a script that does not
-    parse, each of which must fail, naming why. Last, it runs scratch fixtures each untrue one
-    way, and requires each to be named for it: a read that never ran, an error written, an early
-    end, a known tag that excuses nothing or is on a line with no read, a read inside a read, and
-    an error other than strict mode's (#376).
+    excuses the one disagreement it names, and only of that kind. A run with -Path skips that
+    folder. Then it runs itself in a pwsh of its own, as a gate does, over paths that must each
+    fail, naming why: a folder whose one script sets no strict mode, a folder with no script
+    beside one with a script, the fixture folder alone, and a script that does not parse. Last,
+    it runs scratch fixtures, each untrue in one way, and requires each to be named for that way
+    (#376).
 
     What it cannot see: a command result passed in as a parameter, a variable assigned in one
     function and read in another, a copy made inside a loop of a variable assigned later in that
@@ -542,6 +541,7 @@ if ($SelfTest) {
     foreach ($d in $lax, $strict, $empty, $broken, $bad) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
     Set-Content -LiteralPath (Join-Path $lax 'lax.ps1') -Value "'no strict mode here'"
     Set-Content -LiteralPath (Join-Path $strict 'strict.ps1') -Value 'Set-StrictMode -Version Latest'
+    Set-Content -LiteralPath (Join-Path $empty 'notes.md') -Value 'no script here'
     Set-Content -LiteralPath (Join-Path $broken 'broken.ps1') -Value 'Set-StrictMode -Version Latest', 'function {'
     $run = { param([string] $Paths) $said = & pwsh -NoProfile -File $PSCommandPath $Paths 2>&1 | Out-String; @{ Code = $LASTEXITCODE; Text = $said } }
     # Scratch fixtures, each untrue one way, and the line Get-FixtureUntruth must name for it.
@@ -553,6 +553,11 @@ if ($SelfTest) {
         'comment.ps1' = @(@('# known false hit', '@(1).Count'), 'comment.ps1:2: says known false hit on a line with no reads')
         'nested.ps1'  = @(@('(Get-Item .).Name.Name'), 'nested.ps1: stopped when run: nested.ps1:2: a read inside another read')
         'other.ps1'   = @(@("(Get-Item -LiteralPath 'no-such-path-strict-list-check').Name"), 'other.ps1: stopped when run: ')
+        # A tag excuses only its own kind: each of these is named twice, the second for the tag.
+        'hit.ps1'     = @(@('(Get-Item .).Name  # known miss'),
+            @('hit.ps1:2: .Name is flagged, but strict mode let it through', 'hit.ps1:2: says known miss, but none'))
+        'miss.ps1'    = @(@("'text'.Count  # known false hit"),
+            @('miss.ps1:2: .Count threw under strict mode, but is not flagged', 'miss.ps1:2: says known false hit, but none'))
     }
     foreach ($k in $badFixtures.Keys) { Set-Content -LiteralPath (Join-Path $bad $k) -Value (@('Set-StrictMode -Version Latest') + $badFixtures[$k][0]) }
     try {
@@ -571,7 +576,7 @@ if ($SelfTest) {
     if (-not $noneOk) { "$($alone.Text)$($none.Text)".TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" } }
     $besideOk = $alone.Code -eq 0 -and $beside.Code -eq 1 -and
         $beside.Text -match "(?m)^FAILED - strict-list-check: $([regex]::Escape($empty)) holds no script" -and
-        $beside.Text -notmatch [regex]::Escape("$strict ")
+        $beside.Text -notmatch "(?m)^FAILED - strict-list-check: $([regex]::Escape($strict)) holds"
     Write-Host "self-test 5/7: a -Path that holds no script, beside one that does, fails, naming it -- $(if ($besideOk) { 'ok' } else { 'FAILED' })"
     if (-not $besideOk) { $beside.Text.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" } }
     # A run given the fixture folder alone skips it; a script that does not parse is named (#376).
@@ -581,9 +586,10 @@ if ($SelfTest) {
     if (-not $skipOk) { "$($fixtureOnly.Text)$($unparsed.Text)".TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" } }
     # Each scratch fixture is named for its own fault, so a guard of the runner that stopped
     # holding would let a fixture prove nothing (#376).
-    $missed = @($badFixtures.Keys | Where-Object { $w = $badFixtures[$_][1]; -not @($badSaid | Where-Object { $_.StartsWith($w) }).Count })
-    $runnerOk = -not $missed.Count -and $badSaid.Count -eq $badFixtures.Count
-    Write-Host "self-test 7/7: the fixture run names a read that never ran, an error, an early end, a stale or stray tag, a read in a read and another error -- $(if ($runnerOk) { 'ok' } else { 'FAILED' })"
+    $wantSaid = @($badFixtures.Keys | ForEach-Object { $badFixtures[$_][1] })
+    $missed = @($wantSaid | Where-Object { $w = $_; -not @($badSaid | Where-Object { $_.StartsWith($w) }).Count })
+    $runnerOk = -not $missed.Count -and $badSaid.Count -eq $wantSaid.Count
+    Write-Host "self-test 7/7: the fixture run names a read that never ran, an error, an early end, a stale or stray tag, a tag of the other kind, a read in a read and another error -- $(if ($runnerOk) { 'ok' } else { 'FAILED' })"
     if (-not $runnerOk) { $missed | ForEach-Object { Write-Host "    not named: $_" }; $badSaid | ForEach-Object { Write-Host "    said: $_" } }
     Write-Host ''
     $failures = @(@(-not $want.Count -or $wrong.Count) + @(-not $canaryOk) + @([bool] $untrue.Count) + @(-not $noneOk) + @(-not $besideOk) +
