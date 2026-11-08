@@ -32,7 +32,8 @@
     - a body given inline, `--body`, `--body=`, `-b`, attached or not;
     - a `gh pr create` with no `--body-file` or `-F`, whatever else it uses: `--fill`,
       `--editor`, `--web`, `--template`, or nothing;
-    - a body file given no path, `-` (standard input), or a path holding `$`, `%`, a backtick or
+    - a body file given no path, `--body-file=` with nothing after it among them, `-` (standard
+      input), or a path holding `$`, `%`, a backtick or
       a leading `~`, which the shell expands and this cannot;
     - a path, taken against `cwd` where it is relative, that names no file;
     - a body file pr-body-check.ps1 fails, with that check's report.
@@ -142,7 +143,8 @@ function Get-PrBodyRefusal {
                 $w = $words[$j]
                 if ($w -cmatch '^(?:--body(?:=.*)?|-b.*)$') { $inline = $true }
                 elseif ($w -cin '--body-file', '-F') { $files.Add($(if ($j + 1 -lt $words.Count) { $words[++$j] })) }
-                elseif ($w -cmatch '^(?:--body-file=|-F)(.+)$') { $files.Add($Matches[1]) }
+                # An attached value may be empty, as `--body-file=`: a body file with no path.
+                elseif ($w -cmatch '^(?:--body-file=|-F)(.*)$') { $files.Add($Matches[1]) }
                 elseif ($w -cin '--help', '-h') { $help = $true }
             }
             if ($help) { continue }
@@ -209,6 +211,7 @@ if ($SelfTest) {
         @('gh pr create --body-file ~/x.md', @(), 'in full'),
         @('gh pr create --body-file -', @(), 'standard input'),
         @('gh pr create --body-file', @(), 'no path'),
+        @('gh pr edit 5 --body-file=', @(), 'no path'),
         @("gh pr create --body-file `"$tmp/missing.md`"", @(), 'not there'),
         @("gh pr create --title t --body-file `"$bad`"", @(), 'fails pr-body-check'),
         @("gh pr edit 5 -F `"$bad`"", @(), 'fails pr-body-check'),
@@ -230,6 +233,9 @@ if ($SelfTest) {
         @("gh pr comment 5 -F `"$note`"", $visual, $null),
         @("gh issue comment 5 -F`"$linked`"", $visual, 'fails markdown-check\.ps1 -Body'),
         @("gh issue comment 5 --body-file=`"$note`"", $visual, $null),
+        @("gh issue comment 5 --body-file=`"$linked`"", $visual, 'fails markdown-check\.ps1 -Body'),
+        @('gh issue create --title t --body-file=', @(), 'no path'),
+        @('gh pr comment 5 --body-file=', @(), 'no path'),
         @('gh issue comment 5 --body "inline, not seen"', @(), $null),
         @('gh issue create --title t -b text', @(), $null),
         @('gh issue create --title t --body-file $S/x.md', @(), 'in full'),
@@ -239,6 +245,8 @@ if ($SelfTest) {
         @('gh issue create --title t', @(), $null),
         @("gh issue view 5; gh issue close 5 --comment x", @(), $null),
         @('gh pr view 5 --json body', @(), $null),
+        # Bodies given to subcommands outside the five, which a check would refuse (ruling 2, #386).
+        @("gh issue edit 5 --body x; gh pr review 5 -F `"$bad`"", @(), $null),
         @('git status', @(), $null),
         @('', @(), $null)
     )
@@ -271,14 +279,18 @@ if ($SelfTest) {
     $sh = (Get-Command sh -ErrorAction SilentlyContinue)?.Source ?? (Join-Path (git --exec-path) "../../../usr/bin/sh.exe")
     $env:PATH = "$(Split-Path $sh)$([IO.Path]::PathSeparator)$env:PATH"
     $through = {
-        param($command)
-        $text = (@{ tool_input = @{ command = $command }; cwd = $root } | ConvertTo-Json -Compress) | & $sh -c $wired 2>&1 | Out-String
+        param($command, $cwd = $root)
+        $text = (@{ tool_input = @{ command = $command }; cwd = $cwd } | ConvertTo-Json -Compress) | & $sh -c $wired 2>&1 | Out-String
         @{ Code = $LASTEXITCODE; Text = $text }
     }
     if (-not $wired) { $ok = $false; Write-Host "    $Settings wires no command that names this script" }
     else {
         $refused = & $through 'gh pr create --body text'
-        $issue = & $through "gh issue create --title t --body-file `"$linked`""
+        # Run from the temporary folder, with cwd '.' and the file by its name, so the input holds
+        # no path, and no clone's or user's path can match the wiring's pattern for gh pr instead.
+        Push-Location -LiteralPath $tmp
+        try { $issue = & $through 'gh issue create --title t --body-file linked.md' '.' }
+        finally { Pop-Location }
         $edit = & $through 'gh pr edit 1 --title t'
         $other = & $through 'git status'
         $ok = $refused.Code -eq 2 -and $refused.Text -match 'Refused' -and $refused.Text -match '--body-file' -and
