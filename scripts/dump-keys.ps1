@@ -148,7 +148,7 @@ function Write-Keys {
     $keyed = @($inputs | Where-Object { -not $_['linked_game_control'] -and ($_['key_sequence'] -or $_['alternative_key_sequence']) })
     $bare = @($inputs | Where-Object { -not $_['linked_game_control'] -and -not ($_['key_sequence'] -or $_['alternative_key_sequence']) })
     $shown = { param($i) (@($i['key_sequence'], $i['alternative_key_sequence']) | Where-Object { $_ } | ForEach-Object { "``$_``" }) -join ' or ' }
-    "The dump has $($all.Count) custom inputs$(if ($Below) { ", $($inputs.Count) of them not in $(Get-DumpLabel $Below)" }): $($keyed.Count) with a default key, $($linked.Count) linked to a control, and $($bare.Count) with neither."
+    "The dump has $($all.Keys.Count) custom inputs$(if ($Below) { ", $($inputs.Count) of them not in $(Get-DumpLabel $Below)" }): $($keyed.Count) with a default key, $($linked.Count) linked to a control, and $($bare.Count) with neither."
     ''
 
     $sharing = @(); $alone = @()
@@ -210,7 +210,7 @@ moved=X
             'the counts add up'                                                          = $out -match '\*\*3 of the 4 inputs with a default key' -and $out -match 'The other 1 share with no engine control: `free`'
             'a linked input gets its control''s default, or is told it has none'         = $out -match '\| `link` \| `rotate` \| `R` \|' -and $out -match '\| `lost` \| `gone` \| not among the engine controls \|'
             'an input with neither is named'                                             = $out -match '1 have no key and no link: `bare`\.'
-            'two inputs whose names differ only in case are both read'                   = (& { $p = Join-Path $temp 'case.json'; Set-Content -LiteralPath $p -Value '{"custom-input":{"Ab":{},"ab":{}}}'; $d = Open-Dump $p; try { (Get-DumpTable $d 'custom-input').Count -eq 2 } finally { $d.Dispose() } })
+            'two inputs whose names differ only in case are both read'                   = (& { $p = Join-Path $temp 'case.json'; Set-Content -LiteralPath $p -Value '{"custom-input":{"Ab":{},"ab":{}}}'; $d = Open-Dump $p; try { (Get-DumpTable $d 'custom-input').Keys.Count -eq 2 } finally { $d.Dispose() } })
             'the member is the mod whose Lua quotes the name'                        = $out -match '\| `alpha` \| `same` \|' -and $out -match '\| not found \| `pad` \|'
         }
         $failures = 0; $n = 0

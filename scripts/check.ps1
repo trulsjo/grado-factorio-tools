@@ -1,8 +1,9 @@
 <#
 .SYNOPSIS
     Parses every script under scripts/, holds their comment lines to a width, reads their list
-    parameters with param-check.ps1, their variables' spelling with variable-case-check.ps1 and
-    their help with help-check.ps1, holds README.md to naming each of their parameters, runs every
+    parameters with param-check.ps1, their variables' spelling with variable-case-check.ps1,
+    their help with help-check.ps1 and their strict-mode reads with strict-list-check.ps1, holds
+    README.md to naming each of their parameters, runs every
     self-test that needs neither the game nor the network, holds the agent pages to their size
     limits, and runs markdown-check.ps1 over the tracked Markdown. Exit 0 means all of that held, on
     a tree that did not change while it was read, or one git could write no tree of, which it says.
@@ -25,10 +26,12 @@
     same scripts, for a list parameter that `pwsh -File` would hand over as one string
     (grado-factorio-tools#163), and variable-case-check.ps1, for one scope spelling a variable
     two ways that differ only in case (grado-factorio-tools#285), and help-check.ps1, for a help
-    block PowerShell does not read (grado-factorio-tools#342). Then -SelfTest of each script
-    in $SELF_TESTS, each in a pwsh of its own, so one script's `exit` does not end the run, and
-    -SelfTest -NoGame of each in $NO_GAME_CASES: the cases of a script that needs the game which
-    read no game's output but a log written for them (grado-factorio-tools#175). They run four at
+    block PowerShell does not read (grado-factorio-tools#342), and strict-list-check.ps1, for a
+    read of .Count, .Id or .Name that strict mode can throw on (grado-factorio-tools#373). Then
+    -SelfTest of each script in $SELF_TESTS, each in a pwsh of its own, so one script's `exit`
+    does not end the run, and -SelfTest -NoGame of each in $NO_GAME_CASES: the cases of a script
+    that needs the game which read no game's output but a log written for them
+    (grado-factorio-tools#175). They run four at
     a time, or as many as the machine has processors where that is fewer, and at least two
     (grado-factorio-tools#296): twelve at a time ended no sooner and took the self-tests twice as
     long in all. They are printed in list order once all have finished, each with its own time.
@@ -142,10 +145,11 @@
     self-tests, and the one that holds Get-ReadmeProblem over a fixture script and README there;
     and nothing else. The run's own call of each loop and of Get-ReadmeProblem, with this folder,
     this README and this script's lists, is not run, nor its run of param-check.ps1,
-    variable-case-check.ps1 and help-check.ps1 over this folder: a run that stopped making a
-    call, or passed it a list less, would still pass. Nor is its -SkipIfPassed branch, its call
-    of Complete-Run, or its exit with the code that returns: the cases hold the record and the
-    code, not that the run skips on the one or exits with the other. Needs git, and no game.
+    variable-case-check.ps1, help-check.ps1 and strict-list-check.ps1 over this folder: a run
+    that stopped making a call, or passed it a list less, would still pass. Nor is its
+    -SkipIfPassed branch, its call of Complete-Run, or its exit with the code that returns: the
+    cases hold the record and the code, not that the run skips on the one or exits with the
+    other. Needs git, and no game.
 
 .EXAMPLE
     pwsh -File scripts/check.ps1
@@ -598,6 +602,16 @@ Write-Host "check: help-check.ps1 scripts -- $($bad ? 'FAILED' : 'ok') $(& $took
 if ($bad) {
     $said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
     $failed.Add('help-check.ps1 found help PowerShell does not read, or a script that does not parse')
+}
+
+$clock.Restart()
+Push-Location $root
+try { $said = & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'strict-list-check.ps1') scripts 2>&1 | Out-String } finally { Pop-Location }
+$bad = $LASTEXITCODE -or $said -notmatch '(?m)^OK - strict-list-check: '
+Write-Host "check: strict-list-check.ps1 scripts -- $($bad ? 'FAILED' : 'ok') $(& $took)"
+if ($bad) {
+    $said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
+    $failed.Add('strict-list-check.ps1 found a read strict mode can throw on')
 }
 
 $clock.Restart()

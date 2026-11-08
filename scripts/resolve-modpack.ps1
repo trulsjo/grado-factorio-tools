@@ -194,7 +194,7 @@ function Select-Release {
         if ($r.info_json.factorio_version -ne $Line) { continue }
         $ok = $true
         foreach ($d in @($r.info_json.PSObject.Properties['dependencies']?.Value | Where-Object { $_ })) {
-            $dep = ConvertFrom-Dependency $d
+            $dep = ConvertFrom-Dependency $d # strict-lists: one
             if ($dep.Name -ceq 'base' -and $dep.Kind -in 'required', 'unordered', 'recommended' -and -not (Test-Constraint $Build $dep.Op $dep.Version)) { $ok = $false }
         }
         if ($ok) { $r }
@@ -263,7 +263,7 @@ function Resolve-Packs {
                 $closure[$name] = @{ Version = $p.Release.version; Dependencies = @($p.Release.info_json.PSObject.Properties['dependencies']?.Value | Where-Object { $_ }); Local = $false }
             }
             foreach ($d in $closure[$name].Dependencies) {
-                $dep = ConvertFrom-Dependency $d
+                $dep = ConvertFrom-Dependency $d # strict-lists: one
                 if ($dep.Kind -notin 'required', 'unordered', 'recommended') { continue }
                 # Mod names compare exactly, so a game mod in another case is taken as not bundled
                 # (measured for game mods; see game-mods.ps1).
@@ -281,7 +281,7 @@ function Resolve-Packs {
         foreach ($name in $closure.Keys) {
             $member = $closure[$name]
             foreach ($d in $member.Dependencies) {
-                $dep = ConvertFrom-Dependency $d
+                $dep = ConvertFrom-Dependency $d # strict-lists: one
                 if ($dep.Name -ceq 'base') {
                     if (-not $member.Local -and $dep.Kind -in 'required', 'unordered', 'recommended' -and $dep.Op -in '>=', '>' -and (-not $floor -or (ConvertTo-Version $dep.Version) -gt (ConvertTo-Version $floor))) {
                         $floor = $dep.Version; $floorBy = "$name $($member.Version)"
@@ -329,7 +329,7 @@ function Read-Packs {
     $packs = [System.Collections.Specialized.OrderedDictionary]::new([StringComparer]::Ordinal)
     $seen = [hashtable]::new([StringComparer]::OrdinalIgnoreCase)
     foreach ($p in $Path) {
-        $info = Read-ModInfo -Text (Get-Content -LiteralPath $p -Raw) -Where $p
+        $info = Read-ModInfo -Text (Get-Content -LiteralPath $p -Raw) -Where $p # strict-lists: one
         $other = $seen[$info.name]
         if ($other -and $other.Name -cne $info.name) {
             throw "$p names its pack '$($info.name)' and $($other.Path) names its pack '$($other.Name)': pack names that differ only in case cannot both be pinned."
@@ -448,7 +448,7 @@ function Invoke-SelfTest {
             $r = & $resolve (& $pack 'P' @('content'))
             (($r[0].Picks.Keys | Sort-Object -CaseSensitive) -join ',') -ceq 'content,lib,mod with spaces' -and -not $r[0].Unresolved } }
         @{ Name = 'a + line, with or without the space, is read as recommended and walked, its mod in the closure; a game mod behind + is left out (#208)'; Test = {
-            $dep = ConvertFrom-Dependency '+FluidWagonColorMask'
+            $dep = ConvertFrom-Dependency '+FluidWagonColorMask' # strict-lists: one
             $r = & $resolve (& $pack 'P' @('recommends'))
             $dep.Kind -eq 'recommended' -and $dep.Name -ceq 'FluidWagonColorMask' -and
                 (($r[0].Picks.Keys | Sort-Object -CaseSensitive) -join ',') -ceq 'mod with spaces,no-deps,recommends' -and -not $r[0].Unresolved } }
@@ -461,7 +461,7 @@ function Invoke-SelfTest {
             $base[0].Unresolved.Count -eq 1 -and $base[0].Unresolved[0] -match "declares 'recommends-base': no release declares factorio_version 2\.0 with a base floor 2\.0\.77 meets" -and
                 $r[0].Violations.Count -eq 1 -and $r[0].Violations[0] -match "recommends-new 1\.0\.0 declares '\+ lib >= 2\.5\.0'.*lib 2\.4\.0" } }
         @{ Name = 'a prefix Factorio does not define is read as part of the name (#208)'; Test = {
-            $dep = ConvertFrom-Dependency '* lib'
+            $dep = ConvertFrom-Dependency '* lib' # strict-lists: one
             $r = & $resolve (& $pack 'P' @('* lib'))
             $dep.Kind -eq 'required' -and $dep.Name -ceq '* lib' -and
                 $r[0].Unresolved.Count -eq 1 -and $r[0].Unresolved[0] -ceq "P 0.1.0 declares '* lib': the portal does not know this name" } }
@@ -592,7 +592,7 @@ $getReleases = {
     }
 }
 
-Write-Host "resolve-modpack: line $Line on build $Build, $($packs.Count) pack(s), from $PortalBaseUrl"
+Write-Host "resolve-modpack: line $Line on build $Build, $($packs.Keys.Count) pack(s), from $PortalBaseUrl"
 $results = @(Resolve-Packs -Packs $packs -GetReleases $getReleases -Line $Line -Build $Build)
 $pass = Write-Report -Results $results
 

@@ -433,7 +433,7 @@ function Invoke-SelfTest {
                 $refused.Text -match '1 named no commit here' -and $refused.Text -match '0 problem' -and
                 $passed.Code -eq 0 -and $passed.Text -match '(?m)^OK - pr-body-check: 1 ' } }
         @{ Name = 'a closing keyword before an issue reference is found with its line: each keyword, in capitals, around a colon, in underscores, before another repository''s issue or an issue''s address, and in a code span'; Test = {
-            $each = 'close', 'closes', 'closed', 'fix', 'fixes', 'fixed', 'resolve', 'resolves', 'resolved' | ForEach-Object { @(Get-ClosingKeyword "It $_ #7.").Count }
+            $each = @('close', 'closes', 'closed', 'fix', 'fixes', 'fixed', 'resolve', 'resolves', 'resolved' | ForEach-Object { @(Get-ClosingKeyword "It $_ #7.").Count })
             $forms = @(Get-ClosingKeyword "Summary`n`nCLOSES #7 and Fixed: #8, with resolves:#9.`r`nIt fixes octo-org/octo-repo#100, and ``closes #10`` too.")
             $more = @(Get-ClosingKeyword "It fixes : #3, and _closes #4_, and resolves https://github.com/octo-org/octo-repo/issues/5.")
             -not ($each -ne 1) -and $each.Count -eq 9 -and $forms.Count -eq 5 -and -not ($forms[0..2].Line -ne 3) -and -not ($forms[3..4].Line -ne 4) -and

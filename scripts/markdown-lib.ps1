@@ -349,12 +349,16 @@ function Test-Markdown {
 
         if ($line -match '\|' -and $i + 1 -lt $Lines.Count -and $Lines[$i + 1] -match '\|' -and ($Lines[$i + 1] -replace '^(\s*>)+\s?') -match $delimiter) {
             . $flush
-            $columns = (Split-TableRow $line).Count
+            # Split-TableRow gives one array, which @() round the variable enumerates; round the
+            # call it would nest.
+            $header = Split-TableRow $line
+            $columns = @($header).Count
             for ($r = $i; $r -lt $Lines.Count -and ($Lines[$r] -replace '^(\s*>)+\s?') -match '\S'; $r++) {
                 if ($r -gt $i -and $Lines[$r].Contains('](')) { . $links ($Lines[$r] -replace '^(\s*>)+\s?') $r }
                 $cells = Split-TableRow ($Lines[$r] -replace '^(\s*>)+\s?')
-                if ($cells.Count -ne $columns) {
-                    @{ Line = $r + 1; Message = "the table row has $($cells.Count) column(s) and its header has $columns" }
+                $width = @($cells).Count
+                if ($width -ne $columns) {
+                    @{ Line = $r + 1; Message = "the table row has $width column(s) and its header has $columns" }
                 }
                 if ($r -eq $i + 1) { continue }
                 foreach ($cell in $cells) { foreach ($f in Test-Inline -Text $cell) { @{ Line = $r + 1; Message = "$($f.Message), a table cell" } } }

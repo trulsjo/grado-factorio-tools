@@ -67,8 +67,8 @@
     and .Name, mark such a statement; for .Count, the marker does not help, so assign a wrapped
     value instead. It runs no game.
 
-    WHERE IT RUNS HERE. check.ps1 runs its -SelfTest only, not a run over this repository's
-    scripts/, which on 2026-11-07 flagged 35 reads (Truls, on #343).
+    WHERE IT RUNS HERE. check.ps1 runs its -SelfTest, and a run over this repository's scripts/
+    (#373), whose 35 reads of 2026-11-07 were each fixed or marked.
 
 .PARAMETER Path
     The scripts, or directories of scripts read with their subdirectories, to check.

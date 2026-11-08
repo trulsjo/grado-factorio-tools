@@ -797,7 +797,7 @@ function Invoke-SelfTest {
             $leaked = @(Get-ChildItem -Path $r.CaptureDir -File -Recurse | Where-Object {
                 (Get-Content -LiteralPath $_.FullName -Raw -ErrorAction SilentlyContinue) -match [regex]::Escape($sentinel) })
             if ($leaked) {
-                Write-Host "  FAILED: the token reached $($leaked.Count) captured file(s): $(($leaked.Name) -join ', ')"
+                Write-Host "  FAILED: the token reached $($leaked.Count) captured file(s): $(($leaked | ForEach-Object Name) -join ', ')"
                 $failures++
             }
             else {
