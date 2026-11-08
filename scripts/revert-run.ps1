@@ -380,7 +380,8 @@ function Invoke-SelfTest {
         '        ''k2'''
         '    ),'
         '    [string[]] $Listed = (Get-ChildItem -Name), [string[]] $Expand = "$PSScriptRoot/x",'
-        '    $Map = @{ k = 1 }, [string[]] $OneParen = (''o''), [string[]] $TypedNil = $null, $Bare = (''v''))'
+        '    $Map = @{ k = 1 }, [string[]] $OneParen = (''o''), [string[]] $TypedNil = $null, $Bare = (''v''),'
+        '    $Loose = @(''u''))'
         '# A runner that repeats two defaults, as a self-test''s does: the Find still occurs once.'
         '$run = { param([string[]] $Kinds = @(''a'', ''b''), [int] $Count = 3) }'
         "if (`$Kinds -contains 'a' -and `$Main -eq 'main') { Write-Host 'OK - self-test passed: all 1 cases.'; exit 0 }"
@@ -415,7 +416,7 @@ function Invoke-SelfTest {
                 "default -Paren drops 'p' => `$Paren = @('q')", "default -Paren drops 'q' => `$Paren = @('p')",
                 "default -Wrapped drops 'w1' => `$Wrapped = @('w2')", "default -Wrapped drops 'w2' => `$Wrapped = @('w1')",
                 "default -Stacked drops 'k1' => `$Stacked = @('k2')", "default -Stacked drops 'k2' => `$Stacked = @('k1')",
-                "default -OneParen drops 'o' => `$OneParen = @()")
+                "default -OneParen drops 'o' => `$OneParen = @()", "default -Loose drops 'u' => `$Loose = @()")
             $unwritten = @('-When: its default is computed at run time', '-Nil: its default is $null, which is no value',
                 '-Empty: its default is an empty list, with no element to drop', '-Piped: its default is computed at run time',
                 '-Listed: its default is computed at run time', '-Expand: its default is computed at run time',
@@ -430,16 +431,16 @@ function Invoke-SelfTest {
             $printed = @([regex]::Matches($got, '(?m)^revert-run: defaults\.ps1, not written: (.+)\.\r?$') | ForEach-Object { $_.Groups[1].Value })
             ($said -join '|') -ceq ($want -join '|') -and ($written.Unwritten -join '|') -ceq ($unwritten -join '|') -and
                 ($printed -join '|') -ceq ($unwritten -join '|') -and
-                ($spans -join ' ') -ceq '-Count=1 -Kinds=1 -Main=1 -On=1 -One=1 -OneParen=1 -Paren=1 -Quoted=1 -Single=1 -Stacked=4 -Wrapped=2' -and
+                ($spans -join ' ') -ceq '-Count=1 -Kinds=1 -Loose=1 -Main=1 -On=1 -One=1 -OneParen=1 -Paren=1 -Quoted=1 -Single=1 -Stacked=4 -Wrapped=2' -and
                 @($written.Reverts | Where-Object { -not $_.Find.StartsWith('param([switch] $SelfTest, ') -or $_.SelfTest -ne 'defaults.ps1' }).Count -eq 0 -and
-                $code -eq 0 -and $got -match '(?m)^revert-run: 15 default revert\(s\) written for defaults\.ps1\.' -and
+                $code -eq 0 -and $got -match '(?m)^revert-run: 16 default revert\(s\) written for defaults\.ps1\.' -and
                 ($rows -join '|') -ceq ((@($want | ForEach-Object { $_ -replace ' => .*$' }) | ForEach-Object {
                             "$($_): $(if ($_ -like '*Kinds drops ''a''' -or $_ -like '*-Main *') { 'fails' } else { 'passes' })" }) -join '|') -and (& $same) } }
         @{ Name = '-Defaults reads a comma list, and fails, exit 1 and nothing run, a script that yields no revert or does not parse (#389)'; Test = {
             $none = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Defaults 'defaults.ps1,nodefault.ps1' 2>&1 | Out-String; $noneCode = $LASTEXITCODE
             $broken = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Defaults 'broken.ps1' 2>&1 | Out-String; $brokenCode = $LASTEXITCODE
             Write-Host (($none + $broken).TrimEnd() -replace '(?m)^', '    ')
-            $noneCode -eq 1 -and $none -match '(?m)^revert-run: 15 default revert\(s\) written for defaults\.ps1\.' -and
+            $noneCode -eq 1 -and $none -match '(?m)^revert-run: 16 default revert\(s\) written for defaults\.ps1\.' -and
                 $none -match '-Defaults names nodefault\.ps1, for which no default revert could be written, so no revert was run' -and
                 $none -notmatch '(?m)^revert-run: default ' -and
                 $brokenCode -eq 1 -and $broken -match 'broken\.ps1 does not parse, so its defaults cannot be read' -and (& $same) } }
