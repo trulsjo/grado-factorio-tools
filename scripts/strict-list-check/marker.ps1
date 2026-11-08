@@ -59,3 +59,11 @@ $mixedCopy.Count                                    # expect: flag
 $ownLine = Get-None
 # strict-lists: one
 $ownLine.Name                                       # expect: flag
+
+# The marker covers a statement, not an expression in it that ends where the statement does.
+(Get-None).Name, ((Get-Item .).Name)  # strict-lists: one  # expect: flag 2  # known false hit
+
+# A read off a variable is not one of the statement's inline reads, so it does not stop the
+# marker covering the one inline read beside it.
+$besideRead = Get-None
+if ((Get-Item .).Name -eq $besideRead.Name) { }  # strict-lists: one  # expect: flag
