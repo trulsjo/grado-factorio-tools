@@ -18,7 +18,9 @@ at [#369](https://github.com/trulsjo/grado-factorio-tools/issues/369#issuecommen
 with a sibling read at a commit of its own `main` by
 [a later comment](https://github.com/trulsjo/grado-factorio-tools/issues/369#issuecomment-6706987161),
 and the question of whether a cited check could have failed at
-[#370](https://github.com/trulsjo/grado-factorio-tools/issues/370#issuecomment-6704506905).
+[#370](https://github.com/trulsjo/grado-factorio-tools/issues/370#issuecomment-6704506905). The
+rule on a guard deleted as dead was ruled by Truls's filing of
+[#401](https://github.com/trulsjo/grado-factorio-tools/issues/401) on 2026-11-08.
 
 ## The threshold sorts the comment, not the report
 
@@ -68,3 +70,11 @@ keeps its own prose checks beside its link to this page; these are shared.
   reviewers found it
   ([their comment](https://github.com/trulsjo/grado-factorio-tools/pull/368#issuecomment-6703616741),
   finding G), and the PR's own review did not.
+- **A guard or branch the change deletes as dead carries two things**: a reason no input reaches
+  it, read from the code, and a run of the same check or script before and after the deletion,
+  over the same inputs, with the same output. A deletion with either missing is a finding. A
+  revert that passes the self-test is no evidence of either: a live guard with no case passes
+  the same way. Fixing trulsjo/grado-factorio-tools's PR #395's panel finding I
+  ([its comment](https://github.com/trulsjo/grado-factorio-tools/pull/395#issuecomment-6725858356)),
+  the session first meant to delete four guards of `strict-list-check.ps1` on their passing
+  reverts alone, until a side agent raised it.
