@@ -1,8 +1,9 @@
 <#
 .SYNOPSIS
-    Runs a list of reverts on a copy of the repository, one at a time, and reports each as
-    failing, passing or crashed its self-test, or as refused. Exit 0 means every revert on the
-    list was run or refused; it says nothing of what they found, which the report does.
+    Runs a list of reverts, and with -Defaults the default reverts it writes, on a copy of the
+    repository, one at a time, and reports each as failing, passing or crashed its self-test, or
+    as refused. Exit 0 means every revert was run or refused; it says nothing of what they found,
+    which the report does.
 
 .DESCRIPTION
     WHY (grado-factorio-tools#284). A review's bug scan, and the session answering it, revert
@@ -21,6 +22,23 @@
             @{ Name = 'F1'; File = 'scripts/x.ps1'; Find = 'if ($a) {'; Replace = 'if ($true) {'
                SelfTest = 'scripts/x.ps1'; Args = @('-NoGame'); Lines = 1 }
         ) }
+
+    THE DEFAULT REVERTS (grado-factorio-tools#382). In PR #374 a self-test passed four times
+    whatever a parameter's default was, because its runner carried a default of its own, and
+    each was found only by a reviewer who thought to revert that default by hand. With -Defaults,
+    for each script it names, a path from the copy's root, the run writes the reverts itself,
+    after the list's, from the script's param() block as the parser reads it. A default revert
+    is, for a list default, one per element, that element dropped from it: `$Path = @('a', 'b')`
+    gives `$Path = @('b')` and `$Path = @('a')`, and a lone element dropped gives `@()`. A
+    default is a list where it is written as one, or where the parameter's type is an array. For a
+    scalar default it is one revert, another value put in its place: a string gets -reverted
+    after it, a number 1 added, $true or $false the other. Each is named `default -<Name> ...`,
+    edits the text from the parameter's variable to the end of its default, its Find running from
+    the script's param( so that a self-test's runner that repeats the default does not make it
+    occur twice (as two did in the first run for #382's pull request), and runs the script's
+    own -SelfTest with no Args, as a list's revert is run and in the same table. The run prints how
+    many it wrote for each script, and a line for each default it wrote none for: one computed at
+    run time, as `(Get-Date)` or `"$x"`, $null, or an empty list.
 
     File and SelfTest are paths from the copy's root. Args is optional, handed to the self-test
     after -SelfTest. Lines is optional, 1 unless given. Find and Replace are exact text, matched
@@ -50,12 +68,20 @@
     self-test among those it runs (grado-factorio-tools#297), not one that needs the game, nor one
     in a sibling. A revert across two files,
     or by a pattern. A self-test that changes a tracked file and puts it back.
+    Of -Defaults: a default computed at run time, which it names and writes no revert for; a
+    parameter with no param() default, as one the script's body sets when it is not given, which
+    it does not name; a function's parameters; which of a scalar's other values matter, as it
+    tries one; and a default revert whose self-test needs Args, as -NoGame.
 
 .PARAMETER Copy
     The git working tree to revert in.
 
 .PARAMETER List
-    The .psd1 file of reverts.
+    The .psd1 file of reverts. None unless given; -List, -Defaults or both must be.
+
+.PARAMETER Defaults
+    The scripts, as paths from the copy's root, whose default reverts are written and run after
+    the list's. None unless given.
 
 .PARAMETER SelfTest
     Run the cases that hold the runner to what this header says, on a scratch repository, naming
@@ -63,18 +89,99 @@
 
 .EXAMPLE
     pwsh -File scripts/revert-run.ps1 -Copy C:/scratch/copy -List C:/scratch/reverts.psd1
+
+.EXAMPLE
+    pwsh -File scripts/revert-run.ps1 -Copy C:/scratch/copy -Defaults 'scripts/a.ps1,scripts/b.ps1'
 #>
 
 #Requires -Version 7
 [CmdletBinding(DefaultParameterSetName = 'Run')]
 param(
     [Parameter(ParameterSetName = 'Run', Mandatory)] [string] $Copy,
-    [Parameter(ParameterSetName = 'Run', Mandatory)] [string] $List,
+    [Parameter(ParameterSetName = 'Run')] [string] $List = '',
+    [Parameter(ParameterSetName = 'Run')] [string[]] $Defaults = @(),
     [Parameter(ParameterSetName = 'SelfTest', Mandatory)] [switch] $SelfTest
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+# A list handed through pwsh -File arrives as one string.
+$Defaults = @($Defaults | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+
+# The default reverts of the script at $Script, a path from $Root: for each parameter whose
+# param() block gives a default, one revert per element of a list default, that element dropped,
+# and one for a scalar default, another value put in its place. Each is a revert as a list's is,
+# its self-test the script's own. Unwritten names each default it could not write one for, and why.
+function Get-DefaultRevert {
+    param([Parameter(Mandatory)] [string] $Root, [Parameter(Mandatory)] [string] $Script)
+    $file = $Script -replace '\\', '/'
+    $path = Join-Path $Root $file
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "-Defaults names $Script, which is not a file in the copy." }
+    $tokens = $null; $errors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref] $tokens, [ref] $errors)
+    if ($errors) { throw "$Script does not parse, so its defaults cannot be read: $($errors[0].Message)" }
+    $text = $ast.Extent.Text
+    $reverts = [System.Collections.Generic.List[hashtable]]::new()
+    $unwritten = [System.Collections.Generic.List[string]]::new()
+    $params = if ($ast.ParamBlock) { @($ast.ParamBlock.Parameters) } else { @() }
+    foreach ($p in $params) {
+        $default = $p.DefaultValue
+        if (-not $default) { continue }
+        $name = $p.Name.VariablePath.UserPath
+        # From the script's param( to the end of this default, so the Find occurs once where a
+        # self-test's runner repeats the default; only the text from the variable on is replaced,
+        # and that is the lines the edit may change.
+        $base = $ast.Extent.StartOffset
+        $from = $ast.ParamBlock.Extent.StartOffset - $base
+        $at = $p.Name.Extent.StartOffset - $base
+        $prefix = $text.Substring($from, $at - $from)
+        $own = $text.Substring($at, $default.Extent.EndOffset - $base - $at)
+        $lines = @($own -split '\r?\n').Count
+        $revert = { param([string] $label, [string] $value)
+            $reverts.Add(@{ Name = "default -$name $label"; File = $file; Find = $prefix + $own; Replace = $prefix + "`$$name = $value"; SelfTest = $file; Lines = $lines }) }
+        $elements = $null
+        if ($default -is [System.Management.Automation.Language.ArrayLiteralAst]) { $elements = @($default.Elements) }
+        elseif ($default -is [System.Management.Automation.Language.ArrayExpressionAst]) {
+            $statements = @($default.SubExpression.Statements)
+            $only = if ($statements.Count -eq 1 -and $statements[0] -is [System.Management.Automation.Language.PipelineAst] -and
+                @($statements[0].PipelineElements).Count -eq 1 -and $statements[0].PipelineElements[0] -is [System.Management.Automation.Language.CommandExpressionAst]) {
+                $statements[0].PipelineElements[0].Expression }
+            if (-not $statements) { $elements = @() }
+            elseif ($only -is [System.Management.Automation.Language.ArrayLiteralAst]) { $elements = @($only.Elements) }
+            elseif ($only) { $elements = @($only) }
+            else { $unwritten.Add("-${name}: its default is computed at run time"); continue }
+        }
+        elseif ($p.StaticType.IsArray) { $elements = @($default) }
+        if ($null -ne $elements) {
+            if (-not $elements) { $unwritten.Add("-${name}: its default is an empty list, with no element to drop"); continue }
+            for ($i = 0; $i -lt $elements.Count; $i++) {
+                $rest = @(for ($j = 0; $j -lt $elements.Count; $j++) { if ($j -ne $i) { $elements[$j].Extent.Text } })
+                & $revert "drops $($elements[$i].Extent.Text)" "@($($rest -join ', '))"
+            }
+            continue
+        }
+        $was = $default.Extent.Text
+        $isString = $default -is [System.Management.Automation.Language.StringConstantExpressionAst] -or
+            ($default -is [System.Management.Automation.Language.ExpandableStringExpressionAst] -and -not @($default.NestedExpressions))
+        if ($isString) {
+            $other = "'$("$($default.Value)-reverted" -replace "'", "''")'"
+            & $revert "$was -> $other" $other
+        }
+        elseif ($default -is [System.Management.Automation.Language.ConstantExpressionAst] -and $default.Value -is [ValueType] -and $default.Value -isnot [bool]) {
+            $other = "$($default.Value + 1)"
+            & $revert "$was -> $other" $other
+        }
+        elseif ($default -is [System.Management.Automation.Language.VariableExpressionAst] -and $default.VariablePath.UserPath -in 'true', 'false') {
+            $other = if ($default.VariablePath.UserPath -eq 'true') { '$false' } else { '$true' }
+            & $revert "$was -> $other" $other
+        }
+        elseif ($default -is [System.Management.Automation.Language.VariableExpressionAst] -and $default.VariablePath.UserPath -eq 'null') {
+            $unwritten.Add("-${name}: its default is `$null, which is no value")
+        }
+        else { $unwritten.Add("-${name}: its default is computed at run time") }
+    }
+    @{ Reverts = @($reverts); Unwritten = @($unwritten) }
+}
 
 # What is uncommitted or untracked in the copy, one path to a line, or nothing.
 function Get-DirtyPath {
@@ -163,18 +270,30 @@ function Format-RevertTable {
 # The run over $ListPath in $Root: the rows, printed as they go and as a table; throws where it
 # cannot run.
 function Invoke-RevertRun {
-    param([Parameter(Mandatory)] [string] $Root, [Parameter(Mandatory)] [string] $ListPath)
+    param([Parameter(Mandatory)] [string] $Root, [string] $ListPath = '', [string[]] $Defaults = @())
+    if (-not $ListPath -and -not $Defaults) { throw 'give -List, -Defaults or both, so there is a revert to run.' }
     $dirty = @(Get-DirtyPath -Root $Root)
     if ($dirty) { throw "the copy $Root has uncommitted changes, so no revert was run: $($dirty -join ', ')" }
-    $data = try { Import-PowerShellDataFile -LiteralPath $ListPath } catch { throw "the list $ListPath cannot be read: $($_.Exception.Message)" }
-    if (-not $data.ContainsKey('Reverts') -or -not @($data.Reverts)) { throw "the list $ListPath holds no Reverts." }
-    foreach ($r in @($data.Reverts)) {
-        $missing = @('Name', 'File', 'Find', 'Replace', 'SelfTest' | Where-Object { -not ($r -is [hashtable] -and $r.ContainsKey($_)) })
-        if ($missing) { throw "a revert in $ListPath lacks $($missing -join ', ')." }
+    $all = [System.Collections.Generic.List[object]]::new()
+    if ($ListPath) {
+        $data = try { Import-PowerShellDataFile -LiteralPath $ListPath } catch { throw "the list $ListPath cannot be read: $($_.Exception.Message)" }
+        if (-not $data.ContainsKey('Reverts') -or -not @($data.Reverts)) { throw "the list $ListPath holds no Reverts." }
+        foreach ($r in @($data.Reverts)) {
+            $missing = @('Name', 'File', 'Find', 'Replace', 'SelfTest' | Where-Object { -not ($r -is [hashtable] -and $r.ContainsKey($_)) })
+            if ($missing) { throw "a revert in $ListPath lacks $($missing -join ', ')." }
+            $all.Add($r)
+        }
     }
+    foreach ($script in $Defaults) {
+        $written = Get-DefaultRevert -Root $Root -Script $script
+        Write-Host "revert-run: $($written.Reverts.Count) default revert(s) written for $script."
+        foreach ($u in $written.Unwritten) { Write-Host "revert-run: $script, not written: $u." }
+        foreach ($r in $written.Reverts) { $all.Add($r) }
+    }
+    if (-not $all.Count) { throw 'no revert was written or listed, so nothing was run.' }
     $rows = [System.Collections.Generic.List[object]]::new()
     try {
-        foreach ($r in @($data.Reverts)) {
+        foreach ($r in $all) {
             $row = Invoke-Revert -Root $Root -Revert $r
             $rows.Add($row)
             Write-Host "revert-run: $($row.Name) -- $($row.Result)$(if ($row.Exit) { " (exit $($row.Exit))" }): $($row.Summary)"
@@ -217,7 +336,19 @@ function Invoke-SelfTest {
     Set-Content -LiteralPath (Join-Path $repo '.gitignore') -Value 'ignored.txt'
     Set-Content -LiteralPath (Join-Path $repo 'ignored.txt') -Value 'ignored one'
     Set-Content -LiteralPath (Join-Path $temp 'outside.txt') -Value 'outside one'
-    & $git add stub.ps1 bin.dat .gitignore
+    # A script whose param() block has a default of each kind: it passes unless 'a' is dropped
+    # from -Kinds or -Main is not 'main'.
+    $fixture = @(
+        'param([switch] $SelfTest, [string[]] $Kinds = @(''a'', ''b''), [string] $Main = ''main'', [int] $Count = 3,'
+        '    [bool] $On = $true, $When = (Get-Date), [string] $None, $Nil = $null, [string[]] $Empty = @(), [string[]] $One = ''x'')'
+        '# A runner that repeats two defaults, as a self-test''s does: the Find still occurs once.'
+        '$run = { param([string[]] $Kinds = @(''a'', ''b''), [int] $Count = 3) }'
+        "if (`$Kinds -contains 'a' -and `$Main -eq 'main') { Write-Host 'OK - self-test passed: all 1 cases.'; exit 0 }"
+        "Write-Host 'FAILED - self-test: 1 of 1 case(s) did not hold.'"
+        'exit 1'
+    ) -join "`n"
+    [IO.File]::WriteAllText((Join-Path $repo 'defaults.ps1'), "$fixture`n")
+    & $git add stub.ps1 bin.dat .gitignore defaults.ps1
     & $git commit --quiet -m stub
     $list = { param([string] $name, [string] $text) $p = Join-Path $temp "$name.psd1"; Set-Content -LiteralPath $p -Value $text; $p }
     $one = { param([string] $Find, [string] $Replace, [string] $More = '') "@{ Name = 'R'; File = 'stub.ps1'; Find = '$Find'; Replace = '$Replace'; SelfTest = 'stub.ps1'$More }" }
@@ -229,6 +360,30 @@ function Invoke-SelfTest {
     $same = { [IO.File]::ReadAllText($stubPath) -ceq "$stub`n" -and -not @(Get-DirtyPath -Root $repo) }
 
     $cases = @(
+        @{ Name = '-Defaults writes one revert per element of a list default and one per scalar default, names each default it cannot write, and runs them as a list''s'; Test = {
+            $written = Get-DefaultRevert -Root $repo -Script 'defaults.ps1'
+            # Each Replace is the Find's text up to the variable, then the new default: its tail.
+            $said = @($written.Reverts | ForEach-Object { "$($_.Name) => $([regex]::Match($_.Replace, '\$\w+ = (?:(?!\$\w+ = ).)*$').Value)" })
+            $want = @(
+                "default -Kinds drops 'a' => `$Kinds = @('b')", "default -Kinds drops 'b' => `$Kinds = @('a')",
+                "default -Main 'main' -> 'main-reverted' => `$Main = 'main-reverted'", 'default -Count 3 -> 4 => $Count = 4',
+                'default -On $true -> $false => $On = $false', "default -One drops 'x' => `$One = @()")
+            $unwritten = @('-When: its default is computed at run time', '-Nil: its default is $null, which is no value',
+                '-Empty: its default is an empty list, with no element to drop')
+            $got = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Defaults 'defaults.ps1' 2>&1 | Out-String
+            $code = $LASTEXITCODE
+            Write-Host ($got.TrimEnd() -replace '(?m)^', '    ')
+            $rows = @([regex]::Matches($got, '(?m)^\| (default [^|]+) \| (\w+) \|') | ForEach-Object { "$($_.Groups[1].Value.Trim()): $($_.Groups[2].Value)" })
+            ($said -join '|') -ceq ($want -join '|') -and ($written.Unwritten -join '|') -ceq ($unwritten -join '|') -and
+                @($written.Reverts | Where-Object { -not $_.Find.StartsWith('param([switch] $SelfTest, ') -or $_.SelfTest -ne 'defaults.ps1' -or $_.Lines -ne 1 }).Count -eq 0 -and
+                $code -eq 0 -and $got -match '(?m)^revert-run: 6 default revert\(s\) written for defaults\.ps1\.' -and
+                ($rows -join '|') -ceq ("default -Kinds drops 'a': fails|default -Kinds drops 'b': passes|default -Main 'main' -> 'main-reverted': fails|" +
+                    "default -Count 3 -> 4: passes|default -On `$true -> `$false: passes|default -One drops 'x': passes") -and (& $same) } }
+        @{ Name = 'with neither -List nor -Defaults, and with -Defaults naming no file of the copy, the run fails, exit 1, and runs nothing'; Test = {
+            $neither = & pwsh -NoProfile -File $PSCommandPath -Copy $repo 2>&1 | Out-String; $neitherCode = $LASTEXITCODE
+            $missing = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Defaults 'no-such.ps1' 2>&1 | Out-String; $missingCode = $LASTEXITCODE
+            $neitherCode -eq 1 -and $neither -match 'give -List, -Defaults or both' -and
+                $missingCode -eq 1 -and $missing -match '-Defaults names no-such\.ps1, which is not a file in the copy' -and (& $same) } }
         @{ Name = 'Find occurring 0 times, twice, or only ignoring case is refused with the count, and so is an edit that changes no line; the file is unchanged'; Test = {
             $p = & $list 'count' "@{ Reverts = @( $(& $one 'zzz' 'y'), $(& $one "''alpha''" "''other''"), $(& $one "`$A = ''ALPHA''" 'y'), $(& $one "`$b = ''beta''" "`$b = ''beta''") ) }"
             $got = & $run $p
@@ -330,7 +485,7 @@ function Invoke-SelfTest {
 
 if ($SelfTest) { Invoke-SelfTest }
 
-try { $rows = @(Invoke-RevertRun -Root (Resolve-Path -LiteralPath $Copy).Path -ListPath $List) }
+try { $rows = @(Invoke-RevertRun -Root (Resolve-Path -LiteralPath $Copy).Path -ListPath $List -Defaults $Defaults) }
 catch { Write-Host "FAILED - revert-run: $($_.Exception.Message)"; exit 1 }
 $counts = ($rows | ForEach-Object { $_.Result } | Group-Object | Sort-Object Name | ForEach-Object { "$($_.Count) $($_.Name)" }) -join ', '
 Write-Host "OK - revert-run: $($rows.Count) revert(s) run or refused: $counts."
