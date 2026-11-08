@@ -43,8 +43,9 @@
     below that is not about the tree holds a body: emphasis and code spans, table rows, a figure
     split across a line end, and with -MaxLineLength the line length. Its links are read as A
     LINK IN A BODY says, below. A finding names the file as it was given, and the summary line
-    says it read a body. Beside -Path, -All or -Range, or naming no file, it fails before
-    anything is read, and says why.
+    says it read a body. Beside -Path, -All or -Range, naming no file, or naming one that holds
+    no text, as a failed write leaves, it fails before anything is checked, and says why. A
+    byte-order mark at the file's start is dropped.
 
     WHAT IT READS AS WHAT. A paragraph ends at a blank line, a heading, a list item, a table or a
     fenced or indented code block; nothing inside either is read, no emphasis and no link
@@ -723,17 +724,27 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             $findings = @($got.Text -split '\r?\n' | Where-Object { $_ -like 'body.md:*' })
             $got.Code -eq 1 -and ($findings -join '|') -ceq ("body.md:3: the link to #no-such names no heading of this body|body.md:3: the link to docs/x.md $relative|" +
                 "body.md:5: the link to notes.md $relative|body.md:7: the link to C:/src/x.md $relative|body.md:7: the link to //example.com/x $relative") } }
-        @{ Name = '-Body refuses -Path, -All or -Range beside it, and a file that is missing, reading nothing; -MaxLineLength holds a body as a page (#384)'; Test = {
+        @{ Name = '-Body refuses -Path, -All or -Range beside it, a file that is missing, a folder, no name and a file with no text, reading nothing; -MaxLineLength holds a body as a page; a byte-order mark hides no heading (#384, #389)'; Test = {
             $own = Join-Path $temp 'body-refusals'
             New-Item -ItemType Directory -Path $own | Out-Null
             git -C $own init --quiet
             Set-Content -LiteralPath (Join-Path $own 'page.md') -Value 'and *open'
             Set-Content -LiteralPath (Join-Path $own 'long.md') -Value ('word ' * 6).Trim()
+            New-Item -ItemType Directory -Path (Join-Path $own 'sub') | Out-Null
+            [IO.File]::WriteAllText((Join-Path $own 'empty.md'), '')
+            [IO.File]::WriteAllText((Join-Path $own 'blank.md'), "  `n`n")
+            # With a byte-order mark, as Windows PowerShell 5's Set-Content -Encoding UTF8 writes.
+            [IO.File]::WriteAllText((Join-Path $own 'bom.md'), "# Results`n`n[own](#results)`n", [Text.UTF8Encoding]::new($true))
+            $bom = & $run $own @('-Body', 'bom.md')
             $said = @(
                 @{ Run = & $run $own @('-Body', 'page.md', '-Path', 'page.md'); Want = '-Body cannot be combined with -Path, -All or -Range' }
                 @{ Run = & $run $own @('-Body', 'page.md', '-All'); Want = '-Body cannot be combined with -Path, -All or -Range' }
                 @{ Run = & $run $own @('-Body', 'page.md', '-Range', 'HEAD~1..HEAD'); Want = '-Body cannot be combined with -Path, -All or -Range' }
                 @{ Run = & $run $own @('-Body', 'missing.md'); Want = '-Body names missing\.md, which is no file, so nothing was checked' }
+                @{ Run = & $run $own @('-Body', 'sub'); Want = '-Body names sub, which is no file, so nothing was checked' }
+                @{ Run = & $run $own @('-Body', ''); Want = '-Body named no file, so nothing was checked' }
+                @{ Run = & $run $own @('-Body', 'empty.md'); Want = '-Body names empty\.md, which holds no text, so nothing was checked' }
+                @{ Run = & $run $own @('-Body', 'blank.md'); Want = '-Body names blank\.md, which holds no text, so nothing was checked' }
             )
             $ok = $true
             foreach ($s in $said) {
@@ -743,7 +754,8 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             }
             $long = & $run $own @('-Body', 'long.md', '-MaxLineLength', '20')
             $free = & $run $own @('-Body', 'long.md')
-            $ok -and $long.Code -eq 1 -and $long.Text -match '(?m)^long\.md:1: the line is 29 characters, over the limit of 20' -and $free.Code -eq 0 } }
+            $ok -and $long.Code -eq 1 -and $long.Text -match '(?m)^long\.md:1: the line is 29 characters, over the limit of 20' -and $free.Code -eq 0 -and
+                $bom.Code -eq 0 -and $bom.Text -match 'bom\.md read as a body, nothing found' } }
         @{ Name = '-Path takes a tracked file in git''s case, so a link in another case still fails and a finding names the file as git holds it (#193)'; Test = {
             $own = Join-Path $temp 'case'
             New-Item -ItemType Directory -Path $own | Out-Null
@@ -819,8 +831,11 @@ if ($PSBoundParameters.ContainsKey('Body')) {
     $refused = if ($named -or $All -or $Range) { '-Body cannot be combined with -Path, -All or -Range: it names its one file itself' }
     elseif (-not $Body) { '-Body named no file' }
     elseif (-not (Test-Path -LiteralPath $Body -PathType Leaf)) { "-Body names $Body, which is no file" }
+    # ReadAllText drops a byte-order mark, which would hide a heading on the first line.
+    $text = if (-not $refused) { [IO.File]::ReadAllText((Resolve-Path -LiteralPath $Body).ProviderPath, [Text.UTF8Encoding]::new($false)) }
+    if (-not $refused -and -not $text.Trim()) { $refused = "-Body names $Body, which holds no text" }
     if ($refused) { Write-Host "FAILED - markdown-check: $refused, so nothing was checked."; exit 1 }
-    $reader = [IO.StringReader]::new([Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $Body).ProviderPath)))
+    $reader = [IO.StringReader]::new($text)
     $lines = @(while ($null -ne ($l = $reader.ReadLine())) { $l })
     $found = 0
     foreach ($finding in Test-Markdown -Lines $lines -Path $Body -Body -Exists { $false } -Anchors { $null } -MaxLineLength $MaxLineLength | Sort-Object { $_.Line }) {
