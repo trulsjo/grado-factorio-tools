@@ -49,7 +49,8 @@
 
 .PARAMETER Own
     The git pathspecs of the files that are our own code, which a citation must resolve to one of
-    to fail. Every tracked file unless given. Pathspecs that name no tracked file fail the run.
+    to fail. Every tracked file unless given. Pathspecs that together name no tracked file fail
+    the run.
 
 .PARAMETER Foreign
     A regular expression; a line it matches is left alone. None unless given.

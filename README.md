@@ -606,9 +606,10 @@ too little.
 
     pwsh -File scripts/line-cite-check.ps1
 
-CI runs it so. Before it did, on 2026-11-07, it read 83 files here and failed on 1 citation, a
-quoted specimen it took for ours, which was reworded. Prose that writes "lines 196-197" with no
-path is not seen; the rest is in its header. `-SelfTest` runs it on a scratch repository.
+CI runs it with `-MinCitations 50 -MinContinuations 4`. Before it did, on 2026-11-07, it read 83
+files here and failed on 1 citation, a quoted specimen it took for ours, which was reworded. Prose
+that writes "lines 196-197" with no path is not seen; the rest is in its header. `-SelfTest` runs
+it on a scratch repository.
 
 ## Checking that list parameters are split
 
