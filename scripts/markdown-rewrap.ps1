@@ -213,9 +213,10 @@ function Invoke-CommentRewrap {
     # What each line is: in a block comment, and under which help keyword. A keyword is matched
     # in upper case, as PowerShell writes .SYNOPSIS: a line opening .github is prose.
     $HELP_KEYWORD = '^\s*\.([A-Z]+)\b'
-    # A header's section lead, `WHY.` or `WHAT IT READS (#1).`: ALL-CAPS words, an optional
-    # parenthesis, a full stop. It opens a paragraph of its own (#377).
-    $SECTION_LEAD = "^[A-Z]{2,}[A-Z'-]*(?: [A-Z][A-Z'-]*)*(?: \([^)]*\))?\.(?:\s|$)"
+    # A header's section lead, `WHY.`, `EACH REVERT, IN ORDER.` or `WHAT IT READS (#1).`:
+    # ALL-CAPS words, which may hold a digit and be split by commas, an optional parenthesis, a
+    # full stop. It opens a paragraph of its own (#377).
+    $SECTION_LEAD = "^[A-Z]{2,}[A-Z0-9'-]*(?:,? [A-Z][A-Z0-9'-]*)*(?: \([^)]*\))?\.(?:\s|$)"
     $read = {
         param([string[]] $l)
         $inBlock = @($false) * $l.Count; $section = @('') * $l.Count
@@ -382,6 +383,12 @@ function Invoke-SelfTest {
             $r = (Invoke-CommentRewrap -Lines $in -Max $max).Lines
             ($r -ccontains '    WHAT IT READS. Another short one.') -and ($r -ccontains '    WHERE IT CAME FROM (#343). A third.') -and
                 ($r -ccontains '# WHAT IT READS. Short.') -and -not @($r | Where-Object { $_.Length -gt $max }) }
+        'a lead may hold a comma or a digit, and still starts a paragraph (#377)' = {
+            $in = @('<#', '.DESCRIPTION', '    A help line here that is well over the forty.', '    EACH REVERT, IN ORDER. Next.',
+                '    A second line here well over the forty.', '    UTF-16 UNITS. Then.', '#>')
+            $r = (Invoke-CommentRewrap -Lines $in -Max $max).Lines
+            ($r -ccontains '    EACH REVERT, IN ORDER. Next.') -and ($r -ccontains '    UTF-16 UNITS. Then.') -and
+                -not @($r | Where-Object { $_.Length -gt $max }) }
         'a line with an ALL-CAPS word mid-line, or an ALL-CAPS lead with no full stop, is still joined (#377)' = {
             # Each joined, the lead fills the line before: as a paragraph, it would stand alone.
             $mid = (Invoke-CommentRewrap -Lines @('<#', '.DESCRIPTION', '    A help line that is well over the limit.', '    SEE the NOTE.', '#>') -Max $max).Lines
