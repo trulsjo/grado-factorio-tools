@@ -401,7 +401,8 @@ function Test-SelfTestRegion {
     param([Parameter(Mandatory)] [System.Management.Automation.Language.Ast] $Node)
     for ($p = $Node.Parent; $p; $p = $p.Parent) {
         if ($p -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $p.Name -eq 'Invoke-SelfTest') { return $true }
-        if ($p -is [System.Management.Automation.Language.StatementBlockAst] -and $p.Parent -is [System.Management.Automation.Language.IfStatementAst]) {
+        # A clause's block is the Item2 its parent if names; no other node is.
+        if ($p.Parent -is [System.Management.Automation.Language.IfStatementAst]) {
             foreach ($clause in $p.Parent.Clauses) {
                 if ([object]::ReferenceEquals($clause.Item2, $p) -and $clause.Item1.Extent.Text -eq '$SelfTest') { return $true }
             }
@@ -431,6 +432,7 @@ function Test-Verdict {
     if ($holder -is [System.Management.Automation.Language.NamedBlockAst] -and [object]::ReferenceEquals(@($holder.Statements)[-1], $statement)) {
         $block = $holder.Parent.Parent
         $value = if ($block -is [System.Management.Automation.Language.ScriptBlockExpressionAst]) { Get-ExpressionStatement $block }
+        # None where the block is assigned, as `$t = { ... }`, not a statement of its own.
         if ($value -and $value.Parent -is [System.Management.Automation.Language.HashtableAst]) {
             foreach ($pair in $value.Parent.KeyValuePairs) {
                 if ([object]::ReferenceEquals($pair.Item2, $value) -and $pair.Item1 -is [System.Management.Automation.Language.StringConstantExpressionAst] -and
@@ -439,21 +441,22 @@ function Test-Verdict {
         }
         return $false
     }
+    # The chain is the assignment's Right, as its Left is never an -and chain.
     if ($holder -isnot [System.Management.Automation.Language.AssignmentStatementAst] -or $holder.Operator -ne 'Equals' -or
-        $holder.Left -isnot [System.Management.Automation.Language.VariableExpressionAst] -or
-        -not [object]::ReferenceEquals($holder.Right, $statement)) { return $false }
+        $holder.Left -isnot [System.Management.Automation.Language.VariableExpressionAst]) { return $false }
     $name = $holder.Left.VariablePath.UserPath
     $scope = $holder.Parent
     while ($scope -isnot [System.Management.Automation.Language.ScriptBlockAst]) { $scope = $scope.Parent }
+    # A variable whose parent is an assignment is its Left, as a Right is a statement: a write.
     $reads = @($scope.FindAll({ param($n)
                 $n -is [System.Management.Automation.Language.VariableExpressionAst] -and $n.VariablePath.UserPath -eq $name -and
-                -not ($n.Parent -is [System.Management.Automation.Language.AssignmentStatementAst] -and [object]::ReferenceEquals($n.Parent.Left, $n)) }, $true))
+                $n.Parent -isnot [System.Management.Automation.Language.AssignmentStatementAst] }, $true))
     if (-not $reads) { return $false }
     foreach ($r in $reads) {
         $negated = $r.Parent -is [System.Management.Automation.Language.UnaryExpressionAst] -and $r.Parent.TokenKind -in 'Not', 'Exclaim'
+        # A pipeline whose parent is an if is one of its conditions; its bodies are blocks.
         $condition = Get-ExpressionStatement $r
-        $tested = $condition -and $condition.Parent -is [System.Management.Automation.Language.IfStatementAst] -and
-            @($condition.Parent.Clauses | Where-Object { [object]::ReferenceEquals($_.Item1, $condition) })
+        $tested = $condition -and $condition.Parent -is [System.Management.Automation.Language.IfStatementAst]
         if (-not ($negated -or $tested)) { return $false }
     }
     $true
@@ -802,9 +805,32 @@ function Invoke-SelfTest {
                 "    `$both = !`$vOk"
                 "    `$flag = `$x -ne 'l' -and `$x -ne 'm'"
                 '    $flag | Out-Null'
+                # Not verdicts, each of a shape one guard of Test-Verdict tells apart: a Test
+                # block ending in a pipeline of two, a bare block and an assigned one, a key other
+                # than Test or not a string, a += and a member assigned, and variables read under
+                # -bnot or copied.
+                "    @{ Test = { `$x -ne 'u1' -and `$x -ne 'u2' | Out-Null } }"
+                "    { `$x -ne 'v1' -and `$x -ne 'v2' }"
+                "    `$tb = { `$x -ne 't1' -and `$x -ne 't2' }"
+                "    @{ Test = { 'x' }; Other = { `$x -ne 'w3' -and `$x -ne 'w4' } }"
+                "    @{ `$key = { `$x -ne 'w1' -and `$x -ne 'w2' } }"
+                "    `$plus += `$x -ne 'y1' -and `$x -ne 'y2'"
+                '    if ($plus) { }'
+                "    `$h.Ok = `$x -ne 'z1' -and `$x -ne 'z2'"
+                "    `$bOk = `$x -ne 'b1' -and `$x -ne 'b2'"
+                '    $bits = -bnot $bOk'
+                "    `$cOk = `$x -ne 'c1' -and `$x -ne 'c2'"
+                '    $copy = $cOk'
                 '}'
                 'function Invoke-SelfTest {'
                 "    @{ Test = { `$x -ne 'n' -and `$x -ne 'o' } }"
+                '}'
+                # Outside the region: another function, and an elseif beside an if ($SelfTest).
+                'function Other {'
+                "    @{ Test = { `$x -ne 'o1' -and `$x -ne 'o2' } }"
+                '}'
+                'if ($SelfTest) { } elseif ($x) {'
+                "    @{ Test = { `$x -ne 'e1' -and `$x -ne 'e2' } }"
                 '}'
                 "`$out = @{ Test = { `$x -ne 'p' -and `$x -ne 'q' } }"
                 "`$outOk = `$x -ne 'r' -and `$x -ne 's'"
@@ -815,9 +841,10 @@ function Invoke-SelfTest {
             [IO.File]::WriteAllText((Join-Path $verdictDir 'verdicts.ps1'), "$verdicts`n")
             $written = Get-ConditionRevert -Root $verdictDir -Script 'verdicts.ps1'
             $dropped = @($written.Reverts | ForEach-Object { ($_.Name -split ' ', 3)[2] -replace '^.*drops ' })
-            $want = @("`$x -eq 'b'", "`$x -eq 'd'", "`$x -ne 'f'", "`$x -ne 'g'", "`$x -ne 'h'", "`$x -ne 'i'", "`$x -ne 'l'", "`$x -ne 'm'",
-                "`$x -ne 'p'", "`$x -ne 'q'", "`$x -ne 'r'", "`$x -ne 's'")
-            $skips = 'line 4, 2 operand(s)|line 6, 2 operand(s)|line 8, 2 operand(s)|line 16, 2 operand(s)'
+            $want = @("`$x -eq 'b'", "`$x -eq 'd'", "`$x -ne 'f'", "`$x -ne 'g'", "`$x -ne 'h'", "`$x -ne 'i'", "`$x -ne 'l'", "`$x -ne 'm'") +
+                @('u1', 'u2', 'v1', 'v2', 't1', 't2', 'w3', 'w4', 'w1', 'w2', 'y1', 'y2', 'z1', 'z2', 'b1', 'b2', 'c1', 'c2', 'o1', 'o2', 'e1', 'e2', 'p', 'q', 'r', 's' |
+                    ForEach-Object { "`$x -ne '$_'" })
+            $skips = 'line 4, 2 operand(s)|line 6, 2 operand(s)|line 8, 2 operand(s)|line 28, 2 operand(s)'
             # Through the command line, on a script whose only chains are verdicts: each is named,
             # and with no revert left the run fails, having run nothing.
             [IO.File]::WriteAllText((Join-Path $repo 'verdicts.ps1'), "if (`$SelfTest) { `$ok = `$x -ne 'a' -and `$x -ne 'c'; if (`$ok) { } }`n")
