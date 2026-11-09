@@ -61,11 +61,11 @@
     chain or list spans, and Lines is their count; each is named
     `condition <file>:<line> <operator> drops <text>`, or `type list` for the operator, with
     (1 of 2), (2 of 2) after it where two would share a name, in their order there, and runs
-    the script's own -SelfTest with no Args. A shape whose Find occurs other than once is named
-    with its line, and no revert written for it. With -Base <ref>, only an operand or element on a
-    line `git -C <copy> diff -U0 <ref>` adds or changes is dropped. As with -Defaults, a script
-    it writes no revert for, -Base or not, or that does not parse, fails the run, exit 1 and
-    nothing run.
+    the script's own -SelfTest with no Args. A shape whose Find occurs other than once, or a list
+    of one element, is named with its line, and no revert written for it. With -Base <ref>, only an
+    operand or element on a line `git -C <copy> diff -U0 <ref>` adds or changes is dropped. As with
+    -Defaults, a script it writes no revert for, -Base or not, or that does not parse, fails the
+    run, exit 1 and nothing run.
 
     File and SelfTest are paths from the copy's root. Args is optional, handed to the self-test
     after -SelfTest. Lines is optional, 1 unless given. Find and Replace are exact text, matched
@@ -106,7 +106,8 @@
     Of -Conditions: a regex alternation, as `a|b`; how many times a loop runs; a condition built
     in more than one statement, as `$x = $a; if ($x -and $b)`, whose $a it does not drop; a list
     on the right of -in in parentheses or @(), or held in a variable; -cin and -cnotin,
-    which match with case; -contains, -xor, -not and the comparison operators; a type list that
+    which match with case, though a list of type literals on their right is read as a type list;
+    -contains, -xor, -not and the comparison operators; a type list that
     holds anything but type literals; a condition revert whose self-test needs Args; and with -Base,
     a condition the diff deletes, which leaves nothing to drop, or one it changes by a line outside
     the operand, as the `if (` above it.
@@ -331,7 +332,8 @@ function Get-ConditionRevert {
     }
     $reverts = [System.Collections.Generic.List[hashtable]]::new()
     $unwritten = [System.Collections.Generic.List[string]]::new()
-    foreach ($s in @($shapes | Sort-Object { $_.Node.Extent.StartOffset })) {
+    # In order; of two shapes that start together, the outer, which ends later, first.
+    foreach ($s in @($shapes | Sort-Object { $_.Node.Extent.StartOffset }, { -$_.Node.Extent.EndOffset })) {
         $parts = $s.Parts
         $drops = @(for ($i = 0; $i -lt $parts.Count; $i++) {
                 $lines = $parts[$i].Extent.StartLineNumber..$parts[$i].Extent.EndLineNumber
@@ -339,12 +341,15 @@ function Get-ConditionRevert {
             })
         # By its count: a lone index 0 reads false.
         if (-not $drops.Count) { continue }
-        # The whole lines the shape spans, so that the Find is more likely to occur once.
+        $line = $s.Node.Extent.StartLineNumber
+        # A list of one element, as ,'a', has nothing left once that is dropped.
+        if ($parts.Count -lt 2) { $unwritten.Add("line $line, a $($s.Op) of one element"); continue }
+        # The whole lines the shape spans, so that the Find is more likely to occur once. \z, as $
+        # also matches before a last line break, which a shape at a line's start follows.
         $start = $s.Node.Extent.StartOffset - $origin; $end = $s.Node.Extent.EndOffset - $origin
-        $from = $start - [regex]::Match($text.Substring(0, $start), '[^\r\n]*$').Length
+        $from = $start - [regex]::Match($text.Substring(0, $start), '[^\r\n]*\z').Length
         $to = $end + [regex]::Match($text.Substring($end), '^[^\r\n]*').Length
         $find = $text.Substring($from, $to - $from)
-        $line = $s.Node.Extent.StartLineNumber
         $count = Get-OccurrenceCount -Text $text -Find $find
         if ($count -ne 1) { $unwritten.Add("line $line, a $($s.Op) whose Find occurs $count times"); continue }
         foreach ($i in $drops) {
@@ -578,6 +583,13 @@ function Invoke-SelfTest {
         "    `$x -eq 'n'"
         # Two elements of one text: their reverts' names differ only by their order.
         "`$dup = `$x -in 'a', 'a'"
+        # Two lists of one element, named and not written.
+        "`$one = `$x -in ,'b'"
+        '$single = ,[string]'
+        # A chain inside a chain of the other operator, with no parentheses, is a chain of its own.
+        "`$mix = `$k -and `$x -eq 'b' -or `$x -eq 'c'"
+        # A chain at a line's start, with more after it on the line.
+        "`$x -ne 'z' -and `$k | Out-Null"
         "if (@(`$ok, `$hit, `$no, `$or, `$typed, (`$types -contains `$k), `$two) -notcontains `$false) { Write-Host 'OK - self-test passed: all 1 cases.'; exit 0 }"
         "Write-Host 'FAILED - self-test: 1 of 1 case(s) did not hold.'"
         'exit 1'
@@ -644,7 +656,7 @@ function Invoke-SelfTest {
                 $none -match '-Defaults names nodefault\.ps1, for which no default revert could be written, so no revert was run' -and
                 $none -notmatch '(?m)^revert-run: default ' -and
                 $brokenCode -eq 1 -and $broken -match 'broken\.ps1 does not parse, so its defaults cannot be read' -and (& $same) } }
-        @{ Name = '-Conditions writes one revert per operand of an -and or -or chain and per element of an -in, -notin or type list, with a chain over two lines whose Find and Lines span both and two reverts of one text told apart by their order, names a shape whose Find is not unique, and runs them as a list''s (#400)'; Test = {
+        @{ Name = '-Conditions writes one revert per operand of an -and or -or chain and per element of an -in, -notin or type list, with a chain over two lines whose Find and Lines span both and two reverts of one text told apart by their order, a chain at a line''s start or inside one of the other operator, a list of one element named and not written, names a shape whose Find is not unique, and runs them as a list''s (#400)'; Test = {
             $written = Get-ConditionRevert -Root $repo -Script 'conditions.ps1'
             $said = @($written.Reverts | ForEach-Object { "$($_.Name) => $($_.Replace)" })
             $c = 'condition conditions.ps1'
@@ -658,8 +670,12 @@ function Invoke-SelfTest {
                 "${c}:8 -or drops `$x -eq 'w' => `$or = `$x -eq 'b' -or `$x -eq 'y'",
                 "${c}:9 -in drops [string] => `$typed = `$k -in [int]", "${c}:9 -in drops [int] => `$typed = `$k -in [string]",
                 "${c}:14 -or drops `$x -eq 'b' => `$two = `$x -eq 'n'", "${c}:15 -or drops `$x -eq 'n' => `$two = `$x -eq 'b'",
-                "${c}:16 -in drops 'a' (1 of 2) => `$dup = `$x -in 'a'", "${c}:16 -in drops 'a' (2 of 2) => `$dup = `$x -in 'a'")
-            $unwritten = @('line 10, a -or whose Find occurs 2 times', 'line 11, a -or whose Find occurs 2 times')
+                "${c}:16 -in drops 'a' (1 of 2) => `$dup = `$x -in 'a'", "${c}:16 -in drops 'a' (2 of 2) => `$dup = `$x -in 'a'",
+                "${c}:19 -or drops `$k -and `$x -eq 'b' => `$mix = `$x -eq 'c'", "${c}:19 -or drops `$x -eq 'c' => `$mix = `$k -and `$x -eq 'b'",
+                "${c}:19 -and drops `$k => `$mix = `$x -eq 'b' -or `$x -eq 'c'", "${c}:19 -and drops `$x -eq 'b' => `$mix = `$k -or `$x -eq 'c'",
+                "${c}:20 -and drops `$x -ne 'z' => `$k | Out-Null", "${c}:20 -and drops `$k => `$x -ne 'z' | Out-Null")
+            $unwritten = @('line 10, a -or whose Find occurs 2 times', 'line 11, a -or whose Find occurs 2 times', 'line 17, a -in of one element',
+                'line 18, a type list of one element')
             $failing = @("${c}:5 -in drops 'b'", "${c}:7 type list drops [int]", "${c}:8 -or drops `$x -eq 'b'", "${c}:9 -in drops [int]", "${c}:14 -or drops `$x -eq 'b'")
             $got = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'conditions.ps1' 2>&1 | Out-String
             $code = $LASTEXITCODE
@@ -669,7 +685,7 @@ function Invoke-SelfTest {
             ($said -join '|') -ceq ($want -join '|') -and ($written.Unwritten -join '|') -ceq ($unwritten -join '|') -and
                 ($printed -join '|') -ceq ($unwritten -join '|') -and $code -eq 0 -and
                 @($written.Reverts | Where-Object { $_.File -ne 'conditions.ps1' -or $_.SelfTest -ne 'conditions.ps1' -or $_.Lines -ne ($_.Name -match ':1[45] ' ? 2 : 1) }).Count -eq 0 -and
-                $got -match '(?m)^revert-run: 17 condition revert\(s\) written for conditions\.ps1\.' -and
+                $got -match '(?m)^revert-run: 23 condition revert\(s\) written for conditions\.ps1\.' -and
                 ($rows -join '|') -ceq ((@($want | ForEach-Object { $_ -replace ' => .*$' }) | ForEach-Object {
                             "$($_): $(if ($_ -in $failing) { 'fails' } else { 'passes' })" }) -join '|') -and (& $same) } }
         @{ Name = '-Conditions fails, exit 1 and nothing run, a script that yields no revert, does not parse or is not in the copy (#400)'; Test = {
@@ -679,9 +695,9 @@ function Invoke-SelfTest {
             Write-Host (($none + $broken + $missing).TrimEnd() -replace '(?m)^', '    ')
             $noneCode -eq 1 -and $none -match '-Conditions names nodefault\.ps1, for which no condition revert could be written, so no revert was run' -and
                 $brokenCode -eq 1 -and $broken -match 'broken\.ps1 does not parse, so its conditions cannot be read' -and
-                $broken -match '(?m)^revert-run: 17 condition revert\(s\) written for conditions\.ps1\.' -and $broken -notmatch '(?m)^revert-run: condition ' -and
+                $broken -match '(?m)^revert-run: 23 condition revert\(s\) written for conditions\.ps1\.' -and $broken -notmatch '(?m)^revert-run: condition ' -and
                 $missingCode -eq 1 -and $missing -match '-Conditions names no-such\.ps1, which is not a file in the copy' -and (& $same) } }
-        @{ Name = '-Base writes condition reverts only on the lines git diff <ref> changes, a hunk of one line or more, the first operand of a chain over two lines when only its line changed, says the ref in the line it prints, and fails with no -Conditions or a ref git cannot diff (#400)'; Test = {
+        @{ Name = '-Base writes condition reverts only on the lines git diff <ref> changes, a hunk of one line or more, the first operand of a chain over two lines when only its line changed, says the ref in the line it prints, drops nothing where no line changed or a hunk only deletes, and fails with no -Conditions or a ref git cannot diff (#400)'; Test = {
             # Lines 5 and 6 changed in one hunk, and line 9 in a hunk of its own.
             $lines = [IO.File]::ReadAllText((Join-Path $repo 'conditions.ps1')) -split "`n"
             $lines[4] = "`$hit = `$x -in 'a', 'b', 'c'"; $lines[5] = "`$no = `$x -notin 'q', 'r', 's'"; $lines[8] = '$typed = $k -in [string], [int], [char]'
@@ -702,7 +718,16 @@ function Invoke-SelfTest {
             # Through the command line, the written line names the ref.
             $since = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'spans.ps1' -Base 'HEAD~1' 2>&1 | Out-String; $sinceCode = $LASTEXITCODE
             Write-Host ($since.TrimEnd() -replace '(?m)^', '    ')
-            $sinceCode -eq 0 -and $since -match '(?m)^revert-run: 1 condition revert\(s\) written for spans\.ps1, on lines changed since HEAD~1\.\r?$' -and
+            # No line changed since the ref: nothing to drop.
+            $nothing = @((Get-ConditionRevert -Root $repo -Script 'spans.ps1' -Since 'HEAD').Reverts)
+            # A line deleted after a condition, a hunk +1,0, changes no line of the condition.
+            [IO.File]::WriteAllText((Join-Path $repo 'del.ps1'), "`$a = `$x -ne 'a' -and `$x -ne 'b'`n# gone`n")
+            & $git add del.ps1; & $git commit --quiet -m 'del'
+            [IO.File]::WriteAllText((Join-Path $repo 'del.ps1'), "`$a = `$x -ne 'a' -and `$x -ne 'b'`n")
+            & $git commit --quiet -am 'deleted'
+            $deleted = @((Get-ConditionRevert -Root $repo -Script 'del.ps1' -Since 'HEAD~1').Reverts)
+            $nothing.Count -eq 0 -and $deleted.Count -eq 0 -and
+                $sinceCode -eq 0 -and $since -match '(?m)^revert-run: 1 condition revert\(s\) written for spans\.ps1, on lines changed since HEAD~1\.\r?$' -and
                 $spans.Count -eq 1 -and $spans[0].Name -ceq "condition spans.ps1:1 -and drops `$x -ne 'b'" -and $spans[0].Lines -eq 2 -and
                 $spans[0].Find -ceq "`$ok = `$x -ne 'b' -and`n    `$x -ne 'z'" -and $spans[0].Replace -ceq "`$ok = `$x -ne 'z'" -and
                 ($said -join '|') -ceq "5 -in drops 'a'|5 -in drops 'b'|5 -in drops 'c'|6 -notin drops 'q'|6 -notin drops 'r'|6 -notin drops 's'|9 -in drops [string]|9 -in drops [int]|9 -in drops [char]" -and
