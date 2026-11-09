@@ -607,9 +607,9 @@ if ($SelfTest) {
         Set-Content -LiteralPath (Join-Path $mismatch 'unflagged.ps1') -Value 'Set-StrictMode -Version Latest', '@(1).Count  # expect: flag'
         $mismatchFlags = Test-FixtureFlags @(Get-Files $mismatch)
         # A flagged .Count, for the advice printed with it.
-        $advice = Join-Path $temp 'advice'
+        $advice = Join-Path $temp 'advice'; $adviceFile = 'count.ps1'
         New-Item -ItemType Directory -Path $advice -Force | Out-Null
-        Set-Content -LiteralPath (Join-Path $advice 'count.ps1') -Value 'Set-StrictMode -Version Latest', '$x = Get-ChildItem', '$x.Count'
+        Set-Content -LiteralPath (Join-Path $advice $adviceFile) -Value 'Set-StrictMode -Version Latest', '$x = Get-ChildItem', '$x.Count'
         $adviceSaid = @(Invoke-Check @(Get-Files $advice) | ForEach-Object Text)
     } finally { Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue }
     # The run over the strict folder alone passes, so the two below fail for what they hold.
@@ -642,7 +642,7 @@ if ($SelfTest) {
     Write-Host "self-test 8/9: case 1's comparison fails a fixture set with no # expect: flag line, and one with a line flagged other than it says -- $(if ($noExpectOk) { 'ok' } else { 'FAILED' })"
     if (-not $noExpectOk) { @($noExpectFlags.Wrong) + @($mismatchFlags.Wrong) | ForEach-Object { Write-Host "    $_" } }
     # The advice for a .Count names each fix, written out here so that a change to it fails (#396).
-    $wantAdvice = 'count.ps1:3: .Count off $x, assigned an unwrapped command result on line 2; wrap the command in @(...); ' +
+    $wantAdvice = $adviceFile + ':3: .Count off $x, assigned an unwrapped command result on line 2; wrap the command in @(...); ' +
         'off a dictionary, read .PSBase.Count; @() round a call that returns its list as one object, , $list, nests it, ' +
         'so its count is always 1: wrap the variable the call was assigned to instead'
     $adviceOk = $adviceSaid.Count -eq 1 -and ($adviceSaid[0] -split "`n")[0].EndsWith("$([IO.Path]::DirectorySeparatorChar)$wantAdvice", [StringComparison]::Ordinal)
