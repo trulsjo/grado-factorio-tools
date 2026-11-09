@@ -334,7 +334,9 @@ function Get-TokenOnlyChange {
         $raw = @(git -C $Root -c core.quotePath=false diff-tree -r --no-renames $was[$i] $is[$i] 2>$null)
         if ($LASTEXITCODE) { return @() }
         foreach ($line in $raw) {
-            if ($line -cnotmatch '^:(\d+) (\d+) ([0-9a-f]+) ([0-9a-f]+) M\t(.+\.ps1)$' -or $Matches[1] -ne $Matches[2]) { return @() }
+            # An added or deleted .ps1 has mode 000000 on one side, so it is refused here as a mode
+            # change is; a blob git cannot read, as after a prune, is refused below.
+            if ($line -cnotmatch '^:(\d+) (\d+) ([0-9a-f]+) ([0-9a-f]+) [A-Z]\t(.+\.ps1)$' -or $Matches[1] -ne $Matches[2]) { return @() }
             $path = $Matches[5]
             $before = Read-Blob -Root $Root -Id $Matches[3]; $after = Read-Blob -Root $Root -Id $Matches[4]
             if ($null -eq $before -or $null -eq $after -or (Get-TokenKey $before) -cne (Get-TokenKey $after)) { return @() }
@@ -704,10 +706,27 @@ if ($SelfTest) {
                     (& $tokenRun @{ 's.ps1' = $script } @{ 's.ps1' = $script.Replace('# A comment.', '#  A comment.') })
                     (& $tokenRun @{ 's.ps1' = $script } @{ 's.ps1' = $script.Replace("`n# A", "`n`n# A") })
                     (& $tokenRun @{ 's.ps1' = $script } @{ 's.ps1' = $spaced; 'n.ps1' = $script })
-                    (& $tokenRun @{ 's.ps1' = $script; 'n.md' = 'one' } @{ 's.ps1' = $spaced; 'n.md' = 'two' }))
+                    (& $tokenRun @{ 's.ps1' = $script } @{ 's.ps1' = $spaced; 'e.ps1' = '' })
+                    # A Markdown file whose words are only spaced anew would be the same in tokens.
+                    (& $tokenRun @{ 's.ps1' = $script; 'n.md' = 'one two' } @{ 's.ps1' = $spaced; 'n.md' = 'one  two' }))
+                # A mode changed in the index, both blobs readable and the same in tokens.
+                [IO.File]::WriteAllText((Join-Path $repo 'm.ps1'), $script); git -C $repo add m.ps1
+                $from = Get-CheckedTree -Root $repo
+                git -C $repo update-index --chmod=+x m.ps1
+                $mode = @(Get-TokenOnlyChange -Root $repo -From $from -To (Get-CheckedTree -Root $repo))
+                git -C $repo rm --cached --quiet m.ps1; Remove-Item -LiteralPath (Join-Path $repo 'm.ps1')
+                # Two trees whose s.ps1 is a blob git does not hold, as after a prune: neither
+                # side can be read, so none is the same in tokens.
+                # Each in an index of its own: a tree piped to mktree here ends in CRLF.
+                $gone = foreach ($id in ('1' * 40), ('2' * 40)) {
+                    $env:GIT_INDEX_FILE = Join-Path $outside "gone-$id"
+                    try { git -C $repo update-index --add --cacheinfo "100644,$id,s.ps1"; git -C $repo write-tree --missing-ok }
+                    finally { Remove-Item Env:GIT_INDEX_FILE }
+                }
+                $pruned = @(Get-TokenOnlyChange -Root $repo -From "$($gone[0]) $($gone[0])" -To "$($gone[1]) $($gone[1])")
                 $full = Get-RunPlan -Steps $TOOL_STEPS
                 $alone = @(& $tokenRun @{ 's.ps1' = $script } @{ 's.ps1' = $spaced })
-                -not @($runs | Where-Object { $_ }) -and ($alone -join '|') -ceq 's.ps1' -and $full.SelfTests -and $full.Readme -and $full.Scripts -and
+                -not @($runs | Where-Object { $_ }) -and -not $mode -and -not $pruned -and $gone.Count -eq 2 -and ($alone -join '|') -ceq 's.ps1' -and $full.SelfTests -and $full.Readme -and $full.Scripts -and
                     @($full.Steps).Count -eq $TOOL_STEPS.Count }
             'a comment line pushed over the width by added indentation is a skip by tokens, and the width check, which still runs, fails it (#405)' = {
                 $comment = "# $('word ' * 19)xx"
