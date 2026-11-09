@@ -174,10 +174,14 @@ if ($SelfTest) {
     $git = { $said = & git -C $sib @args 2>&1 | Out-String; $codes.Add("git $($args -join ' '): $LASTEXITCODE"); $said }
     # A step that sets up a case and is not one: git with no hooks, so no pwsh is started for it
     # (#296), then the submodule brought to the pin the new HEAD records, where the hook would have
-    # left it or the step after it put it.
+    # left it or the step after it put it. That is a checkout in the submodule, not `git submodule
+    # update`, a shell script on git 2.37 that took 3.9 to 4.9 s a run here where a checkout takes
+    # 0.2 (#406); a submodule not initialised is left, as that command leaves it.
     $setup = {
         $null = & git -C $sib -c "core.hooksPath=$noHooks" @args 2>&1; $codes.Add("setup git $($args -join ' '): $LASTEXITCODE")
-        git -C $sib submodule --quiet update
+        if ((Test-Path -LiteralPath (Join-Path $subDir '.git')) -and "$(git -C $sib ls-tree HEAD -- $sub)" -match '^160000 commit ([0-9a-f]+)\t') {
+            git -C $subDir -c advice.detachedHead=false checkout --quiet $Matches[1]
+        }
     }
     # This script run as a hook would be, from the sibling's root, with $stdin on its stdin.
     $direct = {
