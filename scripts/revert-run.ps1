@@ -332,9 +332,10 @@ function Get-ConditionRevert {
     }
     $reverts = [System.Collections.Generic.List[hashtable]]::new()
     $unwritten = [System.Collections.Generic.List[string]]::new()
-    # In order. Of two shapes that start together, FindAll lists the outer first, and the sort keeps
-    # it.
-    foreach ($s in @($shapes | Sort-Object { $_.Node.Extent.StartOffset })) {
+    # In order. Of two shapes that start together, a chain inside one of the other operator, the
+    # outer first: it ends later. Sort-Object without -Stable does not keep tied items in their
+    # order.
+    foreach ($s in @($shapes | Sort-Object { $_.Node.Extent.StartOffset }, { -$_.Node.Extent.EndOffset })) {
         $parts = $s.Parts
         $drops = @(for ($i = 0; $i -lt $parts.Count; $i++) {
                 $lines = $parts[$i].Extent.StartLineNumber..$parts[$i].Extent.EndLineNumber
@@ -738,6 +739,15 @@ function Invoke-SelfTest {
                 ($said -join '|') -ceq "5 -in drops 'a'|5 -in drops 'b'|5 -in drops 'c'|6 -notin drops 'q'|6 -notin drops 'r'|6 -notin drops 's'|9 -in drops [string]|9 -in drops [int]|9 -in drops [char]" -and
                 -not $written.Unwritten -and $aloneCode -eq 1 -and $alone -match '-Base limits -Conditions, which is not given' -and
                 $badRefCode -eq 1 -and $badRef -match '-Base no-such-ref is not a ref git can diff in the copy' -and (& $same) } }
+        @{ Name = 'of 30 chains each inside one of the other operator, starting together, each outer chain''s reverts come before its inner one''s (#400)'; Test = {
+            # Enough ties that Sort-Object, which keeps no order among them, turns some over.
+            $nests = Join-Path $temp 'nests'
+            New-Item -ItemType Directory -Path $nests -Force | Out-Null
+            $chains = for ($i = 1; $i -le 30; $i++) { "`$m$i = `$k -and `$x -eq 'b$i' -or `$x -eq 'c$i'" }
+            [IO.File]::WriteAllText((Join-Path $nests 'nests.ps1'), (($chains -join "`n") + "`n"))
+            $order = @((Get-ConditionRevert -Root $nests -Script 'nests.ps1').Reverts | ForEach-Object { ($_.Name -split ' ')[1, 2] -join ' ' })
+            $want = @(for ($i = 1; $i -le 30; $i++) { "nests.ps1:$i -or"; "nests.ps1:$i -or"; "nests.ps1:$i -and"; "nests.ps1:$i -and" })
+            ($order -join '|') -ceq ($want -join '|') -and (& $same) } }
         @{ Name = 'with neither -List, -Defaults nor -Conditions, and with -Defaults naming no file of the copy, the run fails, exit 1, and runs nothing'; Test = {
             $neither = & pwsh -NoProfile -File $PSCommandPath -Copy $repo 2>&1 | Out-String; $neitherCode = $LASTEXITCODE
             $missing = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Defaults 'no-such.ps1' 2>&1 | Out-String; $missingCode = $LASTEXITCODE
