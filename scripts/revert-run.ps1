@@ -332,8 +332,9 @@ function Get-ConditionRevert {
     }
     $reverts = [System.Collections.Generic.List[hashtable]]::new()
     $unwritten = [System.Collections.Generic.List[string]]::new()
-    # In order; of two shapes that start together, the outer, which ends later, first.
-    foreach ($s in @($shapes | Sort-Object { $_.Node.Extent.StartOffset }, { -$_.Node.Extent.EndOffset })) {
+    # In order. Of two shapes that start together, FindAll lists the outer first, and the sort keeps
+    # it.
+    foreach ($s in @($shapes | Sort-Object { $_.Node.Extent.StartOffset })) {
         $parts = $s.Parts
         $drops = @(for ($i = 0; $i -lt $parts.Count; $i++) {
                 $lines = $parts[$i].Extent.StartLineNumber..$parts[$i].Extent.EndLineNumber
