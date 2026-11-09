@@ -1,7 +1,8 @@
 #!/bin/sh
 # Runs scripts/check.ps1 before a push leaves: a parse of every script and every self-test that
 # needs neither the game nor the network. With -SkipIfPassed, so a tree that check already passed
-# is not run again (grado-factorio-tools#176); what a skip shows and cannot see is in that
+# is not run again (grado-factorio-tools#176), nor its self-tests on a tree that differs from it
+# only in whitespace between a script's tokens (#405); what a skip shows and cannot see is in that
 # script's header, with what the check does not run. This file is only the wiring, as commit-msg
 # is, and is installed by the same one step:
 #

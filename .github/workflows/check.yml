@@ -57,7 +57,9 @@ jobs:
       # specimen in docs/research/scripts-checks.md, reworded. Nothing here is foreign code.
       # The floors fail a run whose patterns stopped matching (#379): on 2026-11-08,
       # CI's run of this step on PR #395 (42486073408) read 86 files and found 71 path-and-line
-      # citations and 6 continuations, none of our own code.
+      # citations and 6 continuations, none of our own code. Since #404, which amended ruling 8
+      # for this check, check.ps1 runs it too, so the pre-push hook refuses what this step would.
+      # This step stays, so CI's log shows the floors and the count it read on their own line.
       - name: Check that no prose cites our own code by line number
         run: pwsh -NoProfile -File scripts/line-cite-check.ps1 -MinCitations 50 -MinContinuations 4
 
