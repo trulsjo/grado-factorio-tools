@@ -30,10 +30,10 @@
     on the line where it ends (a ; or another comment between is fine). The marker never makes
     a read of .Count safe, because what one object's .Count gives depends on its type. On PowerShell
     7.6.9 under Set-StrictMode -Version Latest (2026-11-08), a hashtable has one, counting its keys
-    unless a key named Count takes it over, and a PSCustomObject has one that is always 1; a
-    string, a number, a file, a folder, a Process and $null throw. In $a, $b = ... only the first
-    variable gets the one object. A marker after a line with several unsafe reads covers none of
-    them; nor does a marker after a string cover a statement inside it.
+    unless a key named Count takes it over, and a PSCustomObject has one that is 1 unless a property
+    named Count takes it over; a string, a number, a file, a folder, a Process and $null throw. In
+    $a, $b = ... only the first variable gets the one object. A marker after a line with several
+    unsafe reads covers none of them; nor does a marker after a string cover a statement inside it.
 
     It parses each .ps1 that calls Set-StrictMode and gives each value a state:
       bare      a command result as PowerShell hands it over: Get-Thing, (Get-Thing),
