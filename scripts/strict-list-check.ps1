@@ -14,8 +14,9 @@
     beside it, and a run reads the paths it is given. The marker keeps its name.
 
     WHY. Under Set-StrictMode -Version Latest a command that outputs nothing gives $null, and one
-    that outputs one object gives that object. Reading .Count off either throws, and so does
-    reading the .Id or .Name of $null or of an empty array. All of it shows only on the run that
+    that outputs one object gives that object. Reading .Count off $null throws, and so does reading
+    it off one object of most types; which have one is said below. So does reading the .Id or .Name
+    of $null or of an empty array. All of it shows only on the run that
     finds nothing or one, often minutes into a real check; it happened six times on 2026-11-05.
 
     The fixes differ by property. For .Count, wrap the command in @(...), which always gives an
@@ -65,10 +66,11 @@
     A run with -Path skips that folder. Then it runs itself in a pwsh of its own, as a gate does,
     over paths that must each fail, naming why: a folder whose one script sets no strict mode, a
     folder with no script beside one with a script, the fixture folder alone, and a script that does
-    not parse. Last, it runs scratch fixtures, each untrue in one way, and requires each to be named
+    not parse. Next, it runs scratch fixtures, each untrue in one way, and requires each to be named
     for that way (#376), and runs the first comparison on scratch fixtures with no # expect: flag
     line, and on scratch fixtures with a line flagged other than it says, each of which must fail
-    (#397).
+    (#397). Then it runs the check on a scratch script with one unsafe .Count read and requires the
+    advice printed for it word for word (#396).
 
     What it cannot see: a command result passed in as a parameter, a variable assigned in one
     function and read in another, a copy made inside a loop of a variable assigned later in that
