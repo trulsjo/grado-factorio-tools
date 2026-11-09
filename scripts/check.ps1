@@ -157,8 +157,8 @@
     that. Each line prints its seconds so two runs can be compared; the measurement is in
     docs/measurements.md. Run at once, a self-test takes longer than alone, as the others share the
     processors: the slowest, follow-pin.ps1's, about 73 s alone and 124 s here four at a time,
-    so the run ends no sooner than it does (grado-factorio-tools#296). On 2026-11-09 it took
-    211 to 256 s alone, three runs, and 105 to 110 s once its setup stopped running
+    so the run ends no sooner than it does (grado-factorio-tools#296). On 2026-11-10 it took
+    152 to 181 s alone, three runs, and 93 to 94 s once its setup stopped running
     `git submodule update` (grado-factorio-tools#406).
 
 .PARAMETER SkipIfPassed
