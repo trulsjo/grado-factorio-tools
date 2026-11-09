@@ -668,7 +668,7 @@ function Invoke-SelfTest {
                 $brokenCode -eq 1 -and $broken -match 'broken\.ps1 does not parse, so its conditions cannot be read' -and
                 $broken -match '(?m)^revert-run: 13 condition revert\(s\) written for conditions\.ps1\.' -and $broken -notmatch '(?m)^revert-run: condition ' -and
                 $missingCode -eq 1 -and $missing -match '-Conditions names no-such\.ps1, which is not a file in the copy' -and (& $same) } }
-        @{ Name = '-Base writes condition reverts only on the lines git diff <ref> changes, a hunk of one line or more, the first operand of a chain over two lines when only its line changed, and fails with no -Conditions or a ref git cannot diff (#400)'; Test = {
+        @{ Name = '-Base writes condition reverts only on the lines git diff <ref> changes, a hunk of one line or more, the first operand of a chain over two lines when only its line changed, says the ref in the line it prints, and fails with no -Conditions or a ref git cannot diff (#400)'; Test = {
             # Lines 5 and 6 changed in one hunk, and line 9 in a hunk of its own.
             $lines = [IO.File]::ReadAllText((Join-Path $repo 'conditions.ps1')) -split "`n"
             $lines[4] = "`$hit = `$x -in 'a', 'b', 'c'"; $lines[5] = "`$no = `$x -notin 'q', 'r', 's'"; $lines[8] = '$typed = $k -in [string], [int], [char]'
@@ -686,7 +686,11 @@ function Invoke-SelfTest {
             [IO.File]::WriteAllText((Join-Path $repo 'spans.ps1'), "`$ok = `$x -ne 'b' -and`n    `$x -ne 'z'`n")
             & $git commit --quiet -am 'first'
             $spans = @((Get-ConditionRevert -Root $repo -Script 'spans.ps1' -Since 'HEAD~1').Reverts)
-            $spans.Count -eq 1 -and $spans[0].Name -ceq "condition spans.ps1:1 -and drops `$x -ne 'b'" -and $spans[0].Lines -eq 2 -and
+            # Through the command line, the written line names the ref.
+            $since = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'spans.ps1' -Base 'HEAD~1' 2>&1 | Out-String; $sinceCode = $LASTEXITCODE
+            Write-Host ($since.TrimEnd() -replace '(?m)^', '    ')
+            $sinceCode -eq 0 -and $since -match '(?m)^revert-run: 1 condition revert\(s\) written for spans\.ps1, on lines changed since HEAD~1\.\r?$' -and
+                $spans.Count -eq 1 -and $spans[0].Name -ceq "condition spans.ps1:1 -and drops `$x -ne 'b'" -and $spans[0].Lines -eq 2 -and
                 $spans[0].Find -ceq "`$ok = `$x -ne 'b' -and`n    `$x -ne 'z'" -and $spans[0].Replace -ceq "`$ok = `$x -ne 'z'" -and
                 ($said -join '|') -ceq "5 -in drops 'a'|5 -in drops 'b'|5 -in drops 'c'|6 -notin drops 'q'|6 -notin drops 'r'|6 -notin drops 's'|9 -in drops [string]|9 -in drops [int]|9 -in drops [char]" -and
                 -not $written.Unwritten -and $aloneCode -eq 1 -and $alone -match '-Base limits -Conditions, which is not given' -and
