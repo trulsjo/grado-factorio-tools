@@ -808,7 +808,7 @@ function Invoke-SelfTest {
                 # Not verdicts, each of a shape one guard of Test-Verdict tells apart: a Test
                 # block ending in a pipeline of two, a bare block and an assigned one, a key other
                 # than Test or not a string, a += and a member assigned, and variables read under
-                # -bnot or copied.
+                # -bnot, copied or written out as a statement of its own.
                 "    @{ Test = { `$x -ne 'u1' -and `$x -ne 'u2' | Out-Null } }"
                 "    { `$x -ne 'v1' -and `$x -ne 'v2' }"
                 "    `$tb = { `$x -ne 't1' -and `$x -ne 't2' }"
@@ -821,6 +821,8 @@ function Invoke-SelfTest {
                 '    $bits = -bnot $bOk'
                 "    `$cOk = `$x -ne 'c1' -and `$x -ne 'c2'"
                 '    $copy = $cOk'
+                "    `$dOk = `$x -ne 'd1' -and `$x -ne 'd2'"
+                '    $dOk'
                 '}'
                 'function Invoke-SelfTest {'
                 "    @{ Test = { `$x -ne 'n' -and `$x -ne 'o' } }"
@@ -842,9 +844,9 @@ function Invoke-SelfTest {
             $written = Get-ConditionRevert -Root $verdictDir -Script 'verdicts.ps1'
             $dropped = @($written.Reverts | ForEach-Object { ($_.Name -split ' ', 3)[2] -replace '^.*drops ' })
             $want = @("`$x -eq 'b'", "`$x -eq 'd'", "`$x -ne 'f'", "`$x -ne 'g'", "`$x -ne 'h'", "`$x -ne 'i'", "`$x -ne 'l'", "`$x -ne 'm'") +
-                @('u1', 'u2', 'v1', 'v2', 't1', 't2', 'w3', 'w4', 'w1', 'w2', 'y1', 'y2', 'z1', 'z2', 'b1', 'b2', 'c1', 'c2', 'o1', 'o2', 'e1', 'e2', 'p', 'q', 'r', 's' |
+                @('u1', 'u2', 'v1', 'v2', 't1', 't2', 'w3', 'w4', 'w1', 'w2', 'y1', 'y2', 'z1', 'z2', 'b1', 'b2', 'c1', 'c2', 'd1', 'd2', 'o1', 'o2', 'e1', 'e2', 'p', 'q', 'r', 's' |
                     ForEach-Object { "`$x -ne '$_'" })
-            $skips = 'line 4, 2 operand(s)|line 6, 2 operand(s)|line 8, 2 operand(s)|line 28, 2 operand(s)'
+            $skips = 'line 4, 2 operand(s)|line 6, 2 operand(s)|line 8, 2 operand(s)|line 30, 2 operand(s)'
             # Through the command line, on a script whose only chains are verdicts: each is named,
             # and with no revert left the run fails, having run nothing.
             [IO.File]::WriteAllText((Join-Path $repo 'verdicts.ps1'), "if (`$SelfTest) { `$ok = `$x -ne 'a' -and `$x -ne 'c'; if (`$ok) { } }`n")
