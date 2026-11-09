@@ -72,7 +72,7 @@ keeps its own prose checks beside its link to this page; these are shared.
   finding G), and the PR's own review did not.
 - **A guard or branch the change deletes as dead carries two things**: a reason no input reaches
   it, read from the code, and a run of the same check or script before and after the deletion,
-  over the same inputs, with the same output. A deletion with either missing is a finding. A
+  over the same inputs, with the same output. A deletion with neither is a finding. A
   revert that passes the self-test is no evidence of either: a live guard with no case passes
   the same way. Fixing trulsjo/grado-factorio-tools's PR #395's panel finding I
   ([its comment](https://github.com/trulsjo/grado-factorio-tools/pull/395#issuecomment-6725858356)),
