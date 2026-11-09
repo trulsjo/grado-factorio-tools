@@ -133,7 +133,7 @@
     On PR #403 one space put back in one line ran the whole check, follow-pin.ps1's self-test
     alone for 313 s. With -SkipIfPassed, where the record's trees and this tree's differ only in
     .ps1 files changed in place, and each such file's tokens, read by the parser with comments
-    and line breaks, are the same in both by kind, line and text, the run names those files and
+    and line breaks, are the same in both by kind and text, the run names those files and
     the passed tree, and runs no self-test, none of $TOOL_STEPS marked Parsed, and not README's
     reading of the parameters. It still runs the parse and the width check, which a space can fail
     (an indent counts), line-cite-check.ps1, the page limits and the Markdown check, and a pass
@@ -309,14 +309,14 @@ function Read-Blob {
     if ($git.ExitCode) { $null } else { $text }
 }
 
-# A script's tokens as the parser gives them, comments and line breaks included, each by its kind,
-# its line and its text: two scripts whose keys are equal differ at most in the whitespace between
-# tokens on a line.
+# A script's tokens as the parser gives them, comments and line breaks included, each by its kind
+# and its text: two scripts whose keys are equal differ at most in the whitespace between tokens
+# on a line, as every line break is a NewLine token or inside one's text.
 function Get-TokenKey {
     param([AllowEmptyString()] [string] $Text)
     $tokens = $null; $errors = $null
     [void] [System.Management.Automation.Language.Parser]::ParseInput($Text, [ref] $tokens, [ref] $errors)
-    @($tokens | ForEach-Object { "$($_.Kind) $($_.Extent.StartLineNumber) $($_.Text)" }) -join "`n"
+    @($tokens | ForEach-Object { "$($_.Kind) $($_.Text)" }) -join "`n"
 }
 
 # The scripts that differ between the tree pairs $From, the recorded pass's, and $To, this run's,
@@ -332,7 +332,7 @@ function Get-TokenOnlyChange {
     foreach ($i in 0, 1) {
         if ($was[$i] -eq $is[$i]) { continue }
         $raw = @(git -C $Root -c core.quotePath=false diff-tree -r --no-renames $was[$i] $is[$i] 2>$null)
-        if ($LASTEXITCODE -or -not $raw) { return @() }
+        if ($LASTEXITCODE) { return @() }
         foreach ($line in $raw) {
             if ($line -cnotmatch '^:(\d+) (\d+) ([0-9a-f]+) ([0-9a-f]+) M\t(.+\.ps1)$' -or $Matches[1] -ne $Matches[2]) { return @() }
             $path = $Matches[5]
