@@ -486,7 +486,7 @@ function Invoke-RevertRun {
         Write-Host "revert-run: $($written.Reverts.Count) condition revert(s) written for $script$(if ($Since) { ", on lines changed since $Since" })."
         foreach ($u in $written.Unwritten) { Write-Host "revert-run: $script, not written: $u." }
         # As for -Defaults, a script named that yields no revert read nothing.
-        if (-not $written.Reverts) { throw "-Conditions names $script, for which no condition revert could be written, so no revert was run." }
+        if (-not $written.Reverts) { throw "-Conditions names $script, for which no condition revert could be written$(if ($Since) { " on lines changed since $Since" }), so no revert was run." }
         foreach ($r in $written.Reverts) { $all.Add($r) }
     }
     $rows = [System.Collections.Generic.List[object]]::new()
@@ -698,7 +698,7 @@ function Invoke-SelfTest {
                 $brokenCode -eq 1 -and $broken -match 'broken\.ps1 does not parse, so its conditions cannot be read' -and
                 $broken -match '(?m)^revert-run: 23 condition revert\(s\) written for conditions\.ps1\.' -and $broken -notmatch '(?m)^revert-run: condition ' -and
                 $missingCode -eq 1 -and $missing -match '-Conditions names no-such\.ps1, which is not a file in the copy' -and (& $same) } }
-        @{ Name = '-Base writes condition reverts only on the lines git diff <ref> changes, a hunk of one line or more, the first operand of a chain over two lines when only its line changed, says the ref in the line it prints, drops nothing where no line changed or a hunk only deletes, and fails with no -Conditions or a ref git cannot diff (#400)'; Test = {
+        @{ Name = '-Base writes condition reverts only on the lines git diff <ref> changes, a hunk of one line or more, the first operand of a chain over two lines when only its line changed, says the ref in the line it prints, drops nothing where no line changed, naming the ref when that fails the run, or where a hunk only deletes, and fails with no -Conditions or a ref git cannot diff (#400)'; Test = {
             # Lines 5 and 6 changed in one hunk, and line 9 in a hunk of its own.
             $lines = [IO.File]::ReadAllText((Join-Path $repo 'conditions.ps1')) -split "`n"
             $lines[4] = "`$hit = `$x -in 'a', 'b', 'c'"; $lines[5] = "`$no = `$x -notin 'q', 'r', 's'"; $lines[8] = '$typed = $k -in [string], [int], [char]'
@@ -721,13 +721,17 @@ function Invoke-SelfTest {
             Write-Host ($since.TrimEnd() -replace '(?m)^', '    ')
             # No line changed since the ref: nothing to drop.
             $nothing = @((Get-ConditionRevert -Root $repo -Script 'spans.ps1' -Since 'HEAD').Reverts)
+            # Through the command line, the failure names the ref that left nothing.
+            $noneSince = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'spans.ps1' -Base 'HEAD' 2>&1 | Out-String; $noneSinceCode = $LASTEXITCODE
+            Write-Host ($noneSince.TrimEnd() -replace '(?m)^', '    ')
             # A line deleted after a condition, a hunk +1,0, changes no line of the condition.
             [IO.File]::WriteAllText((Join-Path $repo 'del.ps1'), "`$a = `$x -ne 'a' -and `$x -ne 'b'`n# gone`n")
             & $git add del.ps1; & $git commit --quiet -m 'del'
             [IO.File]::WriteAllText((Join-Path $repo 'del.ps1'), "`$a = `$x -ne 'a' -and `$x -ne 'b'`n")
             & $git commit --quiet -am 'deleted'
             $deleted = @((Get-ConditionRevert -Root $repo -Script 'del.ps1' -Since 'HEAD~1').Reverts)
-            $nothing.Count -eq 0 -and $deleted.Count -eq 0 -and
+            $nothing.Count -eq 0 -and $deleted.Count -eq 0 -and $noneSinceCode -eq 1 -and
+                $noneSince -match 'spans\.ps1, for which no condition revert could be written on lines changed since HEAD, so no revert was run' -and
                 $sinceCode -eq 0 -and $since -match '(?m)^revert-run: 1 condition revert\(s\) written for spans\.ps1, on lines changed since HEAD~1\.\r?$' -and
                 $spans.Count -eq 1 -and $spans[0].Name -ceq "condition spans.ps1:1 -and drops `$x -ne 'b'" -and $spans[0].Lines -eq 2 -and
                 $spans[0].Find -ceq "`$ok = `$x -ne 'b' -and`n    `$x -ne 'z'" -and $spans[0].Replace -ceq "`$ok = `$x -ne 'z'" -and
