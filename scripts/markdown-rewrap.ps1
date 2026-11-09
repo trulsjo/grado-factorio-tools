@@ -397,6 +397,26 @@ function Invoke-SelfTest {
             $r = (Invoke-CommentRewrap -Lines $in -Max $max).Lines
             ($r -ccontains '    EACH REVERT, IN ORDER. Next.') -and ($r -ccontains '    UTF-16 UNITS. Then.') -and
                 -not @($r | Where-Object { $_.Length -gt $max }) }
+        # Each part of the lead's pattern (#399): in each, the rewrapped line sits right above the
+        # lead line, after its own full stop, so the rewrap reaches it.
+        'a lead with a parenthesis starts a paragraph right after a rewrapped line (#399)' = {
+            $in = @('<#', '.DESCRIPTION', '    A help line that runs past forty, it ends.', '    WHERE IT CAME FROM (#343). A third.', '#>',
+                '# A hash line that runs past forty, it ends.', '# WHERE IT CAME FROM (#343). A third.')
+            $want = @('<#', '.DESCRIPTION', '    A help line that runs past forty, it', '    ends.', '    WHERE IT CAME FROM (#343). A third.', '#>',
+                '# A hash line that runs past forty, it', '# ends.', '# WHERE IT CAME FROM (#343). A third.')
+            ((Invoke-CommentRewrap -Lines $in -Max $max).Lines -join "`n") -ceq ($want -join "`n") }
+        'a one-letter word and a full stop, as A., is no lead, and is joined (#399)' = {
+            $in = @('<#', '.DESCRIPTION', '    A help line that runs past forty, it ends.', '    A. The next item here.', '#>',
+                '# A hash line that runs past forty, it ends.', '# A. The next item here.')
+            $want = @('<#', '.DESCRIPTION', '    A help line that runs past forty, it', '    ends. A. The next item here.', '#>',
+                '# A hash line that runs past forty, it', '# ends. A. The next item here.')
+            ((Invoke-CommentRewrap -Lines $in -Max $max).Lines -join "`n") -ceq ($want -join "`n") }
+        'a word whose full stop has no space or line end after it, as README.md, is no lead, and is joined (#399)' = {
+            $in = @('<#', '.DESCRIPTION', '    A help line that runs past forty, it ends.', '    README.md is the next one.', '#>',
+                '# A hash line that runs past forty, it ends.', '# README.md is the next one.')
+            $want = @('<#', '.DESCRIPTION', '    A help line that runs past forty, it', '    ends. README.md is the next one.', '#>',
+                '# A hash line that runs past forty, it', '# ends. README.md is the next one.')
+            ((Invoke-CommentRewrap -Lines $in -Max $max).Lines -join "`n") -ceq ($want -join "`n") }
         'a line with an ALL-CAPS word mid-line, or an ALL-CAPS lead with no full stop, is still joined (#377)' = {
             # Each joined, the lead fills the line before: as a paragraph, it would stand alone.
             $mid = (Invoke-CommentRewrap -Lines @('<#', '.DESCRIPTION', '    A help line that is well over the limit.', '    SEE the NOTE.', '#>') -Max $max).Lines
