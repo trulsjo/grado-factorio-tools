@@ -62,7 +62,14 @@
     `condition <file>:<line> <operator> drops <text>`, or `type list` for the operator, with
     (1 of 2), (2 of 2) after it where two would share a name, in their order there, and runs
     the script's own -SelfTest with no Args. A shape whose Find occurs other than once, or a list
-    of one element, is named with its line, and no revert written for it. With -Base <ref>, only an
+    of one element, is named with its line, and no revert written for it. A self-test's verdict
+    gets none either (#407): dropping an operand of a conjunction that holds leaves it holding,
+    so no self-test can fail that revert. Inside the clause of an if whose condition is $SelfTest,
+    or a function named Invoke-SelfTest, an -and chain is a verdict where it is the last statement
+    of a script block that is the value of a Test key, or the value assigned to a variable its
+    script block reads only as an if's condition or the operand of -not or !. Each is named,
+    `revert-run: <file>, skipped as a verdict: line <n>, <k> operand(s)`. An -or verdict, a chain
+    inside a verdict's operand, and any other chain keep their reverts. With -Base <ref>, only an
     operand or element on a line `git -C <copy> diff -U0 <ref>` adds or changes is dropped. As with
     -Defaults, a script it writes no revert for, -Base or not, or that does not parse, fails the
     run, exit 1 and nothing run.
@@ -108,7 +115,10 @@
     on the right of -in in parentheses or @(), or held in a variable; -cin and -cnotin,
     which match with case, though a list of type literals on their right is read as a type list;
     -contains, -xor, -not and the comparison operators; a type list that
-    holds anything but type literals; a condition revert whose self-test needs Args; and with -Base,
+    holds anything but type literals; a condition revert whose self-test needs Args; a verdict of
+    another shape, as an -and chain a function a case calls returns, or a variable read once as a
+    value, which keeps its reverts and passes; a self-test that is neither an if ($SelfTest)
+    clause nor Invoke-SelfTest, in which nothing is skipped; and with -Base,
     a condition the diff deletes, which leaves nothing to drop, or one it changes by a line outside
     the operand, as the `if (` above it.
 
@@ -341,6 +351,7 @@ function Get-ConditionRevert {
     }
     $reverts = [System.Collections.Generic.List[hashtable]]::new()
     $unwritten = [System.Collections.Generic.List[string]]::new()
+    $skipped = [System.Collections.Generic.List[string]]::new()
     foreach ($s in @(Get-ShapeOrder -Shapes @($shapes))) {
         $parts = $s.Parts
         $drops = @(for ($i = 0; $i -lt $parts.Count; $i++) {
@@ -350,6 +361,12 @@ function Get-ConditionRevert {
         # By its count: a lone index 0 reads false.
         if (-not $drops.Count) { continue }
         $line = $s.Node.Extent.StartLineNumber
+        # A self-test's verdict holds with any of its operands dropped, so no self-test can fail
+        # such a revert (#407).
+        if ($s.Node -is [System.Management.Automation.Language.BinaryExpressionAst] -and $s.Node.Operator -eq 'And' -and
+            (Test-SelfTestRegion -Node $s.Node) -and (Test-Verdict -Chain $s.Node)) {
+            $skipped.Add("line $line, $($parts.Count) operand(s)"); continue
+        }
         # A list of one element, as ,'a', has nothing left once that is dropped.
         if ($parts.Count -lt 2) { $unwritten.Add("line $line, a $($s.Op) of one element"); continue }
         # The whole lines the shape spans, so that the Find is more likely to occur once. \z, as $
@@ -375,7 +392,71 @@ function Get-ConditionRevert {
         $n = 0
         foreach ($r in $g.Group) { $n++; $r.Name += " ($n of $($g.Count))" }
     }
-    @{ Reverts = @($reverts); Unwritten = @($unwritten) }
+    @{ Reverts = @($reverts); Unwritten = @($unwritten); Skipped = @($skipped) }
+}
+
+# Whether $Node is inside a script's self-test (#407): the clause of an if whose condition is
+# $SelfTest, or a function named Invoke-SelfTest.
+function Test-SelfTestRegion {
+    param([Parameter(Mandatory)] [System.Management.Automation.Language.Ast] $Node)
+    for ($p = $Node.Parent; $p; $p = $p.Parent) {
+        if ($p -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $p.Name -eq 'Invoke-SelfTest') { return $true }
+        if ($p -is [System.Management.Automation.Language.StatementBlockAst] -and $p.Parent -is [System.Management.Automation.Language.IfStatementAst]) {
+            foreach ($clause in $p.Parent.Clauses) {
+                if ([object]::ReferenceEquals($clause.Item2, $p) -and $clause.Item1.Extent.Text -eq '$SelfTest') { return $true }
+            }
+        }
+    }
+    $false
+}
+
+# The statement $Expression is the whole of, as `$a -and $b` on a line of its own, or nothing.
+function Get-ExpressionStatement {
+    param([System.Management.Automation.Language.Ast] $Expression)
+    $command = $Expression.Parent
+    if ($command -isnot [System.Management.Automation.Language.CommandExpressionAst]) { return }
+    $pipe = $command.Parent
+    if ($pipe -is [System.Management.Automation.Language.PipelineAst] -and @($pipe.PipelineElements).Count -eq 1) { $pipe }
+}
+
+# Whether the -and chain $Chain is a self-test's verdict (#407): the last statement of a script
+# block that is the value of a Test key, or the value assigned to a variable that its scope reads
+# only as a truth value, an if's condition or the operand of -not or !.
+function Test-Verdict {
+    param([Parameter(Mandatory)] [System.Management.Automation.Language.Ast] $Chain)
+    # An assignment holds its value as an expression statement with no pipeline round it.
+    $statement = if ($Chain.Parent.Parent -is [System.Management.Automation.Language.AssignmentStatementAst]) { $Chain.Parent } else { Get-ExpressionStatement $Chain }
+    if (-not $statement) { return $false }
+    $holder = $statement.Parent
+    if ($holder -is [System.Management.Automation.Language.NamedBlockAst] -and [object]::ReferenceEquals(@($holder.Statements)[-1], $statement)) {
+        $block = $holder.Parent.Parent
+        $value = if ($block -is [System.Management.Automation.Language.ScriptBlockExpressionAst]) { Get-ExpressionStatement $block }
+        if ($value -and $value.Parent -is [System.Management.Automation.Language.HashtableAst]) {
+            foreach ($pair in $value.Parent.KeyValuePairs) {
+                if ([object]::ReferenceEquals($pair.Item2, $value) -and $pair.Item1 -is [System.Management.Automation.Language.StringConstantExpressionAst] -and
+                    $pair.Item1.Value -eq 'Test') { return $true }
+            }
+        }
+        return $false
+    }
+    if ($holder -isnot [System.Management.Automation.Language.AssignmentStatementAst] -or $holder.Operator -ne 'Equals' -or
+        $holder.Left -isnot [System.Management.Automation.Language.VariableExpressionAst] -or
+        -not [object]::ReferenceEquals($holder.Right, $statement)) { return $false }
+    $name = $holder.Left.VariablePath.UserPath
+    $scope = $holder.Parent
+    while ($scope -isnot [System.Management.Automation.Language.ScriptBlockAst]) { $scope = $scope.Parent }
+    $reads = @($scope.FindAll({ param($n)
+                $n -is [System.Management.Automation.Language.VariableExpressionAst] -and $n.VariablePath.UserPath -eq $name -and
+                -not ($n.Parent -is [System.Management.Automation.Language.AssignmentStatementAst] -and [object]::ReferenceEquals($n.Parent.Left, $n)) }, $true))
+    if (-not $reads) { return $false }
+    foreach ($r in $reads) {
+        $negated = $r.Parent -is [System.Management.Automation.Language.UnaryExpressionAst] -and $r.Parent.TokenKind -in 'Not', 'Exclaim'
+        $condition = Get-ExpressionStatement $r
+        $tested = $condition -and $condition.Parent -is [System.Management.Automation.Language.IfStatementAst] -and
+            @($condition.Parent.Clauses | Where-Object { [object]::ReferenceEquals($_.Item1, $condition) })
+        if (-not ($negated -or $tested)) { return $false }
+    }
+    $true
 }
 
 # What is uncommitted or untracked in the copy, one path to a line, or nothing.
@@ -492,6 +573,7 @@ function Invoke-RevertRun {
         $written = Get-ConditionRevert -Root $Root -Script $script -Since $Since
         Write-Host "revert-run: $($written.Reverts.Count) condition revert(s) written for $script$(if ($Since) { ", on lines changed since $Since" })."
         foreach ($u in $written.Unwritten) { Write-Host "revert-run: $script, not written: $u." }
+        foreach ($v in $written.Skipped) { Write-Host "revert-run: $script, skipped as a verdict: $v" }
         # As for -Defaults, a script named that yields no revert read nothing.
         if (-not $written.Reverts) { throw "-Conditions names $script, for which no condition revert could be written$(if ($Since) { " on lines changed since $Since" }), so no revert was run." }
         foreach ($r in $written.Reverts) { $all.Add($r) }
@@ -705,6 +787,46 @@ function Invoke-SelfTest {
                 $brokenCode -eq 1 -and $broken -match 'broken\.ps1 does not parse, so its conditions cannot be read' -and
                 $broken -match '(?m)^revert-run: 23 condition revert\(s\) written for conditions\.ps1\.' -and $broken -notmatch '(?m)^revert-run: condition ' -and
                 $missingCode -eq 1 -and $missing -match '-Conditions names no-such\.ps1, which is not a file in the copy' -and (& $same) } }
+        @{ Name = '-Conditions writes no revert of an -and verdict in a self-test, a Test block''s last statement or a variable read only as a truth value, and names each it skips; an -or verdict, a chain inside a verdict''s operand, one read as a value, one not last, and each outside the self-test keep theirs (#407)'; Test = {
+            $verdicts = @(
+                'param([switch] $SelfTest)'
+                "`$x = 'b'"
+                'if ($SelfTest) {'
+                "    `$cases = @(@{ Name = 'one'; Test = { `$x -ne 'a' -and `$x -ne 'c' } }"
+                "        @{ Name = 'two'; Test = { `$x -eq 'b' -or `$x -eq 'd' } }"
+                "        @{ Name = 'three'; Test = { `$x -ne 'e' -and (`$x -ne 'f' -and `$x -ne 'g') } }"
+                "        @{ Name = 'four'; Test = { `$x -ne 'h' -and `$x -ne 'i'; 'last' } })"
+                "    `$vOk = `$x -ne 'j' -and `$x -ne 'k'"
+                "    if (-not `$vOk) { 'no' }"
+                "    Write-Host `"`$(if (`$vOk) { 'ok' })`""
+                "    `$both = !`$vOk"
+                "    `$flag = `$x -ne 'l' -and `$x -ne 'm'"
+                '    $flag | Out-Null'
+                '}'
+                'function Invoke-SelfTest {'
+                "    @{ Test = { `$x -ne 'n' -and `$x -ne 'o' } }"
+                '}'
+                "`$out = @{ Test = { `$x -ne 'p' -and `$x -ne 'q' } }"
+                "`$outOk = `$x -ne 'r' -and `$x -ne 's'"
+                'if ($outOk) { }'
+            ) -join "`n"
+            $verdictDir = Join-Path $temp 'verdicts'
+            New-Item -ItemType Directory -Path $verdictDir -Force | Out-Null
+            [IO.File]::WriteAllText((Join-Path $verdictDir 'verdicts.ps1'), "$verdicts`n")
+            $written = Get-ConditionRevert -Root $verdictDir -Script 'verdicts.ps1'
+            $dropped = @($written.Reverts | ForEach-Object { ($_.Name -split ' ', 3)[2] -replace '^.*drops ' })
+            $want = @("`$x -eq 'b'", "`$x -eq 'd'", "`$x -ne 'f'", "`$x -ne 'g'", "`$x -ne 'h'", "`$x -ne 'i'", "`$x -ne 'l'", "`$x -ne 'm'",
+                "`$x -ne 'p'", "`$x -ne 'q'", "`$x -ne 'r'", "`$x -ne 's'")
+            $skips = 'line 4, 2 operand(s)|line 6, 2 operand(s)|line 8, 2 operand(s)|line 16, 2 operand(s)'
+            # Through the command line, on a script whose only chains are verdicts: each is named,
+            # and with no revert left the run fails, having run nothing.
+            [IO.File]::WriteAllText((Join-Path $repo 'verdicts.ps1'), "if (`$SelfTest) { `$ok = `$x -ne 'a' -and `$x -ne 'c'; if (`$ok) { } }`n")
+            & $git add verdicts.ps1; & $git commit --quiet -m 'verdicts'
+            $got = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'verdicts.ps1' 2>&1 | Out-String; $code = $LASTEXITCODE
+            Write-Host ($got.TrimEnd() -replace '(?m)^', '    ')
+            ($dropped -join '|') -ceq ($want -join '|') -and ($written.Skipped -join '|') -ceq $skips -and
+                $code -eq 1 -and $got -match '(?m)^revert-run: verdicts\.ps1, skipped as a verdict: line 1, 2 operand\(s\)\r?$' -and
+                $got -notmatch '(?m)^revert-run: condition ' -and (& $same) } }
         @{ Name = '-Base writes condition reverts only on the lines git diff <ref> changes, a hunk of one line or more, a list of one element on a changed line named and not written, the first operand of a chain over two lines when only its line changed, says the ref in the line it prints, drops nothing where no line changed, naming the ref when that fails the run, or where a hunk only deletes, and fails with no -Conditions or a ref git cannot diff (#400)'; Test = {
             # Lines 5 and 6 changed in one hunk, line 9 in a hunk of its own, and line 17, a list of
             # one element, in another.
