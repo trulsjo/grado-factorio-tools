@@ -336,7 +336,8 @@ function Get-ConditionRevert {
                 $lines = $parts[$i].Extent.StartLineNumber..$parts[$i].Extent.EndLineNumber
                 if ($null -eq $changed -or @($lines | Where-Object { $changed.Contains($_) })) { $i }
             })
-        if (-not $drops) { continue }
+        # By its count: a lone index 0 reads false.
+        if (-not $drops.Count) { continue }
         # The whole lines the shape spans, so that the Find is more likely to occur once.
         $start = $s.Node.Extent.StartOffset - $origin; $end = $s.Node.Extent.EndOffset - $origin
         $from = $start - [regex]::Match($text.Substring(0, $start), '[^\r\n]*$').Length
@@ -667,7 +668,7 @@ function Invoke-SelfTest {
                 $brokenCode -eq 1 -and $broken -match 'broken\.ps1 does not parse, so its conditions cannot be read' -and
                 $broken -match '(?m)^revert-run: 13 condition revert\(s\) written for conditions\.ps1\.' -and $broken -notmatch '(?m)^revert-run: condition ' -and
                 $missingCode -eq 1 -and $missing -match '-Conditions names no-such\.ps1, which is not a file in the copy' -and (& $same) } }
-        @{ Name = '-Base writes condition reverts only on the lines git diff <ref> changes, a hunk of one line or more, and fails with no -Conditions or a ref git cannot diff (#400)'; Test = {
+        @{ Name = '-Base writes condition reverts only on the lines git diff <ref> changes, a hunk of one line or more, the first operand of a chain over two lines when only its line changed, and fails with no -Conditions or a ref git cannot diff (#400)'; Test = {
             # Lines 5 and 6 changed in one hunk, and line 9 in a hunk of its own.
             $lines = [IO.File]::ReadAllText((Join-Path $repo 'conditions.ps1')) -split "`n"
             $lines[4] = "`$hit = `$x -in 'a', 'b', 'c'"; $lines[5] = "`$no = `$x -notin 'q', 'r', 's'"; $lines[8] = '$typed = $k -in [string], [int], [char]'
@@ -679,7 +680,15 @@ function Invoke-SelfTest {
             $aloneCode = $LASTEXITCODE
             $badRef = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'conditions.ps1' -Base 'no-such-ref' 2>&1 | Out-String; $badRefCode = $LASTEXITCODE
             Write-Host (($alone + $badRef).TrimEnd() -replace '(?m)^', '    ')
-            ($said -join '|') -ceq "5 -in drops 'a'|5 -in drops 'b'|5 -in drops 'c'|6 -notin drops 'q'|6 -notin drops 'r'|6 -notin drops 's'|9 -in drops [string]|9 -in drops [int]|9 -in drops [char]" -and
+            # A chain over two lines, of which only the first operand's line changed.
+            [IO.File]::WriteAllText((Join-Path $repo 'spans.ps1'), "`$ok = `$x -ne 'a' -and`n    `$x -ne 'z'`n")
+            & $git add spans.ps1; & $git commit --quiet -m 'spans'
+            [IO.File]::WriteAllText((Join-Path $repo 'spans.ps1'), "`$ok = `$x -ne 'b' -and`n    `$x -ne 'z'`n")
+            & $git commit --quiet -am 'first'
+            $spans = @((Get-ConditionRevert -Root $repo -Script 'spans.ps1' -Since 'HEAD~1').Reverts)
+            $spans.Count -eq 1 -and $spans[0].Name -ceq "condition spans.ps1:1 -and drops `$x -ne 'b'" -and $spans[0].Lines -eq 2 -and
+                $spans[0].Find -ceq "`$ok = `$x -ne 'b' -and`n    `$x -ne 'z'" -and $spans[0].Replace -ceq "`$ok = `$x -ne 'z'" -and
+                ($said -join '|') -ceq "5 -in drops 'a'|5 -in drops 'b'|5 -in drops 'c'|6 -notin drops 'q'|6 -notin drops 'r'|6 -notin drops 's'|9 -in drops [string]|9 -in drops [int]|9 -in drops [char]" -and
                 -not $written.Unwritten -and $aloneCode -eq 1 -and $alone -match '-Base limits -Conditions, which is not given' -and
                 $badRefCode -eq 1 -and $badRef -match '-Base no-such-ref is not a ref git can diff in the copy' -and (& $same) } }
         @{ Name = 'with neither -List, -Defaults nor -Conditions, and with -Defaults naming no file of the copy, the run fails, exit 1, and runs nothing'; Test = {
