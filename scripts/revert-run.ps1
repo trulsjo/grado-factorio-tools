@@ -279,12 +279,21 @@ function Get-DefaultRevert {
     @{ Reverts = @($reverts); Unwritten = @($unwritten) }
 }
 
+# The shapes in the order their reverts are written (#400): by where each starts, and of two that
+# start together, as a chain inside one of the other operator or a type list at a chain's start,
+# the outer, which ends later, first. Sort-Object without -Stable keeps tied items in their order
+# only while there are few of them, so the second key is what holds it.
+function Get-ShapeOrder {
+    param([object[]] $Shapes)
+    @($Shapes | Sort-Object { $_.Node.Extent.StartOffset }, { -$_.Node.Extent.EndOffset })
+}
+
 # The condition reverts of the script at $Script, a path from $Root (#400): one per operand of an
 # -and or -or chain, that operand dropped with its operator, and one per element of a comma list
 # on the right of -in or -notin, or of a comma list of type literals, that element dropped with
 # its comma. Each Find is the whole lines the chain or list spans. With $Since, only an operand or
 # element on a line `git diff $Since` changes. Unwritten names each shape whose Find occurs other
-# than once.
+# than once, and each list of one element.
 function Get-ConditionRevert {
     param([Parameter(Mandatory)] [string] $Root, [Parameter(Mandatory)] [string] $Script, [string] $Since = '')
     $file = $Script -replace '\\', '/'
@@ -332,10 +341,7 @@ function Get-ConditionRevert {
     }
     $reverts = [System.Collections.Generic.List[hashtable]]::new()
     $unwritten = [System.Collections.Generic.List[string]]::new()
-    # In order. Of two shapes that start together, a chain inside one of the other operator, the
-    # outer first: it ends later. Sort-Object without -Stable does not keep tied items in their
-    # order.
-    foreach ($s in @($shapes | Sort-Object { $_.Node.Extent.StartOffset }, { -$_.Node.Extent.EndOffset })) {
+    foreach ($s in @(Get-ShapeOrder -Shapes @($shapes))) {
         $parts = $s.Parts
         $drops = @(for ($i = 0; $i -lt $parts.Count; $i++) {
                 $lines = $parts[$i].Extent.StartLineNumber..$parts[$i].Extent.EndLineNumber
@@ -699,10 +705,11 @@ function Invoke-SelfTest {
                 $brokenCode -eq 1 -and $broken -match 'broken\.ps1 does not parse, so its conditions cannot be read' -and
                 $broken -match '(?m)^revert-run: 23 condition revert\(s\) written for conditions\.ps1\.' -and $broken -notmatch '(?m)^revert-run: condition ' -and
                 $missingCode -eq 1 -and $missing -match '-Conditions names no-such\.ps1, which is not a file in the copy' -and (& $same) } }
-        @{ Name = '-Base writes condition reverts only on the lines git diff <ref> changes, a hunk of one line or more, the first operand of a chain over two lines when only its line changed, says the ref in the line it prints, drops nothing where no line changed, naming the ref when that fails the run, or where a hunk only deletes, and fails with no -Conditions or a ref git cannot diff (#400)'; Test = {
-            # Lines 5 and 6 changed in one hunk, and line 9 in a hunk of its own.
+        @{ Name = '-Base writes condition reverts only on the lines git diff <ref> changes, a hunk of one line or more, a list of one element on a changed line named and not written, the first operand of a chain over two lines when only its line changed, says the ref in the line it prints, drops nothing where no line changed, naming the ref when that fails the run, or where a hunk only deletes, and fails with no -Conditions or a ref git cannot diff (#400)'; Test = {
+            # Lines 5 and 6 changed in one hunk, line 9 in a hunk of its own, and line 17, a list of
+            # one element, in another.
             $lines = [IO.File]::ReadAllText((Join-Path $repo 'conditions.ps1')) -split "`n"
-            $lines[4] = "`$hit = `$x -in 'a', 'b', 'c'"; $lines[5] = "`$no = `$x -notin 'q', 'r', 's'"; $lines[8] = '$typed = $k -in [string], [int], [char]'
+            $lines[4] = "`$hit = `$x -in 'a', 'b', 'c'"; $lines[5] = "`$no = `$x -notin 'q', 'r', 's'"; $lines[8] = '$typed = $k -in [string], [int], [char]'; $lines[16] = "`$one = `$x -in ,'c'"
             [IO.File]::WriteAllText((Join-Path $repo 'conditions.ps1'), ($lines -join "`n"))
             & $git commit --quiet -am 'base'
             $written = Get-ConditionRevert -Root $repo -Script 'conditions.ps1' -Since 'HEAD~1'
@@ -737,17 +744,23 @@ function Invoke-SelfTest {
                 $spans.Count -eq 1 -and $spans[0].Name -ceq "condition spans.ps1:1 -and drops `$x -ne 'b'" -and $spans[0].Lines -eq 2 -and
                 $spans[0].Find -ceq "`$ok = `$x -ne 'b' -and`n    `$x -ne 'z'" -and $spans[0].Replace -ceq "`$ok = `$x -ne 'z'" -and
                 ($said -join '|') -ceq "5 -in drops 'a'|5 -in drops 'b'|5 -in drops 'c'|6 -notin drops 'q'|6 -notin drops 'r'|6 -notin drops 's'|9 -in drops [string]|9 -in drops [int]|9 -in drops [char]" -and
-                -not $written.Unwritten -and $aloneCode -eq 1 -and $alone -match '-Base limits -Conditions, which is not given' -and
+                ($written.Unwritten -join '|') -ceq 'line 17, a -in of one element' -and $aloneCode -eq 1 -and $alone -match '-Base limits -Conditions, which is not given' -and
                 $badRefCode -eq 1 -and $badRef -match '-Base no-such-ref is not a ref git can diff in the copy' -and (& $same) } }
-        @{ Name = 'of 30 chains each inside one of the other operator, starting together, each outer chain''s reverts come before its inner one''s (#400)'; Test = {
-            # Enough ties that Sort-Object, which keeps no order among them, turns some over.
+        @{ Name = 'of two shapes that start together, the outer comes first: Get-ShapeOrder given each inner first, and 30 chains each inside one of the other operator (#400)'; Test = {
+            # Given inner first, a sort that keeps tied items in order leaves them so, and one that
+            # does not turns some over; only the second key puts every outer first, on any runtime.
+            $fake = { param($at, $to, $tag) @{ Tag = $tag; Node = [pscustomobject]@{ Extent = [pscustomobject]@{ StartOffset = $at; EndOffset = $to } } } }
+            $given = @(for ($i = 0; $i -lt 30; $i++) { & $fake (10 * $i) (10 * $i + 3) "inner$i"; & $fake (10 * $i) (10 * $i + 8) "outer$i" })
+            $sorted = @(Get-ShapeOrder -Shapes $given | ForEach-Object { $_.Tag })
+            $wantSorted = @(for ($i = 0; $i -lt 30; $i++) { "outer$i"; "inner$i" })
+            # Read from a script: with 60 tied shapes, Sort-Object on 7.6.9 turns some over too.
             $nests = Join-Path $temp 'nests'
             New-Item -ItemType Directory -Path $nests -Force | Out-Null
             $chains = for ($i = 1; $i -le 30; $i++) { "`$m$i = `$k -and `$x -eq 'b$i' -or `$x -eq 'c$i'" }
             [IO.File]::WriteAllText((Join-Path $nests 'nests.ps1'), (($chains -join "`n") + "`n"))
             $order = @((Get-ConditionRevert -Root $nests -Script 'nests.ps1').Reverts | ForEach-Object { ($_.Name -split ' ')[1, 2] -join ' ' })
             $want = @(for ($i = 1; $i -le 30; $i++) { "nests.ps1:$i -or"; "nests.ps1:$i -or"; "nests.ps1:$i -and"; "nests.ps1:$i -and" })
-            ($order -join '|') -ceq ($want -join '|') -and (& $same) } }
+            ($sorted -join '|') -ceq ($wantSorted -join '|') -and ($order -join '|') -ceq ($want -join '|') -and (& $same) } }
         @{ Name = 'with neither -List, -Defaults nor -Conditions, and with -Defaults naming no file of the copy, the run fails, exit 1, and runs nothing'; Test = {
             $neither = & pwsh -NoProfile -File $PSCommandPath -Copy $repo 2>&1 | Out-String; $neitherCode = $LASTEXITCODE
             $missing = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Defaults 'no-such.ps1' 2>&1 | Out-String; $missingCode = $LASTEXITCODE
