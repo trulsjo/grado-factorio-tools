@@ -66,13 +66,13 @@
     hanging indent such as a help paragraph's term and its text, whose flagged line is rewrapped to
     its own indent. A section lead after a line that ends other than in a full stop, as in a colon,
     which is joined to that line's paragraph; and a prose line that wraps to open with an ALL-CAPS
-    word and a full stop after a line that ends a sentence, which starts a paragraph (#398). A
-    prose line in a block comment opening with `.` and upper-case letters, as
-    `.NET`, which is taken for a keyword: it is left, and named where over, and under `.EXAMPLE`
-    it ends that section, so a command after it is rewrapped, where the lib's closed list of
-    keywords ends none. A block comment opened after code on its line, which is not read as one,
-    and so not named. And a line starting `# ` inside a here-string or a YAML block scalar, which
-    is taken for a comment, rewrapped and named.
+    word and a full stop after a line ending in a full stop, as an abbreviation such as e.g. does,
+    which starts a paragraph (#398). A prose line in a block comment opening with `.` and upper-case
+    letters, as `.NET`, which is taken for a keyword: it is left, and named where over, and under
+    `.EXAMPLE` it ends that section, so a command after it is rewrapped, where the lib's closed list
+    of keywords ends none. A block comment opened after code on its line, which is not read as one,
+    and so not named. And a line starting `# ` inside a here-string or a YAML block scalar, which is
+    taken for a comment, rewrapped and named.
 
 .PARAMETER Range
     Rewrap the Markdown files changed in this commit range, as markdown-check.ps1 takes it:
