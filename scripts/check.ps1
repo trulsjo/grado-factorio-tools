@@ -131,8 +131,8 @@
 
     A SKIP OF THE SELF-TESTS ON A CHANGE OF WHITESPACE BETWEEN TOKENS (grado-factorio-tools#405).
     On PR #403 one space put back in one line ran the whole check, follow-pin.ps1's self-test
-    alone for 313 s. With -SkipIfPassed, where the record's trees and this tree's differ only in
-    .ps1 files changed in place, and each such file's tokens, read by the parser with comments
+    alone for 313 s. With -SkipIfPassed, where the record's trees and this tree's differ only
+    in .ps1 files changed in place, and each such file's tokens, read by the parser with comments
     and line breaks, are the same in both by kind and text, the run names those files and
     the passed tree, and runs no self-test, none of $TOOL_STEPS marked Parsed, and not README's
     reading of the parameters. It still runs the parse and the width check, which a space can fail
