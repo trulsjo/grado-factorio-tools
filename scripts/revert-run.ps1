@@ -477,7 +477,7 @@ function Invoke-RevertRun {
         if (-not $written.Reverts) { throw "-Conditions names $script, for which no condition revert could be written, so no revert was run." }
         foreach ($r in $written.Reverts) { $all.Add($r) }
     }
-    $rows =[System.Collections.Generic.List[object]]::new()
+    $rows = [System.Collections.Generic.List[object]]::new()
     try {
         foreach ($r in $all) {
             $row = Invoke-Revert -Root $Root -Revert $r # strict-lists: one
