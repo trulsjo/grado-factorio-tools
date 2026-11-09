@@ -606,7 +606,8 @@ too little.
 
     pwsh -File scripts/line-cite-check.ps1
 
-CI runs it with `-MinCitations 50 -MinContinuations 4`. Before it did, on 2026-11-07, it read 83
+CI runs it with `-MinCitations 50 -MinContinuations 4`, and since #404 `scripts/check.ps1` does
+too, so the pre-push hook refuses what CI would. Before CI did, on 2026-11-07, it read 83
 files here and failed on 1 citation, a quoted specimen it took for ours, which was reworded. Prose
 that writes "lines 196-197" with no path is not seen; the rest is in its header. `-SelfTest` runs
 it on a scratch repository.
@@ -754,13 +755,15 @@ no network.
 
 `scripts/check.ps1` is the one command before a push. It parses every script here, runs each
 self-test that needs neither the game nor the network, runs `param-check.ps1`,
-`variable-case-check.ps1`, `help-check.ps1` and `strict-list-check.ps1` over `scripts/` and
+`variable-case-check.ps1`, `help-check.ps1` and `strict-list-check.ps1` over `scripts/`,
+`line-cite-check.ps1` over the tracked files with CI's floors (#404) and
 `markdown-check.ps1` over the tracked Markdown, holds the agent pages to their size limits, and
 fails on a script parameter this README never names as `-<Name>` (#194), or a script's comment
 line over 100 characters; the `pre-commit` hook holds the staged scripts to that rule too, through
 `scripts/comment-line-check.ps1` (#225). CI runs it, and so does the `pre-push` hook, with
-`-SkipIfPassed`, which runs nothing when a recorded run passed this same tree. What it cannot see
-is in its header.
+`-SkipIfPassed`, which runs nothing when a recorded run passed this same tree, and no self-test
+when the tree differs from that one only in whitespace between a script's tokens (#405); the
+parse and the width check still run. What it cannot see is in its header.
 
     pwsh -File scripts/check.ps1
 
