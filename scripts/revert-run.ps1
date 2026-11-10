@@ -725,25 +725,40 @@ function Invoke-SelfTest {
         @{ Code = $LASTEXITCODE; Text = $text }
     }
     $same = { [IO.File]::ReadAllText($stubPath) -ceq "$stub`n" -and -not @(Get-DirtyPath -Root $repo) }
-    # Whether each written revert would run as Invoke-Revert reads it, so that one checked here
-    # and not run is not one the run would refuse (#409): its Find occurs once in its file, the
-    # edit changes at least one line and no more than Lines, and the edited script still parses.
+    # Each written revert that would not run as Invoke-Revert reads it, named with why, so that
+    # one checked here and not run is not one the run would refuse (#409): its Find occurs once in
+    # its file, and the edit changes at least one line and no more than Lines, counted as the run
+    # counts them, by git's numstat, here in one git process for them all; and the edited script
+    # still parses. None where each would run.
     $fits = { param([hashtable[]] $reverts)
-        $misfits = foreach ($r in $reverts) {
-            $text = [IO.File]::ReadAllText((Join-Path $repo $r.File))
-            if ((Get-OccurrenceCount -Text $text -Find $r.Find) -ne 1) { $r.Name; continue }
-            $at = $text.IndexOf($r.Find, [StringComparison]::Ordinal)
-            $edited = $text.Substring(0, $at) + $r.Replace + $text.Substring($at + $r.Find.Length)
-            $old = $text -split "`n"; $new = $edited -split "`n"; $least = [Math]::Min($old.Count, $new.Count)
-            $head = 0; while ($head -lt $least -and $old[$head] -ceq $new[$head]) { $head++ }
-            $tail = 0; while ($tail -lt $least - $head -and $old[-1 - $tail] -ceq $new[-1 - $tail]) { $tail++ }
-            $removed = $old.Count - $head - $tail; $added = $new.Count - $head - $tail
-            $tokens = $null; $errors = $null
-            [void] [System.Management.Automation.Language.Parser]::ParseInput($edited, [ref] $tokens, [ref] $errors)
-            if (-not ($removed -or $added) -or $removed -gt $r.Lines -or $added -gt $r.Lines -or $errors) { $r.Name }
+        $dir = Join-Path $temp "fits-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+        New-Item -ItemType Directory -Path (Join-Path $dir 'a'), (Join-Path $dir 'b') | Out-Null
+        $edits = @{}
+        $misfits = @(for ($i = 0; $i -lt $reverts.Count; $i++) {
+                $r = $reverts[$i]
+                $text = [IO.File]::ReadAllText((Join-Path $repo $r.File))
+                $count = Get-OccurrenceCount -Text $text -Find $r.Find
+                if ($count -ne 1) { "$($r.Name): Find occurs $count times"; continue }
+                $at = $text.IndexOf($r.Find, [StringComparison]::Ordinal)
+                $edited = $text.Substring(0, $at) + $r.Replace + $text.Substring($at + $r.Find.Length)
+                $tokens = $null; $errors = $null
+                [void] [System.Management.Automation.Language.Parser]::ParseInput($edited, [ref] $tokens, [ref] $errors)
+                if ($errors) { "$($r.Name): the edit does not parse"; continue }
+                [IO.File]::WriteAllText((Join-Path $dir "a/$i"), $text); [IO.File]::WriteAllText((Join-Path $dir "b/$i"), $edited)
+                $edits["$i"] = $r
+            })
+        $counted = @{}
+        # Relative, as git quotes a path with a backslash in it.
+        foreach ($line in @(git -C $dir diff --no-index --numstat -- a b)) {
+            if ($line -match '^(\d+)\t(\d+)\t.*/(\d+)$') { $counted[$Matches[3]] = @([int] $Matches[1], [int] $Matches[2]) }
         }
+        $misfits += @(foreach ($k in $edits.Keys | Sort-Object { [int] $_ }) {
+                $c = $counted[$k]; $r = $edits[$k]
+                if (-not $c) { "$($r.Name): the edit changes no line" }
+                elseif ($c[0] -gt $r.Lines -or $c[1] -gt $r.Lines) { "$($r.Name): the edit changes $($c[0]) added and $($c[1]) removed lines, more than Lines = $($r.Lines)" }
+            })
         if ($misfits) { Write-Host "    would not run as written: $($misfits -join '; ')" }
-        -not $misfits }
+        $misfits }
 
     $cases = @(
         @{ Name = '-Defaults writes one revert per element of a list default and one per scalar default, names each default it cannot write, each revert one the run would run, and runs a few through the command line as a list''s are, one failing and one passing (#409)'; Test = {
@@ -775,6 +790,15 @@ function Invoke-SelfTest {
                 '-PE: its default is computed at run time', '-PS: its default is computed at run time')
             # The lines each default spans, which its revert may change.
             $spans = @($written.Reverts | ForEach-Object { "$($_.Name.Split(' ')[1])=$($_.Lines)" } | Sort-Object -Unique)
+            # The check of the list itself names each revert the run would refuse or could not
+            # parse, and passes a deletion and an addition of one line.
+            $r = { param($name, $find, $replace, $lines = 1) @{ Name = $name; File = 'stub.ps1'; Find = $find; Replace = $replace; Lines = $lines } }
+            $misfit = @(& $fits @(
+                    (& $r 'twice' "'alpha'" "'x'"), (& $r 'parse' "`$b = 'beta'" "`$b = ('beta'"), (& $r 'same' "`$b = 'beta'" "`$b = 'beta'"),
+                    (& $r 'added' "`$b = 'beta'" "`$b = 1`n`$b2 = 2`n`$b3 = 3"), (& $r 'removed' "`$b = 'beta'`n`$c = 'gamma'" "`$b = 1"),
+                    (& $r 'deleted' "`$b = 'beta'`n" ''), (& $r 'appended' "`$b = 'beta'" "`$b = 'beta'`n`$z = 1")))
+            $wantMisfit = @('twice: Find occurs 2 times', 'parse: the edit does not parse', 'same: the edit changes no line',
+                'added: the edit changes 3 added and 1 removed lines, more than Lines = 1', 'removed: the edit changes 1 added and 2 removed lines, more than Lines = 1')
             # Through the command line, a fixture of two reverts, one failing and one passing.
             $got = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Defaults 'few-defaults.ps1' 2>&1 | Out-String
             $code = $LASTEXITCODE
@@ -783,8 +807,9 @@ function Invoke-SelfTest {
             $printed = @([regex]::Matches($got, '(?m)^revert-run: few-defaults\.ps1, not written: (.+)\.\r?$') | ForEach-Object { $_.Groups[1].Value })
             ($said -join '|') -ceq ($want -join '|') -and ($written.Unwritten -join '|') -ceq ($unwritten -join '|') -and
                 ($spans -join ' ') -ceq '-Count=1 -Kinds=1 -Loose=1 -Main=1 -On=1 -One=1 -OneParen=1 -PA=1 -Paren=1 -PB=1 -PL=1 -PQ=1 -PX=1 -PY=1 -Quoted=1 -Single=1 -Stacked=4 -Wrapped=2' -and
-                @($written.Reverts | Where-Object { -not $_.Find.StartsWith('param([switch] $SelfTest, ') -or $_.File -ne 'defaults.ps1' -or $_.SelfTest -ne 'defaults.ps1' }).Count -eq 0 -and
-                (& $fits $written.Reverts) -and
+                @($written.Reverts | Where-Object { -not $_.Find.StartsWith('param([switch] $SelfTest, ') -or $_.SelfTest -ne 'defaults.ps1' }).Count -eq 0 -and
+                (@($written.Reverts | ForEach-Object { $_.File } | Sort-Object -Unique) -join '|') -ceq 'defaults.ps1' -and
+                -not (& $fits $written.Reverts) -and ($misfit -join '|') -ceq ($wantMisfit -join '|') -and
                 $code -eq 0 -and $got -match '(?m)^revert-run: 2 default revert\(s\) written for few-defaults\.ps1\.' -and
                 ($printed -join '|') -ceq '-When: its default is computed at run time' -and
                 ($rows -join '|') -ceq "default -Kinds drops 'a': fails|default -Kinds drops 'b': passes" -and (& $same) } }
@@ -825,7 +850,7 @@ function Invoke-SelfTest {
             $f = 'condition few-conditions.ps1:4 -in drops'
             ($said -join '|') -ceq ($want -join '|') -and ($written.Unwritten -join '|') -ceq ($unwritten -join '|') -and
                 @($written.Reverts | Where-Object { $_.File -ne 'conditions.ps1' -or $_.SelfTest -ne 'conditions.ps1' -or $_.Lines -ne ($_.Name -match ':1[45] ' ? 2 : 1) }).Count -eq 0 -and
-                (& $fits $written.Reverts) -and
+                -not (& $fits $written.Reverts) -and
                 $code -eq 0 -and $got -match '(?m)^revert-run: 2 condition revert\(s\) written for few-conditions\.ps1\.' -and
                 ($printed -join '|') -ceq 'line 3, a -in of one element' -and
                 ($rows -join '|') -ceq "$f 'a': passes|$f 'b': fails" -and (& $same) } }
