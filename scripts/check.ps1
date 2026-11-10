@@ -530,8 +530,8 @@ if ($SelfTest) {
             & $Change; $t = Get-CheckedTree -Root $repo; & $Undo
             $t -and $t -ne $base
         }
-        # git in $repo with $In written to its standard input byte for byte, as a pipe from
-        # PowerShell would end each line in CRLF; its output, trimmed. Throws where git fails.
+        # git in $repo with $In written to its standard input byte for byte, since a pipe
+        # from PowerShell would end each line in CRLF; its output, trimmed. Throws where git fails.
         $gitIn = {
             param([string] $In, [string[]] $Arguments)
             $start = [Diagnostics.ProcessStartInfo]::new('git')
@@ -553,7 +553,8 @@ if ($SelfTest) {
         # The trees Get-CheckedTree would give, built from blobs and not from the working tree and
         # index (#410): from the one with $Before's files to the one with $After's written over
         # them and those in $Stage staged, as `<working> <index>` pairs, compared by
-        # Get-TokenOnlyChange. Each text is a blob of one git process, and each tree one more.
+        # Get-TokenOnlyChange. Every text is hashed by one git process, and each tree built by
+        # one more.
         $tokenRun = {
             param([hashtable] $Before, [hashtable] $After, [string[]] $Stage = @())
             $staged = @{}; foreach ($k in $Stage) { $staged[$k] = $Before[$k].Replace('{ ', '{    ') }
@@ -778,14 +779,15 @@ if ($SelfTest) {
                 # A mode changed in the index, both blobs readable and the same in tokens.
                 $p = Join-Path $outside 'm.ps1'; [IO.File]::WriteAllText($p, $script); $blob = git -C $repo hash-object -w -- $p
                 $from = & $mktree (@($baseEntries) + "100644 blob $blob`tm.ps1")
-                $mode = @(Get-TokenOnlyChange -Root $repo -From "$from $from" -To "$from $(& $mktree (@($baseEntries) + "100755 blob $blob`tm.ps1"))")
+                $modeTree = & $mktree (@($baseEntries) + "100755 blob $blob`tm.ps1")
+                $mode = @(Get-TokenOnlyChange -Root $repo -From "$from $from" -To "$from $modeTree")
                 # Two trees whose s.ps1 is a blob git does not hold, as after a prune: neither
                 # side can be read, so none is the same in tokens.
                 $gone = foreach ($id in ('1' * 40), ('2' * 40)) { & $mktree "100644 blob $id`ts.ps1" '--missing' }
                 $pruned = @(Get-TokenOnlyChange -Root $repo -From "$($gone[0]) $($gone[0])" -To "$($gone[1]) $($gone[1])")
                 $full = Get-RunPlan -Steps $TOOL_STEPS
                 $alone = @(& $tokenRun @{ 's.ps1' = $script } @{ 's.ps1' = $spaced })
-                -not @($runs | Where-Object { $_ }) -and -not $mode -and -not $pruned -and $gone.Count -eq 2 -and ($alone -join '|') -ceq 's.ps1' -and $full.SelfTests -and $full.Readme -and $full.Scripts -and
+                -not @($runs | Where-Object { $_ }) -and -not $mode -and $modeTree -ne $from -and -not $pruned -and $gone.Count -eq 2 -and $gone[0] -ne $gone[1] -and ($alone -join '|') -ceq 's.ps1' -and $full.SelfTests -and $full.Readme -and $full.Scripts -and
                     @($full.Steps).Count -eq $TOOL_STEPS.Count }
             'a comment line pushed over the width by added indentation is a skip by tokens, and the width check, which still runs, fails it (#405)' = {
                 $comment = "# $('word ' * 19)xx"
