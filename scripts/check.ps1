@@ -530,22 +530,47 @@ if ($SelfTest) {
             & $Change; $t = Get-CheckedTree -Root $repo; & $Undo
             $t -and $t -ne $base
         }
-        # Get-TokenOnlyChange from the tree with $Before's files, added to the index, to the one
-        # with $After's written over them, and those in $Stage added to the index too; every
-        # file is then taken out again.
+        # git in $repo with $In written to its standard input byte for byte, as a pipe from
+        # PowerShell would end each line in CRLF; its output, trimmed. Throws where git fails.
+        $gitIn = {
+            param([string] $In, [string[]] $Arguments)
+            $start = [Diagnostics.ProcessStartInfo]::new('git')
+            foreach ($a in @('-C', $repo) + $Arguments) { $start.ArgumentList.Add($a) }
+            $start.RedirectStandardInput = $true; $start.RedirectStandardOutput = $true; $start.RedirectStandardError = $true
+            $start.UseShellExecute = $false; $start.StandardInputEncoding = [Text.UTF8Encoding]::new($false)
+            $process = [Diagnostics.Process]::Start($start)
+            $errors = $process.StandardError.ReadToEndAsync()
+            $process.StandardInput.Write($In); $process.StandardInput.Close()
+            $out = $process.StandardOutput.ReadToEnd(); $process.WaitForExit()
+            if ($process.ExitCode) { throw "git $Arguments failed: $($errors.Result)" }
+            $out.Trim()
+        }
+        # The tree of $Entries, each `<mode> blob <id>`, a tab and a path, by one git process.
+        $mktree = { param([string[]] $Entries, [string[]] $Options = @()) & $gitIn (@($Entries | ForEach-Object { "$_`n" }) -join '') (@('mktree') + $Options) }
+        # The index's entries as mktree reads them: the files every tree below is built on, as
+        # Get-CheckedTree would find them in the index and the working tree.
+        $baseEntries = @(git -C $repo ls-files -s | ForEach-Object { $_ -replace '^(\d+) ([0-9a-f]+) \d\t', "`$1 blob `$2`t" })
+        # The trees Get-CheckedTree would give, built from blobs and not from the working tree and
+        # index (#410): from the one with $Before's files to the one with $After's written over
+        # them and those in $Stage staged, as `<working> <index>` pairs, compared by
+        # Get-TokenOnlyChange. Each text is a blob of one git process, and each tree one more.
         $tokenRun = {
             param([hashtable] $Before, [hashtable] $After, [string[]] $Stage = @())
-            foreach ($k in $Before.Keys) { [IO.File]::WriteAllText((Join-Path $repo $k), $Before[$k]) }
-            git -C $repo add -- @($Before.Keys)
-            $from = Get-CheckedTree -Root $repo
-            foreach ($k in $After.Keys) { [IO.File]::WriteAllText((Join-Path $repo $k), $After[$k]) }
-            foreach ($k in $Stage) { [IO.File]::WriteAllText((Join-Path $repo $k), $Before[$k].Replace('{ ', '{    ')); git -C $repo add -- $k }
-            try { @(Get-TokenOnlyChange -Root $repo -From $from -To (Get-CheckedTree -Root $repo)) }
-            finally {
-                $all = @($Before.Keys) + @($After.Keys) | Sort-Object -Unique
-                git -C $repo rm --cached --quiet --ignore-unmatch -- @($all)
-                foreach ($k in $all) { Remove-Item -LiteralPath (Join-Path $repo $k) -ErrorAction SilentlyContinue }
+            $staged = @{}; foreach ($k in $Stage) { $staged[$k] = $Before[$k].Replace('{ ', '{    ') }
+            $texts = @(@($Before.Values) + @($After.Values) + @($staged.Values) | Sort-Object -Unique -CaseSensitive)
+            $paths = for ($i = 0; $i -lt $texts.Count; $i++) {
+                $p = Join-Path $outside "blob-$i"; [IO.File]::WriteAllText($p, $texts[$i]); $p
             }
+            $ids = @(git -C $repo hash-object -w -- @($paths) 2>$null)
+            if ($LASTEXITCODE -or $ids.Count -ne $texts.Count) { throw 'git hash-object failed.' }
+            $id = [hashtable]::new([StringComparer]::Ordinal); for ($i = 0; $i -lt $texts.Count; $i++) { $id[$texts[$i]] = $ids[$i] }
+            # Each argument a hashtable of files, a later one's written over an earlier one's.
+            $tree = {
+                $files = @{}; foreach ($l in $args) { foreach ($k in $l.Keys) { $files[$k] = $id[$l[$k]] } }
+                & $mktree (@($baseEntries) + @($files.Keys | ForEach-Object { "100644 blob $($files[$_])`t$_" })) }
+            $from = & $tree $Before
+            $index = if ($Stage) { & $tree $Before $staged } else { $from }
+            @(Get-TokenOnlyChange -Root $repo -From "$from $from" -To "$(& $tree $Before $After $staged) $index")
         }
         $cases = [ordered]@{
             'a pass over an unchanged tree exits 0 and records the tree, which reads back as that tree' = {
@@ -751,19 +776,12 @@ if ($SelfTest) {
                     # A Markdown file whose words are only spaced anew would be the same in tokens.
                     (& $tokenRun @{ 's.ps1' = $script; 'n.md' = 'one two' } @{ 's.ps1' = $spaced; 'n.md' = 'one  two' }))
                 # A mode changed in the index, both blobs readable and the same in tokens.
-                [IO.File]::WriteAllText((Join-Path $repo 'm.ps1'), $script); git -C $repo add m.ps1
-                $from = Get-CheckedTree -Root $repo
-                git -C $repo update-index --chmod=+x m.ps1
-                $mode = @(Get-TokenOnlyChange -Root $repo -From $from -To (Get-CheckedTree -Root $repo))
-                git -C $repo rm --cached --quiet m.ps1; Remove-Item -LiteralPath (Join-Path $repo 'm.ps1')
+                $p = Join-Path $outside 'm.ps1'; [IO.File]::WriteAllText($p, $script); $blob = git -C $repo hash-object -w -- $p
+                $from = & $mktree (@($baseEntries) + "100644 blob $blob`tm.ps1")
+                $mode = @(Get-TokenOnlyChange -Root $repo -From "$from $from" -To "$from $(& $mktree (@($baseEntries) + "100755 blob $blob`tm.ps1"))")
                 # Two trees whose s.ps1 is a blob git does not hold, as after a prune: neither
                 # side can be read, so none is the same in tokens.
-                # Each in an index of its own: a tree piped to mktree here ends in CRLF.
-                $gone = foreach ($id in ('1' * 40), ('2' * 40)) {
-                    $env:GIT_INDEX_FILE = Join-Path $outside "gone-$id"
-                    try { git -C $repo update-index --add --cacheinfo "100644,$id,s.ps1"; git -C $repo write-tree --missing-ok }
-                    finally { Remove-Item Env:GIT_INDEX_FILE }
-                }
+                $gone = foreach ($id in ('1' * 40), ('2' * 40)) { & $mktree "100644 blob $id`ts.ps1" '--missing' }
                 $pruned = @(Get-TokenOnlyChange -Root $repo -From "$($gone[0]) $($gone[0])" -To "$($gone[1]) $($gone[1])")
                 $full = Get-RunPlan -Steps $TOOL_STEPS
                 $alone = @(& $tokenRun @{ 's.ps1' = $script } @{ 's.ps1' = $spaced })
