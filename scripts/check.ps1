@@ -362,7 +362,8 @@ function Get-RunPlan {
 # the line naming them, Plan, by Get-RunPlan, and Pass, the line a pass ends with.
 function Get-RunStart {
     param([string] $Root, [hashtable] $Passed, [string] $Tree, [object[]] $Steps)
-    if ($Passed -and $Passed.Tree -eq $Tree) {
+    # No record reads as no tree: $null.Tree is $null, never equal to a tree.
+    if ($Passed.Tree -eq $Tree) {
         return @{ Skip = "OK - check skipped: this tree (working $($Passed.Working), index $($Passed.Index)) passed it at $($Passed.At). Nothing was run." }
     }
     $files = if ($Passed) { @(Get-TokenOnlyChange -Root $Root -From $Passed.Tree -To $Tree) } else { @() }
