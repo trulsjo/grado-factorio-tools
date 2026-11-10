@@ -551,12 +551,13 @@ if ($SelfTest) {
         # Get-CheckedTree would find them in the index and the working tree.
         $baseEntries = @(git -C $repo ls-files -s | ForEach-Object { $_ -replace '^(\d+) ([0-9a-f]+) \d\t', "`$1 blob `$2`t" })
         # The trees Get-CheckedTree would give, built from blobs and not from the working tree and
-        # index (#410): from the one with $Before's files to the one with $After's written over
-        # them and those in $Stage staged, as `<working> <index>` pairs, compared by
-        # Get-TokenOnlyChange. Every text is hashed by one git process, and each tree built by
-        # one more.
+        # index (#410): from the one with $Before's files to the one where each file in $Stage is
+        # spaced anew and staged, as git add leaves it, and $After's are then written over the
+        # working tree's, as `<working> <index>` pairs, compared by Get-TokenOnlyChange; with
+        # -Trees, the second pair itself (#413). Every text is hashed by one git process, and each
+        # tree built by one more.
         $tokenRun = {
-            param([hashtable] $Before, [hashtable] $After, [string[]] $Stage = @())
+            param([hashtable] $Before, [hashtable] $After, [string[]] $Stage = @(), [switch] $Trees)
             $staged = @{}; foreach ($k in $Stage) { $staged[$k] = $Before[$k].Replace('{ ', '{    ') }
             $texts = @(@($Before.Values) + @($After.Values) + @($staged.Values) | Sort-Object -Unique -CaseSensitive)
             $paths = for ($i = 0; $i -lt $texts.Count; $i++) {
@@ -571,7 +572,9 @@ if ($SelfTest) {
                 & $mktree (@($baseEntries) + @($files.Keys | ForEach-Object { "100644 blob $($files[$_])`t$_" })) }
             $from = & $tree $Before
             $index = if ($Stage) { & $tree $Before $staged } else { $from }
-            @(Get-TokenOnlyChange -Root $repo -From "$from $from" -To "$(& $tree $Before $After $staged) $index")
+            $to = "$(& $tree $Before $staged $After) $index"
+            if ($Trees) { return $to }
+            @(Get-TokenOnlyChange -Root $repo -From "$from $from" -To $to)
         }
         $cases = [ordered]@{
             'a pass over an unchanged tree exits 0 and records the tree, which reads back as that tree' = {
@@ -763,6 +766,23 @@ if ($SelfTest) {
                 $plan = Get-RunPlan -Steps $TOOL_STEPS -TokensOnly
                 ($got -join '|') -ceq 's.ps1|t.ps1' -and $plan.Scripts -and -not $plan.SelfTests -and -not $plan.Readme -and
                     -not @($plan.Steps | Where-Object { $_.Parsed }) -and @($plan.Steps).Count -eq @($TOOL_STEPS | Where-Object { -not $_.Parsed }).Count }
+            'a .ps1 whose token-only change is staged, and then put back in the working tree, is named from the index alone; the trees built for it, and for one staged as git add leaves it, are those Get-CheckedTree gives (#413)' = {
+                $script = "param([switch] `$SelfTest)`n# A comment.`nif (`$SelfTest) { `$a = 1 }`n"
+                $alone = @(& $tokenRun @{ 'u.ps1' = $script } @{ 'u.ps1' = $script } -Stage 'u.ps1')
+                $built = & $tokenRun @{ 't.ps1' = $script; 'u.ps1' = $script } @{ 'u.ps1' = $script } -Stage 't.ps1', 'u.ps1' -Trees
+                # The same two files on disk and in the index: both spaced anew and staged, and
+                # u.ps1 then written back as it was.
+                $wide = $script.Replace('{ ', '{    ')
+                foreach ($n in 't.ps1', 'u.ps1') { [IO.File]::WriteAllText((Join-Path $repo $n), $wide) }
+                git -C $repo add -- t.ps1 u.ps1
+                [IO.File]::WriteAllText((Join-Path $repo 'u.ps1'), $script)
+                try { $real = Get-CheckedTree -Root $repo }
+                finally { git -C $repo rm --cached --quiet -- t.ps1 u.ps1; Remove-Item -LiteralPath (Join-Path $repo 't.ps1'), (Join-Path $repo 'u.ps1') }
+                ($alone -join '|') -ceq 'u.ps1' -and $real -and $real -ceq $built }
+            'where git fails, the fixture''s git call throws naming the command: mktree given a blob git does not hold, without --missing (#414)' = {
+                $refused = try { & $mktree "100644 blob $('3' * 40)`ts.ps1" | Out-Null; '' } catch { $_.Exception.Message }
+                Write-Host "    $refused"
+                $refused -clike 'git mktree failed: ?*' }
             'a changed token, comment or line count, a space that changes what the tokens parse to, an added .ps1 or any other changed file runs the whole check (#405)' = {
                 $script = "param([switch] `$SelfTest)`n# A comment.`nif (`$SelfTest) { `$a = 1 }`n"
                 $spaced = $script.Replace('{ $a', '{   $a')
