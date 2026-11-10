@@ -202,11 +202,12 @@ function Get-DefaultRevert {
     $reverts = [System.Collections.Generic.List[hashtable]]::new()
     $unwritten = [System.Collections.Generic.List[string]]::new()
     $params = if ($ast.ParamBlock) { @($ast.ParamBlock.Parameters) } else { @() }
-    # A value written out, not computed: a string with nothing expanded in it, or a number.
-    $isConstant = { param($e)
-        $e -is [System.Management.Automation.Language.StringConstantExpressionAst] -or
-        ($e -is [System.Management.Automation.Language.ExpandableStringExpressionAst] -and -not @($e.NestedExpressions)) -or
-        ($e -is [System.Management.Automation.Language.ConstantExpressionAst] -and $e.Value -is [ValueType]) }
+    # A value written out, not computed: a string with nothing expanded in it, or a number. The
+    # parser makes the first a StringConstantExpressionAst, the one type derived from
+    # ConstantExpressionAst, whatever its quotes, and an ExpandableStringExpressionAst only of a
+    # string with something expanded in it; a ConstantExpressionAst of its own it makes only of a
+    # number (#415, PowerShell 7.6.9's parser).
+    $isConstant = { param($e) $e -is [System.Management.Automation.Language.ConstantExpressionAst] }
     foreach ($p in $params) {
         $default = $p.DefaultValue
         if (-not $default) { continue }
@@ -269,13 +270,16 @@ function Get-DefaultRevert {
         # One written-out value in parentheses, a constant, $true or $false, is named by its
         # shape before the computed test, which reads $true as a variable (#394).
         $isBool = { param($e) $e -is [System.Management.Automation.Language.VariableExpressionAst] -and $e.VariablePath.UserPath -in 'true', 'false' }
-        if ($single -and -not $computed -and $elements.Count -eq 1 -and ((& $isConstant $elements[0]) -or (& $isBool $elements[0]))) {
+        # A parenthesised default has one statement, which gives its expression, the elements of a
+        # comma list, at least one, or none and is computed: so one not computed, of fewer than
+        # two elements, has one (#416).
+        if ($single -and -not $computed -and ((& $isConstant $elements[0]) -or (& $isBool $elements[0]))) {
             $unwritten.Add("-${name}: its default is a value in parentheses, $shown, a shape -Defaults does not read"); continue
         }
-        if ($null -ne $elements -and ($computed -or @($elements | Where-Object { -not ((& $isConstant $_) -or (& $isBool $_)) }))) {
-            $unwritten.Add("-${name}: its default is computed at run time"); continue
-        }
         if ($null -ne $elements) {
+            if ($computed -or @($elements | Where-Object { -not ((& $isConstant $_) -or (& $isBool $_)) })) {
+                $unwritten.Add("-${name}: its default is computed at run time"); continue
+            }
             if (-not $elements) { $unwritten.Add("-${name}: its default is an empty list, with no element to drop"); continue }
             for ($i = 0; $i -lt $elements.Count; $i++) {
                 $rest = @(for ($j = 0; $j -lt $elements.Count; $j++) { if ($j -ne $i) { $elements[$j].Extent.Text } })
@@ -284,13 +288,12 @@ function Get-DefaultRevert {
             continue
         }
         $was = $default.Extent.Text
-        $isString = $default -is [System.Management.Automation.Language.StringConstantExpressionAst] -or
-            ($default -is [System.Management.Automation.Language.ExpandableStringExpressionAst] -and -not @($default.NestedExpressions))
-        if ($isString) {
+        # A string, then any other constant, a number, as $isConstant reads them (#417).
+        if ($default -is [System.Management.Automation.Language.StringConstantExpressionAst]) {
             $other = "'$("$($default.Value)-reverted" -replace "'", "''")'"
             & $revert "$was -> $other" $other
         }
-        elseif ($default -is [System.Management.Automation.Language.ConstantExpressionAst] -and $default.Value -is [ValueType]) {
+        elseif ($default -is [System.Management.Automation.Language.ConstantExpressionAst]) {
             $other = "$($default.Value + 1)"
             & $revert "$was -> $other" $other
         }
