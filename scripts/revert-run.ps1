@@ -70,11 +70,11 @@
     `'<what the case holds>' = { }` (#411); the whole of a parenthesised argument to a command
     invoked with & on a variable, as `& $check '<name>' (<chain>) $said` (#411); or the value
     assigned to a variable its script block reads only as an if's condition or the operand of -not
-    or !. Each is named,
-    `revert-run: <file>, skipped as a verdict: line <n>, <k> operand(s)`. An -or verdict, a chain
-    inside a verdict's operand, one not its block's last statement, one under a key that is not a
-    string, as `$key`, one passed to a command named otherwise, as `& 'name'`, `Check` or
-    `. $check`, and any other chain keep their reverts. With -Base <ref>, only an
+    or !. Each is named, `revert-run: <file>, skipped as a verdict: line <n>, <k> operand(s)`.
+    An -or verdict, a chain inside a verdict's operand, one not its block's last statement, one
+    under a key that is not a string, as `$key`, one passed to a command named otherwise, as
+    `& 'name'` or `Check`, or invoked other than with &, as `. $check`, and any other chain keep
+    their reverts. With -Base <ref>, only an
     operand or element on a line `git -C <copy> diff -U0 <ref>` adds or changes is dropped. As with
     -Defaults, a script it writes no revert for, -Base or not, or that does not parse, fails the
     run, exit 1 and nothing run.
@@ -725,11 +725,12 @@ function Invoke-SelfTest {
         @{ Code = $LASTEXITCODE; Text = $text }
     }
     $same = { [IO.File]::ReadAllText($stubPath) -ceq "$stub`n" -and -not @(Get-DirtyPath -Root $repo) }
-    # Each written revert that would not run as Invoke-Revert reads it, named with why, so that
-    # one checked here and not run is not one the run would refuse (#409): its Find occurs once in
-    # its file, and the edit changes at least one line and no more than Lines, counted as the run
-    # counts them, by git's numstat, here in one git process for them all; and the edited script
-    # still parses. None where each would run.
+    # Each written revert that fails three of Invoke-Revert's refusals, or does not parse, named
+    # with why (#409): its Find occurs once in its file, and the edit changes at least one line and
+    # no more than Lines, counted as the run counts them, by git's numstat, here in one git process
+    # for them all. The run does not refuse an edit that does not parse, but would read it as
+    # crashed. The run's other refusals, an empty Find, an untracked File and a binary one, are not
+    # checked: no written revert reaches them. None where each fits.
     $fits = { param([hashtable[]] $reverts)
         $dir = Join-Path $temp "fits-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
         New-Item -ItemType Directory -Path (Join-Path $dir 'a'), (Join-Path $dir 'b') | Out-Null
@@ -863,7 +864,7 @@ function Invoke-SelfTest {
                 $brokenCode -eq 1 -and $broken -match 'broken\.ps1 does not parse, so its conditions cannot be read' -and
                 $broken -match '(?m)^revert-run: 23 condition revert\(s\) written for conditions\.ps1\.' -and $broken -notmatch '(?m)^revert-run: condition ' -and
                 $missingCode -eq 1 -and $missing -match '-Conditions names no-such\.ps1, which is not a file in the copy' -and (& $same) } }
-        @{ Name = '-Conditions writes no revert of an -and verdict in a self-test, the last statement of a block under a string key, a variable read only as a truth value, or a chain in parentheses passed to & $<variable>, and names each it skips; an -or verdict, a chain inside a verdict''s operand, one read as a value, one not last, one under a key not a string, one passed to a command not a variable, and each outside the self-test keep theirs (#407, #411)'; Test = {
+        @{ Name = '-Conditions writes no revert of an -and verdict in a self-test, the last statement of a block under a string key, a variable read only as a truth value, or a chain in parentheses passed to & $<variable>, and names each it skips; an -or verdict, a chain inside a verdict''s operand, one read as a value, one not last, one under a key not a string, one passed to a command not invoked with & on a variable, and each outside the self-test keep theirs (#407, #411)'; Test = {
             $verdicts = @(
                 'param([switch] $SelfTest)'
                 "`$x = 'b'"
@@ -897,8 +898,7 @@ function Invoke-SelfTest {
                 "    `$dOk = `$x -ne 'd1' -and `$x -ne 'd2'"
                 '    $dOk'
                 # #411's shapes: a block under a quoted key, and a chain in parentheses passed to a
-                # command named by a variable; then an -or so passed, a chain nested in one so
-                # passed, one passed to a command named otherwise, and one piped in its parentheses.
+                # command invoked with & on a variable; then the boundaries that keep their reverts.
                 "    @{ 'a case' = { `$x -ne 'k1' -and `$x -ne 'k2' } }"
                 "    & `$check 'one' (`$x -ne 'g1' -and `$x -ne 'g2') `$x"
                 "    & `$check 'two' (`$x -eq 'g3' -or `$x -eq 'g4')"
