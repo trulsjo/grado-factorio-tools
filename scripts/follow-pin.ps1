@@ -180,7 +180,7 @@ if ($SelfTest) {
     $setup = {
         $null = & git -C $sib -c "core.hooksPath=$noHooks" @args 2>&1; $codes.Add("setup git $($args -join ' '): $LASTEXITCODE")
         if ((Test-Path -LiteralPath (Join-Path $subDir '.git')) -and "$(git -C $sib ls-tree HEAD -- $sub)" -match '^160000 commit ([0-9a-f]+)\t') {
-            git -C $subDir -c advice.detachedHead=false checkout --quiet $Matches[1]
+            git -C $subDir -c advice.detachedHead=false checkout --quiet $Matches[1]; $codes.Add("setup checkout $($Matches[1]): $LASTEXITCODE")
         }
     }
     # This script run as a hook would be, from the sibling's root, with $stdin on its stdin.
