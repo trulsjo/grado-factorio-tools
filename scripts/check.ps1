@@ -133,16 +133,17 @@
     On PR #403 one space put back in one line ran the whole check, follow-pin.ps1's self-test
     alone for 313 s. With -SkipIfPassed, where the record's trees and this tree's differ only
     in .ps1 files changed in place, and each such file's tokens, read by the parser with comments
-    and line breaks, are the same in both by kind and text, the run names those files and
-    the passed tree, and runs no self-test, none of $TOOL_STEPS marked Parsed, and not README's
-    reading of the parameters. It still runs the parse and the width check, which a space can fail
-    (an indent counts), line-cite-check.ps1, the page limits and the Markdown check, and a pass
-    is recorded for this tree. Any other changed file, a .ps1 added, deleted or changing mode, a
-    blob git cannot read, or a change to a token's text, a comment's included, runs the whole
-    check. No self-test was found that reads a tracked script by column or width, searched with
-    grep for each read of a file from $PSScriptRoot or $PSCommandPath and for each column, offset
-    and Get-LongCommentLine in scripts/: strict-list-check.ps1's reads its fixtures by line and
-    by offset order, which such a change keeps. It cannot see a self-test that reads a script by
+    and line breaks, are the same in both by kind and text and parse to the same tree, node by
+    node, the run names those files and the passed tree, and runs no self-test, none of $TOOL_STEPS
+    marked Parsed, and not README's reading of the parameters. It still runs the parse and the width
+    check, which a space can fail (an indent counts), line-cite-check.ps1, the page limits and the
+    Markdown check, and a pass is recorded for this tree. Any other changed file, a .ps1 added,
+    deleted or changing mode, a blob git cannot read, a change to a token's text, a comment's
+    included, or a space that changes what the parser makes of the tokens runs the whole check. No
+    self-test was found that reads a tracked script by column or width, searched with grep for each
+    read of a file from $PSScriptRoot or $PSCommandPath and for each column, offset and
+    Get-LongCommentLine in scripts/: strict-list-check.ps1's reads its fixtures by line and by
+    offset order, which such a change keeps. It cannot see a self-test that reads a script by
     column, as a parse error's message names one, or one written after that search.
 
     -SelfTest holds the record and its reading, Get-TokenOnlyChange, Get-RunPlan, and
@@ -311,13 +312,20 @@ function Read-Blob {
 }
 
 # A script's tokens as the parser gives them, comments and line breaks included, each by its kind
-# and its text: two scripts whose keys are equal differ at most in the whitespace between tokens
-# on a line, as every line break is a NewLine token or inside one's text.
+# and its text, and the tree the parser makes of them, each node by its depth and type: two
+# scripts whose keys are equal differ at most in the whitespace between tokens on a line, as
+# every line break is a NewLine token or inside one's text. The tree is needed because a space
+# can change what the same tokens parse to: in a command's argument, `$s.Substring(1)` is a method
+# call and `$s.Substring (1)` a property read and a second argument (PR #408's review panel).
 function Get-TokenKey {
     param([AllowEmptyString()] [string] $Text)
     $tokens = $null; $errors = $null
-    [void] [System.Management.Automation.Language.Parser]::ParseInput($Text, [ref] $tokens, [ref] $errors)
-    @($tokens | ForEach-Object { "$($_.Kind) $($_.Text)" }) -join "`n"
+    $ast = [System.Management.Automation.Language.Parser]::ParseInput($Text, [ref] $tokens, [ref] $errors)
+    $nodes = foreach ($node in $ast.FindAll({ $true }, $true)) {
+        $depth = 0; for ($p = $node.Parent; $p; $p = $p.Parent) { $depth++ }
+        "$depth $($node.GetType().Name)"
+    }
+    (@($tokens | ForEach-Object { "$($_.Kind) $($_.Text)" }) + '' + @($nodes)) -join "`n"
 }
 
 # The scripts that differ between the tree pairs $From, the recorded pass's, and $To, this run's,
@@ -731,7 +739,7 @@ if ($SelfTest) {
                 $plan = Get-RunPlan -Steps $TOOL_STEPS -TokensOnly
                 ($got -join '|') -ceq 's.ps1|t.ps1' -and $plan.Scripts -and -not $plan.SelfTests -and -not $plan.Readme -and
                     -not @($plan.Steps | Where-Object { $_.Parsed }) -and @($plan.Steps).Count -eq @($TOOL_STEPS | Where-Object { -not $_.Parsed }).Count }
-            'a changed token, comment or line count, an added .ps1 or any other changed file runs the whole check (#405)' = {
+            'a changed token, comment or line count, a space that changes what the tokens parse to, an added .ps1 or any other changed file runs the whole check (#405)' = {
                 $script = "param([switch] `$SelfTest)`n# A comment.`nif (`$SelfTest) { `$a = 1 }`n"
                 $spaced = $script.Replace('{ $a', '{   $a')
                 $runs = @(
@@ -740,6 +748,8 @@ if ($SelfTest) {
                     (& $tokenRun @{ 's.ps1' = $script } @{ 's.ps1' = $script.Replace("`n# A", "`n`n# A") })
                     (& $tokenRun @{ 's.ps1' = $script } @{ 's.ps1' = $spaced; 'n.ps1' = $script })
                     (& $tokenRun @{ 's.ps1' = $script } @{ 's.ps1' = $spaced; 'e.ps1' = '' })
+                    # The same tokens, a method call made a property read and a second argument.
+                    (& $tokenRun @{ 'c.ps1' = "Write-Output `$s.Substring(1)`n" } @{ 'c.ps1' = "Write-Output `$s.Substring (1)`n" })
                     # A Markdown file whose words are only spaced anew would be the same in tokens.
                     (& $tokenRun @{ 's.ps1' = $script; 'n.md' = 'one two' } @{ 's.ps1' = $spaced; 'n.md' = 'one  two' }))
                 # A mode changed in the index, both blobs readable and the same in tokens.
