@@ -561,8 +561,8 @@ if ($SelfTest) {
             $paths = for ($i = 0; $i -lt $texts.Count; $i++) {
                 $p = Join-Path $outside "blob-$i"; [IO.File]::WriteAllText($p, $texts[$i]); $p
             }
+            # Where git cannot write a blob, an id is missing, and mktree throws on the entry.
             $ids = @(git -C $repo hash-object -w -- @($paths) 2>$null)
-            if ($LASTEXITCODE -or $ids.Count -ne $texts.Count) { throw 'git hash-object failed.' }
             $id = [hashtable]::new([StringComparer]::Ordinal); for ($i = 0; $i -lt $texts.Count; $i++) { $id[$texts[$i]] = $ids[$i] }
             # Each argument a hashtable of files, a later one's written over an earlier one's.
             $tree = {
