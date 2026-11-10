@@ -206,7 +206,8 @@ function Get-DefaultRevert {
     # parser makes the first a StringConstantExpressionAst, the one type derived from
     # ConstantExpressionAst, whatever its quotes, and an ExpandableStringExpressionAst only of a
     # string with something expanded in it; a ConstantExpressionAst of its own it makes only of a
-    # number (#415, PowerShell 7.6.9's parser).
+    # number, or of an attribute's named argument given no value, which is no default (#415,
+    # PowerShell 7.6.9's parser).
     $isConstant = { param($e) $e -is [System.Management.Automation.Language.ConstantExpressionAst] }
     foreach ($p in $params) {
         $default = $p.DefaultValue
