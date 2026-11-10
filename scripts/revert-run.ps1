@@ -881,6 +881,9 @@ function Invoke-SelfTest {
                 "    & 'check' 'four' (`$x -ne 'g8' -and `$x -ne 'g9')"
                 "    Check 'five' (`$x -ne 'g10' -and `$x -ne 'g11')"
                 "    & `$check 'six' (`$x -ne 'g12' -and `$x -ne 'g13' | Out-Null)"
+                # Dot-sourced, not invoked with &; and a block under $key beside a string key.
+                "    . `$check 'seven' (`$x -ne 'g16' -and `$x -ne 'g17')"
+                "    @{ 'name' = 1; `$key = { `$x -ne 'g18' -and `$x -ne 'g19' } }"
                 '}'
                 'function Invoke-SelfTest {'
                 "    @{ Test = { `$x -ne 'n' -and `$x -ne 'o' } }"
@@ -905,8 +908,8 @@ function Invoke-SelfTest {
             $want = @("`$x -eq 'b'", "`$x -eq 'd'", "`$x -ne 'f'", "`$x -ne 'g'", "`$x -ne 'h'", "`$x -ne 'i'", "`$x -ne 'l'", "`$x -ne 'm'") +
                 @('u1', 'u2', 'v1', 'v2', 't1', 't2', 'w1', 'w2', 'y1', 'y2', 'z1', 'z2', 'b1', 'b2', 'c1', 'c2', 'd1', 'd2' | ForEach-Object { "`$x -ne '$_'" }) +
                 @("`$x -eq 'g3'", "`$x -eq 'g4'") +
-                @('g5', 'g6', 'g8', 'g9', 'g10', 'g11', 'g12', 'g13', 'o1', 'o2', 'e1', 'e2', 'p', 'q', 'r', 's', 'g14', 'g15' | ForEach-Object { "`$x -ne '$_'" })
-            $skips = (4, 6, 8, 17, 28, 29, 31, 37 | ForEach-Object { "line $_, 2 operand(s)" }) -join '|'
+                @('g5', 'g6', 'g8', 'g9', 'g10', 'g11', 'g12', 'g13', 'g16', 'g17', 'g18', 'g19', 'o1', 'o2', 'e1', 'e2', 'p', 'q', 'r', 's', 'g14', 'g15' | ForEach-Object { "`$x -ne '$_'" })
+            $skips = (4, 6, 8, 17, 28, 29, 31, 39 | ForEach-Object { "line $_, 2 operand(s)" }) -join '|'
             # Through the command line, on a script whose only chains are verdicts: each is named,
             # and with no revert left the run fails, having run nothing.
             [IO.File]::WriteAllText((Join-Path $repo 'verdicts.ps1'), (@(
