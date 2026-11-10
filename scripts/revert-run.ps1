@@ -708,7 +708,14 @@ function Invoke-SelfTest {
         'exit 1'
     ) -join "`n"
     [IO.File]::WriteAllText((Join-Path $repo 'conditions.ps1'), "$conditions`n")
-    & $git add stub.ps1 bin.dat .gitignore defaults.ps1 nodefault.ps1 broken.ps1 conditions.ps1
+    # The few reverts each of -Defaults and -Conditions runs through the command line (#409): one
+    # that fails, one that passes, and a default and a list it names and writes no revert for.
+    $verdict = "{ Write-Host 'OK - self-test passed: all 1 cases.'; exit 0 }`nWrite-Host 'FAILED - self-test: 1 of 1 case(s) did not hold.'`nexit 1"
+    [IO.File]::WriteAllText((Join-Path $repo 'few-defaults.ps1'),
+        "param([switch] `$SelfTest, [string[]] `$Kinds = @('a', 'b'), `$When = (Get-Date))`nif (`$Kinds -contains 'a') $verdict`n")
+    [IO.File]::WriteAllText((Join-Path $repo 'few-conditions.ps1'),
+        "param([switch] `$SelfTest)`n`$x = 'b'`n`$one = `$x -in ,'b'`nif (`$x -in 'a', 'b') $verdict`n")
+    & $git add stub.ps1 bin.dat .gitignore defaults.ps1 nodefault.ps1 broken.ps1 conditions.ps1 few-defaults.ps1 few-conditions.ps1
     & $git commit --quiet -m stub
     $list = { param([string] $name, [string] $text) $p = Join-Path $temp "$name.psd1"; Set-Content -LiteralPath $p -Value $text; $p }
     $one = { param([string] $Find, [string] $Replace, [string] $More = '') "@{ Name = 'R'; File = 'stub.ps1'; Find = '$Find'; Replace = '$Replace'; SelfTest = 'stub.ps1'$More }" }
@@ -718,9 +725,28 @@ function Invoke-SelfTest {
         @{ Code = $LASTEXITCODE; Text = $text }
     }
     $same = { [IO.File]::ReadAllText($stubPath) -ceq "$stub`n" -and -not @(Get-DirtyPath -Root $repo) }
+    # Whether each written revert would run as Invoke-Revert reads it, so that one checked here
+    # and not run is not one the run would refuse (#409): its Find occurs once in its file, the
+    # edit changes at least one line and no more than Lines, and the edited script still parses.
+    $fits = { param([hashtable[]] $reverts)
+        $misfits = foreach ($r in $reverts) {
+            $text = [IO.File]::ReadAllText((Join-Path $repo $r.File))
+            if ((Get-OccurrenceCount -Text $text -Find $r.Find) -ne 1) { $r.Name; continue }
+            $at = $text.IndexOf($r.Find, [StringComparison]::Ordinal)
+            $edited = $text.Substring(0, $at) + $r.Replace + $text.Substring($at + $r.Find.Length)
+            $old = $text -split "`n"; $new = $edited -split "`n"; $least = [Math]::Min($old.Count, $new.Count)
+            $head = 0; while ($head -lt $least -and $old[$head] -ceq $new[$head]) { $head++ }
+            $tail = 0; while ($tail -lt $least - $head -and $old[-1 - $tail] -ceq $new[-1 - $tail]) { $tail++ }
+            $removed = $old.Count - $head - $tail; $added = $new.Count - $head - $tail
+            $tokens = $null; $errors = $null
+            [void] [System.Management.Automation.Language.Parser]::ParseInput($edited, [ref] $tokens, [ref] $errors)
+            if (-not ($removed -or $added) -or $removed -gt $r.Lines -or $added -gt $r.Lines -or $errors) { $r.Name }
+        }
+        if ($misfits) { Write-Host "    would not run as written: $($misfits -join '; ')" }
+        -not $misfits }
 
     $cases = @(
-        @{ Name = '-Defaults writes one revert per element of a list default and one per scalar default, names each default it cannot write, and runs them as a list''s'; Test = {
+        @{ Name = '-Defaults writes one revert per element of a list default and one per scalar default, names each default it cannot write, each revert one the run would run, and runs a few through the command line as a list''s are, one failing and one passing (#409)'; Test = {
             $written = Get-DefaultRevert -Root $repo -Script 'defaults.ps1'
             # Each Replace is the Find's text up to the variable, then the new default: its tail.
             $said = @($written.Reverts | ForEach-Object { "$($_.Name) => $([regex]::Match($_.Replace, '\$\w+ = (?:(?!\$\w+ = ).)*$').Value)" })
@@ -749,18 +775,19 @@ function Invoke-SelfTest {
                 '-PE: its default is computed at run time', '-PS: its default is computed at run time')
             # The lines each default spans, which its revert may change.
             $spans = @($written.Reverts | ForEach-Object { "$($_.Name.Split(' ')[1])=$($_.Lines)" } | Sort-Object -Unique)
-            $got = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Defaults 'defaults.ps1' 2>&1 | Out-String
+            # Through the command line, a fixture of two reverts, one failing and one passing.
+            $got = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Defaults 'few-defaults.ps1' 2>&1 | Out-String
             $code = $LASTEXITCODE
             Write-Host ($got.TrimEnd() -replace '(?m)^', '    ')
             $rows = @([regex]::Matches($got, '(?m)^\| (default [^|]+) \| (\w+) \|') | ForEach-Object { "$($_.Groups[1].Value.Trim()): $($_.Groups[2].Value)" })
-            $printed = @([regex]::Matches($got, '(?m)^revert-run: defaults\.ps1, not written: (.+)\.\r?$') | ForEach-Object { $_.Groups[1].Value })
+            $printed = @([regex]::Matches($got, '(?m)^revert-run: few-defaults\.ps1, not written: (.+)\.\r?$') | ForEach-Object { $_.Groups[1].Value })
             ($said -join '|') -ceq ($want -join '|') -and ($written.Unwritten -join '|') -ceq ($unwritten -join '|') -and
-                ($printed -join '|') -ceq ($unwritten -join '|') -and
                 ($spans -join ' ') -ceq '-Count=1 -Kinds=1 -Loose=1 -Main=1 -On=1 -One=1 -OneParen=1 -PA=1 -Paren=1 -PB=1 -PL=1 -PQ=1 -PX=1 -PY=1 -Quoted=1 -Single=1 -Stacked=4 -Wrapped=2' -and
-                @($written.Reverts | Where-Object { -not $_.Find.StartsWith('param([switch] $SelfTest, ') -or $_.SelfTest -ne 'defaults.ps1' }).Count -eq 0 -and
-                $code -eq 0 -and $got -match '(?m)^revert-run: 23 default revert\(s\) written for defaults\.ps1\.' -and
-                ($rows -join '|') -ceq ((@($want | ForEach-Object { $_ -replace ' => .*$' }) | ForEach-Object {
-                            "$($_): $(if ($_ -like '*Kinds drops ''a''' -or $_ -like '*-Main *') { 'fails' } else { 'passes' })" }) -join '|') -and (& $same) } }
+                @($written.Reverts | Where-Object { -not $_.Find.StartsWith('param([switch] $SelfTest, ') -or $_.File -ne 'defaults.ps1' -or $_.SelfTest -ne 'defaults.ps1' }).Count -eq 0 -and
+                (& $fits $written.Reverts) -and
+                $code -eq 0 -and $got -match '(?m)^revert-run: 2 default revert\(s\) written for few-defaults\.ps1\.' -and
+                ($printed -join '|') -ceq '-When: its default is computed at run time' -and
+                ($rows -join '|') -ceq "default -Kinds drops 'a': fails|default -Kinds drops 'b': passes" -and (& $same) } }
         @{ Name = '-Defaults reads a comma list, and fails, exit 1 and nothing run, a script that yields no revert or does not parse (#389)'; Test = {
             $none = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Defaults 'defaults.ps1,nodefault.ps1' 2>&1 | Out-String; $noneCode = $LASTEXITCODE
             $broken = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Defaults 'broken.ps1' 2>&1 | Out-String; $brokenCode = $LASTEXITCODE
@@ -769,7 +796,7 @@ function Invoke-SelfTest {
                 $none -match '-Defaults names nodefault\.ps1, for which no default revert could be written, so no revert was run' -and
                 $none -notmatch '(?m)^revert-run: default ' -and
                 $brokenCode -eq 1 -and $broken -match 'broken\.ps1 does not parse, so its defaults cannot be read' -and (& $same) } }
-        @{ Name = '-Conditions writes one revert per operand of an -and or -or chain and per element of an -in, -notin or type list, with a chain over two lines whose Find and Lines span both and two reverts of one text told apart by their order, a chain at a line''s start or inside one of the other operator, a list of one element named and not written, names a shape whose Find is not unique, and runs them as a list''s (#400)'; Test = {
+        @{ Name = '-Conditions writes one revert per operand of an -and or -or chain and per element of an -in, -notin or type list, with a chain over two lines whose Find and Lines span both and two reverts of one text told apart by their order, a chain at a line''s start or inside one of the other operator, a list of one element named and not written, names a shape whose Find is not unique, each revert one the run would run, and runs a few through the command line as a list''s are, one failing and one passing (#400, #409)'; Test = {
             $written = Get-ConditionRevert -Root $repo -Script 'conditions.ps1'
             $said = @($written.Reverts | ForEach-Object { "$($_.Name) => $($_.Replace)" })
             $c = 'condition conditions.ps1'
@@ -789,18 +816,19 @@ function Invoke-SelfTest {
                 "${c}:20 -and drops `$x -ne 'z' => `$k | Out-Null", "${c}:20 -and drops `$k => `$x -ne 'z' | Out-Null")
             $unwritten = @('line 10, a -or whose Find occurs 2 times', 'line 11, a -or whose Find occurs 2 times', 'line 17, a -in of one element',
                 'line 18, a type list of one element')
-            $failing = @("${c}:5 -in drops 'b'", "${c}:7 type list drops [int]", "${c}:8 -or drops `$x -eq 'b'", "${c}:9 -in drops [int]", "${c}:14 -or drops `$x -eq 'b'")
-            $got = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'conditions.ps1' 2>&1 | Out-String
+            # Through the command line, a fixture of two reverts, one failing and one passing.
+            $got = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'few-conditions.ps1' 2>&1 | Out-String
             $code = $LASTEXITCODE
             Write-Host ($got.TrimEnd() -replace '(?m)^', '    ')
             $rows = @([regex]::Matches($got, '(?m)^\| (condition [^|]+) \| (\w+) \|') | ForEach-Object { "$($_.Groups[1].Value.Trim()): $($_.Groups[2].Value)" })
-            $printed = @([regex]::Matches($got, '(?m)^revert-run: conditions\.ps1, not written: (.+)\.\r?$') | ForEach-Object { $_.Groups[1].Value })
+            $printed = @([regex]::Matches($got, '(?m)^revert-run: few-conditions\.ps1, not written: (.+)\.\r?$') | ForEach-Object { $_.Groups[1].Value })
+            $f = 'condition few-conditions.ps1:4 -in drops'
             ($said -join '|') -ceq ($want -join '|') -and ($written.Unwritten -join '|') -ceq ($unwritten -join '|') -and
-                ($printed -join '|') -ceq ($unwritten -join '|') -and $code -eq 0 -and
                 @($written.Reverts | Where-Object { $_.File -ne 'conditions.ps1' -or $_.SelfTest -ne 'conditions.ps1' -or $_.Lines -ne ($_.Name -match ':1[45] ' ? 2 : 1) }).Count -eq 0 -and
-                $got -match '(?m)^revert-run: 23 condition revert\(s\) written for conditions\.ps1\.' -and
-                ($rows -join '|') -ceq ((@($want | ForEach-Object { $_ -replace ' => .*$' }) | ForEach-Object {
-                            "$($_): $(if ($_ -in $failing) { 'fails' } else { 'passes' })" }) -join '|') -and (& $same) } }
+                (& $fits $written.Reverts) -and
+                $code -eq 0 -and $got -match '(?m)^revert-run: 2 condition revert\(s\) written for few-conditions\.ps1\.' -and
+                ($printed -join '|') -ceq 'line 3, a -in of one element' -and
+                ($rows -join '|') -ceq "$f 'a': passes|$f 'b': fails" -and (& $same) } }
         @{ Name = '-Conditions fails, exit 1 and nothing run, a script that yields no revert, does not parse or is not in the copy (#400)'; Test = {
             $none = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'nodefault.ps1' 2>&1 | Out-String; $noneCode = $LASTEXITCODE
             $broken = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'conditions.ps1,broken.ps1' 2>&1 | Out-String; $brokenCode = $LASTEXITCODE
