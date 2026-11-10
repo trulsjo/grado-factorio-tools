@@ -133,8 +133,8 @@
     On PR #403 one space put back in one line ran the whole check, follow-pin.ps1's self-test
     alone for 313 s. With -SkipIfPassed, where the record's trees and this tree's differ only
     in .ps1 files changed in place, and each such file's tokens, read by the parser with comments
-    and line breaks, are the same in both by kind and text and parse to the same tree, node by
-    node, the run names those files and the passed tree, and runs no self-test, none of $TOOL_STEPS
+    and line breaks, are the same in both by kind and text and parse to the same node types, in
+    order, the run names those files and the passed tree, and runs no self-test, none of $TOOL_STEPS
     marked Parsed, and not README's reading of the parameters. It still runs the parse and the width
     check, which a space can fail (an indent counts), line-cite-check.ps1, the page limits and the
     Markdown check, and a pass is recorded for this tree. Any other changed file, a .ps1 added,
@@ -312,19 +312,17 @@ function Read-Blob {
 }
 
 # A script's tokens as the parser gives them, comments and line breaks included, each by its kind
-# and its text, and the tree the parser makes of them, each node by its depth and type: two
-# scripts whose keys are equal differ at most in the whitespace between tokens on a line, as
-# every line break is a NewLine token or inside one's text. The tree is needed because a space
+# and its text, and the type of each node of the tree the parser makes of them, in its order:
+# two scripts whose keys are equal differ at most in the whitespace between tokens on a line, as
+# every line break is a NewLine token or inside one's text. The types are needed because a space
 # can change what the same tokens parse to: in a command's argument, `$s.Substring(1)` is a method
-# call and `$s.Substring (1)` a property read and a second argument (PR #408's review panel).
+# call and `$s.Substring (1)` a property read and a second argument (PR #408's review panel). It
+# cannot see a space that keeps every type in order but moves a node, which no one has found.
 function Get-TokenKey {
     param([AllowEmptyString()] [string] $Text)
     $tokens = $null; $errors = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseInput($Text, [ref] $tokens, [ref] $errors)
-    $nodes = foreach ($node in $ast.FindAll({ $true }, $true)) {
-        $depth = 0; for ($p = $node.Parent; $p; $p = $p.Parent) { $depth++ }
-        "$depth $($node.GetType().Name)"
-    }
+    $nodes = foreach ($node in $ast.FindAll({ $true }, $true)) { $node.GetType().Name }
     (@($tokens | ForEach-Object { "$($_.Kind) $($_.Text)" }) + '' + @($nodes)) -join "`n"
 }
 
