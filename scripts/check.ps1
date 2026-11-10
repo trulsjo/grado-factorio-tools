@@ -145,8 +145,8 @@
     by offset order, which such a change keeps. It cannot see a self-test that reads a script by
     column, as a parse error's message names one, or one written after that search.
 
-    -SelfTest holds the record and its reading, Get-TokenOnlyChange and Get-RunPlan, not the
-    skip, nor that the run follows the plan, against a
+    -SelfTest holds the record and its reading, Get-TokenOnlyChange, Get-RunPlan, and
+    Get-RunStart and Invoke-RunPlan, which decide the skip and follow the plan, against a
     scratch repository, and this check runs
     it like the others (grado-factorio-tools#176's review); a file made unreadable off Windows
     needs a user other than root.
@@ -171,14 +171,15 @@
     a folder of fixture scripts outside it with lists of their own, some of them run as
     self-tests, and the one that holds Get-ReadmeProblem over a fixture script and README there,
     those that hold $TOOL_STEPS's line-cite-check.ps1 step and Invoke-ToolStep over fixture scripts,
-    and Get-TokenOnlyChange and Get-RunPlan in the scratch repository;
-    and nothing else. The run's own call of each loop and of Get-ReadmeProblem, with this folder,
-    this README and this script's lists, is not run, nor its run of param-check.ps1,
-    variable-case-check.ps1, help-check.ps1 and strict-list-check.ps1 over this folder: a run
-    that stopped making a call, or passed it a list less, would still pass. Nor is its
-    -SkipIfPassed branch, its call of Complete-Run, or its exit with the code that returns: the
-    cases hold the record and the code, not that the run skips on the one or exits with the
-    other. Needs git, and no game.
+    and Get-TokenOnlyChange, Get-RunPlan and Get-RunStart in the scratch repository, and
+    Invoke-RunPlan with blocks of its own; and nothing else. The run's own blocks, its call of
+    each loop and of Get-ReadmeProblem, with this folder, this README and this script's lists,
+    are not run, nor its run of param-check.ps1, variable-case-check.ps1, help-check.ps1 and
+    strict-list-check.ps1 over this folder: a run that stopped making a call, or passed it a list
+    less, would still pass. Nor is its reading of the record for -SkipIfPassed, its exit where
+    Get-RunStart says skip, its call of Complete-Run, or its exit with the code that returns: the
+    cases hold the record, the skip and the code, not that the run reads the one or exits with
+    the others. Needs git, and no game.
 
 .EXAMPLE
     pwsh -File scripts/check.ps1
@@ -353,6 +354,37 @@ function Get-TokenOnlyChange {
 function Get-RunPlan {
     param([object[]] $Steps, [switch] $TokensOnly)
     @{ Scripts = $true; Steps = @($Steps | Where-Object { -not ($TokensOnly -and $_.Parsed) }); Readme = -not $TokensOnly; SelfTests = -not $TokensOnly }
+}
+
+# What a run does, from $Passed, the record -SkipIfPassed read or nothing, and $Tree, this tree:
+# Skip, the line of a run that runs nothing, where the tree is the one that passed. Else Files,
+# the .ps1 files whose only change since the pass is whitespace between tokens (#405), Notice,
+# the line naming them, Plan, by Get-RunPlan, and Pass, the line a pass ends with.
+function Get-RunStart {
+    param([string] $Root, [hashtable] $Passed, [string] $Tree, [object[]] $Steps)
+    if ($Passed -and $Passed.Tree -eq $Tree) {
+        return @{ Skip = "OK - check skipped: this tree (working $($Passed.Working), index $($Passed.Index)) passed it at $($Passed.At). Nothing was run." }
+    }
+    $files = if ($Passed) { @(Get-TokenOnlyChange -Root $Root -From $Passed.Tree -To $Tree) } else { @() }
+    $notice = if ($files) {
+        "check: since the tree that passed at $($Passed.At) (working $($Passed.Working), index $($Passed.Index)), only whitespace between " +
+        "tokens changed, in $($files -join ', '). The self-tests, the checks that read the parsed scripts and README's reading of their " +
+        'parameters are not run; the rest is.'
+    }
+    $pass = if ($files) { "OK - check passed, with no self-test run: only whitespace between tokens changed since the tree that passed at $($Passed.At)." }
+        else { "OK - check passed. Not run, because each needs the game: -SelfTest of $($NEEDS_GAME -join ', '); of $($NO_GAME_CASES -join ', '), only the cases that need no game ran." }
+    @{ Skip = $null; Files = $files; Notice = $notice; Plan = Get-RunPlan -Steps $Steps -TokensOnly:([bool] $files); Pass = $pass }
+}
+
+# Runs what $Plan names, in a run's order, each part by its block in $Do: Scripts, the parse and
+# the width check; Step, given each of the plan's steps; Readme; SelfTests. What a block returns
+# is its failures, each added to $Failed.
+function Invoke-RunPlan {
+    param([hashtable] $Plan, [hashtable] $Do, [System.Collections.Generic.List[string]] $Failed)
+    if ($Plan.Scripts) { foreach ($f in & $Do.Scripts) { $Failed.Add($f) } }
+    foreach ($step in $Plan.Steps) { foreach ($f in & $Do.Step $step) { $Failed.Add($f) } }
+    if ($Plan.Readme) { foreach ($f in & $Do.Readme) { $Failed.Add($f) } }
+    if ($Plan.SelfTests) { foreach ($f in & $Do.SelfTests) { $Failed.Add($f) } }
 }
 
 # One of $TOOL_STEPS run from $Root, with $Folder its scripts' folder, its line printed with $Took
@@ -736,6 +768,31 @@ if ($SelfTest) {
                 $width = @(Get-ScriptProblem -Path $path -Limit 100)
                 ($got -join '|') -ceq 'w.ps1' -and (Get-RunPlan -Steps $TOOL_STEPS -TokensOnly).Scripts -and
                     ($width -join '|') -ceq 'w.ps1 has comment lines over 100 characters, line 2' }
+            'a run follows its start: the tree that passed runs nothing; one changed only in whitespace between tokens names its files, runs the parse and width check and the steps that read no parsed script, adds what each returns to the failures, and passes saying no self-test ran; with no record every part runs (#404, #405)' = {
+                $script = "param([switch] `$SelfTest)`n# A comment.`nif (`$SelfTest) { `$a = 1 }`n"
+                [IO.File]::WriteAllText((Join-Path $repo 'r.ps1'), $script); git -C $repo add r.ps1
+                try {
+                    $from = Get-CheckedTree -Root $repo
+                    $record = @{ Tree = $from; Working = $from.Split(' ')[0]; Index = $from.Split(' ')[1]; At = '2026-11-10T00:00:00Z' }
+                    $same = Get-RunStart -Root $repo -Passed $record -Tree $from -Steps $TOOL_STEPS
+                    [IO.File]::WriteAllText((Join-Path $repo 'r.ps1'), $script.Replace('{ $a', '{   $a'))
+                    $now = Get-CheckedTree -Root $repo
+                    $spaced = Get-RunStart -Root $repo -Passed $record -Tree $now -Steps $TOOL_STEPS
+                    $none = Get-RunStart -Root $repo -Passed $null -Tree $now -Steps $TOOL_STEPS
+                }
+                finally { git -C $repo rm --cached --quiet -- r.ps1; Remove-Item -LiteralPath (Join-Path $repo 'r.ps1') }
+                # Each block returns its own name as its failure, so the failures are the parts run.
+                $do = @{ Scripts = { 'scripts' }; Step = { param($s) $s.Script }; Readme = { 'readme' }; SelfTests = { 'self-tests' } }
+                $ran = foreach ($s in $spaced, $none) {
+                    $failed = [System.Collections.Generic.List[string]]::new()
+                    Invoke-RunPlan -Plan $s.Plan -Do $do -Failed $failed
+                    $failed -join '|'
+                }
+                $same.Skip -ceq "OK - check skipped: this tree (working $($record.Working), index $($record.Index)) passed it at 2026-11-10T00:00:00Z. Nothing was run." -and
+                    -not $spaced.Skip -and ($spaced.Files -join '|') -ceq 'r.ps1' -and $spaced.Notice -like '*only whitespace between tokens changed, in r.ps1.*' -and
+                    $spaced.Pass -like 'OK - check passed, with no self-test run:*' -and $ran[0] -ceq 'scripts|line-cite-check.ps1' -and
+                    -not $none.Skip -and -not $none.Files -and -not $none.Notice -and $none.Pass -like 'OK - check passed. Not run, because each needs the game:*' -and
+                    $ran[1] -ceq ((@('scripts') + @($TOOL_STEPS | ForEach-Object { $_.Script }) + @('readme', 'self-tests')) -join '|') }
         }
         $failures = 0; $n = 0
         foreach ($name in $cases.Keys) {
@@ -755,39 +812,27 @@ if ($SelfTest) {
 $record = git -C $root rev-parse --path-format=absolute --git-path check-passed 2>$null
 $tree = Get-CheckedTree -Root $root
 $passed = if ($SkipIfPassed -and $tree) { Read-PassRecord $record }
-if ($passed -and $passed.Tree -eq $tree) {
-    Write-Host "OK - check skipped: this tree (working $($passed.Working), index $($passed.Index)) passed it at $($passed.At). Nothing was run."
-    exit 0
-}
-# Only whitespace between tokens changed since the pass (#405): the self-tests are not run.
-$tokensOnly = if ($passed) { @(Get-TokenOnlyChange -Root $root -From $passed.Tree -To $tree) } else { @() }
-if ($tokensOnly) {
-    Write-Host ("check: since the tree that passed at $($passed.At) (working $($passed.Working), index $($passed.Index)), only whitespace between " +
-        "tokens changed, in $($tokensOnly -join ', '). The self-tests, the checks that read the parsed scripts and README's reading of their " +
-        'parameters are not run; the rest is.')
-}
-$plan = Get-RunPlan -Steps $TOOL_STEPS -TokensOnly:([bool] $tokensOnly)
+$start = Get-RunStart -Root $root -Passed $passed -Tree $tree -Steps $TOOL_STEPS
+if ($start.Skip) { Write-Host $start.Skip; exit 0 }
+if ($start.Notice) { Write-Host $start.Notice }
 
-if ($plan.Scripts) {
-    $clock.Restart()
-    foreach ($f in Test-ScriptFolder -Folder $PSScriptRoot -Limit $COMMENT_LINE_LIMIT -SelfTests $SELF_TESTS -NeedsGame $NEEDS_GAME -NoGameCases $NO_GAME_CASES) { $failed.Add($f) }
-    Write-Host "check: every script parsed $(& $took)"
+Invoke-RunPlan -Plan $start.Plan -Failed $failed -Do @{
+    Scripts = {
+        $clock.Restart()
+        Test-ScriptFolder -Folder $PSScriptRoot -Limit $COMMENT_LINE_LIMIT -SelfTests $SELF_TESTS -NeedsGame $NEEDS_GAME -NoGameCases $NO_GAME_CASES
+        Write-Host "check: every script parsed $(& $took)"
+    }
+    # From the root, so each script is named by its path from there.
+    Step = { param($step) $clock.Restart(); Invoke-ToolStep -Root $root -Folder $PSScriptRoot -Step $step -Took $took }
+    Readme = {
+        $clock.Restart()
+        $unnamed = @(Get-ReadmeProblem -Folder $PSScriptRoot -Readme (Join-Path $root 'README.md'))
+        Write-Host "check: README.md names every script parameter -- $($unnamed ? 'FAILED' : 'ok') $(& $took)"
+        foreach ($f in $unnamed) { Write-Host "    $f" }
+        $unnamed
+    }
+    SelfTests = { Invoke-SelfTestRun -Folder $PSScriptRoot -SelfTests $SELF_TESTS -NoGameCases $NO_GAME_CASES }
 }
-
-# From the root, so each script is named by its path from there.
-foreach ($step in $plan.Steps) {
-    $clock.Restart()
-    foreach ($f in Invoke-ToolStep -Root $root -Folder $PSScriptRoot -Step $step -Took $took) { $failed.Add($f) }
-}
-
-if ($plan.Readme) {
-    $clock.Restart()
-    $unnamed = @(Get-ReadmeProblem -Folder $PSScriptRoot -Readme (Join-Path $root 'README.md'))
-    Write-Host "check: README.md names every script parameter -- $($unnamed ? 'FAILED' : 'ok') $(& $took)"
-    foreach ($f in $unnamed) { Write-Host "    $f"; $failed.Add($f) }
-}
-
-if ($plan.SelfTests) { foreach ($f in Invoke-SelfTestRun -Folder $PSScriptRoot -SelfTests $SELF_TESTS -NoGameCases $NO_GAME_CASES) { $failed.Add($f) } }
 
 $clock.Restart()
 foreach ($page in $PAGE_LIMITS.Keys) {
@@ -823,8 +868,6 @@ elseif ($said -match '(?ms)^markdown-check: \d+ file\(s\) have unstaged edits.*?
 Write-Host ''
 # A tree that did not stand still while it was read fails the run, with or without a record:
 # an edit during the run means no one tree passed (grado-factorio-tools#366).
-$pass = if ($tokensOnly) { "OK - check passed, with no self-test run: only whitespace between tokens changed since the tree that passed at $($passed.At)." }
-    else { "OK - check passed. Not run, because each needs the game: -SelfTest of $($NEEDS_GAME -join ', '); of $($NO_GAME_CASES -join ', '), only the cases that need no game ran." }
-$end = Complete-Run -Root $root -Record $record -Tree $tree -Failed $failed -Pass $pass
+$end = Complete-Run -Root $root -Record $record -Tree $tree -Failed $failed -Pass $start.Pass
 $end.Lines | ForEach-Object { Write-Host $_ }
 exit $end.Code
