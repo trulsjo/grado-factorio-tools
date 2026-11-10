@@ -766,6 +766,11 @@ function Invoke-SelfTest {
             $written = Get-DefaultRevert -Root $repo -Script 'defaults.ps1'
             # Each Replace is the Find's text up to the variable, then the new default: its tail.
             $said = @($written.Reverts | ForEach-Object { "$($_.Name) => $([regex]::Match($_.Replace, '\$\w+ = (?:(?!\$\w+ = ).)*$').Value)" })
+            # And its head, up to the tail's variable, is the Find's own, so no revert changes an
+            # earlier default on its way to its own.
+            $heads = @($written.Reverts | Where-Object {
+                    $tail = [regex]::Match($_.Replace, '\$\w+ = (?:(?!\$\w+ = ).)*$')
+                    -not $_.Find.StartsWith($_.Replace.Substring(0, $tail.Index) + [regex]::Match($tail.Value, '^\$\w+ = ').Value, [StringComparison]::Ordinal) })
             $want = @(
                 "default -Kinds drops 'a' => `$Kinds = @('b')", "default -Kinds drops 'b' => `$Kinds = @('a')",
                 "default -Main 'main' -> 'main-reverted' => `$Main = 'main-reverted'", 'default -Count 3 -> 4 => $Count = 4',
@@ -806,7 +811,7 @@ function Invoke-SelfTest {
             Write-Host ($got.TrimEnd() -replace '(?m)^', '    ')
             $rows = @([regex]::Matches($got, '(?m)^\| (default [^|]+) \| (\w+) \|') | ForEach-Object { "$($_.Groups[1].Value.Trim()): $($_.Groups[2].Value)" })
             $printed = @([regex]::Matches($got, '(?m)^revert-run: few-defaults\.ps1, not written: (.+)\.\r?$') | ForEach-Object { $_.Groups[1].Value })
-            ($said -join '|') -ceq ($want -join '|') -and ($written.Unwritten -join '|') -ceq ($unwritten -join '|') -and
+            ($said -join '|') -ceq ($want -join '|') -and -not $heads -and ($written.Unwritten -join '|') -ceq ($unwritten -join '|') -and
                 ($spans -join ' ') -ceq '-Count=1 -Kinds=1 -Loose=1 -Main=1 -On=1 -One=1 -OneParen=1 -PA=1 -Paren=1 -PB=1 -PL=1 -PQ=1 -PX=1 -PY=1 -Quoted=1 -Single=1 -Stacked=4 -Wrapped=2' -and
                 @($written.Reverts | Where-Object { -not $_.Find.StartsWith('param([switch] $SelfTest, ') -or $_.SelfTest -ne 'defaults.ps1' }).Count -eq 0 -and
                 (@($written.Reverts | ForEach-Object { $_.File } | Sort-Object -Unique) -join '|') -ceq 'defaults.ps1' -and
