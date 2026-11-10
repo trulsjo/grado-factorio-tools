@@ -118,7 +118,12 @@
     holds anything but type literals; a condition revert whose self-test needs Args; a verdict of
     another shape, as an -and chain a function a case calls returns, or a variable read once as a
     value, which keeps its reverts and passes; a self-test that is neither an if ($SelfTest)
-    clause nor Invoke-SelfTest, in which nothing is skipped; and with -Base,
+    clause nor Invoke-SelfTest, in which nothing is skipped; a verdict variable read outside the
+    script block it is assigned in, as by a function through dynamic scope or after the
+    pipeline whose ForEach-Object block assigned it, a read it does not see, so the chain may be
+    skipped though such a read takes its value; a variable read only as a truth value but meant
+    to be false, as `if ($stale) { $failures++ }`, whose skipped reverts would have failed
+    (PR #408's review panel); and with -Base,
     a condition the diff deletes, which leaves nothing to drop, or one it changes by a line outside
     the operand, as the `if (` above it.
 
