@@ -51,7 +51,19 @@ each result means are in that script's header. For each script whose `param()` b
 adds, or whose defaults it edits, it also runs
 `pwsh -File scripts/revert-run.ps1 -Copy <copy> -Defaults <scripts>`, which writes those
 scripts' default reverts itself (#382, #390); what a default revert is, and which defaults it
-writes none for, are in that script's header too. It reports each run's table. A revert that
+writes none for, are in that script's header too. For each script the change touches, one script
+to a run, it runs
+`pwsh -File scripts/revert-run.ps1 -Copy <copy> -Conditions <script> -Base <base>`, with `<base>`
+the pull request's base, `git -C <copy> merge-base origin/main <full SHA>` (#402). That run
+writes a revert per operand of each `-and` or `-or` chain and per element of each `-in`, `-notin`
+or type list on a line the diff adds or changes; the lane's list holds the claims and the
+conditions of a shape the run does not write, which its header names. A script with no such
+condition on a changed line fails the run, exit 1, with `-Conditions names <script>, for which no
+condition revert could be written on lines changed since <base>`: the lane reports that line, and
+it is nothing to revert, not a finding. Where a ticket the change closes has a criterion over
+every guard of a script or a function, it runs `-Conditions` on that whole script, without
+`-Base`. Each revert runs the script's whole self-test: on `main` at `4534a44`, `revert-run.ps1`
+alone gave 133, close to 3.7 hours (#402's brief). It reports each run's table. A revert that
 fails nothing is a finding, unless it is a default revert the pull request lists with why it
 passes, as PR #389 listed `line-cite-check.ps1 -Foreign`. With "none", it reverts nothing. The
 session answering a review's findings runs its reverts the same way.
