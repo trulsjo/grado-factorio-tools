@@ -493,7 +493,8 @@ if ($SelfTest) {
         # The tool call reaches sh as JSON, where every quote is \" and every line break \n, so an
         # arm matching one backslash starts pwsh, 1.7 to 4.9 s, on nearly every command (PR #420).
         # A stub at the wired path says whether it was started: not for quotes and lines alone,
-        # and for a real backslash, in the forms above.
+        # and for a pair, in the forms above. Unhalved, off Windows, one backslash is rightly not
+        # enough to start it.
         $ok = $false
         if ($wired) {
             $stubProject = Join-Path $scratch 'stub'
@@ -503,12 +504,12 @@ if ($SelfTest) {
             $quoted = "git log --format=`"%h %s`" -3`ngit status"
             $starts = foreach ($form in $forms) {
                 @{ Quoted = (& $through 'Bash' $quoted $form $stubProject).Text -match 'STARTED'
-                   Backslash = (& $through 'Bash' "echo 'a\b'" $form $stubProject).Text -match 'STARTED' }
+                   Backslash = (& $through 'Bash' "echo 'a${PAIR}b'" $form $stubProject).Text -match 'STARTED' }
             }
             $ok = -not @($starts | Where-Object { $_.Quoted -or -not $_.Backslash })
-            if (-not $ok) { foreach ($s in $starts) { Write-Host "    quoted started: $($s.Quoted); backslash started: $($s.Backslash)" } }
+            if (-not $ok) { foreach ($s in $starts) { Write-Host "    quoted started: $($s.Quoted); pair started: $($s.Backslash)" } }
         }
-        & $report 'the wired hook is not started by quotes and line breaks alone, and is by a backslash, halved as the session halves it' $ok
+        & $report 'the wired hook is not started by quotes and line breaks alone, and is by a pair, halved as the session halves it' $ok
         $ok = $false
         if ($wired) {
             $ps = & $through 'PowerShell' 'cat'
