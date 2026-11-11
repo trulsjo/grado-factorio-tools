@@ -451,6 +451,22 @@ checked. `-SelfTest` proves each refusal and pass, and runs the command the sett
 `-SelfTest -Settings .claude/settings.json` runs a consumer's. What it cannot see is in its
 header: a substitution in a script the command runs, and a command inside `sh -c`, are two.
 
+## Keeping an agent session from a Bash command that hangs
+
+Under Git Bash on Windows, a bare `cat` or `python -` reads the Bash tool's stdin, a pipe never
+closed, and hangs; a long heredoc has been cut short on a quote; and a pair of backslashes reaches
+bash as one. `scripts/refuse-hanging-bash.ps1`, ported from realistic-fusion-refreshed's
+`tools/refuse-hanging-bash.py` (#352), is a hook that refuses a Bash tool command with any of the
+three: a `cat` or Python reading nothing fed to it, a heredoc body over 60 lines, and on Windows a
+pair of backslashes anywhere. It passes every PowerShell tool call, and appends each refusal to the
+consumer's `.claude/refused-bash.log`, which the consumer git-ignores.
+
+This repository wires it in its tracked `.claude/settings.json`. A consumer's line is the script's
+first `.EXAMPLE`. `-SelfTest` runs rf's cases, the log, when a pair is the reason, and the wired
+command; `-SelfTest -Settings .claude/settings.json` runs a consumer's and fails where git does
+not ignore its log. What it cannot see is in its header: a reader other than `cat` and Python is
+one.
+
 ## Keeping an agent session from downloading a program
 
 On 2026-10-07 a subagent fetched linter binaries and packages and ran them on this machine
@@ -843,7 +859,8 @@ scripts/     PowerShell entry points, one job each, and the libraries they
 .claude/     settings.json, which wires the session hooks: one refuses a commit
              or push skipping those, one Python run from a heredoc, one a
              pull request body the check fails, one a Bash command bash
-             would run a backtick span in, and one a download of a program
+             would run a backtick span in, one a download of a program, and
+             one a Bash command that hangs
 .github/     the workflow that runs scripts/check.ps1 on pull requests and main
 docs/        the commit convention, the ADRs, the notes agents read, the
              extraction record — what moved, from where, and why — and

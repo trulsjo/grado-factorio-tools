@@ -11,6 +11,8 @@ __pycache__/
 # Personal, never committed
 *.local.md
 /.claude/settings.local.json
+# What refuse-hanging-bash.ps1 refused, this machine's record (#322 ruling 5)
+/.claude/refused-bash.log
 
 # Agent runtime state. Ignore the contents rather than the directory, so that
 # .omc/skills/ stays committable: project-scoped skills are meant to be shared,
