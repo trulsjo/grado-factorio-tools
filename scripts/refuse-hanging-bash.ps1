@@ -384,7 +384,7 @@ if ($SelfTest) {
     )
     $failures = 0
     $n = 0
-    $total = $cases.Count + 3 + 5 + 7
+    $total = $cases.Count + 3 + 5 + 8
     $report = {
         param([string] $what, [bool] $ok, [string] $why)
         $script:n++
@@ -482,8 +482,22 @@ if ($SelfTest) {
             if (-not $ok) { foreach ($r in $ps, $lower) { Write-Host "    $($r.Code) $($r.Text)" } }
         }
         & $report 'the wired hook passes a PowerShell tool call, and a tool named bash in other case' $ok
-        $unread = 'not json' | pwsh -NoProfile -File $PSCommandPath 2>&1 | Out-String
-        & $report 'a tool call it cannot read exits 1 and says it was not checked' ($LASTEXITCODE -eq 1 -and $unread -match 'NOT checked') "$LASTEXITCODE $unread"
+        # JSON that is not an object, a string or an array, is no call either.
+        $unreadOk = $true
+        foreach ($shape in 'not json', '"cat"', '["cat"]') {
+            $unread = $shape | pwsh -NoProfile -File $PSCommandPath 2>&1 | Out-String
+            if ($LASTEXITCODE -ne 1 -or $unread -notmatch 'NOT checked') { $unreadOk = $false; Write-Host "    $shape -> $LASTEXITCODE $unread" }
+        }
+        & $report 'a tool call it cannot read, not JSON or JSON that is no object, exits 1 and says it was not checked' $unreadOk
+        # Its refusal is logged, so under the copy, not the project this runs in.
+        $sessionDir = $env:CLAUDE_PROJECT_DIR
+        try {
+            $env:CLAUDE_PROJECT_DIR = $copy
+            $untold = '{"tool_input":{"command":"cat"}}' | pwsh -NoProfile -File $PSCommandPath 2>&1 | Out-String
+            $untoldCode = $LASTEXITCODE
+        }
+        finally { $env:CLAUDE_PROJECT_DIR = $sessionDir }
+        & $report 'a call with no tool_name is read as the Bash tool''s, and its hanging cat refused' ($untoldCode -eq 2 -and $untold -match 'never closed') "$untoldCode $untold"
         # The first example's form, for a project with no hook script, as a clone without the
         # submodule is: the command runs, and stdout tells the agent it was not checked.
         $form = [regex]::Match((Get-Content -LiteralPath $PSCommandPath -Raw), 'i=\$\(cat\).*?esac').Value
@@ -515,7 +529,8 @@ if ($SelfTest) {
 
 try {
     $call = [Console]::In.ReadToEnd() | ConvertFrom-Json
-    if ($call -isnot [pscustomobject]) { throw 'the tool call is not a JSON object' }
+    # Not [pscustomobject], which is [psobject] and so holds a string or an array too.
+    if ($call -isnot [System.Management.Automation.PSCustomObject]) { throw 'the tool call is not a JSON object' }
     $root = $env:CLAUDE_PROJECT_DIR ? $env:CLAUDE_PROJECT_DIR : (Split-Path $PSScriptRoot -Parent)
     $why = Get-Refusal -Call $call -Log (Join-Path $root '.claude/refused-bash.log') -Windows:$IsWindows
 }
