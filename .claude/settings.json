@@ -32,7 +32,7 @@
           },
           {
             "type": "command",
-            "command": "i=$(cat); c=${i#*'\"tool_input\"'}; case $c in *cat*|*py*|*'<<'*|*'\\\\\\\\'*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/scripts/refuse-hanging-bash.ps1\";; esac"
+            "command": "i=$(cat); case ${i%%'\"tool_input\"'*} in *'\"tool_name\"'*'\"PowerShell\"'*) exit 0;; esac; c=${i#*'\"tool_input\"'}; case $c in *cat*|*py*|*'<<'*|*'\\\\\\\\\\\\\\\\'*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/scripts/refuse-hanging-bash.ps1\";; esac"
           }
         ]
       }
