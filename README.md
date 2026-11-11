@@ -541,6 +541,23 @@ check's own reading, through `scripts/markdown-lib.ps1`, which both load. `-Comm
 for a script's or a workflow's comment lines over the limit, a `#` block or a paragraph of a block
 comment, found by length. `-SelfTest` needs no git and no game.
 
+## Checking prose against the glossary
+
+A `GLOSSARY.md` gives a term the words to avoid for it, on its `_Avoid_` line, and nothing read
+new prose against them (grado-factorio-modpack#164). `scripts/glossary-check.ps1`, lifted from
+grado-factorio-modpack (#348), reads the Markdown lines a range adds and fails on each that uses
+an avoided word not marked `<!-- deliberate: word -->`. A word in double quotes or a code span is
+a mention and passes. `-Left` names the words a repository leaves to the reviewer, each with why:
+ordinary words there, avoided only as a word for one term. `-List` prints what is matched and
+what is not, and `-All` counts over the whole tree without failing.
+
+    pwsh -File scripts/glossary-check.ps1 -Range origin/main...HEAD
+
+CI runs it here on a pull request with six words left, ruled on #348. `-Left` is a dictionary, so
+a step passes it from PowerShell, `shell: pwsh`, not through `pwsh -File`; its first `.EXAMPLE`
+shows the form. `-SelfTest` builds scratch repositories and needs git. What it cannot see is in its
+header: whether a use is wrong is one.
+
 ## Checking a pull request body
 
 `scripts/pr-body-check.ps1` reads a pull request body for commits it cites, and fails on one that
