@@ -451,6 +451,22 @@ checked. `-SelfTest` proves each refusal and pass, and runs the command the sett
 `-SelfTest -Settings .claude/settings.json` runs a consumer's. What it cannot see is in its
 header: a substitution in a script the command runs, and a command inside `sh -c`, are two.
 
+## Keeping an agent session from downloading a program
+
+On 2026-10-07 a subagent fetched linter binaries and packages and ran them on this machine
+unasked (grado-factorio-modpack#179). `scripts/ask-before-download.ps1`, lifted from
+grado-factorio-modpack (#353), is a hook that refuses a package install, as `npm install`,
+`npx`, `pip install` or `gh release download`, and a fetch of an `.exe`, `.msi`, `.zip`,
+`.tar.gz` or `.tgz` from any host but `mods.factorio.com` and those `-AllowedHost` adds. The
+refusal tells the session to ask Truls, who runs the command himself if he agrees.
+
+This repository wires it in its tracked `.claude/settings.json`, and `CLAUDE.md` states the
+rule. A consumer's line is the script's first `.EXAMPLE`, with the branch that tells the agent
+when the script is missing. `-SelfTest` proves what is refused and what passes, through the
+wired command too; `-SelfTest -Settings .claude/settings.json` runs a consumer's, found by the
+script's name. What it cannot see is in its header: a download a script it lets through makes
+is one.
+
 ## Packing mods
 
 `scripts/pack-mods.ps1` builds one zip per mod directory, named `<name>_<version>.zip` from the
@@ -826,8 +842,8 @@ scripts/     PowerShell entry points, one job each, and the libraries they
              pre-push hooks, opted into once per clone
 .claude/     settings.json, which wires the session hooks: one refuses a commit
              or push skipping those, one Python run from a heredoc, one a
-             pull request body the check fails, and one a Bash command bash
-             would run a backtick span in
+             pull request body the check fails, one a Bash command bash
+             would run a backtick span in, and one a download of a program
 .github/     the workflow that runs scripts/check.ps1 on pull requests and main
 docs/        the commit convention, the ADRs, the notes agents read, the
              extraction record — what moved, from where, and why — and

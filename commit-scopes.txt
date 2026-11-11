@@ -28,6 +28,7 @@ heredoc-hook
 pin-measure
 pin-hook
 discard-hook
+download-hook
 pr-body-hook
 backtick-hook
 docs
