@@ -182,9 +182,9 @@ if ($SelfTest) {
         @{ Name = 'a word -Left names is listed as not matched with its why, and is not reported in any form, where one -Left does not name still is'; Test = {
             $Left = [ordered] @{ '^verified$' = 'left here on purpose' }
             $withLeft = @(Get-Avoided -Glossary $glossary)
-            $left = @($withLeft | Where-Object Why | Where-Object Entry -eq 'verified')
+            $leftEntry = @($withLeft | Where-Object Why | Where-Object Entry -eq 'verified')
             $f = @(Find-Avoided -Lines 'It was verified, and it confirms.' -Numbers 1 -Avoided $withLeft | ForEach-Object Word)
-            $left.Count -eq 1 -and $left[0].Why -eq 'left here on purpose' -and $f.Count -eq 1 -and $f[0] -eq 'confirms' } }
+            $leftEntry.Count -eq 1 -and $leftEntry[0].Why -eq 'left here on purpose' -and $f.Count -eq 1 -and $f[0] -eq 'confirms' } }
         @{ Name = 'over a range the script exits 1 on an unmarked use and names it, 0 once the use is marked, and 0 where a file only loses lines'; Test = {
             $temp = Join-Path ([IO.Path]::GetTempPath()) "glossary-check-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
             New-Item -ItemType Directory -Path $temp -Force | Out-Null
