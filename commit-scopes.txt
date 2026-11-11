@@ -23,6 +23,7 @@ strict-list-check
 revert-run
 pr-body-check
 cd-hook
+hanging-hook
 hook-skip
 heredoc-hook
 pin-measure
