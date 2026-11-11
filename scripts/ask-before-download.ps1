@@ -169,7 +169,7 @@ if ($SelfTest) {
     $failures = 0
     $n = 0
     $refused = @($cases | Where-Object { $_[1] })
-    $total = $cases.Count + $refused.Count + 5
+    $total = $cases.Count + $refused.Count + 8
     foreach ($c in $cases) {
         $n++
         $ok = [bool] (Get-Download -Command $c[0]) -eq $c[1]
@@ -188,11 +188,20 @@ if ($SelfTest) {
     # found by name, through sh, with the tool call on stdin. Exit 2 and a reason for every
     # refused case, exit 0 and silence for a portal read and a plain command.
     $Settings = (Resolve-Path -LiteralPath ($Settings ? $Settings : (Join-Path $PSScriptRoot '../.claude/settings.json'))).Path
+    # The case for -Settings below runs this with the variable set, to read which file it took.
+    if ($env:ASK_BEFORE_DOWNLOAD_SETTINGS_PROBE) { Write-Host "settings: $Settings"; exit 3 }
     $project = Split-Path (Split-Path $Settings -Parent) -Parent
     $names = [regex]::Escape((Split-Path $PSCommandPath -Leaf))
-    $entry = @((Get-Content -LiteralPath $Settings -Raw | ConvertFrom-Json).hooks.PreToolUse) |
-        Where-Object { @($_.hooks.command) -match $names } | Select-Object -First 1
-    $wired = if ($entry) { @($entry.hooks.command) -match $names | Select-Object -First 1 } else { '' }
+    # The entry is found by the script's name, wherever it stands among the PreToolUse entries.
+    $findWired = {
+        param([string] $path)
+        $found = @((Get-Content -LiteralPath $path -Raw | ConvertFrom-Json).hooks.PreToolUse) |
+            Where-Object { @($_.hooks.command) -match $names } | Select-Object -First 1
+        @{ Entry = $found; Command = $(if ($found) { @($found.hooks.command) -match $names | Select-Object -First 1 } else { '' }) }
+    }
+    $read = & $findWired $Settings
+    $entry = $read.Entry
+    $wired = $read.Command
     $env:CLAUDE_PROJECT_DIR = $project
     # Git for Windows keeps its sh, and the cat beside it, off the path PowerShell sees.
     $sh = (Get-Command sh -ErrorAction SilentlyContinue)?.Source ?? (Join-Path (git --exec-path) "../../../usr/bin/sh.exe")
@@ -268,6 +277,40 @@ if ($SelfTest) {
     $ok = $entry -and -not $unstarted
     Write-Host ("self-test {0}/{1}: the matcher of the entry that wires the hook starts it for the Bash tool and for the PowerShell tool -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++ }
+    # -AllowedHost as the hook passes it, one comma-separated string under pwsh -File: the second
+    # host is let through, and refused without the parameter.
+    $n++
+    $call = @{ tool_input = @{ command = 'curl -LO https://dl.example.org/tool.zip' } } | ConvertTo-Json -Compress
+    $call | pwsh -NoProfile -File $PSCommandPath -AllowedHost 'a.example.org,dl.example.org' 2>&1 | Out-Null
+    $withHost = $LASTEXITCODE
+    $call | pwsh -NoProfile -File $PSCommandPath 2>&1 | Out-Null
+    $withoutHost = $LASTEXITCODE
+    $ok = $withHost -eq 0 -and $withoutHost -eq 2
+    Write-Host ("self-test {0}/{1}: the script run with -AllowedHost 'a.example.org,dl.example.org' lets the second host through, and refuses it without -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
+    if (-not $ok) { $failures++; Write-Host "    with: $withHost, without: $withoutHost" }
+    # The entry named, not the first: a settings file whose first entry wires another command.
+    $n++
+    $fixture = Join-Path ([IO.Path]::GetTempPath()) "ask-before-download-settings-$([guid]::NewGuid().ToString('N').Substring(0, 8)).json"
+    try {
+        @{ hooks = @{ PreToolUse = @(
+            @{ matcher = 'Bash'; hooks = @(@{ type = 'command'; command = 'echo other' }) },
+            @{ matcher = 'Bash|PowerShell'; hooks = @(@{ type = 'command'; command = "pwsh -File scripts/$(Split-Path $PSCommandPath -Leaf)" }) }
+        ) } } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $fixture
+        $second = & $findWired $fixture
+        # -Settings is read: a child self-test given the fixture says it took the fixture. The
+        # variable stops it there, so it never reaches this case.
+        $env:ASK_BEFORE_DOWNLOAD_SETTINGS_PROBE = '1'
+        try { $took = pwsh -NoProfile -File $PSCommandPath -SelfTest -Settings $fixture 2>&1 | Out-String; $tookCode = $LASTEXITCODE }
+        finally { $env:ASK_BEFORE_DOWNLOAD_SETTINGS_PROBE = '' }
+    }
+    finally { Remove-Item -LiteralPath $fixture -Force -ErrorAction SilentlyContinue }
+    $ok = $second.Entry -and $second.Entry.matcher -ceq 'Bash|PowerShell' -and $second.Command -match $names
+    Write-Host ("self-test {0}/{1}: the wiring is read from the entry that names this script, not the first -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
+    if (-not $ok) { $failures++ }
+    $n++
+    $ok = $tookCode -eq 3 -and $took -match "settings: .*$([regex]::Escape((Split-Path $fixture -Leaf)))"
+    Write-Host ("self-test {0}/{1}: a -SelfTest given -Settings reads that file -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
+    if (-not $ok) { $failures++; Write-Host "    exit $tookCode $took" }
     Write-Host ''
     Write-Host "self-test took $($watch.Elapsed.TotalSeconds.ToString('0.0', [cultureinfo]::InvariantCulture)) s."
     if ($failures) { Write-Host "FAILED - self-test: $failures of $total case(s) did not hold."; exit 1 }

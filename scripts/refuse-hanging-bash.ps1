@@ -384,7 +384,7 @@ if ($SelfTest) {
     )
     $failures = 0
     $n = 0
-    $total = $cases.Count + 3 + 5 + 9
+    $total = $cases.Count + 3 + 5 + 11
     $report = {
         param([string] $what, [bool] $ok, [string] $why)
         $script:n++
@@ -430,11 +430,20 @@ if ($SelfTest) {
         # The wiring as the session runs it: the command the settings file wires for this script,
         # found by name, through sh, with the tool call on stdin.
         $Settings = (Resolve-Path -LiteralPath ($Settings ? $Settings : (Join-Path $PSScriptRoot '../.claude/settings.json'))).Path
+        # The case for -Settings below runs this with the variable set, to read which file it took.
+        if ($env:REFUSE_HANGING_BASH_SETTINGS_PROBE) { Write-Host "settings: $Settings"; exit 3 }
         $project = Split-Path (Split-Path $Settings -Parent) -Parent
         $names = [regex]::Escape((Split-Path $PSCommandPath -Leaf))
-        $entry = @((Get-Content -LiteralPath $Settings -Raw | ConvertFrom-Json).hooks.PreToolUse) |
-            Where-Object { @($_.hooks.command) -match $names } | Select-Object -First 1
-        $wired = if ($entry) { @($entry.hooks.command) -match $names | Select-Object -First 1 } else { '' }
+        # The entry is found by the script's name, wherever it stands among the PreToolUse entries.
+        $findWired = {
+            param([string] $path)
+            $found = @((Get-Content -LiteralPath $path -Raw | ConvertFrom-Json).hooks.PreToolUse) |
+                Where-Object { @($_.hooks.command) -match $names } | Select-Object -First 1
+            @{ Entry = $found; Command = $(if ($found) { @($found.hooks.command) -match $names | Select-Object -First 1 } else { '' }) }
+        }
+        $read = & $findWired $Settings
+        $entry = $read.Entry
+        $wired = $read.Command
         # Git for Windows keeps its sh, and the cat beside it, off the path PowerShell sees.
         $sh = (Get-Command sh -ErrorAction SilentlyContinue)?.Source ?? (Join-Path (git --exec-path) "../../../usr/bin/sh.exe")
         $env:PATH = "$(Split-Path $sh)$([IO.Path]::PathSeparator)$env:PATH"
@@ -530,6 +539,20 @@ if ($SelfTest) {
         # The log is the consumer's, and git ignores it there (#322 ruling 5).
         git -C $project check-ignore -q .claude/refused-bash.log 2>$null
         & $report "git ignores .claude/refused-bash.log in the settings' repository" ($LASTEXITCODE -eq 0) "$project`: add /.claude/refused-bash.log to its .gitignore"
+        # The entry named, not the first, and -Settings read: a settings file whose first entry
+        # wires another command, and a child self-test given it, stopped by the variable once it
+        # says which file it took, so that it never reaches this case.
+        $fixture = Join-Path $scratch 'two-entries.json'
+        @{ hooks = @{ PreToolUse = @(
+            @{ matcher = 'Bash'; hooks = @(@{ type = 'command'; command = 'echo other' }) },
+            @{ matcher = 'Bash|PowerShell'; hooks = @(@{ type = 'command'; command = "pwsh -File scripts/$(Split-Path $PSCommandPath -Leaf)" }) }
+        ) } } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $fixture
+        $second = & $findWired $fixture
+        & $report 'the wiring is read from the entry that names this script, not the first' ([bool] ($second.Entry -and $second.Entry.matcher -ceq 'Bash|PowerShell' -and $second.Command -match $names))
+        $env:REFUSE_HANGING_BASH_SETTINGS_PROBE = '1'
+        try { $took = pwsh -NoProfile -File $PSCommandPath -SelfTest -Settings $fixture 2>&1 | Out-String; $tookCode = $LASTEXITCODE }
+        finally { $env:REFUSE_HANGING_BASH_SETTINGS_PROBE = '' }
+        & $report 'a -SelfTest given -Settings reads that file' ($tookCode -eq 3 -and $took -match 'settings: .*two-entries\.json') "$tookCode $took"
     }
     finally {
         Remove-Item Env:CLAUDE_PROJECT_DIR -ErrorAction SilentlyContinue
