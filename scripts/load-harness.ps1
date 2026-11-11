@@ -151,6 +151,26 @@ foreach ($item in $env:LOAD_HARNESS_EXPECT -split ',') {
 Write-Host "CHECK RAN: $($Harness.Mods.Count) mod(s), save $([bool] $Load.SavePath), expected items in the dump"
 exit 0
 '@ | Set-Content $checkScript
+    # A stand-in for a launched game: a pwsh that holds a file in -Dir open, as the game holds its
+    # write-data, so the directory cannot be removed while it runs. Returned once it holds it.
+    # The cases of Stop-LaunchedGame that use it are true-nukes-refreshed's
+    # scripts/tests/probe-runner-cleanup.ps1 cases throws, warnstop, keep, normal and stop's
+    # first half, at 916074c, adapted by Truls's ruling on #351; its others test that runner.
+    $standIn = {
+        param([string] $Dir)
+        $held = Join-Path $Dir 'held.txt'
+        $p = Start-Process pwsh -PassThru -WindowStyle Hidden -ArgumentList '-NoProfile', '-Command',
+            "`$f = [IO.File]::Open('$held', 'OpenOrCreate', 'ReadWrite', 'None'); Start-Sleep -Seconds 300"
+        $end = (Get-Date).AddSeconds(30)
+        while ((Get-Date) -lt $end) {
+            if (Test-Path -LiteralPath $held) {
+                try { [IO.File]::Open($held, 'Open', 'Read', 'ReadWrite').Dispose() } catch { return $p }
+            }
+            Start-Sleep -Milliseconds 100
+        }
+        $p.Kill()
+        throw "the stand-in game never held $held"
+    }
     $failingCheck = Join-Path $temp 'failing-check.ps1'
     'Write-Host "CHECK SAYS NO"; exit 3' | Set-Content $failingCheck
     $env:LOAD_HARNESS_LIB = $PSScriptRoot
@@ -236,6 +256,83 @@ exit 0
                 Write-Host "    $said"
                 (Test-Path -LiteralPath $out) -and (Get-Content -LiteralPath $out -Raw) -match 'Version: \d' -and $said -match "Factorio exited \d+ during 'step-bad'" }
             finally { Remove-LoadHarness -Harness $h } } }
+        @{ Name = 'Find-MissingAssets reports a missing file of a mapped mod once, and passes a file there, a stripes sprite''s own filename, an unmapped mod and base'; Test = {
+            $assets = Join-Path $temp 'assets/harness-assets'
+            New-Item -ItemType Directory -Path $assets -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $assets 'stripe.png') -Value 'not a picture'
+            $dump = Join-Path $temp 'assets/dump.json'
+            @{
+                item   = @{ a = @{ icon = '__base__/graphics/icons/iron-plate.png'; pictures = @(@{ filename = '__harness-assets__/no-such.png' }) } }
+                sprite = @{ s = @{ filename = '__harness-assets__/never-opened.png'; stripes = @(@{ filename = '__harness-assets__/stripe.png' }) } }
+                other  = '__harness-unmapped__/x.png'
+                again  = @('__harness-assets__/no-such.png')
+            } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $dump
+            $found = @(Find-MissingAssets -DumpPath $dump -DataDir (Get-FactorioDataDirectory -FactorioExe (Resolve-FactorioExe)) -ModDirectories @{ 'harness-assets' = $assets })
+            foreach ($f in $found) { Write-Host "    $($f.Reference)" }
+            $found.Count -eq 1 -and $found[0].Reference -ceq '__harness-assets__/no-such.png' -and $found[0].Mod -ceq 'harness-assets' } }
+        @{ Name = 'Find-MissingAssets finds, in a real dump, an icon path a prototype builds by joining strings, and passes the base icon beside it'; Test = {
+            $canary = Join-Path $temp 'assets/harness-canary'
+            & $newMod $canary 'harness-canary' ('local D = "__harness-canary__/graphics/"' + "`n" +
+                'data:extend({ { type = "item", name = "harness-canary-item", stack_size = 1, icon = D .. "no-such-icon" .. ".png", icon_size = 64 },' +
+                ' { type = "item", name = "harness-canary-plate", stack_size = 1, icon = "__base__/graphics/icons/iron-plate.png" } })')
+            $h = New-LoadHarness -Mods $canary
+            try {
+                $dumped = Invoke-HarnessDump -Harness $h -Tag 'assets'
+                $found = @(Find-MissingAssets -DumpPath $dumped -DataDir (Get-FactorioDataDirectory -FactorioExe $h.FactorioExe) -ModDirectories @{ 'harness-canary' = $canary })
+                foreach ($f in $found) { Write-Host "    $($f.Reference)" }
+                $found.Count -eq 1 -and $found[0].Reference -ceq '__harness-canary__/graphics/no-such-icon.png' }
+            finally { Remove-LoadHarness -Harness $h } } }
+        @{ Name = 'Stop-LaunchedGame kills a game holding a file in its harness, waits until it has gone, and removes the harness, junctions first'; Test = {
+            $h = New-LoadHarness -Mods $good
+            $p = & $standIn $h.Temp
+            Stop-LaunchedGame -Process $p -Label 'self-test' -Harness $h
+            $p.HasExited -and -not (Test-Path -LiteralPath $h.Temp) -and (Test-Path -LiteralPath (Join-Path $good 'info.json')) } }
+        @{ Name = 'Stop-LaunchedGame, with a game it could not close and a caller''s $WarningPreference of Stop, leaves the harness without junctions, names it in a warning, and lets the caller''s own error through'; Test = {
+            $h = New-LoadHarness -Mods $good
+            $p = & $standIn $h.Temp
+            try {
+                $WarningPreference = 'Stop'
+                $warned = [System.Collections.Generic.List[string]]::new()
+                $said = try { try { throw 'the caller''s own error' } finally { Stop-LaunchedGame -Label 'self-test' -Harness $h 3>&1 | ForEach-Object { $warned.Add("$_") } } } catch { $_.Exception.Message }
+                $WarningPreference = 'Continue'
+                $linked = @(Get-ChildItem -LiteralPath $h.ModDirectory -Directory -Force -ErrorAction SilentlyContinue | Where-Object LinkType -eq 'Junction')
+                foreach ($w in $warned) { Write-Host "    warned: $w" }
+                $said -ceq 'the caller''s own error' -and (Test-Path -LiteralPath $h.Temp) -and -not $linked -and
+                    [bool] ($warned -match [regex]::Escape($h.Temp)) }
+            finally { $p.Kill(); $p.WaitForExit(); Remove-TempDirectory -Path $h.Temp -Label 'self-test' } } }
+        @{ Name = 'Stop-LaunchedGame -Keep keeps the harness directory and its files, never the junctions'; Test = {
+            $h = New-LoadHarness -Mods $good
+            $p = & $standIn $h.Temp
+            try {
+                Stop-LaunchedGame -Process $p -Label 'self-test' -Harness $h -Keep | Out-Null
+                $linked = @(Get-ChildItem -LiteralPath $h.ModDirectory -Directory -Force -ErrorAction SilentlyContinue | Where-Object LinkType -eq 'Junction')
+                $p.HasExited -and (Test-Path -LiteralPath (Join-Path $h.Temp 'held.txt')) -and -not $linked }
+            finally { Remove-LoadHarness -Harness $h } } }
+        @{ Name = 'Stop-LaunchedGame in a finally block, the run stopped while its game runs as Ctrl+C stops it, leaves no game running and no harness'; Test = {
+            $mark = Join-Path $temp 'stopped.mark'
+            $ps = [powershell]::Create()
+            [void] $ps.AddScript({
+                param($Lib, $Mod, $Mark, $StandIn)
+                . $Lib
+                $h = New-LoadHarness -Mods $Mod
+                $p = $null
+                try {
+                    $p = & ([scriptblock]::Create($StandIn)) $h.Temp  # strict-lists: one
+                    Set-Content -LiteralPath $Mark -Value "$($h.Temp)|$($p.Id)"
+                    Start-Sleep -Seconds 120
+                }
+                finally { Stop-LaunchedGame -Process $p -Label 'stopped' -Harness $h }
+            }).AddArgument((Join-Path $PSScriptRoot 'load-harness-lib.ps1')).AddArgument($good).AddArgument($mark).AddArgument($standIn.ToString())
+            $async = $ps.BeginInvoke()
+            $end = (Get-Date).AddSeconds(90)
+            while (-not (Test-Path -LiteralPath $mark) -and -not $async.IsCompleted -and (Get-Date) -lt $end) { Start-Sleep -Milliseconds 200 }
+            $running = -not $async.IsCompleted
+            $ps.Stop()
+            $ps.Dispose()
+            if (-not (Test-Path -LiteralPath $mark)) { Write-Host '    the run never reached its game'; return $false }
+            $harnessTemp, $gameId = (Get-Content -LiteralPath $mark -Raw).Trim() -split '\|'
+            $alive = [bool] (Get-Process -Id ([int] $gameId) -ErrorAction SilentlyContinue)
+            $running -and -not $alive -and -not (Test-Path -LiteralPath $harnessTemp) } }
         @{ Name = 'every mod source is still there after the junctions went'; Test = {
             $after = @(Get-ChildItem -LiteralPath (Join-Path $temp 'src'), $cache -Recurse -File -Force | ForEach-Object FullName)
             $sourceBefore.Count -gt 0 -and -not (Compare-Object $sourceBefore $after) } }

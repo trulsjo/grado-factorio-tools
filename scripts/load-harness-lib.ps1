@@ -29,6 +29,13 @@
     paths to mods wants New-LoadHarness, which needs no Get-ModLinks; that one is for a caller
     that builds its own mod directory with New-ModJunctions.
 
+    TWO MORE CAME FROM THAT FILE AT 20422ea (grado-factorio-tools#349 and #351, #321 rulings 1
+    and 4), read 2026-11-06: Find-MissingAssets, with its name and code, and Stop-LaunchedGame,
+    which kept its name and its two-minute wait and took from true-nukes-refreshed's
+    scripts/port-probe.ps1 at b0842be the rest of its cleanup: a game that exits just before the
+    kill is no error, and the harness is removed after the wait and only warns, so it never
+    replaces the caller's own error (Truls's ruling on #351).
+
     IT NEVER TOUCHES THE PLAYER'S GAME. Mods go into a mod directory under a temp directory, and
     every run gets a write-data directory of its own there (Invoke-Factorio), so the player's mods,
     mod-list.json, saves and player-data.json are neither read nor written. Mod directories are
@@ -626,4 +633,123 @@ function Remove-LoadHarness {
     Remove-ModJunctions -ModDirectory $Harness.ModDirectory
     if ($Keep) { Write-Host "temp kept at: $($Harness.Temp)" }
     else { Remove-TempDirectory -Path $Harness.Temp -Label 'load-harness' }
+}
+
+function Stop-LaunchedGame {
+    <#  Kill a game a caller launched with Start-Process, wait until it has really gone, then
+        remove -Harness, junctions first: the order is kill, wait, junctions, the directory. For
+        the finally block of every run that opens a game. Without -Harness it stops the game
+        alone, for a caller that cleans up its own directories after it.
+
+        A KILLED GAME IS NOT GONE WHEN Kill() RETURNS (realistic-fusion-refreshed#467), and until
+        it has gone it holds write-data/.lock, the log and the run's stdout, so the directory's
+        removal loses and it stays in %TEMP%. Measured on 2.0.77 on 2026-09-28: one run on a
+        ten-second wait left its launch, run-stdout.txt and write-data behind; in the seven that
+        were timed the game took between 0.3 and 13.0 s to exit after the kill. So it waits two
+        minutes, and past them warns and goes on: the junctions go, and the directory the game
+        still holds stays, named in Remove-TempDirectory's warning.
+
+        A game that exits between the check and the kill is not an error; a kill that fails on a
+        game still running is thrown, after the harness is removed. The removal only warns when
+        it fails, -WarningAction Continue, so a caller's $WarningPreference = 'Stop' cannot turn
+        it into an error that replaces the caller's own (true-nukes-refreshed#61). -Keep keeps
+        the directory, never the junctions.  #>
+    param(
+        [System.Diagnostics.Process] $Process,
+        [Parameter(Mandatory)] [string] $Label,
+        [object] $Harness,
+        [switch] $Keep
+    )
+
+    try {
+        if ($Process -and -not $Process.HasExited) {
+            try { $Process.Kill() } catch { if (-not $Process.HasExited) { throw } }
+            if (-not $Process.WaitForExit(120000)) {
+                Write-Warning -WarningAction Continue "${Label}: Factorio (pid $($Process.Id)) had not exited two minutes after it was killed."
+            }
+        }
+    }
+    finally {
+        if ($Harness) {
+            # Under a caller's $WarningPreference = 'Stop', Remove-TempDirectory's warning is
+            # thrown, and caught here: the warning below names the directory as well.
+            try { Remove-LoadHarness -Harness $Harness -Keep:$Keep }
+            catch {
+                Write-Warning -WarningAction Continue "${Label}: could not remove the load harness at $($Harness.Temp): $_; junctions may remain in its mods folder, so unlink them with rmdir before deleting it"
+            }
+        }
+    }
+}
+
+function Find-MissingAssets {
+    <#  Every __mod__/... .png or .ogg the loaded prototypes name that is not on disk, as
+        @{ Reference; Mod }, sorted by Reference.
+
+        Factorio will not say. A headless run loads no sprites, so --create validates a prototype
+        that names an icon without ever opening the file, and exits 0; the player's game opens
+        it, fails, and refuses to start: "Failed to load mods: File
+        __base__/graphics/icons/heat-exchanger.png not found", which is how
+        realistic-fusion-refreshed found it, by hand, after every automated check had passed.
+
+        It reads a --dump-data JSON, Invoke-HarnessDump's, not the Lua source. Its first version
+        scanned source text for literal "__base__/..." strings, which worked only while every
+        path was a literal: prototypes build icon paths by joining strings
+        (ENTITY .. name .. ".png"), and a scan of source sees none of them. The dump holds the
+        paths as the game resolved them, so joins, loops and helper functions are all covered.
+
+        Walked as an object graph rather than scanned as text, for one reason: a sprite that
+        declares `stripes` keeps a `filename` beside them that the engine never opens. Vanilla
+        has one: big-artillery-explosion names hr-bigass-explosion-36f.png, which does not exist,
+        while its two stripes name the files that do.
+
+        -DataDir is the game's data directory, Get-FactorioDataDirectory's, where base and core
+        live. -ModDirectories maps a mod name to where its files are on disk. A path of any other
+        mod is passed over, not reported: its files are reachable only when that mod is
+        installed.  #>
+    param(
+        [Parameter(Mandatory)] [string]    $DumpPath,
+        [Parameter(Mandatory)] [string]    $DataDir,
+        [Parameter(Mandatory)] [hashtable] $ModDirectories
+    )
+
+    if (-not (Test-Path -LiteralPath $DumpPath)) { throw "no data dump at '$DumpPath'." }
+
+    $pattern = [regex] '^__(?<mod>[A-Za-z0-9_ .-]+)__/(?<rel>.+\.(?:png|ogg))$'
+    $seen    = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $missing = @()
+
+    $stack = [System.Collections.Generic.Stack[object]]::new()
+    $stack.Push((Get-Content -LiteralPath $DumpPath -Raw | ConvertFrom-Json))
+
+    while ($stack.Count -gt 0) {
+        $node = $stack.Pop()
+
+        if ($node -is [System.Management.Automation.PSCustomObject]) {
+            $properties = $node.PSObject.Properties
+            $striped = $null -ne $properties['stripes']
+            foreach ($property in $properties) {
+                if ($striped -and $property.Name -eq 'filename') { continue }
+                if ($null -ne $property.Value) { $stack.Push($property.Value) }
+            }
+        }
+        elseif ($node -is [System.Object[]]) {
+            foreach ($item in $node) { if ($null -ne $item) { $stack.Push($item) } }
+        }
+        elseif ($node -is [string]) {
+            $match = $pattern.Match($node)
+            if (-not $match.Success -or -not $seen.Add($node)) { continue }
+
+            $mod = $match.Groups['mod'].Value
+            $root = if ($mod -in @('base', 'core')) { Join-Path $DataDir $mod }
+                    elseif ($ModDirectories.ContainsKey($mod)) { $ModDirectories[$mod] }
+                    else { $null }
+
+            if ($null -eq $root) { continue }
+            if (-not (Test-Path -LiteralPath (Join-Path $root $match.Groups['rel'].Value))) {
+                $missing += [pscustomobject]@{ Reference = $node; Mod = $mod }
+            }
+        }
+    }
+
+    return @($missing | Sort-Object Reference)
 }
