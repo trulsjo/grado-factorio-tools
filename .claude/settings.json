@@ -25,6 +25,10 @@
           {
             "type": "command",
             "command": "i=$(cat); case $i in *'`'*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/scripts/refuse-backtick-substitution.ps1\";; esac"
+          },
+          {
+            "type": "command",
+            "command": "i=$(cat); case $i in *npm*|*npx*|*pip*|*gem*|*cargo*|*winget*|*choco*|*scoop*|*release*download*|*.exe*|*.msi*|*.zip*|*.tar.gz*|*.tgz*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/scripts/ask-before-download.ps1\";; esac"
           }
         ]
       }

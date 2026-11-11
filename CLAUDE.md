@@ -39,6 +39,9 @@ submodule, [ADR 0001](docs/adr/0001-siblings-consume-this-repo-as-a-submodule.md
   `ready-for-agent`.
 - The hooks, pre-commit, commit-msg and pre-push, are opted into once per clone:
   `git config core.hooksPath .githooks`.
+- **A session asks before it downloads a program and runs it here**;
+  [`scripts/ask-before-download.ps1`](scripts/ask-before-download.ps1) refuses one, and its header
+  holds the reason.
 - Commit email is set per-repo — do not change it.
 - `CLAUDE.local.md` is never committed, and its contents never move into a tracked file.
 - **A script does one job and says so in its header**: what exit 0 means, and what the script
