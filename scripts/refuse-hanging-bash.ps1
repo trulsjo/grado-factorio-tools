@@ -13,7 +13,7 @@
     are -SelfTest's, with one fixture's mod name made generic. What changed in the port: it is wired
     for both shell tools behind a `case`, and passes a call whose `tool_name` is not `Bash`; the
     refusal log is the consumer's, not the script's repository's; and -SelfTest runs the wiring.
-    The tickets and dates below are realistic-fusion-refreshed's (rf).
+    Below, rf is realistic-fusion-refreshed, and a ticket with no repository named is this one's.
 
     WHAT HANGS, reproduced on 2026-10-09 under Git Bash on Windows with Python 3.13.14
     (realistic-fusion-refreshed#645): a command left reading the tool's stdin, a pipe nobody closes,
@@ -515,7 +515,8 @@ if ($why) {
     [Console]::Error.WriteLine(@"
 Refused before it ran: $why. Write the script or the text to a file with the Write tool and give
 the command that file's path. A command left reading can be fed with a pipe or ``< file`` instead.
-refuse-hanging-bash.ps1's header, in vendor/grado-factorio-tools/scripts/, says what is refused.
+refuse-hanging-bash.ps1's header says what is refused: in grado-factorio-tools's scripts/,
+vendored at vendor/grado-factorio-tools/scripts/.
 "@)
     exit 2
 }

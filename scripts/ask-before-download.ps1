@@ -285,8 +285,8 @@ if ($what) {
     [Console]::Error.WriteLine(@"
 Refused: this command $what.
 Ask Truls first: a session does not download a program and run it on this machine unasked
-(grado-factorio-modpack#179; the reason is in vendor/grado-factorio-tools/scripts/
-ask-before-download.ps1's header). If he says yes, he runs the command himself with the !
+(grado-factorio-modpack#179; the reason is in ask-before-download.ps1's header, in
+grado-factorio-tools's scripts/, vendored at vendor/grado-factorio-tools/scripts/). If he says yes, he runs the command himself with the !
 prefix. Do not rephrase the command to get past this.
 "@)
     exit 2

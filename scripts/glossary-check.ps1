@@ -255,7 +255,8 @@ if ($SelfTest) {
 
 if ($Range -and $Range -notmatch '\.\.+[^.]') { throw '-Range needs both ends, as origin/main...HEAD: the files are read at its end.' }
 $revision = if ($Range) { $Range -replace '^.*\.\.+' } else { 'HEAD' }
-# A glossary that gives the script no word to match leaves nothing it reads able to fail (#362).
+# A glossary that gives the script no word to match leaves nothing it reads able to fail
+# (grado-factorio-modpack#362).
 $glossary = @(git show "${revision}:GLOSSARY.md" 2>$null)
 if ($LASTEXITCODE -ne 0) { Write-Host "FAILED - glossary-check: git could not read GLOSSARY.md at $revision, so no line was read against it. Run it inside the repository."; exit 1 }
 $avoided = @(if ($glossary) { Get-Avoided -Glossary $glossary })

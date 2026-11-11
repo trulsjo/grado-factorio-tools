@@ -6,7 +6,8 @@
 .DESCRIPTION
     WHERE IT CAME FROM (grado-factorio-tools#354, #329 ruling 1). grado-factorio-modpack's
     scripts/absolute-words.ps1 at e7a9586, read 2026-11-06. What changed in the move: the header
-    names that repository's tickets and pages as its own, and nothing else. The review step that
+    names that repository's tickets and pages as its own, the comment above $WORDS names the
+    ruling's repository, and the self-test's list is $listed. The review step that
     walks the list is grado-factorio-tools#355's.
 
     WHY (grado-factorio-modpack#219). The review rules say "Treat a quantifier as an instruction
