@@ -324,17 +324,28 @@ exit 0
                 $said -ceq 'the caller''s own error' -and (Test-Path -LiteralPath $h.Temp) -and -not $linked -and
                     [bool] ($warned -match [regex]::Escape($h.Temp)) }
             finally { $p.Kill(); $p.WaitForExit(); Remove-TempDirectory -Path $h.Temp -Label 'self-test' } } }
-        @{ Name = 'Stop-LaunchedGame waits two minutes for a killed game to go, warns naming its pid where it has not, and kills no game that has gone'; Test = {
+        @{ Name = 'Stop-LaunchedGame waits two minutes for a killed game to go, warns naming its pid where it has not, under a caller''s $WarningPreference of Stop too, and kills no game that has gone'; Test = {
             $gone = & $fakeGame
             Stop-LaunchedGame -Process $gone -Label 'self-test' 3>&1 | ForEach-Object { Write-Host "    warned: $_" }
             $stuck = & $fakeGame -Exits $false
             $warned = @(Stop-LaunchedGame -Process $stuck -Label 'self-test' 3>&1 | ForEach-Object { "$_" })
             $already = & $fakeGame -Exited $true
             Stop-LaunchedGame -Process $already -Label 'self-test'
-            foreach ($w in $warned) { Write-Host "    warned: $w" }
+            # The same warning in a caller's finally under $WarningPreference = 'Stop': written,
+            # not thrown, so the caller's own error is the one that comes out.
+            $stuckUnderStop = & $fakeGame -Exits $false
+            $stopWarned = [System.Collections.Generic.List[string]]::new()
+            try {
+                $WarningPreference = 'Stop'
+                $callerSaid = try { try { throw 'the caller''s own error' } finally { Stop-LaunchedGame -Process $stuckUnderStop -Label 'self-test' 3>&1 | ForEach-Object { $stopWarned.Add("$_") } } } catch { $_.Exception.Message }
+            }
+            finally { $WarningPreference = 'Continue' }
+            foreach ($w in @($warned) + @($stopWarned)) { Write-Host "    warned: $w" }
+            Write-Host "    under Stop, the caller got: $callerSaid"
             $gone.HasExited -and $gone.Killed -eq 1 -and "$($gone.Waited)" -eq '120000' -and
                 $warned.Count -eq 1 -and $warned[0] -match 'pid 99999' -and $warned[0] -match 'two minutes' -and
-                $already.Killed -eq 0 -and $already.Waited.Count -eq 0 } }
+                $already.Killed -eq 0 -and $already.Waited.Count -eq 0 -and
+                $callerSaid -ceq 'the caller''s own error' -and $stopWarned.Count -eq 1 -and $stopWarned[0] -match 'two minutes' } }
         @{ Name = 'Stop-LaunchedGame lets a failed kill pass where the game went meanwhile, and throws it where the game still runs, after removing the harness'; Test = {
             $raced = & $fakeGame -KillFails $true -GoneByFailure $true
             $racedSaid = try { Stop-LaunchedGame -Process $raced -Label 'self-test'; '' } catch { $_.Exception.Message }
