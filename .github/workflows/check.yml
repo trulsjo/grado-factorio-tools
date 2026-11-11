@@ -1,9 +1,9 @@
 # What .githooks/pre-push runs, for a clone that never opted into the hooks, plus what a hook
 # does not run: the commits the tracked files cite, which reach origin/main only once pushed;
 # a citation of our own code by line number, read over the whole tree; the pull request's title;
-# and its body, for the commits it cites, for a closing keyword
-# outside a `Closes #N` line, and for the pr template's three headings. `edited` is listed so a
-# retitle or an edited body is checked again.
+# the Markdown lines it adds, against GLOSSARY.md; and its body, for the commits it cites, for a
+# closing keyword outside a `Closes #N` line, and for the pr template's three headings. `edited`
+# is listed so a retitle or an edited body is checked again.
 #
 # On windows-latest and on ubuntu-latest, a job each (grado-factorio-tools#117): the scripts
 # were written on Windows, grado-factorio-modpack's check runs on ubuntu-latest (its
@@ -62,6 +62,20 @@ jobs:
       # This step stays, so CI's log shows the floors and the count it read on their own line.
       - name: Check that no prose cites our own code by line number
         run: pwsh -NoProfile -File scripts/line-cite-check.ps1 -MinCitations 50 -MinContinuations 4
+
+      # The words GLOSSARY.md avoids, in the Markdown lines a pull request adds
+      # (grado-factorio-tools#348). Three dots: two would judge a branch behind main on what main
+      # changed since. -Left is ruled on #348: these six are ordinary words here, and avoided
+      # only as a word for one term; on 2026-11-11, -All with none left counted 104 uses of copy,
+      # 76 of branch, 20 of share and 3 of port.
+      - name: Check the added Markdown lines against the glossary
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        run: |
+          $plain = 'an ordinary word here; avoided only as a word for one term'
+          ./scripts/glossary-check.ps1 -Range origin/main...HEAD -Left ([ordered] @{
+              '^copy$' = $plain; '^port$' = $plain; '^share$' = $plain
+              '^branch$' = $plain; '^upgrade$' = $plain; '^patch$' = $plain })
 
       # Through the environment, never pasted into the command: a title is text somebody typed.
       - name: Check the pull request title
