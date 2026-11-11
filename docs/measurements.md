@@ -897,3 +897,40 @@ reference, <https://code.claude.com/docs/en/hooks>, and is quoted in the script'
 client on the machine that day was Claude Code 2.1.296 (`claude --version`).
 
 Not measured: a session with a narrowed matcher running a command from the tool left out.
+
+## `dev-launch.ps1`
+
+### It launches a Steam build and a zip install with its own mod directory
+
+Run on 2026-11-11 on the development machine, from the working tree of the branch that lifted
+`dev-launch.ps1`, before its commit (grado-factorio-tools#350 asks for the zip install). A scratch
+script built one mod, `devlaunch-probe`, a directory with an empty `data.lua`; ran
+`pwsh -File scripts/dev-launch.ps1 -FactorioExe <exe> -ModDirectory <scratch>/mods <mod>`; read
+the game's `factorio-current.log` until it named the mod; then closed that game by its pid alone,
+and ran `-Clean`. No other `factorio.exe` was running.
+
+| Install | Version, from its log | The pid `dev-launch.ps1` printed, once the log named the mod |
+|---|---|---|
+| Steam, `D:\SteamLibrary\steamapps\common\Factorio\bin\x64\Factorio.exe` | 2.1.24 (build 87808, win64, steam, space-age) | still running: no relaunch through Steam |
+| zip, `D:\factorio-2.1\bin\x64\factorio.exe` | 2.1.24 (build 87808, win64, full, space-age) | still running |
+
+The Steam build's log, `%APPDATA%\Factorio\factorio-current.log`, the player's write-data:
+
+```text
+   0.000 Initializing Steam API.
+   0.137 Program arguments: "D:\SteamLibrary\steamapps\common\Factorio\bin\x64\Factorio.exe" "--mod-directory" "C:\Users\TrulsJ\AppData\Local\Temp\devlaunch-measure-steam\mods"
+   0.147 Write data path: C:/Users/TrulsJ/AppData/Roaming/Factorio [82870/487056MB]
+   5.421 Loading mod devlaunch-probe 1.0.0 (data.lua)
+```
+
+The zip install's log, `D:\factorio-2.1\factorio-current.log`, its own write-data:
+
+```text
+   0.001 Program arguments: "D:\factorio-2.1\bin\x64\factorio.exe" "--mod-directory" "C:\Users\TrulsJ\AppData\Local\Temp\devlaunch-measure-zip\mods"
+   0.001 Write data path: D:/factorio-2.1 [72306/488368MB]
+   4.526 Loading mod devlaunch-probe 1.0.0 (data.lua)
+```
+
+Each `-Clean` printed `removed <scratch>\mods`. Not measured: a launch without the
+`steam_appid.txt` the script writes, which realistic-fusion-refreshed's copy records as relaunched
+through Steam without `--mod-directory`; a mod given as a zip; and `-With`.

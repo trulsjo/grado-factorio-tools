@@ -2,6 +2,7 @@
 # scripts/commit-check.ps1, which refuses a scope that is not here; CI holds a pull request's
 # title to it too. CLAUDE.md says what a scope is; this file is the only list of them.
 coexistence
+dev-launch
 tree-viewer
 locale-check
 pack
