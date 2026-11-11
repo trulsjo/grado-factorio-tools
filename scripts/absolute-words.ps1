@@ -80,7 +80,7 @@ function Get-CommentNumbers([string[]] $Lines) {
 }
 
 if ($SelfTest) {
-    $words = { param([string] $text) @(Find-Words $text) -join '|' }
+    $listed = { param([string] $text) @(Find-Words $text) -join '|' }
     $temp = Join-Path ([IO.Path]::GetTempPath()) "absolute-words-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
     New-Item -ItemType Directory -Path $temp -Force | Out-Null
     try {
@@ -109,11 +109,11 @@ if ($SelfTest) {
 
     $cases = @(
         @{ Name = 'a word is found in any case, each once, and "cannot" is one of them'; Test = {
-            (& $words 'Only the first holds; ONLY that one cannot.') -eq 'cannot|first|only' } }
+            (& $listed 'Only the first holds; ONLY that one cannot.') -eq 'cannot|first|only' } }
         @{ Name = '"the one" and "with or without" are found as phrases'; Test = {
-            (& $words 'It is the one file, with or without a header.') -eq 'the one|with or without' } }
+            (& $listed 'It is the one file, with or without a header.') -eq 'the one|with or without' } }
         @{ Name = 'a word inside a longer word is not found: overall, first-class, walls, the one-file rule'; Test = {
-            (& $words 'Overall the first-class walls stand, lastly by the one-file rule.') -eq '' } }
+            (& $listed 'Overall the first-class walls stand, lastly by the one-file rule.') -eq '' } }
         @{ Name = 'a comment is a line that opens with # or stands inside a block comment, and not one after code'; Test = {
             (@(Get-CommentNumbers @('<#', '    text', '#>', '$a = 1  # after code', '    # indented', '<# one line #>', 'echo x')) -join ' ') -eq '1 2 3 5 6' } }
         @{ Name = 'an added Markdown line is listed with its file, line and words, and one the range did not add is not'; Test = {
