@@ -384,7 +384,7 @@ if ($SelfTest) {
     )
     $failures = 0
     $n = 0
-    $total = $cases.Count + 3 + 5 + 8
+    $total = $cases.Count + 3 + 5 + 9
     $report = {
         param([string] $what, [bool] $ok, [string] $why)
         $script:n++
@@ -489,15 +489,29 @@ if ($SelfTest) {
             if ($LASTEXITCODE -ne 1 -or $unread -notmatch 'NOT checked') { $unreadOk = $false; Write-Host "    $shape -> $LASTEXITCODE $unread" }
         }
         & $report 'a tool call it cannot read, not JSON or JSON that is no object, exits 1 and says it was not checked' $unreadOk
-        # Its refusal is logged, so under the copy, not the project this runs in.
+        # Where the log goes, from a copy at a consumer's vendored path, where the project and the
+        # script's repository differ: under $CLAUDE_PROJECT_DIR, else under the script's parent.
+        $consumer = Join-Path $scratch 'consumer'
+        $vendored = Join-Path $consumer 'vendor/grado-factorio-tools/scripts'
+        # Each has its .claude, as a consumer and this repository do; the log does not make one.
+        foreach ($d in $vendored, (Join-Path $consumer '.claude'), (Join-Path $consumer 'vendor/grado-factorio-tools/.claude')) {
+            New-Item -ItemType Directory -Path $d -Force | Out-Null
+        }
+        Copy-Item -LiteralPath $PSCommandPath -Destination $vendored
         $sessionDir = $env:CLAUDE_PROJECT_DIR
         try {
-            $env:CLAUDE_PROJECT_DIR = $copy
-            $untold = '{"tool_input":{"command":"cat"}}' | pwsh -NoProfile -File $PSCommandPath 2>&1 | Out-String
+            $env:CLAUDE_PROJECT_DIR = $consumer
+            $untold = '{"tool_input":{"command":"cat"}}' | pwsh -NoProfile -File (Join-Path $vendored (Split-Path $PSCommandPath -Leaf)) 2>&1 | Out-String
             $untoldCode = $LASTEXITCODE
+            $env:CLAUDE_PROJECT_DIR = ''
+            $fellBack = '{"tool_input":{"command":"cat"}}' | pwsh -NoProfile -File (Join-Path $vendored (Split-Path $PSCommandPath -Leaf)) 2>&1 | Out-String
+            $fellBackCode = $LASTEXITCODE
         }
         finally { $env:CLAUDE_PROJECT_DIR = $sessionDir }
         & $report 'a call with no tool_name is read as the Bash tool''s, and its hanging cat refused' ($untoldCode -eq 2 -and $untold -match 'never closed') "$untoldCode $untold"
+        $inProject = @(Get-Content -LiteralPath (Join-Path $consumer '.claude/refused-bash.log') -ErrorAction SilentlyContinue)
+        $inScripts = @(Get-Content -LiteralPath (Join-Path $consumer 'vendor/grado-factorio-tools/.claude/refused-bash.log') -ErrorAction SilentlyContinue)
+        & $report 'a refusal is logged under $CLAUDE_PROJECT_DIR, not the vendored script''s repository, and under that repository only where the variable is unset' ($fellBackCode -eq 2 -and $inProject.Count -eq 1 -and $inScripts.Count -eq 1) "project log $($inProject.Count) line(s), vendored log $($inScripts.Count), exits $untoldCode $fellBackCode"
         # The first example's form, for a project with no hook script, as a clone without the
         # submodule is: the command runs, and stdout tells the agent it was not checked.
         $form = [regex]::Match((Get-Content -LiteralPath $PSCommandPath -Raw), 'i=\$\(cat\).*?esac').Value
