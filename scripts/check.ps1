@@ -780,11 +780,11 @@ if ($SelfTest) {
                 # in HEAD, which git rm --cached refuses without -f, leaving both staged.
                 try { $real = Get-CheckedTree -Root $repo }
                 finally {
-                    git -C $repo rm --cached --quiet -f -- t.ps1 u.ps1; $removed = $LASTEXITCODE
+                    git -C $repo rm --cached --quiet -f -- t.ps1 u.ps1
                     Remove-Item -LiteralPath (Join-Path $repo 't.ps1'), (Join-Path $repo 'u.ps1')
                 }
-                if ($removed) { throw "git rm --cached exited $removed; t.ps1 and u.ps1 stay staged." }
-                # The index is back to the files every tree is built on, for the cases after.
+                # The index is back to the files every tree is built on, for the cases after: a
+                # removal that failed leaves t.ps1 and u.ps1 in it.
                 $left = @(git -C $repo ls-files -s | ForEach-Object { $_ -replace '^(\d+) ([0-9a-f]+) \d\t', "`$1 blob `$2`t" })
                 ($alone -join '|') -ceq 'u.ps1' -and $real -and $real -ceq $built -and ($left -join "`n") -ceq ($baseEntries -join "`n") }
             'where git fails, the fixture''s git call throws naming the command: mktree given a blob git does not hold, without --missing (#414)' = {
