@@ -87,7 +87,11 @@
 
     HOW A CONSUMER WIRES IT. In its tracked .claude/settings.json, a PreToolUse hook on the two
     shell tools, matcher `Bash|PowerShell`, whose command is the first example below: a `case` on
-    `cat`, `py`, `<<` and a backslash, since whatever is refused holds one of them. Where the
+    `cat`, `py`, `<<` and a backslash, since whatever is refused holds one of them. The tool call
+    reaches sh as JSON, which writes a backslash of the command as `\\` but a quote as `\"` and a
+    line break as `\n`, so the arm is four backslashes in quotes: halved, as the shell halves it
+    on Windows, two, a backslash of the command's; not halved, four, a pair. One backslash would
+    start pwsh, 1.7 to 4.9 s, on nearly every command (PR #420). Where the
     script is not there, the wired command lets the shell command run and prints JSON that tells
     the agent it was not checked. It also git-ignores `.claude/refused-bash.log`, below; its
     -SelfTest -Settings fails where git does not ignore that file. This repository wires it from
@@ -138,7 +142,7 @@
     The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json, as HOW A
     CONSUMER WIRES IT says. Its .gitignore gains the line `/.claude/refused-bash.log`.
 
-        i=$(cat); case $i in *cat*|*py*|*'<<'*|*'\'*) h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-hanging-bash.ps1"; if [ -f "$h" ]; then printf '%s' "$i" | pwsh -NoProfile -File "$h"; else printf '%s' '{"systemMessage":"refuse-hanging-bash: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"refuse-hanging-bash: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it."}}'; fi;; esac
+        i=$(cat); case $i in *cat*|*py*|*'<<'*|*'\\\\'*) h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-hanging-bash.ps1"; if [ -f "$h" ]; then printf '%s' "$i" | pwsh -NoProfile -File "$h"; else printf '%s' '{"systemMessage":"refuse-hanging-bash: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"refuse-hanging-bash: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it."}}'; fi;; esac
 
 .EXAMPLE
     To check it. The first is refused with exit 2, the second passes with exit 0:
@@ -384,7 +388,7 @@ if ($SelfTest) {
     )
     $failures = 0
     $n = 0
-    $total = $cases.Count + 3 + 5 + 11
+    $total = $cases.Count + 3 + 5 + 12
     $report = {
         param([string] $what, [bool] $ok, [string] $why)
         $script:n++
@@ -471,18 +475,40 @@ if ($SelfTest) {
             if (-not $ok) { foreach ($r in $refused, $plain) { Write-Host "    $($r.Code) $($r.Text)" }; Write-Host "    logged under the project: $logged" }
         }
         & $report 'the wired hook refuses a hanging cat with exit 2 and a reason, logs it under the project, and passes a fed one in silence' $ok
-        # A pair alone starts the hook only through the case's backslash arm. The session's shell
-        # halves each pair in the wired command before sh reads it, as it halves a Bash tool
-        # command: on PR #420 `*\\*` became `*\*`, and a lone pair was let through. So the form is
-        # run as written and halved; the refusal is Windows-only, so elsewhere a pass is right.
+        # A pair alone starts the hook only through the case's backslash arm. On Windows the
+        # session's shell halves each pair in the wired command before sh reads it, as it halves a
+        # Bash tool command: on PR #420 `*\\*` became `*\*`, and a lone pair was let through.
+        # PowerShell's start of Git's sh.exe halves them the same way, so on Windows the form is
+        # run as written; elsewhere, as written and halved. The refusal is Windows-only, so
+        # elsewhere a pass is right.
+        $forms = if ($IsWindows) { @($wired) } else { @($wired, $wired.Replace('\\', '\')) }
         $ok = $false
         if ($wired) {
-            $verdicts = foreach ($form in $wired, $wired.Replace('\\', '\')) { & $through 'Bash' "echo 'Z${PAIR}Z'" $form }
+            $verdicts = foreach ($form in $forms) { & $through 'Bash' "echo 'Z${PAIR}Z'" $form }
             $ok = if ($IsWindows) { -not @($verdicts | Where-Object { $_.Code -ne 2 -or $_.Text -notmatch 'two backslashes' }) }
                   else { -not @($verdicts | Where-Object { $_.Code -ne 0 }) }
             if (-not $ok) { foreach ($r in $verdicts) { Write-Host "    $($r.Code) $($r.Text)" } }
         }
-        & $report 'the wired hook, as written and with each pair in it halved, refuses a lone pair on Windows' $ok
+        & $report 'the wired hook, with each pair in it halved as the session halves it, refuses a lone pair on Windows' $ok
+        # The tool call reaches sh as JSON, where every quote is \" and every line break \n, so an
+        # arm matching one backslash starts pwsh, 1.7 to 4.9 s, on nearly every command (PR #420).
+        # A stub at the wired path says whether it was started: not for quotes and lines alone,
+        # and for a real backslash, in the forms above.
+        $ok = $false
+        if ($wired) {
+            $stubProject = Join-Path $scratch 'stub'
+            $stubAt = Join-Path $stubProject ([regex]::Match($wired, '\$CLAUDE_PROJECT_DIR/([^"]*)/' + $names).Groups[1].Value)
+            New-Item -ItemType Directory -Path $stubAt -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $stubAt (Split-Path $PSCommandPath -Leaf)) -Value "Write-Output 'STARTED'"
+            $quoted = "git log --format=`"%h %s`" -3`ngit status"
+            $starts = foreach ($form in $forms) {
+                @{ Quoted = (& $through 'Bash' $quoted $form $stubProject).Text -match 'STARTED'
+                   Backslash = (& $through 'Bash' "echo 'a\b'" $form $stubProject).Text -match 'STARTED' }
+            }
+            $ok = -not @($starts | Where-Object { $_.Quoted -or -not $_.Backslash })
+            if (-not $ok) { foreach ($s in $starts) { Write-Host "    quoted started: $($s.Quoted); backslash started: $($s.Backslash)" } }
+        }
+        & $report 'the wired hook is not started by quotes and line breaks alone, and is by a backslash, halved as the session halves it' $ok
         $ok = $false
         if ($wired) {
             $ps = & $through 'PowerShell' 'cat'
