@@ -121,7 +121,8 @@
     Prove it judges each of rf's cases as wanted; that a refusal is logged once, a pass not at
     all, and a log that cannot be written refuses all the same; that a pair is the reason on
     Windows only, after a hang and before a long heredoc; that the wired command refuses for the
-    Bash tool, passes the PowerShell tool's call and an unreadable one with exit 1; that the first
+    Bash tool, passes the PowerShell tool's call and an unreadable one with exit 1, and on Windows
+    refuses a lone pair, as written and with each pair in it halved; that the first
     example's form, where the project has no hook script, exits 0 and prints JSON telling the
     agent; that the matcher of the wired entry starts it for both shell tools; and that git
     ignores the settings' repository's .claude/refused-bash.log. The wired cases need git and sh:
@@ -137,7 +138,7 @@
     The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json, as HOW A
     CONSUMER WIRES IT says. Its .gitignore gains the line `/.claude/refused-bash.log`.
 
-        i=$(cat); case $i in *cat*|*py*|*'<<'*|*\\*) h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-hanging-bash.ps1"; if [ -f "$h" ]; then printf '%s' "$i" | pwsh -NoProfile -File "$h"; else printf '%s' '{"systemMessage":"refuse-hanging-bash: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"refuse-hanging-bash: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it."}}'; fi;; esac
+        i=$(cat); case $i in *cat*|*py*|*'<<'*|*'\'*) h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-hanging-bash.ps1"; if [ -f "$h" ]; then printf '%s' "$i" | pwsh -NoProfile -File "$h"; else printf '%s' '{"systemMessage":"refuse-hanging-bash: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"refuse-hanging-bash: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it."}}'; fi;; esac
 
 .EXAMPLE
     To check it. The first is refused with exit 2, the second passes with exit 0:
@@ -383,7 +384,7 @@ if ($SelfTest) {
     )
     $failures = 0
     $n = 0
-    $total = $cases.Count + 3 + 5 + 6
+    $total = $cases.Count + 3 + 5 + 7
     $report = {
         param([string] $what, [bool] $ok, [string] $why)
         $script:n++
@@ -461,6 +462,18 @@ if ($SelfTest) {
             if (-not $ok) { foreach ($r in $refused, $plain) { Write-Host "    $($r.Code) $($r.Text)" }; Write-Host "    logged under the project: $logged" }
         }
         & $report 'the wired hook refuses a hanging cat with exit 2 and a reason, logs it under the project, and passes a fed one in silence' $ok
+        # A pair alone starts the hook only through the case's backslash arm. The session's shell
+        # halves each pair in the wired command before sh reads it, as it halves a Bash tool
+        # command: on PR #420 `*\\*` became `*\*`, and a lone pair was let through. So the form is
+        # run as written and halved; the refusal is Windows-only, so elsewhere a pass is right.
+        $ok = $false
+        if ($wired) {
+            $verdicts = foreach ($form in $wired, $wired.Replace('\\', '\')) { & $through 'Bash' "echo 'Z${PAIR}Z'" $form }
+            $ok = if ($IsWindows) { -not @($verdicts | Where-Object { $_.Code -ne 2 -or $_.Text -notmatch 'two backslashes' }) }
+                  else { -not @($verdicts | Where-Object { $_.Code -ne 0 }) }
+            if (-not $ok) { foreach ($r in $verdicts) { Write-Host "    $($r.Code) $($r.Text)" } }
+        }
+        & $report 'the wired hook, as written and with each pair in it halved, refuses a lone pair on Windows' $ok
         $ok = $false
         if ($wired) {
             $ps = & $through 'PowerShell' 'cat'
