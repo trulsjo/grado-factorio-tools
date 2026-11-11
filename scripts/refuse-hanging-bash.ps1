@@ -90,8 +90,11 @@
     `cat`, `py`, `<<` and a backslash, since whatever is refused holds one of them. The tool call
     reaches sh as JSON, which writes a backslash of the command as `\\` but a quote as `\"` and a
     line break as `\n`, so the arm is four backslashes in quotes: halved, as the shell halves it
-    on Windows, two, a backslash of the command's; not halved, four, a pair. One backslash would
-    start pwsh, 1.7 to 4.9 s, on nearly every command (PR #420). Where the
+    on Windows, two, a backslash of the command's; not halved, four, a pair. The `case` reads only
+    what follows `"tool_input"`: before it stand the session's `cwd` and `transcript_path`, which
+    on Windows are paths of `\\`. Each start of pwsh took 1.7 to 4.9 s in five runs on
+    2026-11-11, and a wider arm, or one that read the paths, started it on every call
+    (PR #420's review follow-up). Where the
     script is not there, the wired command lets the shell command run and prints JSON that tells
     the agent it was not checked. It also git-ignores `.claude/refused-bash.log`, below; its
     -SelfTest -Settings fails where git does not ignore that file. This repository wires it from
@@ -125,8 +128,9 @@
     Prove it judges each of rf's cases as wanted; that a refusal is logged once, a pass not at
     all, and a log that cannot be written refuses all the same; that a pair is the reason on
     Windows only, after a hang and before a long heredoc; that the wired command refuses for the
-    Bash tool, passes the PowerShell tool's call and an unreadable one with exit 1, and on Windows
-    refuses a lone pair, as written and with each pair in it halved; that the first
+    Bash tool, passes the PowerShell tool's call and an unreadable one with exit 1, refuses a lone
+    pair on Windows, and is started by a pair but not by quotes, line breaks or the paths of a
+    call's `cwd`; that the first example's `case` is the wired one's; that the first
     example's form, where the project has no hook script, exits 0 and prints JSON telling the
     agent; that the matcher of the wired entry starts it for both shell tools; and that git
     ignores the settings' repository's .claude/refused-bash.log. The wired cases need git and sh:
@@ -142,7 +146,7 @@
     The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json, as HOW A
     CONSUMER WIRES IT says. Its .gitignore gains the line `/.claude/refused-bash.log`.
 
-        i=$(cat); case $i in *cat*|*py*|*'<<'*|*'\\\\'*) h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-hanging-bash.ps1"; if [ -f "$h" ]; then printf '%s' "$i" | pwsh -NoProfile -File "$h"; else printf '%s' '{"systemMessage":"refuse-hanging-bash: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"refuse-hanging-bash: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it."}}'; fi;; esac
+        i=$(cat); c=${i#*'"tool_input"'}; case $c in *cat*|*py*|*'<<'*|*'\\\\'*) h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-hanging-bash.ps1"; if [ -f "$h" ]; then printf '%s' "$i" | pwsh -NoProfile -File "$h"; else printf '%s' '{"systemMessage":"refuse-hanging-bash: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"refuse-hanging-bash: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it."}}'; fi;; esac
 
 .EXAMPLE
     To check it. The first is refused with exit 2, the second passes with exit 0:
@@ -388,7 +392,7 @@ if ($SelfTest) {
     )
     $failures = 0
     $n = 0
-    $total = $cases.Count + 3 + 5 + 12
+    $total = $cases.Count + 3 + 5 + 13
     $report = {
         param([string] $what, [bool] $ok, [string] $why)
         $script:n++
@@ -461,7 +465,11 @@ if ($SelfTest) {
         $through = {
             param([string] $tool, [string] $command, [string] $form = $wired, [string] $at = $copy)
             $env:CLAUDE_PROJECT_DIR = $at
-            $text = (@{ tool_name = $tool; tool_input = @{ command = $command } } | ConvertTo-Json -Compress) | & $sh -c $form 2>&1 | Out-String
+            # The session's shape: on Windows its cwd and transcript_path are paths of `\\`, before
+            # tool_input, and the case must not read them.
+            $call = [ordered] @{ session_id = 's'; transcript_path = 'C:\Users\someone\.claude\projects\a\t.jsonl'; cwd = 'C:\src\a-project'
+                hook_event_name = 'PreToolUse'; tool_name = $tool; tool_input = @{ command = $command } }
+            $text = ($call | ConvertTo-Json -Compress) | & $sh -c $form 2>&1 | Out-String
             @{ Code = $LASTEXITCODE; Text = $text }
         }
         $ok = $false
@@ -490,11 +498,11 @@ if ($SelfTest) {
             if (-not $ok) { foreach ($r in $verdicts) { Write-Host "    $($r.Code) $($r.Text)" } }
         }
         & $report 'the wired hook, with each pair in it halved as the session halves it, refuses a lone pair on Windows' $ok
-        # The tool call reaches sh as JSON, where every quote is \" and every line break \n, so an
-        # arm matching one backslash starts pwsh, 1.7 to 4.9 s, on nearly every command (PR #420).
-        # A stub at the wired path says whether it was started: not for quotes and lines alone,
-        # and for a pair, in the forms above. Unhalved, off Windows, one backslash is rightly not
-        # enough to start it.
+        # The tool call reaches sh as JSON, where every quote is \" and every line break \n, and
+        # the cwd before tool_input is a path of \\ on Windows, so an arm matching one backslash,
+        # or reading the whole call, starts pwsh on every command (the header). A stub at the
+        # wired path says whether it was started: not for quotes, lines and paths, and for a
+        # pair, in the forms above. Unhalved, off Windows, one backslash is rightly not enough.
         $ok = $false
         if ($wired) {
             $stubProject = Join-Path $scratch 'stub'
@@ -509,7 +517,11 @@ if ($SelfTest) {
             $ok = -not @($starts | Where-Object { $_.Quoted -or -not $_.Backslash })
             if (-not $ok) { foreach ($s in $starts) { Write-Host "    quoted started: $($s.Quoted); pair started: $($s.Backslash)" } }
         }
-        & $report 'the wired hook is not started by quotes and line breaks alone, and is by a pair, halved as the session halves it' $ok
+        & $report 'the wired hook is not started by quotes, line breaks and the call''s Windows paths, and is by a pair, halved as the session halves it' $ok
+        # The first example is what a consumer copies; its case must be the one held above.
+        $caseOf = { param([string] $text) [regex]::Match($text, 'i=\$\(cat\);.*?\bcase\b.*?\)').Value }
+        $exampleCase = & $caseOf ([regex]::Match((Get-Content -LiteralPath $PSCommandPath -Raw), 'i=\$\(cat\).*?esac').Value)
+        & $report 'the first example''s case is the wired one''s' ([bool] ($wired -and $exampleCase -and $exampleCase -ceq (& $caseOf $wired))) "example: $exampleCase; wired: $(& $caseOf $wired)"
         $ok = $false
         if ($wired) {
             $ps = & $through 'PowerShell' 'cat'
