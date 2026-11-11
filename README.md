@@ -558,6 +558,20 @@ a step passes it from PowerShell, `shell: pwsh`, not through `pwsh -File`; its f
 shows the form. `-SelfTest` builds scratch repositories and needs git. What it cannot see is in its
 header: whether a use is wrong is one.
 
+## Listing the absolute words a range adds
+
+A word such as *every*, *only* or *never* makes a claim about each thing it covers, and reviews
+kept finding such claims nobody had walked (grado-factorio-modpack#219).
+`scripts/absolute-words.ps1`, lifted from grado-factorio-modpack (#354), lists each line a range
+adds that holds one: a Markdown line, a comment line of any other file, or a line of a commit
+message. It lists and does not fail, since the words are in ordinary use; the list is for the
+session to walk before a review.
+
+    pwsh -File scripts/absolute-words.ps1 -Range origin/main...HEAD
+
+`-Range` takes both ends. `-SelfTest` builds a scratch repository and needs git. Code, and a
+comment after code on its line, are not read; the rest is in its header.
+
 ## Checking a pull request body
 
 `scripts/pr-body-check.ps1` reads a pull request body for commits it cites, and fails on one that

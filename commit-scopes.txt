@@ -13,6 +13,7 @@ markdown-check
 param-check
 cited-commit-check
 glossary-check
+absolute-words
 check-input
 comment-line-check
 help-check
