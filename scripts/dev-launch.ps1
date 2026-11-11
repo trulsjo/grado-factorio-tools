@@ -10,7 +10,10 @@
     scripts/dev-launch.ps1 at 605b960, read 2026-11-06, which launched that repository's own three
     mods. What changed in the move: the mods are its arguments, as the packer's were when it moved,
     each a mod directory or zip, named by its info.json through Get-HarnessMods; the mod directory
-    defaults to one under %TEMP%; and a zip is copied in beside the junctions.
+    defaults to one under %TEMP%; a zip is copied in beside the junctions; -With is one
+    comma-separated string, not a [string[]]; the two console hints it printed, /editor and
+    research_all_technologies, are dropped, as about one mod's testing; and it prints the game it
+    launched.
 
     WHAT IT BUILDS. A mod directory holding only the mods given and the bundled mods -With names,
     with their dependencies. A mod directory is junctioned in, so an edit to a prototype and a

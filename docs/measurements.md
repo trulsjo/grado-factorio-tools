@@ -914,23 +914,27 @@ and ran `-Clean`. No other `factorio.exe` was running.
 | Steam, `D:\SteamLibrary\steamapps\common\Factorio\bin\x64\Factorio.exe` | 2.1.24 (build 87808, win64, steam, space-age) | still running: no relaunch through Steam |
 | zip, `D:\factorio-2.1\bin\x64\factorio.exe` | 2.1.24 (build 87808, win64, full, space-age) | still running |
 
+The two logs below are quoted with the user's profile paths written as `%TEMP%` and `%APPDATA%`;
+the rest is as the game wrote it.
+
 The Steam build's log, `%APPDATA%\Factorio\factorio-current.log`, the player's write-data:
 
 ```text
    0.000 Initializing Steam API.
-   0.137 Program arguments: "D:\SteamLibrary\steamapps\common\Factorio\bin\x64\Factorio.exe" "--mod-directory" "C:\Users\TrulsJ\AppData\Local\Temp\devlaunch-measure-steam\mods"
-   0.147 Write data path: C:/Users/TrulsJ/AppData/Roaming/Factorio [82870/487056MB]
+   0.137 Program arguments: "D:\SteamLibrary\steamapps\common\Factorio\bin\x64\Factorio.exe" "--mod-directory" "%TEMP%\devlaunch-measure-steam\mods"
+   0.147 Write data path: %APPDATA%/Factorio [82870/487056MB]
    5.421 Loading mod devlaunch-probe 1.0.0 (data.lua)
 ```
 
 The zip install's log, `D:\factorio-2.1\factorio-current.log`, its own write-data:
 
 ```text
-   0.001 Program arguments: "D:\factorio-2.1\bin\x64\factorio.exe" "--mod-directory" "C:\Users\TrulsJ\AppData\Local\Temp\devlaunch-measure-zip\mods"
+   0.001 Program arguments: "D:\factorio-2.1\bin\x64\factorio.exe" "--mod-directory" "%TEMP%\devlaunch-measure-zip\mods"
    0.001 Write data path: D:/factorio-2.1 [72306/488368MB]
    4.526 Loading mod devlaunch-probe 1.0.0 (data.lua)
 ```
 
 Each `-Clean` printed `removed <scratch>\mods`. Not measured: a launch without the
-`steam_appid.txt` the script writes, which realistic-fusion-refreshed's copy records as relaunched
-through Steam without `--mod-directory`; a mod given as a zip; and `-With`.
+`steam_appid.txt` the script writes, which realistic-fusion-refreshed's copy, at `605b960` read
+2026-11-06, records in its header as relaunched through Steam without `--mod-directory`; a mod given
+as a zip; and `-With`.
