@@ -185,12 +185,12 @@ if ($SelfTest) {
             $leftEntry = @($withLeft | Where-Object Why | Where-Object Entry -eq 'verified')
             $f = @(Find-Avoided -Lines 'It was verified, and it confirms.' -Numbers 1 -Avoided $withLeft | ForEach-Object Word)
             $leftEntry.Count -eq 1 -and $leftEntry[0].Why -eq 'left here on purpose' -and $f.Count -eq 1 -and $f[0] -eq 'confirms' } }
-        @{ Name = 'over a range the script exits 1 on an unmarked use and names it, 0 once the use is marked, and 0 where a file only loses lines'; Test = {
+        @{ Name = 'over a range the script exits 1 on an unmarked use and names it, in a file whose name holds a space, 0 once the use is marked, and 0 where a file only loses lines'; Test = {
             $temp = Join-Path ([IO.Path]::GetTempPath()) "glossary-check-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
             New-Item -ItemType Directory -Path $temp -Force | Out-Null
             try {
                 $git = { git -C $temp -c user.name=selftest -c user.email=selftest@example.invalid -c core.autocrlf=false -c commit.gpgsign=false @args | Out-Null; if ($LASTEXITCODE -ne 0) { throw "git $args failed; the self-test needs git." } }
-                $commit = { param([string] $text) Set-Content -LiteralPath (Join-Path $temp 'a.md') -Value ($text -split "`n"); & $git add -A; & $git commit --quiet -m x }
+                $commit = { param([string] $text) Set-Content -LiteralPath (Join-Path $temp 'a b.md') -Value ($text -split "`n"); & $git add -A; & $git commit --quiet -m x }
                 $run = { param([string] $range) Push-Location $temp; try { $text = (& pwsh -NoProfile -File $PSCommandPath -Range $range 2>&1 | Out-String) } finally { Pop-Location }; @{ Code = $LASTEXITCODE; Text = $text } }
                 & $git init --quiet
                 Set-Content -LiteralPath (Join-Path $temp 'GLOSSARY.md') -Value $glossary
@@ -203,7 +203,7 @@ if ($SelfTest) {
                 $removed = & $run 'HEAD~1..HEAD'
                 Write-Host ($red.Text.TrimEnd() -replace '(?m)^', '    ')
                 if ($removed.Code -ne 0) { Write-Host ($removed.Text.TrimEnd() -replace '(?m)^', '    ') }
-                $red.Code -eq 1 -and $red.Text -match '(?m)^a\.md:2: "verified"' -and $green.Code -eq 0 -and $removed.Code -eq 0
+                $red.Code -eq 1 -and $red.Text -match '(?m)^a b\.md:2: "verified"' -and $green.Code -eq 0 -and $removed.Code -eq 0
             }
             finally { Remove-Item -LiteralPath $temp -Recurse -Force }
         } }
@@ -278,7 +278,8 @@ $added = [ordered] @{}
 if ($Range) {
     $file = $null
     foreach ($d in git -c core.quotepath=off diff --unified=0 --diff-filter=ACMR $Range -- '*.md') {
-        if ($d -match '^\+\+\+ b/(.+)$') { $file = $Matches[1]; $added[$file] = [System.Collections.Generic.List[int]]::new() }
+        # git ends the name with a tab where it holds a space.
+        if ($d -match '^\+\+\+ b/(.+?)\t?$') { $file = $Matches[1]; $added[$file] = [System.Collections.Generic.List[int]]::new() }
         elseif ($d -match '^@@ -\S+ \+(\d+)(?:,(\d+))? @@') {
             $count = if ($Matches[2]) { [int] $Matches[2] } else { 1 }
             for ($k = 0; $k -lt $count; $k++) { $added[$file].Add([int] $Matches[1] + $k) }
