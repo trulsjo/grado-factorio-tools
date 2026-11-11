@@ -51,27 +51,33 @@ each result means are in that script's header. For each script whose `param()` b
 adds, or whose defaults it edits, it also runs
 `pwsh -File scripts/revert-run.ps1 -Copy <copy> -Defaults <scripts>`, which writes those
 scripts' default reverts itself (#382, #390); what a default revert is, and which defaults it
-writes none for, are in that script's header too. For each script the change touches that has a
-`-SelfTest`, one script to a run, it runs
+writes none for, are in that script's header too. For each script the change touches whose
+`-SelfTest` runs with no Args and without the game, one script to a run, it runs
 `pwsh -File scripts/revert-run.ps1 -Copy <copy> -Conditions <script> -Base <base>`, with `<base>`
 the pull request's base, `git -C <copy> merge-base origin/main <full SHA>` (#402). That run
 writes a revert per operand of each `-and` or `-or` chain and per element of each `-in`, `-notin`
-or type list on a line the diff adds or changes, each run against the script's own self-test. A
-library with no `-SelfTest`, as `scripts/game-mods.ps1`, is not run so: its changed conditions go
-in the lane's list, with its caller's self-test. The list holds the claims, and the conditions of
-the shapes the header's *WHAT IT CANNOT SEE* lists under "Of -Conditions"; not the self-test
-verdicts the run skips, whose reverts pass by construction (#407, #411). A script with no
-condition on a changed line fails the run, exit 1, with `-Conditions names <script>, for which no
-condition revert could be written on lines changed since <base>, so no revert was run.`: the lane
-reports that line, and it is nothing to revert, not a finding. Where a ticket the change closes
-has a criterion over all the guards of a script or a function, not over guards it names, it runs
-`-Conditions` on that whole script without `-Base`, and reads the rows within that function. Each
-revert runs the script's whole self-test: on `main` at `4534a44`, `-Conditions` writes 133
-reverts for `revert-run.ps1`, whose self-test took about 100 s on PR #412's branch, close to 3.7
-hours (#402's brief). It reports each run's table. A revert that
-fails nothing is a finding, unless it is a default revert the pull request lists with why it
-passes, as PR #389 listed `line-cite-check.ps1 -Foreign`. With "none", it reverts nothing. The
-session answering a review's findings runs its reverts the same way.
+or type list on a line the diff adds or changes, each run against the script's own self-test.
+**Every other changed condition goes in the lane's list**, beside the claims: a lone test in an
+`if`, `elseif` or `while`, as `Get-DefaultRevert`'s `if ($ast.ParamBlock)`; a `-not`, a
+comparison, an `-is` or `-isnot`; the shapes the header's *WHAT IT CANNOT SEE* lists under "Of
+-Conditions"; and those the run reports as not written. The list leaves out a self-test's
+verdicts, skipped or kept, whose reverts pass by construction (#407, #411). A library with no
+`-SelfTest`, as `scripts/game-mods.ps1`, has its changed conditions in the list with its caller's
+self-test. A script whose self-test needs Args has them in the list with its `Args`, as
+`-NoGame` for `trace-definitions.ps1`; one whose self-test needs the game, as the others in
+`check.ps1`'s `$NEEDS_GAME`, is not run, and the lane names its changed conditions as not run. A
+script with no condition on a changed line fails the run, exit 1, with `-Conditions names
+<script>, for which no condition revert could be written on lines changed since <base>, so no
+revert was run.`: the lane reports that line, and it is nothing to revert, not a finding. Where
+a ticket the change closes has a criterion over all the guards of a script or a function, not
+over guards it names, it runs `-Conditions` on that whole script without `-Base`, adds the list
+for that script or function as above, and reads the rows within that script or function: a row
+outside it is no finding of that run. Each revert runs the script's whole self-test: on `main`
+at `4534a44`, `-Conditions` writes 133 reverts for `revert-run.ps1`, whose self-test took about
+100 s on PR #412's branch, close to 3.7 hours (#402's brief). It reports each run's table. A
+revert that fails nothing is a finding, unless it is a default revert the pull request lists
+with why it passes, as PR #389 listed `line-cite-check.ps1 -Foreign`. With "none", it reverts
+nothing. The session answering a review's findings runs its reverts the same way.
 
 **What reads nothing.** The bug scan applies `code-review.md`'s
 [read-nothing rule](code-review.md#how-a-review-is-run) step by step, not to the whole set at

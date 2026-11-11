@@ -39,10 +39,13 @@ setup template's core and this repository's own parts.
   On PR #223, on 2026-10-25, the bug scan reverted the `Test-Stackable` condition and `-SelfTest`
   still passed (its review comment, bug finding 1, score 75), and a third half was added in a fix
   round. **A criterion over all the guards of a script or a function, not over guards it names,
-  cites a `-Conditions` run** of `scripts/revert-run.ps1` on that script, whose table shows each
-  revert within that script or function failing (#402): a revert per line, not per operand,
-  missed four guards PR #395 added, which its panel found (issuecomment-6725858356), by #402's
-  account.
+  cites a `-Conditions` run** of `scripts/revert-run.ps1` on that script, **and a `-List` run** of
+  the conditions it writes no revert for, as `review-brief.md`'s *The reverts* lists them, whose
+  tables show each revert within that script or function failing (#402): a revert per line, not
+  per operand, missed four guards PR #395 added, which its panel found (issuecomment-6725858356),
+  by #402's account. A `-Conditions` table alone did not hold `Get-DefaultRevert`'s
+  `if ($ast.ParamBlock)`, a lone test, on PR #418, whose bug scan wrote 25 reverts by hand beside
+  36 written.
 - **Read an issue**:
   `gh issue view <number> --json title,body,labels,comments --jq '{title, body, labels: [.labels[].name], comments: [.comments[].body]}'`,
   not `--comments`, for the shared page's reason. All five review lanes of #148's session met
