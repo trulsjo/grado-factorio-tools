@@ -185,7 +185,7 @@ if ($SelfTest) {
             $leftEntry = @($withLeft | Where-Object Why | Where-Object Entry -eq 'verified')
             $f = @(Find-Avoided -Lines 'It was verified, and it confirms.' -Numbers 1 -Avoided $withLeft | ForEach-Object Word)
             $leftEntry.Count -eq 1 -and $leftEntry[0].Why -eq 'left here on purpose' -and $f.Count -eq 1 -and $f[0] -eq 'confirms' } }
-        @{ Name = 'over a range the script exits 1 on an unmarked use and names it, in a file whose name holds a space, 0 once the use is marked, and 0 where a file only loses lines'; Test = {
+        @{ Name = 'over a range the script exits 1 on an unmarked use and names it, in a file whose name holds a space, 0 once the use is marked, and 0 where a file only loses the line below an unmarked use'; Test = {
             $temp = Join-Path ([IO.Path]::GetTempPath()) "glossary-check-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
             New-Item -ItemType Directory -Path $temp -Force | Out-Null
             try {
@@ -197,9 +197,12 @@ if ($SelfTest) {
                 & $commit 'fine'
                 & $commit "fine`nIt was verified."
                 & $commit "fine`nIt was verified. <!-- deliberate: verified -->"
-                & $commit 'fine'
-                $red = & $run 'HEAD~3..HEAD~2'
-                $green = & $run 'HEAD~3..HEAD~1'
+                # An unmarked use an earlier commit added, then the line below it removed: a hunk
+                # of +1,0 read as one line would report it.
+                & $commit "It was verified.`nfine"
+                & $commit 'It was verified.'
+                $red = & $run 'HEAD~4..HEAD~3'
+                $green = & $run 'HEAD~4..HEAD~2'
                 $removed = & $run 'HEAD~1..HEAD'
                 Write-Host ($red.Text.TrimEnd() -replace '(?m)^', '    ')
                 if ($removed.Code -ne 0) { Write-Host ($removed.Text.TrimEnd() -replace '(?m)^', '    ') }
