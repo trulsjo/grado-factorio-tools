@@ -9,22 +9,22 @@
 .DESCRIPTION
     WHERE IT CAME FROM (grado-factorio-tools#352, #322 rulings 2 to 5). realistic-fusion-refreshed's
     tools/refuse-hanging-bash.py at b8b6d89, read 2026-11-06, ported to PowerShell like every other
-    shared hook; the one line changed since, at 295ec86, is a comment. Its --self-test cases are
-    -SelfTest's, with one fixture's mod name made generic. What changed in the port: it is wired
+    shared hook; the one line changed since, at 295ec86, is in its docstring. Its --self-test cases
+    are -SelfTest's, with one fixture's mod name made generic. What changed in the port: it is wired
     for both shell tools behind a `case`, and passes a call whose `tool_name` is not `Bash`; the
     refusal log is the consumer's, not the script's repository's; and -SelfTest runs the wiring.
     The tickets and dates below are realistic-fusion-refreshed's (rf).
 
-    WHAT HANGS, reproduced on 2026-10-09 under Git Bash on Windows with Python 3.13.14 (rf#645):
-    a command left reading the tool's stdin, a pipe nobody closes, so a bare `cat` never sees its
-    end (`timeout 8 cat` was still running after 40 s); and `python -` or a bare `python` with
-    stdin from /dev/null, which starts the interactive prompt, fails on the console's size and
-    tries again without end: two runs of 8 s wrote 12.7 MB of traceback between them. Why it
-    takes /dev/null for a console was not established. A heredoc is not what hangs:
-    `python - <<'PY'` with a body holding both kinds of quote ran and exited 0, and so did
-    `cat <<'X'` with an empty body. Of the three commands rf#645 records, the two that ran to the
-    timeout each held a bare `cat` in front of the heredoc, or a `< /dev/null` after it, which
-    replaces the heredoc as stdin.
+    WHAT HANGS, reproduced on 2026-10-09 under Git Bash on Windows with Python 3.13.14
+    (realistic-fusion-refreshed#645): a command left reading the tool's stdin, a pipe nobody closes,
+    so a bare `cat` never sees its end (`timeout 8 cat` was still running after 40 s); and
+    `python -` or a bare `python` with stdin from /dev/null, which starts the interactive prompt,
+    fails on the console's size and tries again without end: two runs of 8 s wrote 12.7 MB of
+    traceback between them. Why it takes /dev/null for a console was not established. A heredoc is
+    not what hangs: `python - <<'PY'` with a body holding both kinds of quote ran and exited 0, and
+    so did `cat <<'X'` with an empty body. Of the three commands realistic-fusion-refreshed#645
+    records, the two that ran to the timeout each held a bare `cat` in front of the heredoc, or a
+    `< /dev/null` after it, which replaces the heredoc as stdin.
 
     WHAT IS REFUSED, each simple command of the line judged by itself. `cat` with no file operand,
     when nothing feeds it: no pipe into it, no `<`, no heredoc and no here-string. Python given `-`
@@ -41,22 +41,22 @@
     that feeds the command; on Windows it is refused all the same when the command holds a pair of
     backslashes.
 
-    A LONG HEREDOC IS REFUSED TOO (rf#666), though it does not hang: one whose body is over
-    $HEREDOC_LINES lines, 60, counted without the line that ends it. The trouble a heredoc has is
-    a body cut short on a quote, `unexpected EOF while looking for matching '`, after which nothing
-    runs. A session told to write such a file with the Write tool sent nine Bash commands holding a
-    heredoc on 2026-10-09 all the same. LENGTH DOES NOT PREDICT THAT FAILURE: of those nine, the
-    one whose longest body was 129 lines, in a command of 132, was cut short, and the one of 121,
-    in a command of 124, ran; the other seven, of 34 lines or fewer, ran. So the 60 is not where
-    heredocs start to fail. It is rf's tracker page's record of the earlier ones, "Every command
-    that failed ran past 60 lines", taken as the size past which a body is a file and is written
-    as one; kept at 60 by #322 ruling 3. It refuses long heredocs that would have worked.
+    A LONG HEREDOC IS REFUSED TOO (realistic-fusion-refreshed#666), though it does not hang: one
+    whose body is over $HEREDOC_LINES lines, 60, counted without the line that ends it. The trouble
+    a heredoc has is a body cut short on a quote, `unexpected EOF while looking for matching '`,
+    after which nothing runs. A session told to write such a file with the Write tool sent nine Bash
+    commands holding a heredoc on 2026-10-09 all the same. LENGTH DOES NOT PREDICT THAT FAILURE: of
+    those nine, the one whose longest body was 129 lines, in a command of 132, was cut short, and
+    the one of 121, in a command of 124, ran; the other seven, of 34 lines or fewer, ran. So the 60
+    is not where heredocs start to fail. It is rf's tracker page's record of the earlier ones,
+    "Every command that failed ran past 60 lines", taken as the size past which a body is a file and
+    is written as one; kept at 60 by #322 ruling 3. It refuses long heredocs that would have worked.
 
-    A PAIR OF BACKSLASHES IS REFUSED ON WINDOWS (rf#682, decided by Truls on 2026-10-12): any
-    command that holds two backslashes in a row, anywhere in it. Such a command does not hang. It
-    runs as something other than what was written, because a Bash tool command there loses one
-    backslash of every two before bash runs it. Reproduced on 2026-10-11 with GNU bash 5.1.16
-    (msys), each row run as a Bash tool command and read from the session's transcript:
+    A PAIR OF BACKSLASHES IS REFUSED ON WINDOWS (realistic-fusion-refreshed#682, decided by Truls on
+    2026-10-12): any command that holds two backslashes in a row, anywhere in it. Such a command
+    does not hang. It runs as something other than what was written, because a Bash tool command
+    there loses one backslash of every two before bash runs it. Reproduced on 2026-10-11 with GNU
+    bash 5.1.16 (msys), each row run as a Bash tool command and read from the session's transcript:
 
         in the command as sent                                  what the program received
         `A\\\\B` as a line of a `<<'EOF'` heredoc, 4 backslashes  2 backslashes
@@ -93,13 +93,13 @@
     -SelfTest -Settings fails where git does not ignore that file. This repository wires it from
     scripts/.
 
-    WHAT IS KEPT (rf#660). Each refusal appends one line of JSON to `.claude/refused-bash.log`
-    under $CLAUDE_PROJECT_DIR, the consumer's root (under this repository where that is not set):
-    the time, the reason and the command. It is where a false refusal is counted from: read the
-    commands there and see which would not have hung, which heredoc would have run, or which pair
-    of backslashes was in one of the three shapes that run as written. A command let through
-    writes nothing, so a false pass is not in it. A log that cannot be written is passed over, and
-    the call is refused just the same.
+    WHAT IS KEPT (realistic-fusion-refreshed#660). Each refusal appends one line of JSON to
+    `.claude/refused-bash.log` under $CLAUDE_PROJECT_DIR, the consumer's root (under this repository
+    where that is not set): the time, the reason and the command. It is where a false refusal is
+    counted from: read the commands there and see which would not have hung, which heredoc would
+    have run, or which pair of backslashes was in one of the three shapes that run as written. A
+    command let through writes nothing, so a false pass is not in it. A log that cannot be written
+    is passed over, and the call is refused just the same.
 
     WHAT IT CANNOT SEE. Any other reader: only `cat` and Python are known, the two that hung. A
     bare `grep pattern`, `sort` or `jq .` waits the same way; add a reader here when one hangs,
@@ -370,8 +370,9 @@ if ($SelfTest) {
         @('python tools/render.py a-machine < /dev/null', $false),
         @("python -c 'print(1)' && python -m json.tool x.json", $false),
         @('git commit -m "cat" # python -', $false),
-        # rf#682: a pair, in quotes, and a lone backslash; in a short heredoc; on a command line;
-        # refused though it would run; a line's last character and the next line's first.
+        # realistic-fusion-refreshed#682: a pair, in quotes, and a lone backslash; in a short
+        # heredoc; on a command line; refused though it would run; a line's last character and the
+        # next line's first.
         @("echo 'Z\\Z'", $true),
         @("echo 'Z\Z'", $false),
         @("python - <<'PY'`nprint(r`"\\s+`")`nPY", $true),

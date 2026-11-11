@@ -494,7 +494,7 @@ one.
 
 ## Keeping an agent session from downloading a program
 
-On 2026-10-07 a subagent fetched linter binaries and packages and ran them on this machine
+On 2026-10-07 a subagent fetched programs from GitHub releases, and packages, and ran them here
 unasked (grado-factorio-modpack#179). `scripts/ask-before-download.ps1`, lifted from
 grado-factorio-modpack (#353), is a hook that refuses a package install, as `npm install`,
 `npx`, `pip install` or `gh release download`, and a fetch of an `.exe`, `.msi`, `.zip`,
