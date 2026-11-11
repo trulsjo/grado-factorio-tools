@@ -653,9 +653,13 @@ function Stop-LaunchedGame {
         game still running is thrown, after the harness is removed. The removal only warns when
         it fails, -WarningAction Continue, so a caller's $WarningPreference = 'Stop' cannot turn
         it into an error that replaces the caller's own (true-nukes-refreshed#61). -Keep keeps
-        the directory, never the junctions.  #>
+        the directory, never the junctions.
+
+        -Process is a Process, or anything with its HasExited, Id, Kill() and WaitForExit(int):
+        the self-test passes stand-ins whose kill fails or whose exit never comes, which no real
+        process does on demand.  #>
     param(
-        [System.Diagnostics.Process] $Process,
+        [object] $Process,
         [Parameter(Mandatory)] [string] $Label,
         [object] $Harness,
         [switch] $Keep

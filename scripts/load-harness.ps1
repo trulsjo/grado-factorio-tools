@@ -171,6 +171,24 @@ exit 0
         $p.Kill()
         throw "the stand-in game never held $held"
     }
+    # A game Stop-LaunchedGame cannot tell from a Process: its kill can fail, and its exit can
+    # come after the kill only on the wait, or never, which no real process does on demand.
+    $fakeGame = {
+        param([bool] $KillFails, [bool] $GoneByFailure, [bool] $Exits = $true, [bool] $Exited)
+        $g = [pscustomobject] @{ Id = 99999; Exited = $Exited; Exits = $Exits; KillFails = $KillFails; GoneByFailure = $GoneByFailure; Killed = 0; Waited = @() }
+        $g | Add-Member -MemberType ScriptProperty -Name HasExited -Value { $this.Exited }
+        $g | Add-Member -MemberType ScriptMethod -Name Kill -Value {
+            $this.Killed++
+            if ($this.KillFails) { if ($this.GoneByFailure) { $this.Exited = $true }; throw 'the kill failed' }
+        }
+        $g | Add-Member -MemberType ScriptMethod -Name WaitForExit -Value {
+            param([int] $Milliseconds)
+            $this.Waited += $Milliseconds
+            if ($this.Exits) { $this.Exited = $true }
+            $this.Exits
+        }
+        $g
+    }
     $failingCheck = Join-Path $temp 'failing-check.ps1'
     'Write-Host "CHECK SAYS NO"; exit 3' | Set-Content $failingCheck
     $env:LOAD_HARNESS_LIB = $PSScriptRoot
@@ -256,20 +274,26 @@ exit 0
                 Write-Host "    $said"
                 (Test-Path -LiteralPath $out) -and (Get-Content -LiteralPath $out -Raw) -match 'Version: \d' -and $said -match "Factorio exited \d+ during 'step-bad'" }
             finally { Remove-LoadHarness -Harness $h } } }
-        @{ Name = 'Find-MissingAssets reports a missing file of a mapped mod once, and passes a file there, a stripes sprite''s own filename, an unmapped mod and base'; Test = {
+        @{ Name = 'Find-MissingAssets reports a missing file of base, of core, of a stripe and of a mapped mod once, passes a file there, a stripes sprite''s own filename and an unmapped mod, and throws on a missing dump'; Test = {
             $assets = Join-Path $temp 'assets/harness-assets'
             New-Item -ItemType Directory -Path $assets -Force | Out-Null
             Set-Content -LiteralPath (Join-Path $assets 'stripe.png') -Value 'not a picture'
             $dump = Join-Path $temp 'assets/dump.json'
             @{
                 item   = @{ a = @{ icon = '__base__/graphics/icons/iron-plate.png'; pictures = @(@{ filename = '__harness-assets__/no-such.png' }) } }
-                sprite = @{ s = @{ filename = '__harness-assets__/never-opened.png'; stripes = @(@{ filename = '__harness-assets__/stripe.png' }) } }
+                sprite = @{ s = @{ filename = '__harness-assets__/never-opened.png'; stripes = @(@{ filename = '__harness-assets__/stripe.png' }, @{ filename = '__harness-assets__/no-such-stripe.png' }) } }
                 other  = '__harness-unmapped__/x.png'
                 again  = @('__harness-assets__/no-such.png')
+                # The header's own failure: a file of base not there, and one of core.
+                game   = @('__base__/graphics/icons/no-such-base.png', '__core__/graphics/no-such-core.png', '__core__/graphics/arrows/no-such-arrow.png')
             } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $dump
             $found = @(Find-MissingAssets -DumpPath $dump -DataDir (Get-FactorioDataDirectory -FactorioExe (Resolve-FactorioExe)) -ModDirectories @{ 'harness-assets' = $assets })
-            foreach ($f in $found) { Write-Host "    $($f.Reference)" }
-            $found.Count -eq 1 -and $found[0].Reference -ceq '__harness-assets__/no-such.png' -and $found[0].Mod -ceq 'harness-assets' } }
+            foreach ($f in $found) { Write-Host "    $($f.Mod) $($f.Reference)" }
+            $noDump = try { Find-MissingAssets -DumpPath (Join-Path $temp 'assets/no-dump.json') -DataDir $temp -ModDirectories @{} | Out-Null; '' } catch { $_.Exception.Message }
+            $want = '__base__/graphics/icons/no-such-base.png|base', '__core__/graphics/arrows/no-such-arrow.png|core', '__core__/graphics/no-such-core.png|core',
+                '__harness-assets__/no-such-stripe.png|harness-assets', '__harness-assets__/no-such.png|harness-assets'
+            $got = @($found | ForEach-Object { "$($_.Reference)|$($_.Mod)" })
+            $got.Count -eq $want.Count -and -not (Compare-Object $want $got -CaseSensitive) -and $noDump -match 'no data dump' } }
         @{ Name = 'Find-MissingAssets finds, in a real dump, an icon path a prototype builds by joining strings, and passes the base icon beside it'; Test = {
             $canary = Join-Path $temp 'assets/harness-canary'
             & $newMod $canary 'harness-canary' ('local D = "__harness-canary__/graphics/"' + "`n" +
@@ -300,6 +324,25 @@ exit 0
                 $said -ceq 'the caller''s own error' -and (Test-Path -LiteralPath $h.Temp) -and -not $linked -and
                     [bool] ($warned -match [regex]::Escape($h.Temp)) }
             finally { $p.Kill(); $p.WaitForExit(); Remove-TempDirectory -Path $h.Temp -Label 'self-test' } } }
+        @{ Name = 'Stop-LaunchedGame waits two minutes for a killed game to go, warns naming its pid where it has not, and kills no game that has gone'; Test = {
+            $gone = & $fakeGame
+            Stop-LaunchedGame -Process $gone -Label 'self-test' 3>&1 | ForEach-Object { Write-Host "    warned: $_" }
+            $stuck = & $fakeGame -Exits $false
+            $warned = @(Stop-LaunchedGame -Process $stuck -Label 'self-test' 3>&1 | ForEach-Object { "$_" })
+            $already = & $fakeGame -Exited $true
+            Stop-LaunchedGame -Process $already -Label 'self-test'
+            foreach ($w in $warned) { Write-Host "    warned: $w" }
+            $gone.HasExited -and $gone.Killed -eq 1 -and "$($gone.Waited)" -eq '120000' -and
+                $warned.Count -eq 1 -and $warned[0] -match 'pid 99999' -and $warned[0] -match 'two minutes' -and
+                $already.Killed -eq 0 -and $already.Waited.Count -eq 0 } }
+        @{ Name = 'Stop-LaunchedGame lets a failed kill pass where the game went meanwhile, and throws it where the game still runs, after removing the harness'; Test = {
+            $raced = & $fakeGame -KillFails $true -GoneByFailure $true
+            $racedSaid = try { Stop-LaunchedGame -Process $raced -Label 'self-test'; '' } catch { $_.Exception.Message }
+            $h = New-LoadHarness -Mods $good
+            $running = & $fakeGame -KillFails $true
+            $runningSaid = try { Stop-LaunchedGame -Process $running -Label 'self-test' -Harness $h; '' } catch { $_.Exception.Message }
+            Write-Host "    raced: '$racedSaid'; running: '$runningSaid'"
+            -not $racedSaid -and $runningSaid -match 'the kill failed' -and -not (Test-Path -LiteralPath $h.Temp) } }
         @{ Name = 'Stop-LaunchedGame -Keep keeps the harness directory and its files, never the junctions'; Test = {
             $h = New-LoadHarness -Mods $good
             $p = & $standIn $h.Temp
