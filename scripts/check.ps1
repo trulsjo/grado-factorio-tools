@@ -215,9 +215,11 @@
     a folder of fixture scripts outside it with lists of their own, some of them run as
     self-tests, and the one that holds Get-ReadmeProblem over a fixture script and README there,
     those that hold $TOOL_STEPS's line-cite-check.ps1 step and Invoke-ToolStep over fixture scripts,
-    and Get-TokenOnlyChange, Get-RunPlan, Get-RunStart and, through it, Get-ChangedPath and
-    Get-SelfTestSubset in the scratch repository, and
-    Invoke-RunPlan with blocks of its own; and nothing else. The run's own blocks, its call of
+    and Get-TokenOnlyChange, Get-RunPlan, Get-ChangedPath, Get-RunStart and, through it,
+    Get-SelfTestSubset in the scratch repository, Get-RunStart also called with the lists the run
+    leaves to its defaults, and Invoke-RunPlan with blocks of its own; and those that hold this
+    runner's own verdict on a case, $judgeCase, and the loop's line, by a case giving two values
+    that the loop must fail (#419); and nothing else. The run's own blocks, its call of
     each loop and of Get-ReadmeProblem, with this folder, this README and this script's lists,
     are not run, nor its run of param-check.ps1, variable-case-check.ps1, help-check.ps1 and
     strict-list-check.ps1 over this folder: a run that stopped making a call, or passed it a list
@@ -985,7 +987,7 @@ if ($SelfTest) {
                 $width = @(Get-ScriptProblem -Path $path -Limit 100)
                 ($got -join '|') -ceq 'w.ps1' -and (Get-RunPlan -Steps $TOOL_STEPS -TokensOnly).Scripts -and
                     ($width -join '|') -ceq 'w.ps1 has comment lines over 100 characters, line 2' }
-            'a run follows its start: the tree that passed runs nothing; one changed only in whitespace between tokens names its files, runs the parse and width check and the steps that read no parsed script, adds what each returns to the failures, and passes saying no self-test ran; with no record every part runs (#404, #405)' = {
+            'a run follows its start: the tree that passed runs nothing; one changed only in whitespace between tokens names its files, runs the parse and width check and the steps that read no parsed script, adds what each returns to the failures, and passes saying no self-test ran; with no record every part runs, started as the run starts it, with every self-test and -NoGame case (#404, #405)' = {
                 $script = "param([switch] `$SelfTest)`n# A comment.`nif (`$SelfTest) { `$a = 1 }`n"
                 [IO.File]::WriteAllText((Join-Path $repo 'r.ps1'), $script); git -C $repo add r.ps1
                 try {
@@ -1009,6 +1011,7 @@ if ($SelfTest) {
                     -not $spaced.Skip -and ($spaced.Files -join '|') -ceq 'r.ps1' -and $spaced.Notice -like '*only whitespace between tokens changed, in r.ps1.*' -and
                     $spaced.Pass -like 'OK - check passed, with no self-test run:*' -and $ran[0] -ceq 'scripts|line-cite-check.ps1|pages|markdown' -and
                     -not $none.Skip -and -not $none.Files -and -not $none.Notice -and $none.Pass -like 'OK - check passed. Not run, because each needs the game:*' -and
+                    ($none.Plan.SelfTests -join '|') -ceq ($SELF_TESTS -join '|') -and ($none.Plan.NoGameCases -join '|') -ceq ($NO_GAME_CASES -join '|') -and
                     $ran[1] -ceq ((@('scripts') + @($TOOL_STEPS | ForEach-Object { $_.Script }) + @('readme', 'self-tests', 'pages', 'markdown')) -join '|') }
             'a tree whose working tree is the one that passed, and whose index is not, runs only what reads the index and names the three trees; one whose working tree changed does not (#426)' = {
                 [IO.File]::WriteAllText((Join-Path $repo 'n.md'), "one`n")
@@ -1032,7 +1035,7 @@ if ($SelfTest) {
                     $index.Notice -clike "check: the working tree (working $($is[0])) is the one that passed at 2026-11-12T00:00:00Z, and only the index changed, from $($was[1]) to $($is[1]). *" -and
                     $index.Pass -clike 'OK - check passed, running only what reads the index:*' -and
                     ($failed -join '|') -ceq 'line-cite-check.ps1|self-tests refuse-hanging-bash.ps1|markdown' -and -not $edited.Index -and $edited.Plan.Scripts }
-            'a change of scripts and Markdown alone runs the self-tests of each changed script and of each whose code names a changed file, in turn, and names those not run; a comment naming one is no dependency; another file, or check.ps1, runs them all (#427)' = {
+            'a change of scripts and Markdown alone runs the self-tests of each changed script and of each whose code names a changed file, in turn, and names those not run, or none; a comment naming one is no dependency; a page no script names runs none, and says so; another file, or check.ps1, runs them all (#427)' = {
                 $dir = Join-Path $repo 'scripts'; New-Item -ItemType Directory -Path $dir | Out-Null
                 $put = { param($name, $text) [IO.File]::WriteAllText((Join-Path $dir $name), $text) }
                 & $put 'lib.ps1' "function f { 1 }`n"
@@ -1041,8 +1044,9 @@ if ($SelfTest) {
                 & $put 'mention.ps1' "# lib.ps1 and guide.md are named only here.`n`$x = 1`n"
                 & $put 'check.ps1' "`$x = 1`n"
                 [IO.File]::WriteAllText((Join-Path $repo 'guide.md'), "one`n")
+                [IO.File]::WriteAllText((Join-Path $repo 'lone.md'), "one`n")
                 # Its warnings of line ends git would change say nothing of the case.
-                git -C $repo add scripts guide.md 2>$null
+                git -C $repo add scripts guide.md lone.md 2>$null
                 $lists = @{ SelfTests = @('lib.ps1', 'mention.ps1', 'outer.ps1', 'user.ps1'); NoGameCases = @('outer.ps1') }
                 try {
                     $from = Get-CheckedTree -Root $repo
@@ -1055,20 +1059,47 @@ if ($SelfTest) {
                     }
                     $lib = & $at { & $put 'lib.ps1' "function f { 2 }`n" } { & $put 'lib.ps1' "function f { 1 }`n" }
                     $guide = & $at { [IO.File]::WriteAllText((Join-Path $repo 'guide.md'), "two`n") } { [IO.File]::WriteAllText((Join-Path $repo 'guide.md'), "one`n") }
+                    $lone = & $at { [IO.File]::WriteAllText((Join-Path $repo 'lone.md'), "two`n") } { [IO.File]::WriteAllText((Join-Path $repo 'lone.md'), "one`n") }
+                    $every = & $at { & $put 'lib.ps1' "function f { 2 }`n"; & $put 'mention.ps1' "`$x = 2`n" } {
+                        & $put 'lib.ps1' "function f { 1 }`n"; & $put 'mention.ps1' "# lib.ps1 and guide.md are named only here.`n`$x = 1`n" }
                     $other = & $at { & $put 'lib.ps1' "function f { 2 }`n"; & $file 'a.txt' 'two' } { & $put 'lib.ps1' "function f { 1 }`n"; & $file 'a.txt' 'one' }
                     $self = & $at { & $put 'check.ps1' "`$x = 2`n" } { & $put 'check.ps1' "`$x = 1`n" }
                 }
                 finally {
-                    git -C $repo rm --cached --quiet -r -f -- scripts guide.md
-                    Remove-Item -LiteralPath $dir, (Join-Path $repo 'guide.md') -Recurse -Force
+                    git -C $repo rm --cached --quiet -r -f -- scripts guide.md lone.md
+                    Remove-Item -LiteralPath $dir, (Join-Path $repo 'guide.md'), (Join-Path $repo 'lone.md') -Recurse -Force
                 }
                 $all = 'lib.ps1|mention.ps1|outer.ps1|user.ps1'
+                $told = 'The self-tests run are those of each changed script and of each script whose code names a changed file, in turn:'
                 ($lib.Subset -join '|') -ceq 'lib.ps1|outer.ps1|user.ps1|outer.ps1 -NoGame' -and ($lib.Skipped -join '|') -ceq 'mention.ps1' -and
                     ($lib.Plan.SelfTests -join '|') -ceq 'lib.ps1|outer.ps1|user.ps1' -and ($lib.Plan.NoGameCases -join '|') -ceq 'outer.ps1' -and
                     $lib.Plan.Scripts -and $lib.Plan.Readme -and $lib.Plan.Pages -and $lib.Plan.Markdown -and @($lib.Plan.Steps).Count -eq $TOOL_STEPS.Count -and
                     $lib.Notice -clike '*only scripts and Markdown changed: scripts/lib.ps1. *Not run: mention.ps1. The rest runs.' -and
-                    $lib.Pass -clike 'OK - check passed, with 4 of 5 self-tests run:*' -and ($guide.Subset -join '|') -ceq 'outer.ps1|user.ps1|outer.ps1 -NoGame' -and
+                    $lib.Pass -ceq ('OK - check passed, with 4 of 5 self-tests run: only scripts and Markdown changed since the tree that passed at 2026-11-12T00:00:00Z, ' +
+                        "and CI runs every one. Never run here, because each needs the game: -SelfTest of $($NEEDS_GAME -join ', ').") -and
+                    ($guide.Subset -join '|') -ceq 'outer.ps1|user.ps1|outer.ps1 -NoGame' -and
+                    $null -ne $lone.Subset -and @($lone.Subset).Count -eq 0 -and @($lone.Plan.SelfTests).Count -eq 0 -and @($lone.Plan.NoGameCases).Count -eq 0 -and
+                    $lone.Notice -clike "*only scripts and Markdown changed: lone.md. $told none. Not run: lib.ps1, mention.ps1, outer.ps1, user.ps1, outer.ps1 -NoGame. The rest runs." -and
+                    $lone.Pass -clike 'OK - check passed, with 0 of 5 self-tests run:*' -and
+                    $every.Notice -clike "*$told lib.ps1, mention.ps1, outer.ps1, user.ps1, outer.ps1 -NoGame. Not run: none. The rest runs." -and
                     $null -eq $other.Subset -and ($other.Plan.SelfTests -join '|') -ceq $all -and $null -eq $self.Subset -and ($self.Plan.SelfTests -join '|') -ceq $all }
+            'a record whose trees git does not hold, as after a prune, cannot be diffed, and its run is whole, with every self-test, saying nothing of a skip (#427)' = {
+                $now = Get-CheckedTree -Root $repo
+                $gone = "$('1' * 40) $('1' * 40)"
+                $record = @{ Tree = $gone; Working = '1' * 40; Index = '1' * 40; At = '2026-11-12T00:00:00Z' }
+                $change = Get-ChangedPath -Root $repo -From $gone -To $now
+                $start = Get-RunStart -Root $repo -Passed $record -Tree $now -Steps $TOOL_STEPS
+                -not $change.Read -and @($change.Paths).Count -eq 0 -and -not $start.Skip -and -not $start.Index -and -not $start.Files -and
+                    $null -eq $start.Subset -and -not $start.Notice -and $start.Pass -clike 'OK - check passed. Not run, because each needs the game:*' -and
+                    ($start.Plan.SelfTests -join '|') -ceq ($SELF_TESTS -join '|') -and ($start.Plan.NoGameCases -join '|') -ceq ($NO_GAME_CASES -join '|') }
+            'a plan whose only self-tests are -NoGame cases runs them, and a plan of none runs no self-test block (#427)' = {
+                $do = @{ SelfTests = { param($names, $noGame) "self-tests [$($names -join ',')] no-game [$($noGame -join ',')]" } }
+                $ran = foreach ($lists in @{ SelfTests = @(); NoGameCases = @('n.ps1') }, @{ SelfTests = @(); NoGameCases = @() }) {
+                    $failed = [System.Collections.Generic.List[string]]::new()
+                    Invoke-RunPlan -Plan (@{ Scripts = $false; Steps = @(); Readme = $false; Pages = $false; Markdown = $false } + $lists) -Do $do -Failed $failed
+                    , @($failed)
+                }
+                ($ran[0] -join '|') -ceq 'self-tests [] no-game [n.ps1]' -and @($ran[1]).Count -eq 0 }
         }
         $failures = 0; $n = 0
         foreach ($name in $cases.Keys) {

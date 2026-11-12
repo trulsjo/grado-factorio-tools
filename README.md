@@ -858,7 +858,8 @@ line over 100 characters; the `pre-commit` hook holds the staged scripts to that
 the index when only the index differs from that one (#426); no self-test when the tree differs
 only in whitespace between a script's tokens (#405), when the parse and the width check still run;
 and, when only scripts and Markdown changed, only the self-tests of the changed scripts and of
-the scripts whose code names them, with the rest of the check (#427). CI runs every self-test.
+the scripts whose code names a changed file, in turn, with the rest of the check (#427). CI runs
+every self-test.
 What it cannot see is in its header.
 
     pwsh -File scripts/check.ps1
