@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
     Runs a list of reverts, and with -Defaults and -Conditions the reverts it writes, on a copy of
-    the repository, one at a time, and reports each as failing, passing or crashed its self-test, or
-    as refused. Exit 0 means every revert was run or refused; it says nothing of what they found,
-    which the report does.
+    the repository, one at a time, and reports each as failing, passing, crashed or timed out its
+    self-test, or as refused. Exit 0 means every revert was run or refused; it says nothing of what
+    they found, which the report does.
 
 .DESCRIPTION
     WHY (grado-factorio-tools#284). A review's bug scan, and the session answering it, revert
@@ -90,51 +90,54 @@
     line or more than Lines, removed or added, by `git -C <copy> diff --numstat`. A refused revert
     leaves the file as it was.
     Otherwise `git -C <copy> diff --stat` is printed and the self-test is run, as
-    `pwsh -NoProfile -File <SelfTest> -SelfTest <Args>`, from the copy's root. Its result is:
+    `pwsh -NoProfile -File <SelfTest> -SelfTest <Args>`, from the copy's root, for at most
+    -TimeoutSeconds, 600 unless given (grado-factorio-tools#424). Its result is:
     *fails*, it exited other than 0 and its last summary line is `FAILED - self-test...`;
     *passes*, it exited 0 and that line is `OK - self-test...`, which code-review.md makes a
     finding; *crashed*, anything else, as no summary line, whatever the exit code, or a summary
-    line its exit code contradicts. The file is then restored with
+    line its exit code contradicts; *timed out*, still running at the limit, when it is killed
+    with its child processes and the seconds it ran are its summary, with no exit code. A
+    self-test that loops under the revert and one merely slower than the limit look the same, so
+    a timeout is a lead to check, as a crash is, not a verdict. The file is then restored with
     `git -C <copy> checkout -- <File>`, and the copy checked clean again: one left dirty stops the
     run, exit 1, naming what is left and reporting the reverts run so far.
 
-    THE REPORT is a line per revert as it runs, and at the end a Markdown table of name, result,
-    exit code and summary line, for a review comment.
+    THE REPORT is a line giving the time limit before the first revert runs, a line per revert as
+    it runs, and at the end a Markdown table of name, result, exit code and summary line, for a
+    review comment.
 
     WHAT IT CANNOT SEE. Whether a revert is the right one: a Find that matches once but in the
-    wrong place is run. A self-test whose summary line is worded other than this repository's
-    `OK - self-test` and `FAILED - self-test`, which reads as crashed; check.ps1 fails such a
-    self-test among those it runs (grado-factorio-tools#297), not one that needs the game, nor one
-    in a sibling. A revert across two files,
-    or by a pattern. A self-test that changes a tracked file and puts it back.
-    Of -Defaults: a default computed at run time, which it names and writes no revert for; a
-    hashtable, in parentheses or not, and one constant, $true or $false in parentheses on a
-    parameter whose type is not a list, shapes it does not read, which it names with their text
-    and writes no revert for; a list type other than an array and [array], as a generic list,
-    whose default, if one constant not in parentheses, is read as a scalar's; a
-    parameter with no param() default, as one the script's body sets when it is not given, which
-    it does not name; a function's parameters; which of a scalar's other values matter, as it
-    tries one; and a default revert whose self-test needs Args, as -NoGame.
-    Of -Conditions: a regex alternation, as `a|b`; how many times a loop runs; a condition built
-    in more than one statement, as `$x = $a; if ($x -and $b)`, whose $a it does not drop; a list
-    on the right of -in in parentheses or @(), or held in a variable; -cin and -cnotin,
-    which match with case, though a list of type literals on their right is read as a type list;
-    -contains, -xor, -not and the comparison operators; a type list that
-    holds anything but type literals; a condition revert whose self-test needs Args; a verdict of
-    another shape, as an -and chain a function a case calls returns, one under a key built at run
-    time, as `"$name"`, one passed in $( ) or piped inside its parentheses, or a variable read
-    once as a value, which keeps its reverts and passes; a skipped chain that is not a verdict,
-    as one in a block under a string key that a case runs for its effect, or one passed to
-    & $<variable> that the command reads other than as its verdict, whose reverts might have
-    failed; a self-test that is neither an if ($SelfTest)
-    clause nor Invoke-SelfTest, in which nothing is skipped; a verdict variable read outside the
-    script block it is assigned in, as by a function through dynamic scope or after the
-    pipeline whose ForEach-Object block assigned it, a read it does not see, so the chain may be
-    skipped though such a read takes its value; a variable read only as a truth value but meant
-    to be false, as `if ($stale) { $failures++ }`, whose skipped reverts would have failed
-    (PR #408's review panel); and with -Base,
-    a condition the diff deletes, which leaves nothing to drop, or one it changes by a line outside
-    the operand, as the `if (` above it.
+    wrong place is run. Whether a self-test that timed out loops under the revert or is only
+    slower than -TimeoutSeconds, which it reports alike. A self-test whose summary line is worded
+    other than this repository's `OK - self-test` and `FAILED - self-test`, which reads as crashed;
+    check.ps1 fails such a self-test among those it runs (grado-factorio-tools#297), not one that
+    needs the game, nor one in a sibling. A revert across two files, or by a pattern. A self-test
+    that changes a tracked file and puts it back. Of -Defaults: a default computed at run time,
+    which it names and writes no revert for; a hashtable, in parentheses or not, and one constant,
+    $true or $false in parentheses on a parameter whose type is not a list, shapes it does not read,
+    which it names with their text and writes no revert for; a list type other than an array and
+    [array], as a generic list, whose default, if one constant not in parentheses, is read as a
+    scalar's; a parameter with no param() default, as one the script's body sets when it is not
+    given, which it does not name; a function's parameters; which of a scalar's other values matter,
+    as it tries one; and a default revert whose self-test needs Args, as -NoGame. Of -Conditions: a
+    regex alternation, as `a|b`; how many times a loop runs; a condition built in more than one
+    statement, as `$x = $a; if ($x -and $b)`, whose $a it does not drop; a list on the right of -in
+    in parentheses or @(), or held in a variable; -cin and -cnotin, which match with case, though a
+    list of type literals on their right is read as a type list; -contains, -xor, -not and the
+    comparison operators; a type list that holds anything but type literals; a condition revert
+    whose self-test needs Args; a verdict of another shape, as an -and chain a function a case calls
+    returns, one under a key built at run time, as `"$name"`, one passed in $( ) or piped inside its
+    parentheses, or a variable read once as a value, which keeps its reverts and passes; a skipped
+    chain that is not a verdict, as one in a block under a string key that a case runs for its
+    effect, or one passed to & $<variable> that the command reads other than as its verdict, whose
+    reverts might have failed; a self-test that is neither an if ($SelfTest) clause nor
+    Invoke-SelfTest, in which nothing is skipped; a verdict variable read outside the script block
+    it is assigned in, as by a function through dynamic scope or after the pipeline whose
+    ForEach-Object block assigned it, a read it does not see, so the chain may be skipped though
+    such a read takes its value; a variable read only as a truth value but meant to be false, as
+    `if ($stale) { $failures++ }`, whose skipped reverts would have failed (PR #408's review panel);
+    and with -Base, a condition the diff deletes, which leaves nothing to drop, or one it changes by
+    a line outside the operand, as the `if (` above it.
 
 .PARAMETER Copy
     The git working tree to revert in.
@@ -154,6 +157,10 @@
 .PARAMETER Base
     A ref of the copy: -Conditions then writes reverts only on the lines `git diff <ref>`
     changes. Only with -Conditions.
+
+.PARAMETER TimeoutSeconds
+    How long each revert's self-test may run before it is killed and reported timed out, in
+    seconds, from 1 to 2147483. 600 unless given.
 
 .PARAMETER SelfTest
     Run the cases that hold the runner to what this header says, on a scratch repository, naming
@@ -177,6 +184,8 @@ param(
     [Parameter(ParameterSetName = 'Run')] [string[]] $Defaults = @(),
     [Parameter(ParameterSetName = 'Run')] [string[]] $Conditions = @(),
     [Parameter(ParameterSetName = 'Run')] [string] $Base = '',
+    # At most int's milliseconds, which WaitForExit takes.
+    [Parameter(ParameterSetName = 'Run')] [ValidateRange(1, 2147483)] [int] $TimeoutSeconds = 600,
     [Parameter(ParameterSetName = 'SelfTest', Mandatory)] [switch] $SelfTest
 )
 
@@ -512,9 +521,34 @@ function Get-RevertResult {
     @{ Result = $result; Summary = $last }
 }
 
+# A revert's self-test, `pwsh -NoProfile -File <SelfTest> -SelfTest <Arguments>` from $Root,
+# killed with its child processes once it has run $TimeoutSeconds (#424): its exit code, its whole
+# output, stdout then stderr, whether it timed out, and the seconds it ran.
+function Invoke-BoundedSelfTest {
+    param([Parameter(Mandatory)] [string] $Root, [Parameter(Mandatory)] [string] $SelfTest, [object[]] $Arguments = @(),
+        [Parameter(Mandatory)] [int] $TimeoutSeconds)
+    # The pwsh `& pwsh` would run, by the command lookup's PATH.
+    $start = [Diagnostics.ProcessStartInfo]::new((Get-Command pwsh -CommandType Application | Select-Object -First 1).Source)
+    foreach ($a in '-NoProfile', '-File', $SelfTest, '-SelfTest') { $start.ArgumentList.Add($a) }
+    # Not @($Arguments): of $null, as an if that yields @() assigns, that is one element, handed
+    # on as an empty string the self-test binds to its first positional parameter.
+    foreach ($a in $Arguments) { $start.ArgumentList.Add([string] $a) }
+    $start.WorkingDirectory = $Root
+    $start.RedirectStandardOutput = $true; $start.RedirectStandardError = $true; $start.UseShellExecute = $false
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    $process = [Diagnostics.Process]::Start($start)
+    # Both read as they come, so that neither pipe fills and stalls the self-test.
+    $out = $process.StandardOutput.ReadToEndAsync(); $err = $process.StandardError.ReadToEndAsync()
+    $inTime = $process.WaitForExit($TimeoutSeconds * 1000)
+    if (-not $inTime) { $process.Kill($true); $process.WaitForExit() }
+    $clock.Stop()
+    @{ Code = $(if ($inTime) { $process.ExitCode } else { $null }); Said = $out.Result + $err.Result; TimedOut = -not $inTime
+        Seconds = $clock.Elapsed.TotalSeconds.ToString('0.0', [cultureinfo]::InvariantCulture) }
+}
+
 # One revert applied, run and restored; returns its row. Throws when the copy is left dirty.
 function Invoke-Revert {
-    param([Parameter(Mandatory)] [string] $Root, [Parameter(Mandatory)] [hashtable] $Revert)
+    param([Parameter(Mandatory)] [string] $Root, [Parameter(Mandatory)] [hashtable] $Revert, [Parameter(Mandatory)] [int] $TimeoutSeconds)
     $row = @{ Name = $Revert.Name; Result = 'refused'; Exit = ''; Summary = '' }
     $lines = if ($Revert.ContainsKey('Lines')) { [int] $Revert.Lines } else { 1 }
     $find = [string] $Revert.Find; $replace = [string] $Revert.Replace
@@ -549,11 +583,12 @@ function Invoke-Revert {
         Write-Host "revert-run: $($Revert.Name), git -C <copy> diff --stat:"
         git -C $Root diff --stat | ForEach-Object { Write-Host "    $_" }
         $extra = if ($Revert.ContainsKey('Args')) { @($Revert.Args) } else { @() }
-        Push-Location $Root
-        try { $said = & pwsh -NoProfile -File (Join-Path $Root $Revert.SelfTest) -SelfTest @extra 2>&1 | Out-String; $code = $LASTEXITCODE }
-        finally { Pop-Location }
-        $judged = Get-RevertResult -ExitCode $code -Said $said
-        $row.Result = $judged.Result; $row.Exit = "$code"; $row.Summary = $judged.Summary
+        $ran = Invoke-BoundedSelfTest -Root $Root -SelfTest (Join-Path $Root $Revert.SelfTest) -Arguments $extra -TimeoutSeconds $TimeoutSeconds
+        if ($ran.TimedOut) { $row.Result = 'timed out'; $row.Summary = "killed after $($ran.Seconds) s, at the limit of $TimeoutSeconds s" }
+        else {
+            $judged = Get-RevertResult -ExitCode $ran.Code -Said $ran.Said
+            $row.Result = $judged.Result; $row.Exit = "$($ran.Code)"; $row.Summary = $judged.Summary
+        }
         $row
     }
     finally {
@@ -573,7 +608,8 @@ function Format-RevertTable {
 # The run over $ListPath in $Root: the rows, printed as they go and as a table; throws where it
 # cannot run.
 function Invoke-RevertRun {
-    param([Parameter(Mandatory)] [string] $Root, [string] $ListPath = '', [string[]] $Defaults = @(), [string[]] $Conditions = @(), [string] $Since = '')
+    param([Parameter(Mandatory)] [string] $Root, [string] $ListPath = '', [string[]] $Defaults = @(), [string[]] $Conditions = @(), [string] $Since = '',
+        [Parameter(Mandatory)] [int] $TimeoutSeconds)
     if (-not $ListPath -and -not $Defaults -and -not $Conditions) { throw 'give -List, -Defaults, -Conditions or more than one, so there is a revert to run.' }
     if ($Since -and -not $Conditions) { throw '-Base limits -Conditions, which is not given.' }
     $dirty = @(Get-DirtyPath -Root $Root)
@@ -605,10 +641,11 @@ function Invoke-RevertRun {
         if (-not $written.Reverts) { throw "-Conditions names $script, for which no condition revert could be written$(if ($Since) { " on lines changed since $Since" }), so no revert was run." }
         foreach ($r in $written.Reverts) { $all.Add($r) }
     }
+    Write-Host "revert-run: each self-test run is limited to $TimeoutSeconds s, by -TimeoutSeconds."
     $rows = [System.Collections.Generic.List[object]]::new()
     try {
         foreach ($r in $all) {
-            $row = Invoke-Revert -Root $Root -Revert $r # strict-lists: one
+            $row = Invoke-Revert -Root $Root -Revert $r -TimeoutSeconds $TimeoutSeconds # strict-lists: one
             $rows.Add($row)
             Write-Host "revert-run: $($row.Name) -- $($row.Result)$(if ($row.Exit) { " (exit $($row.Exit))" }): $($row.Summary)"
             $left = @(Get-DirtyPath -Root $Root)
@@ -628,7 +665,7 @@ function Invoke-SelfTest {
     New-Item -ItemType Directory -Path $repo -Force | Out-Null
     $git = { git -C $repo -c user.name=selftest -c user.email=selftest@example.invalid -c commit.gpgsign=false @args; if ($LASTEXITCODE) { throw "git $args failed; the self-test needs git." } }
     # A self-test stub: it fails when $a is reverted, passes whatever else changes, and with -Mode
-    # throws before its summary line or leaves a file behind.
+    # throws before its summary line, leaves a file behind or runs past any time limit a case sets.
     $stub = @(
         'param([switch] $SelfTest, [string] $Mode)'
         "`$a = 'alpha'"
@@ -636,6 +673,7 @@ function Invoke-SelfTest {
         "`$c = 'gamma'"
         "if (`$Mode -eq 'throw') { throw 'boom before the summary' }"
         "if (`$Mode -eq 'dirty') { Set-Content -LiteralPath (Join-Path `$PSScriptRoot 'left.txt') -Value x }"
+        "if (`$Mode -eq 'sleep') { Start-Sleep -Seconds 300 }"
         "if (`$Mode -eq 'root' -and (Get-Location).Path -ne `$PSScriptRoot) { Write-Host 'FAILED - self-test: not run from the copy''s root.'; exit 1 }"
         "if (`$a -eq 'alpha') { Write-Host 'OK - self-test passed: all 1 cases.'; exit 0 }"
         "Write-Host 'FAILED - self-test: 1 of 1 case(s) did not hold.'"
@@ -767,7 +805,7 @@ function Invoke-SelfTest {
         $misfits }
 
     $cases = @(
-        @{ Name = '-Defaults writes one revert per element of a list default and one per scalar default, names each default it cannot write, each revert one the run would run, and runs a few through the command line as a list''s are, one failing and one passing (#409)'; Test = {
+        @{ Name = '-Defaults writes one revert per element of a list default and one per scalar default, names each default it cannot write, each revert one the run would run, and runs a few through the command line as a list''s are, one failing and one passing (#409), each given 600 s with -TimeoutSeconds left out (#424)'; Test = {
             $written = Get-DefaultRevert -Root $repo -Script 'defaults.ps1'
             # Each Replace is the Find's text up to the variable, then the new default: its tail.
             $said = @($written.Reverts | ForEach-Object { "$($_.Name) => $([regex]::Match($_.Replace, '\$\w+ = (?:(?!\$\w+ = ).)*$').Value)" })
@@ -824,6 +862,7 @@ function Invoke-SelfTest {
                 (@($written.Reverts | ForEach-Object { $_.File } | Sort-Object -Unique) -join '|') -ceq 'defaults.ps1' -and
                 -not (& $fits $written.Reverts) -and ($misfit -join '|') -ceq ($wantMisfit -join '|') -and
                 $code -eq 0 -and $got -match '(?m)^revert-run: 2 default revert\(s\) written for few-defaults\.ps1\.' -and
+                $got -match '(?m)^revert-run: each self-test run is limited to 600 s, by -TimeoutSeconds\.' -and
                 ($printed -join '|') -ceq '-When: its default is computed at run time' -and
                 ($rows -join '|') -ceq "default -Kinds drops 'a': fails|default -Kinds drops 'b': passes" -and (& $same) } }
         @{ Name = '-Defaults reads a comma list, and fails, exit 1 and nothing run, a script that yields no revert or does not parse (#389)'; Test = {
@@ -1064,6 +1103,24 @@ function Invoke-SelfTest {
             $last = Get-RevertResult -ExitCode 1 -Said "OK - self-test passed: all 2 cases.`nFAILED - self-test: 1 of 3 case(s) did not hold."
             $got.Code -eq 0 -and $got.Text -match '(?m)^revert-run: R -- crashed \(exit 1\): \r?$' -and "$judged" -eq 'crashed crashed crashed' -and
                 $last.Result -eq 'fails' -and $last.Summary -eq 'FAILED - self-test: 1 of 3 case(s) did not hold.' -and (& $same) } }
+        @{ Name = 'a self-test still running at -TimeoutSeconds is killed and reported timed out within a few seconds of the limit, with the seconds it ran and no exit code, the copy is clean after it, and the next revert runs (#424)'; Test = {
+            $p = & $list 'timeout' "@{ Reverts = @( $(& $one "`$b = ''beta''" "`$b = ''other''" "; Args = @('-Mode', 'sleep')"), $(& $one "`$b = ''beta''" "`$b = ''next''") ) }"
+            # The case's own bound on the run, not the run's code: with the run's limit reverted it
+            # fails this case rather than hanging the self-test.
+            $start = [Diagnostics.ProcessStartInfo]::new((Get-Command pwsh -CommandType Application | Select-Object -First 1).Source)
+            foreach ($a in '-NoProfile', '-File', $PSCommandPath, '-Copy', $repo, '-List', $p, '-TimeoutSeconds', '8') { $start.ArgumentList.Add($a) }
+            $start.RedirectStandardOutput = $true; $start.RedirectStandardError = $true; $start.UseShellExecute = $false
+            $child = [Diagnostics.Process]::Start($start)
+            $out = $child.StandardOutput.ReadToEndAsync(); $err = $child.StandardError.ReadToEndAsync()
+            $bounded = $child.WaitForExit(90000)
+            if (-not $bounded) { $child.Kill($true); $child.WaitForExit(); & $git checkout -q -- stub.ps1; Write-Host '    the run was still going after 90 s, and was killed' }
+            $text = $out.Result + $err.Result
+            Write-Host ($text.TrimEnd() -replace '(?m)^', '    ')
+            $after = if ($text -match '(?m)^revert-run: R -- timed out: killed after (\d+\.\d) s, at the limit of 8 s\r?$') { [double] $Matches[1] } else { -1 }
+            $bounded -and $child.ExitCode -eq 0 -and $after -ge 8 -and $after -lt 13 -and
+                $text -match '(?m)^\| R \| timed out \|  \| killed after \d+\.\d s, at the limit of 8 s \|' -and
+                @([regex]::Matches($text, '(?m)^revert-run: R -- ')).Count -eq 2 -and $text -match '(?m)^revert-run: R -- passes \(exit 0\)' -and
+                $text -match '(?m)^OK - revert-run: 2 revert\(s\) run or refused: 1 passes, 1 timed out\.' -and (& $same) } }
         @{ Name = 'the file is restored after each revert, and a copy left dirty by one is caught before the next'; Test = {
             $both = "@{ Reverts = @( $(& $one "`$b = ''beta''" "`$b = ''other''" "; Args = @('-Mode', 'dirty')"), $(& $one "`$a = ''alpha''" "`$a = ''other''") ) }"
             $got = & $run (& $list 'dirty' $both)
@@ -1122,7 +1179,7 @@ function Invoke-SelfTest {
 
 if ($SelfTest) { Invoke-SelfTest }
 
-try { $rows = @(Invoke-RevertRun -Root (Resolve-Path -LiteralPath $Copy).Path -ListPath $List -Defaults $Defaults -Conditions $Conditions -Since $Base) }
+try { $rows = @(Invoke-RevertRun -Root (Resolve-Path -LiteralPath $Copy).Path -ListPath $List -Defaults $Defaults -Conditions $Conditions -Since $Base -TimeoutSeconds $TimeoutSeconds) }
 catch { Write-Host "FAILED - revert-run: $($_.Exception.Message)"; exit 1 }
 $counts = ($rows | ForEach-Object { $_.Result } | Group-Object | Sort-Object Name | ForEach-Object { "$($_.Count) $($_.Name)" }) -join ', '
 Write-Host "OK - revert-run: $($rows.Count) revert(s) run or refused: $counts."

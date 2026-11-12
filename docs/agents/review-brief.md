@@ -72,7 +72,10 @@ revert was run.`: the lane reports that line, and it is nothing to revert, not a
 a ticket the change closes has a criterion over all the guards of a script or a function, not
 over guards it names, it runs `-Conditions` on that whole script without `-Base`, adds the list
 for that script or function as above, and reads the rows within that script or function: a row
-outside it is no finding of that run. Each revert runs the script's whole self-test: on `main`
+outside it is no finding of that run. Each run gives each self-test 600 s unless
+`-TimeoutSeconds <s>` is added to the command, and reports one still running then as *timed out*,
+which a loop under the revert and a self-test merely slower than the limit both give: a lead to
+check, as a crash is, not a verdict (#424). Each revert runs the script's whole self-test: on `main`
 at `4534a44`, `-Conditions` writes 133 reverts for `revert-run.ps1`, whose self-test took about
 100 s on PR #412's branch, close to 3.7 hours (#402's brief). It reports each run's table. A
 revert that fails nothing is a finding, unless it is a default revert the pull request lists
