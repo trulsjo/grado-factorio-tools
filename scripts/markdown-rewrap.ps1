@@ -332,7 +332,25 @@ function Invoke-SelfTest {
         if (-not $ok) { $r.Lines | ForEach-Object { Write-Host "    |$_" } }
         $ok
     }
+    # A case passes on one output, $true (#419). Any other output fails it, saying
+    # why: [bool] of two values or more is true whatever they are, so a case that
+    # leaked a line passed on a false verdict.
+    $judgeCase = {
+        param([scriptblock] $CaseBlock)
+        $caseOutput = @(& $CaseBlock)
+        if ($caseOutput.Count -ne 1) { Write-Host "    gave $($caseOutput.Count) values, not one [bool]"; return $false }
+        if ($caseOutput[0] -isnot [bool]) { Write-Host "    gave $($null -eq $caseOutput[0] ? '$null' : $caseOutput[0].GetType().Name), not a [bool]"; return $false }
+        $caseOutput[0]
+    }
+    # A case that leaks a value, judged by the loop's own line, which must fail it:
+    # so a loop put back to [bool] of the whole output fails the run (#419).
+    $leakCase = 'the loop fails a case giving $null and then $false (#419); ok here means it was failed'
     $cases = [ordered]@{
+        $leakCase = { $null; $false }
+        'a case passes on one $true; two values, a string or none fail it, and say so (#419)' = {
+            (& $judgeCase { $true }) -eq $true -and (& $judgeCase { $false }) -eq $false -and
+                "$(& $judgeCase { $null; $true } 6>&1)" -ceq '    gave 2 values, not one [bool] False' -and
+                "$(& $judgeCase { 'x' } 6>&1)" -ceq '    gave String, not a [bool] False' -and "$(& $judgeCase { } 6>&1)" -ceq '    gave 0 values, not one [bool] False' }
         'an HTML comment stays whole on the line of the word before it' = {
             $in = @('A first line that is long enough, break <!-- deliberate: word --> then more.')
             -not @(& $naive $in | Where-Object { $_ -match 'break <!-- deliberate: word -->' }) -and (& $holds $in { param($l) @($l | Where-Object { $_ -match 'break <!-- deliberate: word -->' }).Count -eq 1 }) }
@@ -496,7 +514,8 @@ function Invoke-SelfTest {
     $failures = 0; $n = 0
     foreach ($name in $cases.Keys) {
         $n++
-        $ok = try { [bool] (& $cases[$name]) } catch { Write-Host "    threw: $($_.Exception.Message)"; $false }
+        $ok = try { & $judgeCase $cases[$name] } catch { Write-Host "    threw: $($_.Exception.Message)"; $false }
+        if ($name -ceq $leakCase) { $ok = -not $ok }
         Write-Host ("self-test {0}/{1}: {2} -- {3}" -f $n, $cases.Count, $name, $(if ($ok) { 'ok' } else { 'FAILED' }))
         if (-not $ok) { $failures++ }
     }
