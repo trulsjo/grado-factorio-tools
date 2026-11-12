@@ -84,12 +84,13 @@
     with case; a line break in either, LF or CRLF, is read as the file's own.
 
     EACH REVERT, IN ORDER. Refused, and not run, where Find is empty; where File is not a file
-    git tracks in the copy under that very name, as one outside the copy, an untracked one, or
-    one named in another case, which git could not restore; where Find occurs in File other than
-    exactly once, naming the count; where git reads File as binary; or where the edit changes no
-    line or more than Lines, removed or added, by `git -C <copy> diff --numstat`. A refused revert
+    git tracks in the copy under that very name, of those `git -C <copy> ls-files` gives once for
+    the run, as one outside the copy, an untracked one, or one named in another case, which git's
+    status could not check restored; where Find occurs in File other than exactly once, naming
+    the count; where git reads File as binary; or where the edit changes no line or more than
+    Lines, removed or added, by `git -C <copy> diff --numstat --stat -- <File>`. A refused revert
     leaves the file as it was.
-    Otherwise `git -C <copy> diff --stat` is printed and the self-test is run, as
+    Otherwise that call's stat, of File alone, is printed and the self-test is run, as
     `pwsh -NoProfile -File <SelfTest> -SelfTest <Args>`, from the copy's root, for at most
     -TimeoutSeconds, 600 unless given (grado-factorio-tools#424). Its result is:
     *fails*, it exited other than 0 and its last summary line is `FAILED - self-test...`;
@@ -98,9 +99,10 @@
     line its exit code contradicts; *timed out*, still running at the limit, when it is killed
     with its child processes and the seconds it ran are its summary, with no exit code. A
     self-test that loops under the revert and one merely slower than the limit look the same, so
-    a timeout is a lead to check, as a crash is, not a verdict. The file is then restored with
-    `git -C <copy> checkout -- <File>`, and the copy checked clean again: one left dirty stops the
-    run, exit 1, naming what is left and reporting the reverts run so far.
+    a timeout is a lead to check, as a crash is, not a verdict. The file is then restored by
+    writing back the bytes read before the edit, as it stood, where git might write it with other
+    line ends (grado-factorio-tools#422), and the copy checked clean again: one left dirty stops
+    the run, exit 1, naming what is left and reporting the reverts run so far.
 
     THE REPORT is a line giving the time limit before the first revert runs, a line per revert as
     it runs, and at the end a Markdown table of name, result, exit code and summary line, for a
@@ -548,17 +550,18 @@ function Invoke-BoundedSelfTest {
 
 # One revert applied, run and restored; returns its row. Throws when the copy is left dirty.
 function Invoke-Revert {
-    param([Parameter(Mandatory)] [string] $Root, [Parameter(Mandatory)] [hashtable] $Revert, [Parameter(Mandatory)] [int] $TimeoutSeconds)
+    param([Parameter(Mandatory)] [string] $Root, [Parameter(Mandatory)] [hashtable] $Revert, [Parameter(Mandatory)] [int] $TimeoutSeconds,
+        [Parameter(Mandatory)] [AllowEmptyCollection()] [System.Collections.Generic.HashSet[string]] $Tracked)
     $row = @{ Name = $Revert.Name; Result = 'refused'; Exit = ''; Summary = '' }
     $lines = if ($Revert.ContainsKey('Lines')) { [int] $Revert.Lines } else { 1 }
     $find = [string] $Revert.Find; $replace = [string] $Revert.Replace
     # An empty Find occurs everywhere, and counting it would never end.
     if (-not $find) { $row.Summary = 'Find is empty'; return $row }
-    # Only a file git tracks under this very name can be restored by git: not one outside the
-    # copy, an untracked one, or one named in another case, which Windows would let be written.
+    # Only a file git tracks under this very name, of the names `git ls-files` gave the run, can be
+    # checked clean by git after its restore: not one outside the copy, an untracked one, or one
+    # named in another case, which Windows would let be written (#422).
     $file = $Revert.File -replace '\\', '/'
-    $tracked = @(git -C $Root ls-files -- $file 2>$null)
-    if ($LASTEXITCODE -or $tracked.Count -ne 1 -or $tracked[0] -cne $file) { $row.Summary = "$($Revert.File) is not a file git tracks in the copy under that name"; return $row }
+    if (-not $Tracked.Contains($file)) { $row.Summary = "$($Revert.File) is not a file git tracks in the copy under that name"; return $row }
     $path = Join-Path $Root $file
     $bytes = [IO.File]::ReadAllBytes($path)
     $bom = $bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF
@@ -572,16 +575,19 @@ function Invoke-Revert {
     $edited = $text.Substring(0, $at) + $replace + $text.Substring($at + $find.Length)
     [IO.File]::WriteAllText($path, $edited, [Text.UTF8Encoding]::new($bom))
     try {
-        $numstat = "$(git -C $Root diff --numstat -- $file)".Trim()
-        if ($LASTEXITCODE) { throw "git diff --numstat -- $file failed in $Root." }
+        # One call prints both, the numstat line first, then the stat's (#422). The stat is of the
+        # file alone, which on a copy checked clean before each revert is the whole copy's.
+        $diff = @(git -C $Root diff --numstat --stat -- $file)
+        if ($LASTEXITCODE) { throw "git diff --numstat --stat -- $file failed in $Root." }
+        $numstat = if ($diff) { "$($diff[0])".Trim() } else { '' }
         $counts = if ($numstat) { @($numstat -split '\s+')[0..1] } else { '0', '0' }
         # git counts no lines of a file it reads as binary, and prints - for each.
         if ($counts -contains '-') { $row.Summary = "git reads $file as binary, so its changed lines cannot be counted"; return $row }
         $added, $removed = $counts | ForEach-Object { [int] $_ }
         if (-not ($added -or $removed)) { $row.Summary = 'the edit changes no line'; return $row }
         if ($added -gt $lines -or $removed -gt $lines) { $row.Summary = "the edit changes $added added and $removed removed lines, more than Lines = $lines"; return $row }
-        Write-Host "revert-run: $($Revert.Name), git -C <copy> diff --stat:"
-        git -C $Root diff --stat | ForEach-Object { Write-Host "    $_" }
+        Write-Host "revert-run: $($Revert.Name), git -C <copy> diff --stat -- ${file}:"
+        $diff | Select-Object -Skip 1 | ForEach-Object { Write-Host "    $_" }
         $extra = if ($Revert.ContainsKey('Args')) { @($Revert.Args) } else { @() }
         $ran = Invoke-BoundedSelfTest -Root $Root -SelfTest (Join-Path $Root $Revert.SelfTest) -Arguments $extra -TimeoutSeconds $TimeoutSeconds
         if ($ran.TimedOut) { $row.Result = 'timed out'; $row.Summary = "killed after $($ran.Seconds) s, at the limit of $TimeoutSeconds s" }
@@ -591,10 +597,9 @@ function Invoke-Revert {
         }
         $row
     }
-    finally {
-        git -C $Root checkout -q -- $file
-        if ($LASTEXITCODE) { throw "git checkout -- $file failed in $Root." }
-    }
+    # The bytes read before the edit, written back (#422): on a copy checked clean they are the file
+    # as it stood, and the status the run reads after each revert catches one git holds otherwise.
+    finally { [IO.File]::WriteAllBytes($path, $bytes) }
 }
 
 # The rows as a Markdown table, for a review comment.
@@ -641,11 +646,16 @@ function Invoke-RevertRun {
         if (-not $written.Reverts) { throw "-Conditions names $script, for which no condition revert could be written$(if ($Since) { " on lines changed since $Since" }), so no revert was run." }
         foreach ($r in $written.Reverts) { $all.Add($r) }
     }
+    # The names git tracks, read once for every revert (#422), matched with case as git gives them.
+    $tracked = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $names = @(git -C $Root ls-files)
+    if ($LASTEXITCODE) { throw "git ls-files failed in $Root." }
+    foreach ($t in $names) { [void] $tracked.Add($t) }
     Write-Host "revert-run: each self-test run is limited to $TimeoutSeconds s, by -TimeoutSeconds."
     $rows = [System.Collections.Generic.List[object]]::new()
     try {
         foreach ($r in $all) {
-            $row = Invoke-Revert -Root $Root -Revert $r -TimeoutSeconds $TimeoutSeconds # strict-lists: one
+            $row = Invoke-Revert -Root $Root -Revert $r -TimeoutSeconds $TimeoutSeconds -Tracked $tracked # strict-lists: one
             $rows.Add($row)
             Write-Host "revert-run: $($row.Name) -- $($row.Result)$(if ($row.Exit) { " (exit $($row.Exit))" }): $($row.Summary)"
             $left = @(Get-DirtyPath -Root $Root)
@@ -657,6 +667,18 @@ function Invoke-RevertRun {
         Format-RevertTable -Rows $rows | ForEach-Object { Write-Host $_ }
     }
     $rows
+}
+
+# The run as the command line gives it, its summary line printed: returns the exit code, 1 where
+# the run throws, else 0. The self-test calls it in its own process (#422).
+function Invoke-Main {
+    param([Parameter(Mandatory)] [string] $Copy, [string] $List = '', [string[]] $Defaults = @(), [string[]] $Conditions = @(), [string] $Base = '',
+        [Parameter(Mandatory)] [int] $TimeoutSeconds)
+    try { $rows = @(Invoke-RevertRun -Root (Resolve-Path -LiteralPath $Copy).Path -ListPath $List -Defaults $Defaults -Conditions $Conditions -Since $Base -TimeoutSeconds $TimeoutSeconds) }
+    catch { Write-Host "FAILED - revert-run: $($_.Exception.Message)"; return 1 }
+    $counts = ($rows | ForEach-Object { $_.Result } | Group-Object | Sort-Object Name | ForEach-Object { "$($_.Count) $($_.Name)" }) -join ', '
+    Write-Host "OK - revert-run: $($rows.Count) revert(s) run or refused: $counts."
+    0
 }
 
 function Invoke-SelfTest {
@@ -762,11 +784,17 @@ function Invoke-SelfTest {
     & $git commit --quiet -m stub
     $list = { param([string] $name, [string] $text) $p = Join-Path $temp "$name.psd1"; Set-Content -LiteralPath $p -Value $text; $p }
     $one = { param([string] $Find, [string] $Replace, [string] $More = '') "@{ Name = 'R'; File = 'stub.ps1'; Find = '$Find'; Replace = '$Replace'; SelfTest = 'stub.ps1'$More }" }
-    $run = {
-        param([string] $listPath)
-        $text = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -List $listPath 2>&1 | Out-String
-        @{ Code = $LASTEXITCODE; Text = $text }
-    }
+    # The run in this process, as the command line makes it, with what it printed and the exit
+    # code it would end with (#422). The cases about the command line itself, a list that arrives
+    # through pwsh -File as one string, each exit code pwsh ends with, and a run bounded from
+    # outside, start a pwsh of their own.
+    $main = { param([hashtable] $given)
+        $said = [System.Collections.Generic.List[string]]::new(); $code = $null
+        foreach ($o in @(Invoke-Main @given -TimeoutSeconds 600 6>&1)) {
+            if ($o -is [System.Management.Automation.InformationRecord]) { $said.Add("$o") } else { $code = $o }
+        }
+        @{ Code = $code; Text = ($said -join "`n") + "`n" } }
+    $run = { param([string] $listPath) & $main @{ Copy = $repo; List = $listPath } }
     $same = { [IO.File]::ReadAllText($stubPath) -ceq "$stub`n" -and -not @(Get-DirtyPath -Root $repo) }
     # Each written revert that fails three of Invoke-Revert's refusals, or does not parse, named
     # with why (#409): its Find occurs once in its file, and the edit changes at least one line and
@@ -867,7 +895,7 @@ function Invoke-SelfTest {
                 ($rows -join '|') -ceq "default -Kinds drops 'a': fails|default -Kinds drops 'b': passes" -and (& $same) } }
         @{ Name = '-Defaults reads a comma list, and fails, exit 1 and nothing run, a script that yields no revert or does not parse (#389)'; Test = {
             $none = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Defaults 'defaults.ps1,nodefault.ps1' 2>&1 | Out-String; $noneCode = $LASTEXITCODE
-            $broken = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Defaults 'broken.ps1' 2>&1 | Out-String; $brokenCode = $LASTEXITCODE
+            $b = & $main @{ Copy = $repo; Defaults = @('broken.ps1') }; $broken = $b.Text; $brokenCode = $b.Code
             Write-Host (($none + $broken).TrimEnd() -replace '(?m)^', '    ')
             $noneCode -eq 1 -and $none -match '(?m)^revert-run: 26 default revert\(s\) written for defaults\.ps1\.' -and
                 $none -match '-Defaults names nodefault\.ps1, for which no default revert could be written, so no revert was run' -and
@@ -907,9 +935,9 @@ function Invoke-SelfTest {
                 ($printed -join '|') -ceq 'line 3, a -in of one element' -and
                 ($rows -join '|') -ceq "$f 'a': passes|$f 'b': fails" -and (& $same) } }
         @{ Name = '-Conditions fails, exit 1 and nothing run, a script that yields no revert, does not parse or is not in the copy (#400)'; Test = {
-            $none = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'nodefault.ps1' 2>&1 | Out-String; $noneCode = $LASTEXITCODE
-            $broken = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'conditions.ps1,broken.ps1' 2>&1 | Out-String; $brokenCode = $LASTEXITCODE
-            $missing = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'no-such.ps1' 2>&1 | Out-String; $missingCode = $LASTEXITCODE
+            $r = & $main @{ Copy = $repo; Conditions = @('nodefault.ps1') }; $none = $r.Text; $noneCode = $r.Code
+            $r = & $main @{ Copy = $repo; Conditions = @('conditions.ps1', 'broken.ps1') }; $broken = $r.Text; $brokenCode = $r.Code
+            $r = & $main @{ Copy = $repo; Conditions = @('no-such.ps1') }; $missing = $r.Text; $missingCode = $r.Code
             Write-Host (($none + $broken + $missing).TrimEnd() -replace '(?m)^', '    ')
             $noneCode -eq 1 -and $none -match '-Conditions names nodefault\.ps1, for which no condition revert could be written, so no revert was run' -and
                 $brokenCode -eq 1 -and $broken -match 'broken\.ps1 does not parse, so its conditions cannot be read' -and
@@ -993,7 +1021,7 @@ function Invoke-SelfTest {
                         "    @{ 'one' = { `$x -ne 'a' -and `$x -ne 'c' -and `$x -ne 'd' } }"
                         "    & `$check 'two' (`$x -ne 'a' -and `$x -ne 'e') }") -join "`n") + "`n")
             & $git add verdicts.ps1; & $git commit --quiet -m 'verdicts'
-            $got = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'verdicts.ps1' 2>&1 | Out-String; $code = $LASTEXITCODE
+            $r = & $main @{ Copy = $repo; Conditions = @('verdicts.ps1') }; $got = $r.Text; $code = $r.Code
             Write-Host ($got.TrimEnd() -replace '(?m)^', '    ')
             $printed = @([regex]::Matches($got, '(?m)^revert-run: verdicts\.ps1, skipped as a verdict: (.+?)\r?$') | ForEach-Object { $_.Groups[1].Value })
             ($dropped -join '|') -ceq ($want -join '|') -and ($written.Skipped -join '|') -ceq $skips -and
@@ -1008,9 +1036,9 @@ function Invoke-SelfTest {
             & $git commit --quiet -am 'base'
             $written = Get-ConditionRevert -Root $repo -Script 'conditions.ps1' -Since 'HEAD~1'
             $said = @($written.Reverts | ForEach-Object { $_.Name -replace '^condition conditions\.ps1:' })
-            $alone = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -List (& $list 'base' "@{ Reverts = @( $(& $one "`$b = ''beta''" "`$b = ''other''") ) }") -Base 'HEAD~1' 2>&1 | Out-String
-            $aloneCode = $LASTEXITCODE
-            $badRef = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'conditions.ps1' -Base 'no-such-ref' 2>&1 | Out-String; $badRefCode = $LASTEXITCODE
+            $r = & $main @{ Copy = $repo; List = (& $list 'base' "@{ Reverts = @( $(& $one "`$b = ''beta''" "`$b = ''other''") ) }"); Base = 'HEAD~1' }
+            $alone = $r.Text; $aloneCode = $r.Code
+            $r = & $main @{ Copy = $repo; Conditions = @('conditions.ps1'); Base = 'no-such-ref' }; $badRef = $r.Text; $badRefCode = $r.Code
             Write-Host (($alone + $badRef).TrimEnd() -replace '(?m)^', '    ')
             # A chain over two lines, of which only the first operand's line changed.
             [IO.File]::WriteAllText((Join-Path $repo 'spans.ps1'), "`$ok = `$x -ne 'a' -and`n    `$x -ne 'z'`n")
@@ -1019,12 +1047,12 @@ function Invoke-SelfTest {
             & $git commit --quiet -am 'first'
             $spans = @((Get-ConditionRevert -Root $repo -Script 'spans.ps1' -Since 'HEAD~1').Reverts)
             # Through the command line, the written line names the ref.
-            $since = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'spans.ps1' -Base 'HEAD~1' 2>&1 | Out-String; $sinceCode = $LASTEXITCODE
+            $r = & $main @{ Copy = $repo; Conditions = @('spans.ps1'); Base = 'HEAD~1' }; $since = $r.Text; $sinceCode = $r.Code
             Write-Host ($since.TrimEnd() -replace '(?m)^', '    ')
             # No line changed since the ref: nothing to drop.
             $nothing = @((Get-ConditionRevert -Root $repo -Script 'spans.ps1' -Since 'HEAD').Reverts)
             # Through the command line, the failure names the ref that left nothing.
-            $noneSince = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions 'spans.ps1' -Base 'HEAD' 2>&1 | Out-String; $noneSinceCode = $LASTEXITCODE
+            $r = & $main @{ Copy = $repo; Conditions = @('spans.ps1'); Base = 'HEAD' }; $noneSince = $r.Text; $noneSinceCode = $r.Code
             Write-Host ($noneSince.TrimEnd() -replace '(?m)^', '    ')
             # A line deleted after a condition, a hunk +1,0, changes no line of the condition.
             [IO.File]::WriteAllText((Join-Path $repo 'del.ps1'), "`$a = `$x -ne 'a' -and `$x -ne 'b'`n# gone`n")
@@ -1056,8 +1084,8 @@ function Invoke-SelfTest {
             $want = @(for ($i = 1; $i -le 30; $i++) { "nests.ps1:$i -or"; "nests.ps1:$i -or"; "nests.ps1:$i -and"; "nests.ps1:$i -and" })
             ($sorted -join '|') -ceq ($wantSorted -join '|') -and ($order -join '|') -ceq ($want -join '|') -and (& $same) } }
         @{ Name = 'with neither -List, -Defaults nor -Conditions, and with -Defaults naming no file of the copy, the run fails, exit 1, and runs nothing'; Test = {
-            $neither = & pwsh -NoProfile -File $PSCommandPath -Copy $repo 2>&1 | Out-String; $neitherCode = $LASTEXITCODE
-            $missing = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Defaults 'no-such.ps1' 2>&1 | Out-String; $missingCode = $LASTEXITCODE
+            $r = & $main @{ Copy = $repo }; $neither = $r.Text; $neitherCode = $r.Code
+            $r = & $main @{ Copy = $repo; Defaults = @('no-such.ps1') }; $missing = $r.Text; $missingCode = $r.Code
             $neitherCode -eq 1 -and $neither -match 'give -List, -Defaults, -Conditions or more than one' -and
                 $missingCode -eq 1 -and $missing -match '-Defaults names no-such\.ps1, which is not a file in the copy' -and (& $same) } }
         @{ Name = 'Find occurring 0 times, twice, or only ignoring case is refused with the count, and so is an edit that changes no line; the file is unchanged'; Test = {
@@ -1135,17 +1163,23 @@ function Invoke-SelfTest {
             finally { & $git checkout -q -- stub.ps1 }
             Write-Host ($got.Text.TrimEnd() -replace '(?m)^', '    ')
             $got.Code -eq 1 -and $got.Text -match 'has uncommitted changes, so no revert was run: stub\.ps1' -and $got.Text -notmatch '(?m)^revert-run: R -- ' -and (& $same) } }
-        @{ Name = 'a Find with a line break matches a CRLF file, and one from a CRLF list an LF file, a file with a byte-order mark keeps it, and a list it cannot read, or one with no Reverts or a field missing, fails'; Test = {
+        @{ Name = 'a Find with a line break matches a CRLF file, and one from a CRLF list an LF file, a file with a byte-order mark keeps it, a file git would write back with other line ends is restored as it stood (#422), and a list it cannot read, or one with no Reverts or a field missing, fails'; Test = {
             $crlf = Join-Path $temp 'crlf'
             New-Item -ItemType Directory -Path $crlf | Out-Null
             git -C $crlf init --quiet; git -C $crlf config core.autocrlf false
             [IO.File]::WriteAllText((Join-Path $crlf 'stub.ps1'), ($stub -replace "`n", "`r`n") + "`r`n")
             # With a byte-order mark: an edit that dropped it would change line 1 too.
             [IO.File]::WriteAllText((Join-Path $crlf 'bom.ps1'), "$stub`n", [Text.UTF8Encoding]::new($true))
-            git -C $crlf add stub.ps1 bom.ps1; git -C $crlf -c user.name=s -c user.email=s@example.invalid -c commit.gpgsign=false commit --quiet -m stub
+            # LF on disk, which git reads as clean but would write back with CRLF, by its eol.
+            [IO.File]::WriteAllText((Join-Path $crlf 'lf.ps1'), "$stub`n")
+            [IO.File]::WriteAllText((Join-Path $crlf '.gitattributes'), "lf.ps1 text eol=crlf`n")
+            git -C $crlf add stub.ps1 bom.ps1 lf.ps1 .gitattributes; git -C $crlf -c user.name=s -c user.email=s@example.invalid -c commit.gpgsign=false commit --quiet -m stub
+            $lfBytes = "$([IO.File]::ReadAllBytes((Join-Path $crlf 'lf.ps1')))"
             $bom = "@{ Name = 'B'; File = 'bom.ps1'; Find = '`$c = ''gamma'''; Replace = '`$c = ''other'''; SelfTest = 'bom.ps1' }"
-            $p = & $list 'crlf' "@{ Reverts = @( $(& $one "`$a = ''alpha''`n`$b = ''beta''" "`$a = ''other''`n`$b = ''beta''"), $bom ) }"
-            $matched = & pwsh -NoProfile -File $PSCommandPath -Copy $crlf -List $p 2>&1 | Out-String
+            $lf = "@{ Name = 'L'; File = 'lf.ps1'; Find = '`$c = ''gamma'''; Replace = '`$c = ''other'''; SelfTest = 'lf.ps1' }"
+            $p = & $list 'crlf' "@{ Reverts = @( $(& $one "`$a = ''alpha''`n`$b = ''beta''" "`$a = ''other''`n`$b = ''beta''"), $bom, $lf ) }"
+            $matched = (& $main @{ Copy = $crlf; List = $p }).Text
+            $restored = "$([IO.File]::ReadAllBytes((Join-Path $crlf 'lf.ps1')))" -ceq $lfBytes -and -not @(Get-DirtyPath -Root $crlf)
             Write-Host ($matched.TrimEnd() -replace '(?m)^', '    ')
             # A list saved with CRLF, its Find spanning two lines of the LF stub.
             $crlfList = & $list 'crlf-list' "@{ Reverts = @( $(& $one "`$a = ''alpha''`n`$b = ''beta''" "`$a = ''other''`n`$b = ''beta''") ) }"
@@ -1155,6 +1189,7 @@ function Invoke-SelfTest {
             $empty = & $run (& $list 'empty' '@{ Other = 1 }')
             $field = & $run (& $list 'field' "@{ Reverts = @( @{ Name = 'R'; File = 'stub.ps1' } ) }")
             $matched -match '(?m)^revert-run: R -- fails \(exit 1\)' -and $matched -match '(?m)^revert-run: B -- passes \(exit 0\)' -and
+                $matched -match '(?m)^revert-run: L -- passes \(exit 0\)' -and $restored -and
                 $fromCrlf.Text -match '(?m)^revert-run: R -- fails \(exit 1\)' -and (& $same) -and
                 $broken.Code -eq 1 -and $broken.Text -match 'cannot be read' -and $empty.Code -eq 1 -and $empty.Text -match 'holds no Reverts' -and
                 $field.Code -eq 1 -and $field.Text -match 'lacks Find, Replace, SelfTest' } }
@@ -1179,8 +1214,4 @@ function Invoke-SelfTest {
 
 if ($SelfTest) { Invoke-SelfTest }
 
-try { $rows = @(Invoke-RevertRun -Root (Resolve-Path -LiteralPath $Copy).Path -ListPath $List -Defaults $Defaults -Conditions $Conditions -Since $Base -TimeoutSeconds $TimeoutSeconds) }
-catch { Write-Host "FAILED - revert-run: $($_.Exception.Message)"; exit 1 }
-$counts = ($rows | ForEach-Object { $_.Result } | Group-Object | Sort-Object Name | ForEach-Object { "$($_.Count) $($_.Name)" }) -join ', '
-Write-Host "OK - revert-run: $($rows.Count) revert(s) run or refused: $counts."
-exit 0
+exit (Invoke-Main -Copy $Copy -List $List -Defaults $Defaults -Conditions $Conditions -Base $Base -TimeoutSeconds $TimeoutSeconds)
