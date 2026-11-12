@@ -140,16 +140,19 @@ own error (#351). Their cases are in `load-harness.ps1 -SelfTest`.
 with its window, with the mods it is given junctioned into a mod directory of their own, so an edit
 and a restart is the whole loop. The mods are its arguments, directories or zips, as the
 harness's are; `-With` enables bundled mods; `-ModDirectory` says where the directory goes, under
-`%TEMP%` unless given, and the player's own is refused; `-FactorioExe` names the game; `-Wait`
-blocks until it exits. It launches from a directory holding `steam_appid.txt`, so a Steam build
-does not relaunch through Steam and lose the mod directory. It runs with the player's own saves and
-settings.
+`%TEMP%` unless given, and a folder the script did not make is refused (#423); `-FactorioExe`
+names the game; `-Wait` blocks until it exits. It launches from a directory holding
+`steam_appid.txt`, so a Steam build does not relaunch through Steam and lose the mod directory. It
+runs with the player's own saves and settings.
 
     pwsh -File scripts/dev-launch.ps1 -With space-age ./my-mod
     pwsh -File scripts/dev-launch.ps1 -Clean
 
-`-Clean` removes the directory, junctions first. It has no `-SelfTest`: a launch on a Steam build
-and on a zip install is recorded in `docs/measurements.md`.
+`-Clean` removes the directory, junctions first. A run and `-Clean` alike refuse an existing
+`-ModDirectory` that is a file, or a folder that is not empty and holds no
+`README-BEFORE-DELETING.txt`, the marker the script writes first into each folder it makes.
+`-SelfTest` holds that refusal and starts no game; a launch on a Steam build and on a zip install
+is recorded in `docs/measurements.md`.
 
 `get-dump.ps1` gives the path of a `--dump-data` dump of a directory of mods, and runs the game
 only when its cache holds no dump of that set:

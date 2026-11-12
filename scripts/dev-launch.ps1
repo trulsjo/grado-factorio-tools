@@ -23,10 +23,18 @@
     It writes mod-list.json, and a README-BEFORE-DELETING.txt that says how to remove the
     directory.
 
-    THE PLAYER'S MOD DIRECTORY IS NEVER USED, and is refused as -ModDirectory: this rewrites
-    mod-list.json and would lose which of the player's mods are enabled. The game runs with the
-    player's own write-data, so saves and settings are the player's. That is the difference from
-    the load harness, which gives every run a write-data of its own.
+    THE PLAYER'S MOD DIRECTORY IS NEVER USED, NOR ANY FOLDER THIS DID NOT MAKE (#423). A run
+    deletes the junctions and zips in -ModDirectory and overwrites its mod-list.json; -Clean deletes
+    it whole. So a run and -Clean alike refuse, exit 1 before anything in it changes, naming it, an
+    existing -ModDirectory that is a file, or a folder that is not empty and does not hold the
+    README-BEFORE-DELETING.txt this writes into every folder it makes, first, before it changes
+    anything there. That refuses the Steam build's %APPDATA%\Factorio\mods and a zip install's mods
+    beside the game, which the game fills as soon as it starts, and every other folder of anything;
+    the comparison with the Steam path that stood here until then is gone. A new folder, an empty
+    one and one holding the marker are used. It cannot see a folder that holds a file of that name
+    it did not write, which it then treats as its own. The game runs with the player's own
+    write-data, so saves and settings are the player's. That is the difference from the load
+    harness, which gives every run a write-data of its own.
 
     ON A STEAM BUILD, running Factorio.exe directly makes the Steam API relaunch the game through
     Steam and exit ("Steam requires game restart, restarting..."), and Steam starts it WITHOUT
@@ -71,6 +79,12 @@
     PowerShell 5.1's Remove-Item -Recurse follows them instead of skipping them, which would delete
     the sources through the links.
 
+.PARAMETER SelfTest
+    Run the cases that hold the refusal of a folder this did not make, by a run and by -Clean, and
+    the use of one it made, a new one and an empty one, in folders under the temp directory; each
+    run is refused, or cleans, before a game would be found, so no game is needed or started. Not
+    run: a launch, and the building of a mod directory.
+
 .EXAMPLE
     pwsh -File vendor/grado-factorio-tools/scripts/dev-launch.ps1 ./my-mod ./my-mod-assets
 
@@ -89,24 +103,107 @@ param(
     [string] $ModDirectory,
     [string] $FactorioExe,
     [switch] $Wait,
-    [switch] $Clean
+    [switch] $Clean,
+    [switch] $SelfTest
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/load-harness-lib.ps1"
 
+# Written into every folder this makes, before anything else there; the folders it may change.
+$MARKER = 'README-BEFORE-DELETING.txt'
+
+# Why $Path may not be used as the mod directory, or nothing: it is a file, or a folder that holds
+# anything and not $MARKER, so this did not make it (#423). Its junctions and zips would be
+# deleted and its mod-list.json overwritten, or with -Clean the whole of it.
+function Get-ModDirectoryRefusal {
+    param([Parameter(Mandatory)] [string] $Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    $isFolder = Test-Path -LiteralPath $Path -PathType Container
+    if ($isFolder -and (Test-Path -LiteralPath (Join-Path $Path $MARKER) -PathType Leaf)) { return }
+    if ($isFolder -and -not (Get-ChildItem -LiteralPath $Path -Force | Select-Object -First 1)) { return }
+    "Refusing -ModDirectory $Path`: it is $($isFolder ? "a folder that holds files and no $MARKER" : 'a file'), so dev-launch.ps1 did not make it. " +
+        'A run would delete its zips and junctions and overwrite its mod-list.json, and -Clean would delete it. Name a new or empty folder.'
+}
+
+if ($SelfTest) {
+    $temp = Join-Path ([IO.Path]::GetTempPath()) "dev-launch-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+    New-Item -ItemType Directory -Path $temp | Out-Null
+    # This script run on $Folder with $Arguments; its exit code and what it said.
+    $run = {
+        param([string] $Folder, [string[]] $Arguments)
+        $said = & pwsh -NoProfile -File $PSCommandPath -ModDirectory $Folder @Arguments 2>&1 | Out-String
+        @{ Code = $LASTEXITCODE; Said = $said }
+    }
+    # A folder of a player's mods: a zip and a mod-list.json, no marker.
+    $theirs = {
+        param([string] $Name)
+        $folder = Join-Path $temp $Name
+        New-Item -ItemType Directory -Path $folder | Out-Null
+        Set-Content -LiteralPath (Join-Path $folder 'some-mod_1.0.0.zip') -Value 'zip'
+        Set-Content -LiteralPath (Join-Path $folder 'mod-list.json') -Value '{"mods":[]}'
+        $folder
+    }
+    $both = { param([string] $Folder) (Test-Path -LiteralPath (Join-Path $Folder 'some-mod_1.0.0.zip')) -and (Test-Path -LiteralPath (Join-Path $Folder 'mod-list.json')) }
+    # A case passes on one output, $true (#419). Any other output fails it, saying
+    # why: [bool] of two values or more is true whatever they are.
+    $judgeCase = {
+        param([scriptblock] $CaseBlock)
+        $caseOutput = @(& $CaseBlock)
+        if ($caseOutput.Count -ne 1) { Write-Host "    gave $($caseOutput.Count) values, not one [bool]"; return $false }
+        if ($caseOutput[0] -isnot [bool]) { Write-Host "    gave $($null -eq $caseOutput[0] ? '$null' : $caseOutput[0].GetType().Name), not a [bool]"; return $false }
+        $caseOutput[0]
+    }
+    $cases = @(
+        @{ Name = 'a run refuses a folder holding a zip and a mod-list.json and no marker, names it, and leaves both files'; Test = {
+            $folder = & $theirs 'run'
+            $got = & $run $folder @('some-mod')
+            $got.Code -ne 0 -and $got.Said.Contains("Refusing -ModDirectory $folder") -and (& $both $folder) } }
+        @{ Name = '-Clean refuses that folder too, names it, and leaves both files'; Test = {
+            $folder = & $theirs 'clean'
+            $got = & $run $folder @('-Clean')
+            $got.Code -ne 0 -and $got.Said.Contains("Refusing -ModDirectory $folder") -and (& $both $folder) } }
+        @{ Name = '-Clean refuses a file named as the mod directory, and leaves it'; Test = {
+            $file = Join-Path $temp 'a-file.txt'; Set-Content -LiteralPath $file -Value 'x'
+            $got = & $run $file @('-Clean')
+            $got.Code -ne 0 -and $got.Said.Contains('it is a file') -and (Test-Path -LiteralPath $file -PathType Leaf) } }
+        @{ Name = '-Clean removes a folder holding the marker, its zip and its mod-list.json'; Test = {
+            $folder = & $theirs 'made'
+            Set-Content -LiteralPath (Join-Path $folder $MARKER) -Value 'made by dev-launch.ps1'
+            $got = & $run $folder @('-Clean')
+            $got.Code -eq 0 -and $got.Said.Contains("removed $folder") -and -not (Test-Path -LiteralPath $folder) } }
+        @{ Name = 'a new folder, an empty one and one holding the marker are not refused; -Clean of a new one says there is nothing'; Test = {
+            $empty = Join-Path $temp 'empty'; New-Item -ItemType Directory -Path $empty | Out-Null
+            $made = & $theirs 'made-too'; Set-Content -LiteralPath (Join-Path $made $MARKER) -Value 'x'
+            $new = Join-Path $temp 'new'
+            $nothing = & $run $new @('-Clean')
+            -not (Get-ModDirectoryRefusal $new) -and -not (Get-ModDirectoryRefusal $empty) -and -not (Get-ModDirectoryRefusal $made) -and
+                $nothing.Code -eq 0 -and $nothing.Said.Contains("nothing to clean at $new") } }
+    )
+    $failures = 0
+    $n = 0
+    try {
+        foreach ($c in $cases) {
+            $n++
+            $ok = try { & $judgeCase $c.Test } catch { Write-Host "    threw: $($_.Exception.Message)"; $false }
+            Write-Host ("self-test {0}/{1}: {2} -- {3}" -f $n, $cases.Count, $c.Name, $(if ($ok) { 'ok' } else { 'FAILED' }))
+            if (-not $ok) { $failures++ }
+        }
+    }
+    finally { Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue }
+    Write-Host ''
+    if ($failures) { Write-Host "FAILED - self-test: $failures of $($cases.Count) case(s) did not hold."; exit 1 }
+    Write-Host "OK - self-test passed: all $($cases.Count) cases."
+    exit 0
+}
+
 if (-not $ModDirectory) { $ModDirectory = Join-Path ([IO.Path]::GetTempPath()) 'dev-launch-mods' }
 $ModDirectory = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ModDirectory)
 
-# This directory gets its junctions and zips deleted and its mod-list.json overwritten wholesale.
-# Pointed at the player's own mod directory that would destroy the enabled state of every mod
-# installed there.
-$playerMods = Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'Factorio/mods'
-if ((Resolve-Path -LiteralPath $ModDirectory -ErrorAction SilentlyContinue)?.Path -eq
-    (Resolve-Path -LiteralPath $playerMods -ErrorAction SilentlyContinue)?.Path -and (Test-Path -LiteralPath $playerMods)) {
-    throw "Refusing to use your own Factorio mod directory ($playerMods): this script rewrites mod-list.json and would lose which mods you have enabled."
-}
+# Before anything in it changes, for a run and for -Clean alike (#423).
+$refusal = Get-ModDirectoryRefusal -Path $ModDirectory
+if ($refusal) { throw $refusal }
 
 if ($Clean) {
     if (Test-Path -LiteralPath $ModDirectory) {
@@ -126,19 +223,9 @@ catch { throw "-With $($_.Exception.Message)" }
 $rows = @(Get-HarnessMods -Path $Mods)
 
 New-Item -ItemType Directory -Path $ModDirectory -Force | Out-Null
-# Rebuilt every run, so a mod renamed or removed cannot linger as a stale link or zip.
-Remove-ModJunctions -ModDirectory $ModDirectory
-Get-ChildItem -LiteralPath $ModDirectory -Filter *.zip -File | Remove-Item -Force
-$links = @{}
-foreach ($r in $rows) {
-    if ($r.Kind -eq 'directory') { $links[$r.Name] = $r.Path }
-    else { Copy-Item -LiteralPath $r.Path -Destination (Join-Path $ModDirectory "$($r.Name)_$($r.Version).zip") }
-}
-if ($links.Count) { New-ModJunctions -ModDirectory $ModDirectory -Links $links }
-Write-ModList -ModDirectory $ModDirectory -Bundled $bundled -EnabledBundled $enabled -Mods @($rows | ForEach-Object Name)
-
 # These junctions outlive the script, since the game needs them while it runs, so a warning goes
-# where whoever finds this directory later will see it.
+# where whoever finds this directory later will see it. Written first: it marks the folder as this
+# script's (#423), so a run cut short below leaves one the next run still takes.
 @"
 This directory is generated by dev-launch.ps1, from grado-factorio-tools.
 
@@ -149,7 +236,18 @@ recurses through them: it would delete the sources, not just these links.
 To remove it safely:
 
     pwsh -File $PSCommandPath -Clean -ModDirectory "$ModDirectory"
-"@ | Set-Content -LiteralPath (Join-Path $ModDirectory 'README-BEFORE-DELETING.txt') -Encoding utf8
+"@ | Set-Content -LiteralPath (Join-Path $ModDirectory $MARKER) -Encoding utf8
+
+# Rebuilt every run, so a mod renamed or removed cannot linger as a stale link or zip.
+Remove-ModJunctions -ModDirectory $ModDirectory
+Get-ChildItem -LiteralPath $ModDirectory -Filter *.zip -File | Remove-Item -Force
+$links = @{}
+foreach ($r in $rows) {
+    if ($r.Kind -eq 'directory') { $links[$r.Name] = $r.Path }
+    else { Copy-Item -LiteralPath $r.Path -Destination (Join-Path $ModDirectory "$($r.Name)_$($r.Version).zip") }
+}
+if ($links.Count) { New-ModJunctions -ModDirectory $ModDirectory -Links $links }
+Write-ModList -ModDirectory $ModDirectory -Bundled $bundled -EnabledBundled $enabled -Mods @($rows | ForEach-Object Name)
 
 Write-Host "mods       : $(($rows | ForEach-Object { "$($_.Name) ($($_.Kind))" }) -join ', ')"
 Write-Host "bundled    : $(if ($enabled) { $enabled -join ', ' } else { 'none (base only)' })"
