@@ -518,7 +518,7 @@ function Get-RunStart {
         "file, in turn: $(if ($start.Subset) { $start.Subset -join ', ' } else { 'none' }). Not run: $(if ($start.Skipped) { $start.Skipped -join ', ' } else { 'none' }). The rest runs."
     $total = @($SelfTests).Count + @($NoGameCases).Count
     $start.Pass = "OK - check passed, with $(@($start.Subset).Count) of $total self-tests run: only scripts and Markdown changed since the tree that passed at " +
-        "$($Passed.At), and CI runs every one. $game"
+        "$($Passed.At), and CI runs every one. Never run here, because each needs the game: -SelfTest of $($NEEDS_GAME -join ', ')."
     $start
 }
 
