@@ -854,9 +854,12 @@ self-test that needs neither the game nor the network, runs `param-check.ps1`,
 fails on a script parameter this README never names as `-<Name>` (#194), or a script's comment
 line over 100 characters; the `pre-commit` hook holds the staged scripts to that rule too, through
 `scripts/comment-line-check.ps1` (#225). CI runs it, and so does the `pre-push` hook, with
-`-SkipIfPassed`, which runs nothing when a recorded run passed this same tree, and no self-test
-when the tree differs from that one only in whitespace between a script's tokens (#405); the
-parse and the width check still run. What it cannot see is in its header.
+`-SkipIfPassed`, which runs nothing when a recorded run passed this same tree; only what reads
+the index when only the index differs from that one (#426); no self-test when the tree differs
+only in whitespace between a script's tokens (#405), when the parse and the width check still run;
+and, when only scripts and Markdown changed, only the self-tests of the changed scripts and of
+the scripts whose code names them, with the rest of the check (#427). CI runs every self-test.
+What it cannot see is in its header.
 
     pwsh -File scripts/check.ps1
 
