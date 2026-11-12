@@ -193,6 +193,7 @@ function ConvertTo-Blanked {
     $i = 0
     $n = $Command.Length
     while ($i -lt $n) {
+        $was = $i
         $c = $Command[$i]
         if ($c -eq '\' -and $i + 1 -lt $n) { [void] $out.Append('Q'); $i += 2 }
         elseif ($c -eq "'") {
@@ -210,10 +211,12 @@ function ConvertTo-Blanked {
         elseif ($c -eq '<' -and [string]::CompareOrdinal($Command, $i, '<<<', 0, 3) -eq 0) { [void] $out.Append(' <<< '); $i += 3 }
         elseif ($c -eq '<' -and [string]::CompareOrdinal($Command, $i, '<<', 0, 2) -eq 0) {
             $m = $HEREDOC.Match($Command, $i)
-            if (-not $m.Success) { [void] $out.Append('<<'); $i += 2; continue }
-            $pending.Add(@{ Word = $m.Groups[3].Value; Tabs = [bool] $m.Groups[1].Value })
-            [void] $out.Append(' <<H ')
-            $i += $m.Length
+            if (-not $m.Success) { [void] $out.Append('<<'); $i += 2 }
+            else {
+                $pending.Add(@{ Word = $m.Groups[3].Value; Tabs = [bool] $m.Groups[1].Value })
+                [void] $out.Append(' <<H ')
+                $i += $m.Length
+            }
         }
         elseif ($c -eq "`n" -and $pending.Count) {
             # The bodies start on the next line, in the order their heredocs were opened.
@@ -239,6 +242,10 @@ function ConvertTo-Blanked {
             $i = $end -lt 0 ? $n : $end
         }
         else { [void] $out.Append($c); $i++ }
+        # Each branch moves $i by its own arithmetic; one that left it here would walk for ever,
+        # as PR #420's bug scan made the comment branch do, so the pass throws instead (#421). No
+        # branch has a continue, so that every pass reaches this.
+        if ($i -le $was) { throw "the walk over the command stalled at index $was, which a pass left where it was" }
     }
     $out.ToString()
 }
@@ -394,7 +401,7 @@ if ($SelfTest) {
     )
     $failures = 0
     $n = 0
-    $total = $cases.Count + 3 + 5 + 13
+    $total = $cases.Count + 1 + 3 + 5 + 13
     $report = {
         param([string] $what, [bool] $ok, [string] $why)
         $script:n++
@@ -404,8 +411,34 @@ if ($SelfTest) {
     foreach ($c in $cases) {
         $shown = $c[0] -replace '\r', '\r' -replace '\n', '\n'
         if ($shown.Length -gt 120) { $shown = $shown.Substring(0, 120) + '...' }
-        & $report "$(if ($c[1]) { 'refused' } else { 'allowed' }): $shown" ([bool] (Get-HangReason -Command $c[0]) -eq $c[1])
+        # A throw, as the walk's when it stalls, fails the case and not the run (#421).
+        $why = ''
+        $held = try { [bool] (Get-HangReason -Command $c[0]) -eq $c[1] } catch { $why = "threw: $($_.Exception.Message)"; $false }
+        & $report "$(if ($c[1]) { 'refused' } else { 'allowed' }): $shown" $held $why
     }
+
+    # The walk's guard (#421), on a copy of ConvertTo-Blanked made to stall as PR #420's bug scan
+    # made it: the comment branch without `$c -eq '#' -and`, which at a line break after a space
+    # finds that line break at $i and leaves $i there. In a pwsh of its own, given 30 s and then
+    # killed, since without the guard the walk never ends.
+    $function = (Get-Command ConvertTo-Blanked).ScriptBlock.Ast.Extent.Text
+    $stalling = $function.Replace("`$c -eq '#' -and ", '')
+    $probe = Join-Path ([IO.Path]::GetTempPath()) "refuse-hanging-bash-stall-$([guid]::NewGuid().ToString('N').Substring(0, 8)).ps1"
+    Set-Content -LiteralPath $probe -Value "`$HEREDOC = [regex] '$($HEREDOC.ToString().Replace("'", "''"))'", $stalling,
+        '$bodies = [System.Collections.Generic.List[int]]::new()',
+        "try { ConvertTo-Blanked -Command `"a ``nb`" -Bodies `$bodies | Out-Null; 'walked' } catch { `$_.Exception.Message }"
+    try {
+        $start = [Diagnostics.ProcessStartInfo]::new('pwsh')
+        foreach ($a in '-NoProfile', '-File', $probe) { $start.ArgumentList.Add($a) }
+        $start.RedirectStandardOutput = $true; $start.UseShellExecute = $false
+        $child = [Diagnostics.Process]::Start($start)
+        $said = $child.StandardOutput.ReadToEndAsync()
+        $ended = $child.WaitForExit(30000)
+        if (-not $ended) { $child.Kill($true); $child.WaitForExit() }
+        $stalled = if ($ended) { $said.Result.Trim() } else { 'still walking after 30 s, and killed' }
+    }
+    finally { Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue }
+    & $report 'a pass of the walk that leaves its index where it was throws, naming the index (#421)' ($stalling -cne $function -and $stalled -ceq 'the walk over the command stalled at index 2, which a pass left where it was') "the stalled copy said: $stalled"
 
     $scratch = Join-Path ([IO.Path]::GetTempPath()) "refuse-hanging-bash-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
     New-Item -ItemType Directory -Path $scratch -Force | Out-Null
