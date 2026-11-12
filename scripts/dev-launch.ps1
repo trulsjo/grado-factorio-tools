@@ -80,10 +80,12 @@
     the sources through the links.
 
 .PARAMETER SelfTest
-    Run the cases that hold the refusal of a folder this did not make, by a run and by -Clean, and
-    the use of one it made, a new one and an empty one, in folders under the temp directory; each
-    run is refused, or cleans, before a game would be found, so no game is needed or started. Not
-    run: a launch, and the building of a mod directory.
+    Run the cases that hold the refusal of a folder this did not make, by a run and by -Clean, the
+    use of one it made, a new one and an empty one, and the marker a run writes into the folder it
+    builds, in folders under the temp directory, and the runner's own verdict on a case. A run is
+    refused, or cleans, or builds its folder from a mod zip for a game whose Factorio.exe is text
+    and fails at the launch, so no game is needed or started. Not run: a launch, a junction, a
+    bundled mod.
 
 .EXAMPLE
     pwsh -File vendor/grado-factorio-tools/scripts/dev-launch.ps1 ./my-mod ./my-mod-assets
@@ -155,9 +157,45 @@ if ($SelfTest) {
         if ($caseOutput[0] -isnot [bool]) { Write-Host "    gave $($null -eq $caseOutput[0] ? '$null' : $caseOutput[0].GetType().Name), not a [bool]"; return $false }
         $caseOutput[0]
     }
+    # A case that leaks a value, judged by the loop's own line, which must fail it:
+    # so a loop put back to [bool] of the whole output fails the run (#419).
+    $leakCase = 'the loop fails a case giving $null and then $false (#419); ok here means it was failed'
+    # A game that is no game: Factorio.exe is text, which no system starts, and data/ holds no
+    # bundled mod. A run on it gets as far as the launch, having built the mod directory, and fails
+    # there; so no game is needed or started.
+    $fakeGame = {
+        $game = Join-Path $temp 'game'
+        New-Item -ItemType Directory -Path (Join-Path $game 'bin/x64'), (Join-Path $game 'data') | Out-Null
+        $exe = Join-Path $game 'bin/x64/Factorio.exe'; Set-Content -LiteralPath $exe -Value 'not a program'
+        $exe
+    }
+    # A mod zip, some-mod 1.0.0, in a folder of its own: a zip and not a directory, as a junction
+    # cannot be made on every system CI runs.
+    $modZip = {
+        $source = Join-Path $temp 'mod-source'
+        New-Item -ItemType Directory -Path (Join-Path $source 'some-mod') | Out-Null
+        Set-Content -LiteralPath (Join-Path $source 'some-mod/info.json') -Value '{"name": "some-mod", "version": "1.0.0"}'
+        $zip = Join-Path $temp 'some-mod_1.0.0.zip'
+        [IO.Compression.ZipFile]::CreateFromDirectory($source, $zip)
+        $zip
+    }
     $cases = @(
-        # Cases 1 to 3 look for the whole refusal, which is longer than any console is wide: a
-        # message wrapped at the width, as a thrown one is, fails them on any machine.
+        @{ Name = $leakCase; Test = { $null; $false } }
+        @{ Name = 'a case passes on one $true; two values, a string or none fail it, and say so (#419)'; Test = {
+            (& $judgeCase { $true }) -eq $true -and (& $judgeCase { $false }) -eq $false -and
+                "$(& $judgeCase { $null; $true } 6>&1)" -ceq '    gave 2 values, not one [bool] False' -and
+                "$(& $judgeCase { 'x' } 6>&1)" -ceq '    gave String, not a [bool] False' -and "$(& $judgeCase { } 6>&1)" -ceq '    gave 0 values, not one [bool] False' }}
+        @{ Name = 'a run marks the folder it makes before the launch: on a game that cannot start, it leaves the marker, the zip and a mod-list.json, and a second run takes the folder (#423)'; Test = {
+            $exe = & $fakeGame; $zip = & $modZip
+            $folder = Join-Path $temp 'built'
+            $first = & $run $folder @('-FactorioExe', $exe, $zip)
+            $marked = Test-Path -LiteralPath (Join-Path $folder $MARKER) -PathType Leaf
+            $built = & $both $folder
+            $second = & $run $folder @('-FactorioExe', $exe, $zip)
+            $first.Code -ne 0 -and $first.Said.Contains("mod dir    : $folder") -and $marked -and $built -and
+                $second.Code -ne 0 -and -not $second.Said.Contains('Refusing -ModDirectory') -and $second.Said.Contains("mod dir    : $folder") } }
+        # The three cases below look for the whole refusal, which is longer than any console is
+        # wide: a message wrapped at the width, as a thrown one is, fails them on any machine.
         @{ Name = 'a run refuses a folder holding a zip and a mod-list.json and no marker, says why in one piece, and leaves both files'; Test = {
             $folder = & $theirs 'run'
             $got = & $run $folder @('some-mod')
@@ -190,6 +228,7 @@ if ($SelfTest) {
         foreach ($c in $cases) {
             $n++
             $ok = try { & $judgeCase $c.Test } catch { Write-Host "    threw: $($_.Exception.Message)"; $false }
+            if ($c.Name -ceq $leakCase) { $ok = -not $ok }
             Write-Host ("self-test {0}/{1}: {2} -- {3}" -f $n, $cases.Count, $c.Name, $(if ($ok) { 'ok' } else { 'FAILED' }))
             if (-not $ok) { $failures++ }
         }
