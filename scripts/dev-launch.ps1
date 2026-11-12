@@ -156,18 +156,21 @@ if ($SelfTest) {
         $caseOutput[0]
     }
     $cases = @(
-        @{ Name = 'a run refuses a folder holding a zip and a mod-list.json and no marker, names it, and leaves both files'; Test = {
+        # Cases 1 to 3 look for the whole refusal, which is longer than any console is wide: a
+        # message wrapped at the width, as a thrown one is, fails them on any machine.
+        @{ Name = 'a run refuses a folder holding a zip and a mod-list.json and no marker, says why in one piece, and leaves both files'; Test = {
             $folder = & $theirs 'run'
             $got = & $run $folder @('some-mod')
-            $got.Code -ne 0 -and $got.Said.Contains("Refusing -ModDirectory $folder") -and (& $both $folder) } }
-        @{ Name = '-Clean refuses that folder too, names it, and leaves both files'; Test = {
+            $got.Code -ne 0 -and $got.Said.Contains((Get-ModDirectoryRefusal $folder)) -and (& $both $folder) } }
+        @{ Name = '-Clean refuses that folder too, says why in one piece, and leaves both files'; Test = {
             $folder = & $theirs 'clean'
             $got = & $run $folder @('-Clean')
-            $got.Code -ne 0 -and $got.Said.Contains("Refusing -ModDirectory $folder") -and (& $both $folder) } }
-        @{ Name = '-Clean refuses a file named as the mod directory, and leaves it'; Test = {
+            $got.Code -ne 0 -and $got.Said.Contains((Get-ModDirectoryRefusal $folder)) -and (& $both $folder) } }
+        @{ Name = '-Clean refuses a file named as the mod directory, says it is a file in one piece, and leaves it'; Test = {
             $file = Join-Path $temp 'a-file.txt'; Set-Content -LiteralPath $file -Value 'x'
+            $refusal = Get-ModDirectoryRefusal $file
             $got = & $run $file @('-Clean')
-            $got.Code -ne 0 -and $got.Said.Contains('it is a file') -and (Test-Path -LiteralPath $file -PathType Leaf) } }
+            $refusal.Contains('it is a file') -and $got.Code -ne 0 -and $got.Said.Contains($refusal) -and (Test-Path -LiteralPath $file -PathType Leaf) } }
         @{ Name = '-Clean removes a folder holding the marker, its zip and its mod-list.json'; Test = {
             $folder = & $theirs 'made'
             Set-Content -LiteralPath (Join-Path $folder $MARKER) -Value 'made by dev-launch.ps1'
@@ -201,9 +204,10 @@ if ($SelfTest) {
 if (-not $ModDirectory) { $ModDirectory = Join-Path ([IO.Path]::GetTempPath()) 'dev-launch-mods' }
 $ModDirectory = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ModDirectory)
 
-# Before anything in it changes, for a run and for -Clean alike (#423).
+# Before anything in it changes, for a run and for -Clean alike (#423). Written whole, not thrown:
+# the error view wraps a thrown message at the console's width, breaking the path inside it.
 $refusal = Get-ModDirectoryRefusal -Path $ModDirectory
-if ($refusal) { throw $refusal }
+if ($refusal) { [Console]::Error.WriteLine($refusal); exit 1 }
 
 if ($Clean) {
     if (Test-Path -LiteralPath $ModDirectory) {
