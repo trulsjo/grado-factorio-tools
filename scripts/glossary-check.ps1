@@ -165,7 +165,25 @@ if ($SelfTest) {
     $glossary = "**Measured**:", "Run and written down.", "_Avoid_: confirmed, verified (neither says", "which grade), `"measured`" for anything undated", "", "**Portal entry**:", "A page.", "_Avoid_: portal page, above/below without saying of what"
     $avoided = @(Get-Avoided -Glossary $glossary)
     $find = { param([string] $text) $lines = $text -split "`n"; @(Find-Avoided -Lines $lines -Numbers (1..$lines.Count) -Avoided $avoided | ForEach-Object { "$($_.Line): $($_.Word) ($($_.Term))" }) }
+    # A case passes on one output, $true (#419). Any other output fails it, saying
+    # why: [bool] of two values or more is true whatever they are, so a case that
+    # leaked a line passed on a false verdict.
+    $judgeCase = {
+        param([scriptblock] $CaseBlock)
+        $caseOutput = @(& $CaseBlock)
+        if ($caseOutput.Count -ne 1) { Write-Host "    gave $($caseOutput.Count) values, not one [bool]"; return $false }
+        if ($caseOutput[0] -isnot [bool]) { Write-Host "    gave $($null -eq $caseOutput[0] ? '$null' : $caseOutput[0].GetType().Name), not a [bool]"; return $false }
+        $caseOutput[0]
+    }
+    # A case that leaks a value, judged by the loop's own line, which must fail it:
+    # so a loop put back to [bool] of the whole output fails the run (#419).
+    $leakCase = 'the loop fails a case giving $null and then $false (#419); ok here means it was failed'
     $cases = @(
+        @{ Name = $leakCase; Test = { $null; $false } }
+        @{ Name = 'a case passes on one $true; two values, a string or none fail it, and say so (#419)'; Test = {
+            (& $judgeCase { $true }) -eq $true -and (& $judgeCase { $false }) -eq $false -and
+                "$(& $judgeCase { $null; $true } 6>&1)" -ceq '    gave 2 values, not one [bool] False' -and
+                "$(& $judgeCase { 'x' } 6>&1)" -ceq '    gave String, not a [bool] False' -and "$(& $judgeCase { } 6>&1)" -ceq '    gave 0 values, not one [bool] False' }}
         @{ Name = 'an avoided word is reported with its line and its term, in another verb form too'; Test = {
             $f = @(& $find "fine`nThe load confirms it, and was Verified on the portal pages.")
             $f.Count -eq 3 -and $f[0] -eq '2: confirms (Measured)' -and $f[1] -eq '2: Verified (Measured)' -and $f[2] -eq '2: portal pages (Portal entry)' } }
@@ -246,7 +264,8 @@ if ($SelfTest) {
     $n = 0
     foreach ($c in $cases) {
         $n++
-        $ok = try { [bool] (& $c.Test) } catch { Write-Host "    threw: $($_.Exception.Message)"; $false }
+        $ok = try { & $judgeCase $c.Test } catch { Write-Host "    threw: $($_.Exception.Message)"; $false }
+        if ($c.Name -ceq $leakCase) { $ok = -not $ok }
         Write-Host ("self-test {0}/{1}: {2} -- {3}" -f $n, $cases.Count, $c.Name, $(if ($ok) { 'ok' } else { 'FAILED' }))
         if (-not $ok) { $failures++ }
     }
