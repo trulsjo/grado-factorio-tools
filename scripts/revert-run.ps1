@@ -95,14 +95,15 @@
     -TimeoutSeconds, 600 unless given (grado-factorio-tools#424). Its result is:
     *fails*, it exited other than 0 and its last summary line is `FAILED - self-test...`;
     *passes*, it exited 0 and that line is `OK - self-test...`, which code-review.md makes a
-    finding; *crashed*, anything else, as no summary line, whatever the exit code, or a summary
-    line its exit code contradicts; *timed out*, still running at the limit, when it is killed
-    with its child processes and the seconds it ran are its summary, with no exit code. A
-    self-test that loops under the revert and one merely slower than the limit look the same, so
-    a timeout is a lead to check, as a crash is, not a verdict. The file is then restored by
-    writing back the bytes read before the edit, as it stood, where git might write it with other
-    line ends (grado-factorio-tools#422), and the copy checked clean again: one left dirty stops
-    the run, exit 1, naming what is left and reporting the reverts run so far.
+    finding; *crashed*, anything else, as no summary line, whatever the exit code, a summary
+    line its exit code contradicts, or output still held open 5 s after it exited, by a process
+    it left running, whose output is then not waited for; *timed out*, still running at the limit,
+    when it is killed with its child processes and the seconds it ran are its summary, with no exit
+    code. A self-test that loops under the revert and one merely slower than the limit look the
+    same, so a timeout is a lead to check, as a crash is, not a verdict. The file is then restored
+    by writing back the bytes read before the edit, as it stood, where git might write it with other
+    line ends (grado-factorio-tools#422), and the copy checked clean again: one left dirty stops the
+    run, exit 1, naming what is left and reporting the reverts run so far.
 
     THE REPORT is a line giving the time limit before the first revert runs, a line per revert as
     it runs, and at the end a Markdown table of name, result, exit code and summary line, for a
@@ -110,7 +111,9 @@
 
     WHAT IT CANNOT SEE. Whether a revert is the right one: a Find that matches once but in the
     wrong place is run. Whether a self-test that timed out loops under the revert or is only
-    slower than -TimeoutSeconds, which it reports alike. A self-test whose summary line is worded
+    slower than -TimeoutSeconds, which it reports alike. A process a self-test left running, which
+    is not ended: one that holds the output open makes the revert crashed, and one that does not
+    is not seen. A self-test whose summary line is worded
     other than this repository's `OK - self-test` and `FAILED - self-test`, which reads as crashed;
     check.ps1 fails such a self-test among those it runs (grado-factorio-tools#297), not one that
     needs the game, nor one in a sibling. A revert across two files, or by a pattern. A self-test
@@ -524,8 +527,10 @@ function Get-RevertResult {
 }
 
 # A revert's self-test, `pwsh -NoProfile -File <SelfTest> -SelfTest <Arguments>` from $Root,
-# killed with its child processes once it has run $TimeoutSeconds (#424): its exit code, its whole
-# output, stdout then stderr, whether it timed out, and the seconds it ran.
+# killed with its child processes once it has run $TimeoutSeconds (#424): its exit code, its
+# output, stdout then stderr, whether it timed out, whether a pipe was still held open
+# $HELD_SECONDS after it ended, which leaves that pipe's output out, and the seconds it ran.
+$HELD_SECONDS = 5
 function Invoke-BoundedSelfTest {
     param([Parameter(Mandatory)] [string] $Root, [Parameter(Mandatory)] [string] $SelfTest, [object[]] $Arguments = @(),
         [Parameter(Mandatory)] [int] $TimeoutSeconds)
@@ -544,8 +549,11 @@ function Invoke-BoundedSelfTest {
     $inTime = $process.WaitForExit($TimeoutSeconds * 1000)
     if (-not $inTime) { $process.Kill($true); $process.WaitForExit() }
     $clock.Stop()
-    @{ Code = $(if ($inTime) { $process.ExitCode } else { $null }); Said = $out.Result + $err.Result; TimedOut = -not $inTime
-        Seconds = $clock.Elapsed.TotalSeconds.ToString('0.0', [cultureinfo]::InvariantCulture) }
+    # A process the self-test started and left running holds its pipes open after it ends, and a
+    # read to their end would wait as long: past a few seconds, a pipe still open is not waited for.
+    $closed = [Threading.Tasks.Task]::WaitAll([Threading.Tasks.Task[]] @($out, $err), $HELD_SECONDS * 1000)
+    @{ Code = $(if ($inTime) { $process.ExitCode } else { $null }); Said = (@($out, $err) | Where-Object IsCompleted | ForEach-Object Result) -join ''
+        TimedOut = -not $inTime; Held = -not $closed; Seconds = $clock.Elapsed.TotalSeconds.ToString('0.0', [cultureinfo]::InvariantCulture) }
 }
 
 # One revert applied, run and restored; returns its row. Throws when the copy is left dirty.
@@ -591,6 +599,10 @@ function Invoke-Revert {
         $extra = if ($Revert.ContainsKey('Args')) { @($Revert.Args) } else { @() }
         $ran = Invoke-BoundedSelfTest -Root $Root -SelfTest (Join-Path $Root $Revert.SelfTest) -Arguments $extra -TimeoutSeconds $TimeoutSeconds
         if ($ran.TimedOut) { $row.Result = 'timed out'; $row.Summary = "killed after $($ran.Seconds) s, at the limit of $TimeoutSeconds s" }
+        elseif ($ran.Held) {
+            $row.Result = 'crashed'; $row.Exit = "$($ran.Code)"
+            $row.Summary = "its output was still held open $HELD_SECONDS s after it exited, by a process it left running"
+        }
         else {
             $judged = Get-RevertResult -ExitCode $ran.Code -Said $ran.Said
             $row.Result = $judged.Result; $row.Exit = "$($ran.Code)"; $row.Summary = $judged.Summary
@@ -687,15 +699,19 @@ function Invoke-SelfTest {
     New-Item -ItemType Directory -Path $repo -Force | Out-Null
     $git = { git -C $repo -c user.name=selftest -c user.email=selftest@example.invalid -c commit.gpgsign=false @args; if ($LASTEXITCODE) { throw "git $args failed; the self-test needs git." } }
     # A self-test stub: it fails when $a is reverted, passes whatever else changes, and with -Mode
-    # throws before its summary line, leaves a file behind or runs past any time limit a case sets.
+    # throws before its summary line, leaves a file behind, runs past any time limit a case sets
+    # waiting on a child of its own, or passes leaving a child running that holds its output open;
+    # each child's process id goes to -PidFile.
     $stub = @(
-        'param([switch] $SelfTest, [string] $Mode)'
+        'param([switch] $SelfTest, [string] $Mode, [string] $PidFile)'
         "`$a = 'alpha'"
         "`$b = 'beta'"
         "`$c = 'gamma'"
         "if (`$Mode -eq 'throw') { throw 'boom before the summary' }"
         "if (`$Mode -eq 'dirty') { Set-Content -LiteralPath (Join-Path `$PSScriptRoot 'left.txt') -Value x }"
-        "if (`$Mode -eq 'sleep') { Start-Sleep -Seconds 300 }"
+        # -NoNewWindow hands the child this pwsh's pipes, so it holds them as long as it runs.
+        "if (`$Mode -in 'sleep', 'linger') { `$s = Start-Process ([Environment]::ProcessPath) -ArgumentList '-NoProfile', '-Command', 'Start-Sleep -Seconds 300' -NoNewWindow -PassThru; Set-Content -LiteralPath `$PidFile -Value `$s.Id }"
+        "if (`$Mode -eq 'sleep') { `$s.WaitForExit() }"
         "if (`$Mode -eq 'root' -and (Get-Location).Path -ne `$PSScriptRoot) { Write-Host 'FAILED - self-test: not run from the copy''s root.'; exit 1 }"
         "if (`$a -eq 'alpha') { Write-Host 'OK - self-test passed: all 1 cases.'; exit 0 }"
         "Write-Host 'FAILED - self-test: 1 of 1 case(s) did not hold.'"
@@ -1014,7 +1030,7 @@ function Invoke-SelfTest {
                 @("`$x -eq 'g3'", "`$x -eq 'g4'") +
                 @('g5', 'g6', 'g8', 'g9', 'g10', 'g11', 'g12', 'g13', 'g16', 'g17', 'g18', 'g19', 'o1', 'o2', 'e1', 'e2', 'p', 'q', 'r', 's', 'g14', 'g15' | ForEach-Object { "`$x -ne '$_'" })
             $skips = (4, 6, 8, 17, 28, 29, 31, 39 | ForEach-Object { "line $_, 2 operand(s)" }) -join '|'
-            # Through the command line, on a script whose only chains are verdicts: each is named,
+            # In this process, on a script whose only chains are verdicts: each is named,
             # and with no revert left the run fails, having run nothing.
             [IO.File]::WriteAllText((Join-Path $repo 'verdicts.ps1'), (@(
                         "if (`$SelfTest) { `$ok = `$x -ne 'a' -and `$x -ne 'c'; if (`$ok) { }"
@@ -1046,12 +1062,12 @@ function Invoke-SelfTest {
             [IO.File]::WriteAllText((Join-Path $repo 'spans.ps1'), "`$ok = `$x -ne 'b' -and`n    `$x -ne 'z'`n")
             & $git commit --quiet -am 'first'
             $spans = @((Get-ConditionRevert -Root $repo -Script 'spans.ps1' -Since 'HEAD~1').Reverts)
-            # Through the command line, the written line names the ref.
+            # In this process, the written line names the ref.
             $r = & $main @{ Copy = $repo; Conditions = @('spans.ps1'); Base = 'HEAD~1' }; $since = $r.Text; $sinceCode = $r.Code
             Write-Host ($since.TrimEnd() -replace '(?m)^', '    ')
             # No line changed since the ref: nothing to drop.
             $nothing = @((Get-ConditionRevert -Root $repo -Script 'spans.ps1' -Since 'HEAD').Reverts)
-            # Through the command line, the failure names the ref that left nothing.
+            # In this process, the failure names the ref that left nothing.
             $r = & $main @{ Copy = $repo; Conditions = @('spans.ps1'); Base = 'HEAD' }; $noneSince = $r.Text; $noneSinceCode = $r.Code
             Write-Host ($noneSince.TrimEnd() -replace '(?m)^', '    ')
             # A line deleted after a condition, a hunk +1,0, changes no line of the condition.
@@ -1131,8 +1147,10 @@ function Invoke-SelfTest {
             $last = Get-RevertResult -ExitCode 1 -Said "OK - self-test passed: all 2 cases.`nFAILED - self-test: 1 of 3 case(s) did not hold."
             $got.Code -eq 0 -and $got.Text -match '(?m)^revert-run: R -- crashed \(exit 1\): \r?$' -and "$judged" -eq 'crashed crashed crashed' -and
                 $last.Result -eq 'fails' -and $last.Summary -eq 'FAILED - self-test: 1 of 3 case(s) did not hold.' -and (& $same) } }
-        @{ Name = 'a self-test still running at -TimeoutSeconds is killed and reported timed out within a few seconds of the limit, with the seconds it ran and no exit code, the copy is clean after it, and the next revert runs (#424)'; Test = {
-            $p = & $list 'timeout' "@{ Reverts = @( $(& $one "`$b = ''beta''" "`$b = ''other''" "; Args = @('-Mode', 'sleep')"), $(& $one "`$b = ''beta''" "`$b = ''next''") ) }"
+        @{ Name = 'a self-test still running at -TimeoutSeconds is killed with the child it waits on and reported timed out within a few seconds of the limit, with the seconds it ran and no exit code; one that leaves a child holding its output open is reported crashed a few seconds after it exits; the copy is clean after each, and the next revert runs (#424)'; Test = {
+            $sleepPid = Join-Path $temp 'sleep.pid'; $lingerPid = Join-Path $temp 'linger.pid'
+            $p = & $list 'timeout' ("@{ Reverts = @( $(& $one "`$b = ''beta''" "`$b = ''other''" "; Args = @('-Mode', 'sleep', '-PidFile', '$sleepPid')"), " +
+                "$(& $one "`$b = ''beta''" "`$b = ''held''" "; Args = @('-Mode', 'linger', '-PidFile', '$lingerPid')"), $(& $one "`$b = ''beta''" "`$b = ''next''") ) }")
             # The case's own bound on the run, not the run's code: with the run's limit reverted it
             # fails this case rather than hanging the self-test.
             $start = [Diagnostics.ProcessStartInfo]::new((Get-Command pwsh -CommandType Application | Select-Object -First 1).Source)
@@ -1142,13 +1160,21 @@ function Invoke-SelfTest {
             $out = $child.StandardOutput.ReadToEndAsync(); $err = $child.StandardError.ReadToEndAsync()
             $bounded = $child.WaitForExit(90000)
             if (-not $bounded) { $child.Kill($true); $child.WaitForExit(); & $git checkout -q -- stub.ps1; Write-Host '    the run was still going after 90 s, and was killed' }
-            $text = $out.Result + $err.Result
+            # The sleep's child is ended only by a kill of the whole tree; the linger's is left on
+            # purpose, and holds this run's output too, so it is ended before that is read.
+            $alive = { param([string] $f) (Test-Path -LiteralPath $f) -and $null -ne (Get-Process -Id ([int] (Get-Content -LiteralPath $f -Raw).Trim()) -ErrorAction SilentlyContinue) }
+            $orphan = & $alive $sleepPid
+            foreach ($f in $sleepPid, $lingerPid) { if (& $alive $f) { Stop-Process -Id ([int] (Get-Content -LiteralPath $f -Raw).Trim()) -Force } }
+            [void] [Threading.Tasks.Task]::WaitAll([Threading.Tasks.Task[]] @($out, $err), 10000)
+            $text = (@($out, $err) | Where-Object IsCompleted | ForEach-Object Result) -join ''
             Write-Host ($text.TrimEnd() -replace '(?m)^', '    ')
+            if ($orphan) { Write-Host '    the sleeping self-test''s child was still running after the kill' }
             $after = if ($text -match '(?m)^revert-run: R -- timed out: killed after (\d+\.\d) s, at the limit of 8 s\r?$') { [double] $Matches[1] } else { -1 }
-            $bounded -and $child.ExitCode -eq 0 -and $after -ge 8 -and $after -lt 13 -and
+            $bounded -and $child.ExitCode -eq 0 -and $after -ge 8 -and $after -lt 13 -and (Test-Path -LiteralPath $sleepPid) -and -not $orphan -and
                 $text -match '(?m)^\| R \| timed out \|  \| killed after \d+\.\d s, at the limit of 8 s \|' -and
-                @([regex]::Matches($text, '(?m)^revert-run: R -- ')).Count -eq 2 -and $text -match '(?m)^revert-run: R -- passes \(exit 0\)' -and
-                $text -match '(?m)^OK - revert-run: 2 revert\(s\) run or refused: 1 passes, 1 timed out\.' -and (& $same) } }
+                $text -match '(?m)^revert-run: R -- crashed \(exit 0\): its output was still held open 5 s after it exited, by a process it left running\r?$' -and
+                @([regex]::Matches($text, '(?m)^revert-run: R -- ')).Count -eq 3 -and $text -match '(?m)^revert-run: R -- passes \(exit 0\)' -and
+                $text -match '(?m)^OK - revert-run: 3 revert\(s\) run or refused: 1 crashed, 1 passes, 1 timed out\.' -and (& $same) } }
         @{ Name = 'the file is restored after each revert, and a copy left dirty by one is caught before the next'; Test = {
             $both = "@{ Reverts = @( $(& $one "`$b = ''beta''" "`$b = ''other''" "; Args = @('-Mode', 'dirty')"), $(& $one "`$a = ''alpha''" "`$a = ''other''") ) }"
             $got = & $run (& $list 'dirty' $both)
