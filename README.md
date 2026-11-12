@@ -780,8 +780,10 @@ A review reverts each claim of a script on a copy and runs its self-test, as
 `scripts/revert-run.ps1` runs a list of them (#284): `-Copy` is a clean git working tree,
 `-List` a `.psd1` of reverts, each one exact edit of one file and the self-test to run. A revert
 whose text does not occur once, or whose edit changes more lines than it names, is refused; the
-rest are run and reported as *fails*, *passes* or *crashed*, one line each and a Markdown table,
-with the file restored before the next.
+rest are run and reported as *fails*, *passes*, *crashed* or *timed out*, one line each and a
+Markdown table, with the file restored before the next. `-TimeoutSeconds`, 600 unless given, is
+how long each self-test may run before it is killed and reported *timed out* (#424): a loop under
+the revert and a self-test only slower than the limit look the same.
 
     pwsh -File scripts/revert-run.ps1 -Copy <copy> -List <list>
 
