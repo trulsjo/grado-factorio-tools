@@ -153,7 +153,8 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
   `ff59e79` (read 2026-10-25) runs `locale-check.ps1 -Prefix rf-` by hand before shipping; the
   review's prose lane found it (finding 2, score 40).
 - **A revert a pull request cites as evidence shows that its copy differs**, with
-  `git -C <copy> diff --stat`, which `scripts/revert-run.ps1` prints for each revert it runs, as
+  `git -C <copy> diff --stat -- <file>`, which `scripts/revert-run.ps1` prints for each revert it
+  runs on a copy it checked clean before (#422), as
   [`review-brief.md`](review-brief.md)'s *The reverts* asks of a review lane (Truls, 2026-10-21,
   #183; #284). Until PR #276, both pages compared the copy's
   file with the working tree's, `git diff --no-index --stat <file> <copy>/<file>`, which on a
