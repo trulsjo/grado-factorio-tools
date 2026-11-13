@@ -4,9 +4,10 @@ The words a review's session hands each lane, written once so that every lane is
 (#140). How a review is run is in [code-review.md](code-review.md), and the prose rules in
 [code-review-prose.md](code-review-prose.md). This page carries three of `code-review.md`'s rules
 to the lane, what the bug scan does not load, when the check is not run again, and the
-read-nothing rule, and adds one rule of its own: to `code-review.md`'s, that a revert that fails
+read-nothing rule, and adds two rules of its own: to `code-review.md`'s, that a revert that fails
 nothing is a finding, an exception, a default revert the pull request lists with why it passes
-(#390). Any other rule is changed there. How a lane runs a command a rule names, and what of its
+(#390); and that a case reading a thrown message through a child's merged output is a finding
+(#435). Any other rule is changed there. How a lane runs a command a rule names, and what of its
 output it reports, is the brief's (Truls, 2026-10-26, #232), and so is how the bug scan applies
 the read-nothing rule, step by step (#383). The session fills the blanks, written `<like this>`,
 with what is particular to the change, and sends the rest as it stands. A lane that runs both
@@ -75,12 +76,16 @@ for that script or function as above, and reads the rows within that script or f
 outside it is no finding of that run. Each run gives each self-test 600 s unless
 `-TimeoutSeconds <s>` is added to the command, and reports one still running then as *timed out*,
 which a loop under the revert and a self-test merely slower than the limit both give: a lead to
-check, as a crash is, not a verdict (#424). Each revert runs the script's whole self-test: on `main`
-at `4534a44`, `-Conditions` writes 133 reverts for `revert-run.ps1`, whose self-test took about
-100 s on PR #412's branch, close to 3.7 hours (#402's brief). It reports each run's table. A
-revert that fails nothing is a finding, unless it is a default revert the pull request lists
-with why it passes, as PR #389 listed `line-cite-check.ps1 -Foreign`. With "none", it reverts
-nothing. The session answering a review's findings runs its reverts the same way.
+check, as a crash is, not a verdict (#424). It runs at most four `revert-run.ps1` runs at once,
+each on a clone of its own, as `check.ps1` runs four self-tests at once, and runs a *timed out*
+revert again alone before it reports it: PR #428's bug scan ran eight at once, and three
+walk-guard reverts timed out at 120 s that alone failed in 106 s (#435). Each revert runs the
+script's whole self-test: on `main` at `4534a44`, `-Conditions` writes 133 reverts for
+`revert-run.ps1`, whose self-test took about 100 s on PR #412's branch, close to 3.7 hours (#402's
+brief). It reports each run's table. A revert that fails nothing is a finding, unless it is a
+default revert the pull request lists with why it passes, as PR #389 listed
+`line-cite-check.ps1 -Foreign`. With "none", it reverts nothing. The session answering a
+review's findings runs its reverts the same way.
 
 **What reads nothing.** The bug scan applies `code-review.md`'s
 [read-nothing rule](code-review.md#how-a-review-is-run) step by step, not to the whole set at
@@ -91,6 +96,15 @@ that passes, or that no case holds, is a finding. The rule's own exception stand
 only has nothing to check this time, as a commit that stages none of the files, may pass, and
 says it read nothing. PR #374's checks passed on nothing five times,
 each at one such step, and no one review found them all (#383's table).
+
+**What a thrown message looks like to a case.** The bug scan reads each case the diff adds or
+changes that starts a script in a child `pwsh` and reads its merged output (`2>&1`) for text the
+script throws, and each case reading a throw the diff adds or changes. The error view wraps a
+thrown message at the console's width, so such a case passes or fails by the width and the
+length of what the message holds, as a path: each one is a finding. The script writes the
+message whole itself, to stderr, and exits, and the case looks for it whole. PR #428's
+`dev-launch.ps1` case passed locally and failed CI's run 43290205684 on both runners (#435). An
+older case of that shape, in a file the diff touches elsewhere, is no finding of the review.
 
 **Read-only.** Edit no file in the repository, commit nothing, push nothing, and post nothing to
 GitHub: the session acts on the findings and posts the review.
