@@ -53,11 +53,23 @@ it over four, with blank lines between:
 }
 ```
 
-The player's `%APPDATA%\Factorio` was listed before and after the run, with
-`Get-ChildItem -Recurse -Force -File`, as each file's path, last write time and size, leaving out
-the `saves` and `temp` folders. `Compare-Object` of the two listings found no difference: the run
-changed neither the player's mods nor their write-data outside `saves` and `temp`, which were not
-listed.
+The player's `%APPDATA%\Factorio` was listed before and after the run, each file as one string of
+its path, last write time in ticks and size, so that `Compare-Object` compares all three, with
+`$player` set to `Join-Path $env:APPDATA 'Factorio'`:
+
+```powershell
+$watch = { Get-ChildItem -LiteralPath $player -Recurse -Force -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -notmatch '\\saves\\|\\temp\\' } |
+    ForEach-Object { "$($_.FullName)|$($_.LastWriteTimeUtc.Ticks)|$($_.Length)" } | Sort-Object }
+$before = & $watch
+# ... the run ...
+$after = & $watch
+Compare-Object @($before) @($after)
+```
+
+`Compare-Object` returned nothing, 0 differences: the run changed neither the player's mods nor
+their write-data outside `saves` and `temp`, which were not listed. A file the listing could not
+read would have been left out unnamed, by `-ErrorAction SilentlyContinue`.
 
 What it cannot see: a start of the game with its window, which `--dump-data` is not; that such a
 start writes the file too is read from both loading the mods the same way, not measured. A zip
