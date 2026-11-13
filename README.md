@@ -287,46 +287,34 @@ inside a mod in the cache is part of what the game loads. `scripts/refuse-cd-int
 is a hook that refuses a shell command which would stand in `.mod-cache` under a repository root,
 and lets through one that reads the cache by path.
 
-This repository cannot wire it for a consumer: a session reads its hooks from the consumer's own
-tracked settings. In the consumer's `.claude/settings.json`:
+This repository cannot wire it for a consumer, and keeps no mod cache of its own: a session reads
+its hooks from the consumer's own tracked settings. A consumer's line in its
+`.claude/settings.json` is the first `.EXAMPLE` in
+[the script's header](scripts/refuse-cd-into-mod-cache.ps1), on a `PreToolUse` entry whose
+`matcher` is `Bash|PowerShell`, as
+[ADR 0004](docs/adr/0004-a-shared-hook-is-wired-from-the-pin-by-each-consumer.md) rules.
 
-```json
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash|PowerShell",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "i=$(cat); case $i in *mod-cache*) h=\"$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-cd-into-mod-cache.ps1\"; if [ -f \"$h\" ]; then printf '%s' \"$i\" | pwsh -NoProfile -File \"$h\" -Root \"$CLAUDE_PROJECT_DIR\"; else printf '%s' '{\"systemMessage\":\"refuse-cd-into-mod-cache: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.\",\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"refuse-cd-into-mod-cache: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.\"}}'; fi;; esac"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
+`-Root` is the repository whose cache is guarded, and `-CacheName` names the caches, a
+comma-separated list that defaults to `.mod-cache`; the `case` has to name each. The `case`
+keeps PowerShell from starting before every shell command. Exit 2 refuses and says what to do
+instead. Any other failure exits non-zero and not 2, and says on stderr that the command was not
+checked: no `-Root`, or a tool call it cannot read.
 
-`-Root` is the repository whose cache is guarded, and `-CacheName` names a cache that is not
-`.mod-cache`; the `case` has to name it too. The `case` keeps PowerShell from starting before
-every shell command. Exit 2 refuses and says what to do instead. Any other failure exits
-non-zero and not 2, and says on stderr that the command was not checked: no `-Root`, or a tool
-call it cannot read.
-
-Where the script is not there, as in a clone whose submodule is not initialised, the command
-above lets the shell command run and prints JSON whose `additionalContext` tells the agent it
-was not checked. ~~A submodule that is not initialised is the same posture from pwsh itself,
-which exits 64 for a script that is not there (measured 2026-10-08, PowerShell 7.6.6).~~
+Where the script is not there, as in a clone whose submodule is not initialised, the example's
+command lets the shell command run and prints JSON whose `systemMessage` and `additionalContext`
+tell the agent it was not checked, naming the missing path. ~~A submodule that is not
+initialised is the same posture from pwsh itself, which exits 64 for a script that is not there
+(measured 2026-10-08, PowerShell 7.6.6).~~
 **Changed 2026-10-12** ([#115](https://github.com/trulsjo/grado-factorio-tools/issues/115)).
 What reaches the agent from that exit was not measured. By the account of
 grado-factorio-modpack#228, read 2026-10-12, a wiring of that repository's that said so on
 stderr and exited 1 was measured on 2026-10-11 with Claude Code 2.1.296, and what the tool call
 returned to the agent held nothing of it.
 
-`-SelfTest` proves what is refused and what is not, that the command above reaches the script,
-and that it tells the agent where the script is not there. A consumer runs
-`-SelfTest -Settings .claude/settings.json` to prove the same of its own wiring: one that
+`-SelfTest` proves what is refused and what is not, a list given to `-CacheName` included, that
+the example's command reaches the script, and that it tells the agent where the script is not
+there. A consumer runs `-SelfTest -Settings .claude/settings.json` to prove the same of its own
+wiring, found by the script's name wherever it stands in the file: one that
 refuses the command in that branch, says nothing on stdout, or prints JSON a quote in its
 message has broken, fails. So does one whose `matcher` would not start the hook for the `Bash`
 tool and for the `PowerShell` tool: a line above the failing case names the tool and the file.
