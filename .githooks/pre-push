@@ -1,13 +1,13 @@
 #!/bin/sh
 # Runs scripts/check.ps1 before a push leaves: a parse of every script and every self-test that
 # needs neither the game nor the network. With -SkipIfPassed, so a tree that check already passed
-# is not run again (grado-factorio-tools#176), but for the glossary step, which reads the commits
-# being pushed and can still fail the push (#443); where only the index differs from it, only what
-# reads the index runs (#426); its self-tests do not run on a tree that differs from it only in
-# whitespace between a script's tokens (#405), and where only scripts and Markdown changed, only
-# the changed scripts' self-tests and those of the scripts whose code names a changed file, in
-# turn, run (#427). So a push can pass on fewer self-tests than CI runs, which runs every one.
-# What each skip shows and cannot see is in that script's header, with what the check does not
+# is not run again (grado-factorio-tools#176), but for the glossary step, which reads the branch's
+# commits, origin/main...HEAD, and can still fail the push (#443); where only the index differs from
+# it, only what reads the index runs (#426); its self-tests do not run on a tree that differs from
+# it only in whitespace between a script's tokens (#405), and where only scripts and Markdown
+# changed, only the changed scripts' self-tests and those of the scripts whose code names a changed
+# file, in turn, run (#427). So a push can pass on fewer self-tests than CI runs, which runs every
+# one. What each skip shows and cannot see is in that script's header, with what the check does not
 # run. This file is only the wiring, as commit-msg is, and is installed by the same one step:
 #
 #     git config core.hooksPath .githooks

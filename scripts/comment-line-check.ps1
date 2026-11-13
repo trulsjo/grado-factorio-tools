@@ -39,7 +39,8 @@
     that fills that script. The run exits as it would without them, as Truls ruled at triage: on PR
     #438 such lines were found by a reviewer alone. A # line is not read for it, being wrapped by
     sense more often than by width, nor a file that is not PowerShell. On 2026-11-13, `-All` over
-    scripts/*.ps1 named 1120 lines in 49 scripts.
+    scripts/*.ps1 named 1120 lines in 49 scripts, and 1064 in 49 once the report read words as the
+    fill does, after PR #452's review.
 
     WHAT IT CANNOT SEE. An edit not staged. In a file that is not PowerShell, whether a # line is
     a comment, and a block comment of another language. What the PowerShell rule cannot see is in
