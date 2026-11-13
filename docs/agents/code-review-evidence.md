@@ -275,7 +275,7 @@ Two of this repository's steps changed with it, by
   Both left the page, and [review-brief.md](review-brief.md) gained the confirmation turn.
 - **A lane's report is a file outside the repository.** It had been the lane's reply.
 
-Truls ruled three more things in the session that built it, on 2026-11-13
+Truls ruled four more things in the session that built it, on 2026-11-13
 ([his rulings](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6852591475)):
 
 - **A confirmation of a fix reads the fix diff and runs no check and no revert**, whether the
@@ -289,8 +289,12 @@ Truls ruled three more things in the session that built it, on 2026-11-13
   [a third ruling](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6852734986)
   of the same day: with "review only the commits since" gone, a commit that fixes no finding
   had no rule, where the shared page has every commit reviewed before the merge.
+- **Such a commit that changes a line of code in a script gets the bug scan's reverts from that
+  lane**, by
+  [a fourth](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6852998339):
+  the first ruling covered a fix, and new script code would have been read and not tested.
 
-The stub is 3,775 bytes of its 3,779, from `wc -c docs/agents/code-review.md`, where the page
+The stub is 3,767 bytes of its 3,779, from `wc -c docs/agents/code-review.md`, where the page
 stood at 3,751. The room for the values came from these, each quoted as it stood:
 
 - "On top of the `/code-review` plugin", which the page no longer says: it names the plugin
@@ -299,7 +303,8 @@ stood at 3,751. The room for the values came from these, each quoted as it stood
   review, and each fix a confirmation turn.
 - "open the pull request first", which "on the pull request" says.
 - shortened, with the meaning kept: "anything else gets an agent per lane" to "otherwise an
-  agent per lane"; "such as a commit" to "as a commit"; "says so there" to "says so".
+  agent per lane"; "such as a commit" to "as a commit"; "says so there" to "says so"; "the panel of
+  [review-panel.md](review-panel.md)" to "the [panel](review-panel.md)".
 - of a run not yet finished, "It waits on a run not yet finished with
   `gh run watch <id> --exit-status`, and names a run that passed instead of running the check":
   the brief's *The check* holds the command and the three cases.

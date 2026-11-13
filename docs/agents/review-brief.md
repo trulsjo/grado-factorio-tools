@@ -21,8 +21,8 @@ This page is the brief template
 [`docs/code-review-procedure.md`](../code-review-procedure.md) asks this repository to name, and
 it holds that page's steps for a lane (#355): what is not under review, with nothing of what the
 session thinks is right; the agent-facing files read whole; the report as a file, with what was
-not checked; and, below the brief, the turn that confirms a fix, with what follows a fix that
-is not confirmed, which is this page's own.
+not checked; and, below the brief, the turn that confirms a fix. What a turn runs, what
+follows a fix that is not confirmed and where a later commit goes are this page's own.
 
 ---
 
@@ -150,24 +150,36 @@ check, with why: the session answers each one.
 ---
 
 **The confirmation turn** is sent to the lane that raised a finding, continued, once its fix is
-committed. It holds the lines below and no account of what was done; the session fills their
-blanks. Where the lane cannot be continued, a fresh agent is sent the brief's *Reads first* and
+committed. It holds the lines below and no account of how a finding was fixed; the session
+fills their blanks, on a first turn and on each later one. Where the lane cannot be continued,
+a fresh agent is sent the brief's *Reads first* and
 *Read-only* paragraphs as they were filled, and the lines below. A confirmation reads the diff and
 runs nothing, whoever makes it (Truls, 2026-11-13, #355): the session's reverts and CI's run on the
 fix commit cover a fix to a script. The review's comment is posted after this turn, and a
 `not fixed` gets another fix and another turn, or is recorded as left. **A commit added after
 the review that fixes no finding is sent the same way**
 ([Truls, 2026-11-13](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6852734986)):
-the lines name it among the commits, and the lane reads the diff since the commit it last read.
+the lines name it among the commits, with a sentence on what it does, and the lane reads the
+diff since the commit it last read. **Where such a commit changes a line of code in a script,
+the lane runs the bug scan's reverts on it**
+([Truls, the same day](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6852998339)):
+the session fills the lines' blank for that with the brief's *The reverts* paragraph, filled for
+that commit.
 
-Confirm the fixes of the review of pull request `#<number>`, in `<the repository's path>`,
-whose report is `<the report file's full path>` and which read the change at
-`<the reviewed full SHA>`. The fixes are in `<each fix commit, by full SHA>`: read
-`git diff <the reviewed full SHA>..<the last fix's full SHA>`. Not fixed, and why:
-`<each finding, by its number | "none">`. Read the diff as new diff: against the report's
-findings, and by each rule a review here reads by. Run no check and no revert, and do not review
-the change again. Still read-only. Add a section
-**Confirmation** to the report file, a line for each finding by its number, `fixed`,
-`not fixed: <what is left>` or `left unfixed, as said`, with a new finding numbered on under
-**Findings**. End your turn on at most three lines: how many are fixed, what is left, and the
-file's path.
+This is turn `<2 for the first turn after the review, and so on>` of the review of pull request
+`#<number>`, in `<the repository's path>`, whose report is `<the report file's full path>`. The
+change was last read at `<the full SHA the lane last read: the reviewed one, on turn 2>`. The
+commits since are
+`<each, by full SHA: "a fix", or one sentence on what a commit that fixes no finding does>`:
+read `git diff <the last-read full SHA>..<the tip's full SHA>` and each commit's message. Not
+under review:
+`<each decision of Truls's that the commits record, with where he made it | "nothing">`. Not
+fixed, and why: `<each finding, by its number | "none">`. Read the diff as new diff: against the
+report's findings, and by each rule a review here reads by.
+`<Run no check and no revert | Run no check, and no revert but these: The reverts, as the brief
+has the paragraph, filled for each commit that fixes no finding and changes a script's code>`.
+Do not review the change again. Still read-only. Add a section **Turn `<the turn's number>`** at
+the end of the report file: a line for each finding the commits answer, by its number, `fixed`,
+`not fixed: <what is left>` or `left unfixed, as said`, then each new finding, numbered on, in
+the report's form. End your turn on at most three lines: how many are fixed, what is left, and
+the file's path.
