@@ -1,4 +1,9 @@
+> **Re-running `/setup-matt-pocock-skills` rewrites this page in place** and drops the pointer
+> below: restore it from git.
+
 # Triage Labels
+
+**A brief whose ruling replaces a rule lists the old rule's cases**: [rule](issue-tracker.md).
 
 The skills speak in terms of five canonical triage roles. This file maps those roles to the actual
 label strings used in this repo's issue tracker.

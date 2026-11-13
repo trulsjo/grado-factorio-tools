@@ -30,6 +30,18 @@ setup template's core and this repository's own parts.
   - **A command that printed nothing.** #148 ran `gh issue view <number> --comments` on #145,
     which has no comments, and recorded "printed nothing"; what the command does is on the
     shared tracker page, *Read an issue with `--json`*.
+- **A ruling that replaces or removes a rule lists each case the old rule covered** (#446). The
+  session that writes the agent brief makes the list at triage, from the page that holds the old
+  rule as it stands, not from the ruling's text. Each case is named in the old rule's words or by
+  the page that held it, and has a destination: a ruling, a page, or "open, ask Truls". A brief
+  that names a rule as what changes and has no such list fails the bar. #355's brief named "Fix
+  confirmation is a fresh review" as what changes, with no list; five cases the old rule also
+  covered were each put to Truls during PR #437's review and each went in a later commit:
+  [ruling 1](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6852591475),
+  [ruling 3](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6852734986),
+  [ruling 4](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6852998339),
+  and rulings 5 and 6
+  ([one comment](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6854219710)).
 - **An acceptance criterion on what a script does names the self-test case that fails when that
   behaviour is reverted**, or says the behaviour is held by a manual run only. The second is a
   decision recorded in the ticket, not a gap a review finds. The rule is for criteria on a
