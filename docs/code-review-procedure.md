@@ -4,13 +4,14 @@
 review, and the parameters each repository gives. The rules a review applies are on
 [`docs/code-review-rules.md`](code-review-rules.md). Each repository's
 `docs/agents/code-review.md` is a stub page that links both pages, gives its value for each
-parameter under *What each stub gives*, and keeps the steps under *Left to each repository*.
+parameter under *What each stub gives*, and keeps those of the steps under *Left to each
+repository* that it has.
 
 Ruled by Truls on 2026-11-06 in
 [*Rulings: a shared code review procedure*](https://github.com/trulsjo/grado-factorio-tools/issues/332),
-rulings 1 to 8 and 10, with the step under *Before the reviewer is started* from
-[*Rulings: review and session tooling*](https://github.com/trulsjo/grado-factorio-tools/issues/329),
-ruling 1. The steps and the parameters are those of
+rulings 1 to 8 and 10, with the step under *Before the reviewer is started* from ruling 1 of
+[#329](https://github.com/trulsjo/grado-factorio-tools/issues/329), his rulings of the same day
+on the scripts a review and a session use. The steps and the parameters are those of
 [the survey](research/review-procedures.md), *A proposed shared procedure*, whose rows the
 steps below name, as the rulings amend them. Gathered from the review pages of three
 repositories, read 2026-11-06: trulsjo/grado-factorio-tools's `docs/agents/code-review.md` and
@@ -33,7 +34,8 @@ a commit message, that holds a word such as "only", "every" or "cannot"; it list
 fail, and its header says what it reads. Of each line the session asks whether the sentence
 holds for what its word covers, and rewords the one that does not. A word used in passing is
 left. In trulsjo/grado-factorio-modpack, 5 of the 11 findings of PR #210's first review and 3 of
-the 8 of PR #216's were one such word (grado-factorio-modpack#219, by #329's account).
+the 8 of PR #216's were one such word (grado-factorio-modpack#213, counted 2026-10-10, by the
+script's header).
 
 ## The steps
 
@@ -44,8 +46,8 @@ the 8 of PR #216's were one such word (grado-factorio-modpack#219, by #329's acc
    It is briefed from a written template, filled and sent as it stands (row 7). The brief names
    what is not under review, such as a decision of Truls's that the change records, and holds
    nothing of what the author thinks is right (row 8).
-3. **The review is read-only and posts nothing to GitHub.** The reviewer edits, stages, commits
-   and pushes nothing in the session's checkout, to which each repository adds the commands its
+3. **The review is read-only and posts nothing to GitHub.** The reviewer commits and pushes
+   nothing, and edits nothing in the session's checkout; each repository adds the commands its
    own incidents name. A file it must change, it changes in a copy of its own (rows 9 and 10).
 4. **The reviewer is handed** (rows 11 to 18):
    - the three-dot diff against a fetched `origin/main`;
@@ -64,10 +66,10 @@ the 8 of PR #216's were one such word (grado-factorio-modpack#219, by #329's acc
    closes, and each test claim is shown able to fail** (rows 14 and 19).
 6. **The reviewer writes its report to a file outside the repository**, and replies with a short
    line naming the file (row 23): a report sent as a reply has arrived cut off, in the modpack
-   and in rf. A finding gives its place, the text quoted, the failure with its evidence, and the
-   fix (row 20), graded as the repository grades. The report also says what was checked and
-   found right, and what was not checked, and the session answers each thing not checked
-   (row 22).
+   and in rf, by that row, read 2026-11-06 at `987e638` and `9fd78b5`. A finding gives its
+   place, the text quoted, the failure with its evidence, and the fix (row 20), graded as the
+   repository grades. The report also says what was checked and found right, and what was not
+   checked, and the session answers each thing not checked (row 22).
 7. **The session checks each finding before it acts on it or posts it** (row 24). A finding that
    needs Truls's decision is not fixed by the session, and is listed as waiting on him (row 25).
 8. **Fixes are commits of their own** (row 26). **The reviewer that raised a finding confirms
@@ -100,7 +102,7 @@ The stub also names the repository's threshold, as
 
 ## Left to each repository
 
-Six steps are no part of this page, and each repository's stub holds its own:
+Six steps are no part of this page, and each repository's stub holds those it has:
 
 - **lanes** (row 6): whether a review is split among reviewers, and how;
 - **the grade** (row 21): a score, a verdict or a severity, and who gives it;

@@ -1,14 +1,17 @@
 # The brief for a review's agents
 
 The words a review's session hands each lane, written once so that every lane is briefed alike
-(#140). How a review is run is in [code-review.md](code-review.md), and the prose rules in
+(#140). How a review is run is in [code-review.md](code-review.md) and the shared page it
+links, and the prose rules in
 [code-review-prose.md](code-review-prose.md). This page carries three of `code-review.md`'s rules
 to the lane, what the bug scan does not load, when the check is not run again, and the
-read-nothing rule, and adds two rules of its own. One is an exception to `code-review.md`'s rule
-that a revert that fails nothing is a finding: a default revert the pull request lists with why
-it passes (#390). The other, with nothing of it in `code-review.md`, is that a case reading a
-thrown message through a child's merged output is a finding (#435). Any other rule is changed
-there. How a lane runs a command a rule names, and what of its output it reports, is the brief's
+read-nothing rule, and adds three rules of its own. One is an exception to `code-review.md`'s
+rule that a revert that fails nothing is a finding: a default revert the pull request lists with
+why it passes (#390). The second, with nothing of it in `code-review.md`, is that a case reading
+a thrown message through a child's merged output is a finding (#435). The third, there until
+the stub of #355, is that a lane waits on a CI run not yet finished and names one that passed.
+Any other rule is changed there, or on the shared page where it is a shared step. How a lane
+runs a command a rule names, and what of its output it reports, is the brief's
 (Truls, 2026-10-26, #232), and so is how the bug scan applies the read-nothing rule, step by step
 (#383). The session fills the blanks, written `<like this>`, with what is particular to the
 change, and sends the rest as it stands. A lane that runs both reviews is sent both *Reads first*
@@ -125,7 +128,7 @@ GitHub: the session acts on the findings and posts the review.
 the file tool, and end your turn on at most three lines: how many findings, which one matters
 most, and the file's path. It has three sections.
 
-**Findings.** Each is reported as:
+**Findings.** Each is numbered, and reported as:
 
 - **Place:** file and line, or the commit by subject, or the pull request body.
 - **Text:** the words or code in question, quoted.
@@ -146,13 +149,18 @@ check, with why: the session answers each one.
 ---
 
 **The confirmation turn** is sent to the lane that raised a finding, continued, once its fix is
-committed. It holds the lines below and no account of what was done. Where the lane cannot be
-continued, a fresh agent is sent this page's brief as it was filled, the lane's report file and
-the lines below.
+committed. It holds the lines below and no account of what was done; the session fills their
+blanks. Where the lane cannot be continued, a fresh agent is sent the brief's *Reads first* and
+*Read-only* paragraphs as they were filled, and the lines below: it runs no check and no revert,
+and does not review the change again. The review's comment is posted after this turn, and a
+`not fixed` gets another fix and another turn, or is recorded as left.
 
-The fixes are in `<each fix commit, by full SHA>`: read `git diff <the SHA you reviewed>..<the
-last fix's full SHA>`. Not fixed, and why: `<each finding, by its number | "none">`. Read the
-diff as new diff: against your own findings, and by each rule you reviewed by. Still read-only.
-Add a section **Confirmation** to your report file, a line for each finding, `fixed`,
-`not fixed: <what is left>` or `left unfixed, as said`, with a new finding under **Findings**,
-and end your turn on at most three lines, as before.
+Confirm the fixes of the review whose report is `<the report file's full path>`, which read the
+change at `<the reviewed full SHA>`. The fixes are in `<each fix commit, by full SHA>`: read
+`git diff <the reviewed full SHA>..<the last fix's full SHA>`. Not fixed, and why:
+`<each finding, by its number | "none">`. Read the diff as new diff: against the report's
+findings, and by each rule a review here reads by. Still read-only. Add a section
+**Confirmation** to the report file, a line for each finding by its number, `fixed`,
+`not fixed: <what is left>` or `left unfixed, as said`, with a new finding numbered on under
+**Findings**. End your turn on at most three lines: how many are fixed, what is left, and the
+file's path.
