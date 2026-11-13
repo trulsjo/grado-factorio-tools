@@ -23,21 +23,21 @@
     It writes mod-list.json, and a README-BEFORE-DELETING.txt that says how to remove the
     directory.
 
-    NO FOLDER THIS DID NOT MAKE IS USED UNLESS IT IS EMPTY, SO NOT THE PLAYER'S MOD DIRECTORY ONCE
-    THE GAME HAS STARTED ON IT (#423, #434). A run
-    deletes the junctions and zips in -ModDirectory and overwrites its mod-list.json; -Clean deletes
-    it whole. So a run and -Clean alike refuse, exit 1 before anything in it changes, naming it, an
-    existing -ModDirectory that is a file, or a folder that is not empty and does not hold the
+    NO FOLDER THIS DID NOT MAKE IS USED UNLESS IT IS EMPTY (#423, #434). A run deletes the junctions
+    and zips in -ModDirectory and overwrites its mod-list.json; -Clean deletes it whole. So a run
+    and -Clean alike refuse, exit 1 before anything in it changes, naming it, an existing
+    -ModDirectory that is a file, or a folder that is not empty and does not hold the
     README-BEFORE-DELETING.txt this writes into every folder it makes, first, before it changes
-    anything there. That refuses the Steam build's %APPDATA%\Factorio\mods and a zip install's mods
-    beside the game, once the game has started on them, since it writes mod-list.json into an
-    empty mod directory when it starts (docs/factorio-facts.md, *Measured*, on 2.1.24 with
-    --dump-data, #434), and every other folder of anything; the comparison with the Steam path
-    that stood here until then is gone. A new folder, an empty one and one holding the marker are
-    used: so a player's folder the game has never started on, being empty, is taken. It cannot see
-    a folder that holds a file of that name it did not write, which it then treats as its own.
-    The game runs with the player's own write-data, so saves and settings are the player's. That
-    is the difference from the load harness, which gives every run a write-data of its own.
+    anything there. A new folder, an empty one and one holding the marker are used. The comparison
+    with the Steam path that stood here until #423 is gone. So the player's mod directory, the Steam
+    build's %APPDATA%\Factorio\mods or a zip install's mods beside the game, is refused where it
+    holds a file, and taken where it is empty. The game writes mod-list.json into an empty mod
+    directory when it starts with --dump-data, measured on the Steam build 2.1.24
+    (docs/factorio-facts.md, *Measured*, #434), so a folder that build has loaded mods from is not
+    empty; a start with the game's window and a zip install were not run there. It cannot see a
+    folder that holds a file of that name it did not write, which it then treats as its own. The
+    game runs with the player's own write-data, so saves and settings are the player's. That is the
+    difference from the load harness, which gives every run a write-data of its own.
 
     ON A STEAM BUILD, running Factorio.exe directly makes the Steam API relaunch the game through
     Steam and exit ("Steam requires game restart, restarting..."), and Steam starts it WITHOUT
@@ -86,12 +86,12 @@
     Run the cases that hold the refusal of a folder this did not make, by a run and by -Clean,
     written whole to stderr with nothing on stdout (#429), a folder whose one file is hidden among
     them (#430); the use of one it made, a new one and an empty one; and the marker a run writes
-    into the folder it builds; in folders under the temp directory; and the runner's own verdict
-    on a case. A run is
-    refused, or cleans, or builds its folder from a mod zip for a game whose Factorio.exe is text:
-    it is cut short by a copy that fails, or it writes steam_appid.txt into %TEMP%\dev-launch, as
-    every run does, and fails at the launch it attempts, as no system starts a text file. So no
-    game is needed or started. Not run: a launch that starts, a junction, a bundled mod.
+    into the folder it builds; in folders under the temp directory; and the runner's own verdict on
+    a case. A run is refused, or cleans, or builds its folder from a mod zip for a game whose
+    Factorio.exe is text: it is cut short by a copy that fails, or it writes steam_appid.txt into
+    %TEMP%\dev-launch, as every run does, and fails at the launch it attempts, as no system starts a
+    text file. So no game is needed or started. Not run: a launch that starts, a junction, a bundled
+    mod.
 
 .EXAMPLE
     pwsh -File vendor/grado-factorio-tools/scripts/dev-launch.ps1 ./my-mod ./my-mod-assets
