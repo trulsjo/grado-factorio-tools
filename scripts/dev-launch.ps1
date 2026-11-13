@@ -80,9 +80,11 @@
     the sources through the links.
 
 .PARAMETER SelfTest
-    Run the cases that hold the refusal of a folder this did not make, by a run and by -Clean, the
-    use of one it made, a new one and an empty one, and the marker a run writes into the folder it
-    builds, in folders under the temp directory, and the runner's own verdict on a case. A run is
+    Run the cases that hold the refusal of a folder this did not make, by a run and by -Clean,
+    written whole to stderr with nothing on stdout (#429), a folder whose one file is hidden among
+    them (#430); the use of one it made, a new one and an empty one; and the marker a run writes
+    into the folder it builds; in folders under the temp directory; and the runner's own verdict
+    on a case. A run is
     refused, or cleans, or builds its folder from a mod zip for a game whose Factorio.exe is text:
     it is cut short by a copy that fails, or it writes steam_appid.txt into %TEMP%\dev-launch, as
     every run does, and fails at the launch it attempts, as no system starts a text file. So no
@@ -133,11 +135,23 @@ function Get-ModDirectoryRefusal {
 if ($SelfTest) {
     $temp = Join-Path ([IO.Path]::GetTempPath()) "dev-launch-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
     New-Item -ItemType Directory -Path $temp | Out-Null
-    # This script run on $Folder with $Arguments; its exit code and what it said.
+    # This script run on $Folder with $Arguments; its exit code, what it wrote to stdout and to
+    # stderr apart (#429), and both in the order written. A line the child wrote to stderr reaches
+    # this as an ErrorRecord, and one it wrote to stdout as a string.
     $run = {
         param([string] $Folder, [string[]] $Arguments)
-        $said = & pwsh -NoProfile -File $PSCommandPath -ModDirectory $Folder @Arguments 2>&1 | Out-String
-        @{ Code = $LASTEXITCODE; Said = $said }
+        $lines = @(& pwsh -NoProfile -File $PSCommandPath -ModDirectory $Folder @Arguments 2>&1)
+        $code = $LASTEXITCODE
+        $isErr = { $args[0] -is [Management.Automation.ErrorRecord] }
+        @{ Code = $code; Said = ($lines | ForEach-Object { "$_" } | Out-String)
+           Out = ($lines | Where-Object { -not (& $isErr $_) } | ForEach-Object { "$_" } | Out-String)
+           Err = ($lines | Where-Object { & $isErr $_ } | ForEach-Object { "$_" } | Out-String) }
+    }
+    # A run refused as $Refusal says: exit 1, the whole refusal in one line on stderr, and nothing
+    # on stdout, where a caller reading a run's result would take it for output (#429).
+    $refused = {
+        param([hashtable] $Got, [string] $Refusal)
+        $Got.Code -eq 1 -and $Got.Err.Contains($Refusal) -and $Got.Out.Trim() -eq ''
     }
     # A folder of a player's mods: a zip and a mod-list.json, no marker.
     $theirs = {
@@ -209,21 +223,32 @@ if ($SelfTest) {
             $second = & $run $folder @('-FactorioExe', $exe, $zip)
             $first.Code -ne 0 -and -not $first.Said.Contains('mod dir    :') -and $marked -and -not $listed -and
                 $second.Code -ne 0 -and -not $second.Said.Contains('Refusing -ModDirectory') } }
-        # The three cases below look for the whole refusal, which is longer than any console is
+        # The four cases below look for the whole refusal, which is longer than any console is
         # wide: a message wrapped at the width, as a thrown one is, fails them on any machine.
-        @{ Name = 'a run refuses a folder holding a zip and a mod-list.json and no marker, says why in one piece, and leaves both files'; Test = {
+        @{ Name = 'a run refuses a folder holding a zip and a mod-list.json and no marker, says why in one piece on stderr and nothing on stdout, and leaves both files'; Test = {
             $folder = & $theirs 'run'
             $got = & $run $folder @('some-mod')
-            $got.Code -ne 0 -and $got.Said.Contains((Get-ModDirectoryRefusal $folder)) -and (& $both $folder) } }
-        @{ Name = '-Clean refuses that folder too, says why in one piece, and leaves both files'; Test = {
+            (& $refused $got (Get-ModDirectoryRefusal $folder)) -and (& $both $folder) } }
+        @{ Name = '-Clean refuses that folder too, says why in one piece on stderr and nothing on stdout, and leaves both files'; Test = {
             $folder = & $theirs 'clean'
             $got = & $run $folder @('-Clean')
-            $got.Code -ne 0 -and $got.Said.Contains((Get-ModDirectoryRefusal $folder)) -and (& $both $folder) } }
-        @{ Name = '-Clean refuses a file named as the mod directory, says it is a file in one piece, and leaves it'; Test = {
+            (& $refused $got (Get-ModDirectoryRefusal $folder)) -and (& $both $folder) } }
+        @{ Name = '-Clean refuses a file named as the mod directory, says it is a file in one piece on stderr, and leaves it'; Test = {
             $file = Join-Path $temp 'a-file.txt'; Set-Content -LiteralPath $file -Value 'x'
             $refusal = Get-ModDirectoryRefusal $file
             $got = & $run $file @('-Clean')
-            $refusal.Contains('it is a file') -and $got.Code -ne 0 -and $got.Said.Contains($refusal) -and (Test-Path -LiteralPath $file -PathType Leaf) } }
+            $refusal.Contains('it is a file') -and (& $refused $got $refusal) -and (Test-Path -LiteralPath $file -PathType Leaf) } }
+        @{ Name = 'a folder whose one file is hidden is not empty: a run and -Clean refuse it, say why, and leave the file (#430)'; Test = {
+            # Hidden as the system it runs on reads it: by a leading dot off Windows, and by the
+            # attribute on it. A listing without -Force must not see it, or the case holds nothing.
+            $folder = Join-Path $temp 'hidden'; New-Item -ItemType Directory -Path $folder | Out-Null
+            $file = Join-Path $folder '.hidden-file'; Set-Content -LiteralPath $file -Value 'x'
+            if ($IsWindows) { $item = Get-Item -LiteralPath $file -Force; $item.Attributes = $item.Attributes -bor [IO.FileAttributes]::Hidden }
+            $unseen = -not (Get-ChildItem -LiteralPath $folder | Select-Object -First 1)
+            $refusal = Get-ModDirectoryRefusal $folder
+            $ran = & $run $folder @('some-mod')
+            $cleaned = & $run $folder @('-Clean')
+            $unseen -and [bool] $refusal -and (& $refused $ran $refusal) -and (& $refused $cleaned $refusal) -and (Test-Path -LiteralPath $file -PathType Leaf) } }
         @{ Name = '-Clean removes a folder holding the marker, its zip and its mod-list.json'; Test = {
             $folder = & $theirs 'made'
             Set-Content -LiteralPath (Join-Path $folder $MARKER) -Value 'made by dev-launch.ps1'
