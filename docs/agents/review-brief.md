@@ -21,7 +21,8 @@ This page is the brief template
 [`docs/code-review-procedure.md`](../code-review-procedure.md) asks this repository to name, and
 it holds that page's steps for a lane (#355): what is not under review, with nothing of what the
 session thinks is right; the agent-facing files read whole; the report as a file, with what was
-not checked; and, below the brief, the turn that confirms a fix.
+not checked; and, below the brief, the turn that confirms a fix, with what follows a fix that
+is not confirmed, which is this page's own.
 
 ---
 
@@ -151,8 +152,9 @@ check, with why: the session answers each one.
 **The confirmation turn** is sent to the lane that raised a finding, continued, once its fix is
 committed. It holds the lines below and no account of what was done; the session fills their
 blanks. Where the lane cannot be continued, a fresh agent is sent the brief's *Reads first* and
-*Read-only* paragraphs as they were filled, and the lines below: it runs no check and no revert,
-and does not review the change again. The review's comment is posted after this turn, and a
+*Read-only* paragraphs as they were filled, and the lines below, with the words "Run no check
+and no revert, and do not review the change again" after their first sentence. The review's
+comment is posted after this turn, and a
 `not fixed` gets another fix and another turn, or is recorded as left.
 
 Confirm the fixes of the review whose report is `<the report file's full path>`, which read the
