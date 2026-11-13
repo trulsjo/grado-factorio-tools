@@ -228,7 +228,7 @@ $ErrorActionPreference = 'Stop'
 function Invoke-Check {
     <#  Check the Markdown files git names, read at $Revision ('' is the index); with -FromDisk,
         the files the caller names, read from disk, which count as there for a link whether git
-        tracks them or not. Prints each finding and returns how many, as @{ Count; Long }, Long
+        tracks them or not. Prints each finding and returns how many, as @{ Found; Long }, Long
         those of a line over -MaxLineLength.  #>
     param([string[]] $Files, [string] $Revision = '', [Parameter(Mandatory)] [string] $Top, [int] $MaxLineLength = 0, [switch] $FromDisk)
 
@@ -304,7 +304,7 @@ function Invoke-Check {
         }
     }
     finally { $git.StandardInput.Close(); $git.WaitForExit(); $git.Dispose() }
-    @{ Count = $count; Long = $long }
+    @{ Found = $count; Long = $long }
 }
 
 function Test-LongLineFinding {
@@ -1013,7 +1013,7 @@ if ($All -and -not $Range -and -not $files) {
 }
 
 $checked = Invoke-Check -Files $files -Revision $revision -Top $top -MaxLineLength $MaxLineLength -FromDisk:$named
-$found = $checked.Count
+$found = $checked.Found
 # What was read is the index; a file whose working tree differs passed or failed on what is staged.
 if (-not $Range -and -not $named) {
     # safecrlf off: under autocrlf git would otherwise warn of each LF file it compares.
