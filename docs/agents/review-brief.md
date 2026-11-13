@@ -155,7 +155,10 @@ blanks. Where the lane cannot be continued, a fresh agent is sent the brief's *R
 *Read-only* paragraphs as they were filled, and the lines below. A confirmation reads the diff and
 runs nothing, whoever makes it (Truls, 2026-11-13, #355): the session's reverts and CI's run on the
 fix commit cover a fix to a script. The review's comment is posted after this turn, and a
-`not fixed` gets another fix and another turn, or is recorded as left.
+`not fixed` gets another fix and another turn, or is recorded as left. **A commit added after
+the review that fixes no finding is sent the same way**
+([Truls, 2026-11-13](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6852734986)):
+the lines name it among the commits, and the lane reads the diff since the commit it last read.
 
 Confirm the fixes of the review of pull request `#<number>`, in `<the repository's path>`,
 whose report is `<the report file's full path>` and which read the change at

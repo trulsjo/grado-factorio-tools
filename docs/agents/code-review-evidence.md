@@ -275,7 +275,7 @@ Two of this repository's steps changed with it, by
   Both left the page, and [review-brief.md](review-brief.md) gained the confirmation turn.
 - **A lane's report is a file outside the repository.** It had been the lane's reply.
 
-Truls ruled two more things in the session that built it, on 2026-11-13
+Truls ruled three more things in the session that built it, on 2026-11-13
 ([his rulings](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6852591475)):
 
 - **A confirmation of a fix reads the fix diff and runs no check and no revert**, whether the
@@ -284,6 +284,11 @@ Truls ruled two more things in the session that built it, on 2026-11-13
 - **The absolute-words list is walked before the first push here**, where the shared page says
   before the reviewer is started: the review runs after the push, and a pushed commit message
   below the tip is not rewritten.
+- **A commit added after the review, fix or not, goes to the lane that reviewed the change, as
+  a turn**, by
+  [a third ruling](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6852734986)
+  of the same day: with "review only the commits since" gone, a commit that fixes no finding
+  had no rule, where the shared page has every commit reviewed before the merge.
 
 The stub is 3,775 bytes of its 3,779, from `wc -c docs/agents/code-review.md`, where the page
 stood at 3,751. The room for the values came from these, each quoted as it stood:
