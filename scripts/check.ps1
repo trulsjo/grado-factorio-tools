@@ -263,7 +263,7 @@ $ErrorActionPreference = 'Stop'
 $SELF_TESTS = @('absolute-words.ps1', 'ask-before-download.ps1', 'check.ps1', 'check-input-lib.ps1', 'cited-commit-check.ps1', 'comment-line-check.ps1', 'commit-check.ps1', 'compare-resource-counts.ps1', 'dev-launch.ps1', 'dump-diff.ps1', 'dump-keys.ps1', 'dump-planets.ps1', 'dump-shared-names.ps1', 'fetch-mods.ps1',
     'follow-pin.ps1', 'get-dump.ps1', 'glossary-check.ps1', 'help-check.ps1', 'hook-matcher.ps1', 'line-cite-check.ps1', 'markdown-check.ps1', 'markdown-rewrap.ps1', 'mod-info.ps1', 'pack-mods.ps1', 'param-check.ps1', 'pin-measure.ps1', 'pr-body-check.ps1',
     'refuse-backtick-substitution.ps1', 'refuse-cd-into-mod-cache.ps1', 'refuse-git-discard.ps1', 'refuse-git-hook-skip.ps1', 'refuse-hanging-bash.ps1', 'refuse-pr-body.ps1', 'refuse-python-heredoc.ps1', 'resolve-modpack.ps1', 'revert-run.ps1', 'self-test-halves.ps1', 'strict-list-check.ps1',
-    'variable-case-check.ps1')
+    'variable-case-check.ps1', 'warn-skipped-install.ps1')
 # Has a self-test this does not run, and why: it needs Factorio installed.
 $NEEDS_GAME = @('dump-walk.ps1', 'load-harness.ps1', 'locale-check.ps1', 'trace-definitions.ps1', 'tree-viewer.ps1')
 # Of those, each whose -SelfTest -NoGame runs the cases that need no game. This runs them.

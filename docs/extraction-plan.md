@@ -815,6 +815,9 @@ Each recorded as ruled, so that a later survey does not propose it again without
 `.githooks`, or the submodule not initialised. Ruled in *Rulings: the commit-msg hook, its scope
 list, and hook hygiene* ([#317](https://github.com/trulsjo/grado-factorio-tools/issues/317),
 ruling 6); written here by [#357](https://github.com/trulsjo/grado-factorio-tools/issues/357), and wired by each sibling's hooks ticket.
+**Written 2026-11-14** as `scripts/warn-skipped-install.ps1`, by PR_NUMBER_PENDING; its commit on
+`main` is added by the next lift's pull request, as *A lift's pull request cannot name its own
+commit on `main`* above has it.
 
 **Mod portal upload.** It does not exist in any repo. `pack-mods.ps1` is explicit in its own header:
 

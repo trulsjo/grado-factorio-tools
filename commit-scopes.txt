@@ -33,5 +33,7 @@ discard-hook
 download-hook
 pr-body-hook
 backtick-hook
+install-hook
+reword-commit
 docs
 repo

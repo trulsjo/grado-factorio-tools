@@ -1,0 +1,209 @@
+<#
+.SYNOPSIS
+    A SessionStart hook for agent sessions: warns when the clone a session starts in skipped an
+    install step, core.hooksPath not set to .githooks or a submodule not initialised. Where it
+    finds either, it prints JSON whose systemMessage and additionalContext name each step and the
+    command that takes it; where it finds neither, it prints nothing. It always exits 0: a
+    session is never stopped by it.
+
+.DESCRIPTION
+    WHY (grado-factorio-tools#317 ruling 6, #357). A consumer's clone takes two install steps
+    that git does not track: `git config core.hooksPath .githooks`, without which git runs none of
+    the repository's hooks, and `git submodule update --init`, without which vendor/ is empty and
+    every script the consumer resolves from there is missing. A clone that skipped the first
+    commits and pushes past its gates and says nothing.
+
+    HOW A CONSUMER WIRES IT. In its tracked .claude/settings.json, a SessionStart hook whose
+    command is the first example below: the form ADR 0004 rules for a shared hook, with no `case`,
+    since a session starts once. Where the script is not there, the submodule was never fetched,
+    and the command's own branch says so, naming the missing path. Whether this repository wires
+    it in its own settings is not ruled (#357).
+
+    WHAT IT WARNS OF, in the repository -Root names:
+    - core.hooksPath, read with `git config --get`, not `.githooks` (a trailing slash and a
+      leading ./ are let pass), where the root holds a .githooks directory. A repository with no
+      such directory has no hooks to skip, and is not warned of.
+    - each submodule `git submodule status` marks `-`, not initialised, named by its path.
+    And where git cannot read the root as a repository, that the clone was NOT checked.
+
+    WHAT IT CANNOT SEE. A hooks directory that is not .githooks, or a hook file that is not
+    executable off Windows, where git skips it. A submodule initialised at a commit other than
+    the pin, which `git submodule status` marks `+` and follow-pin.ps1 is for. A hooks path set in
+    the environment, or for one command. Whether the session shows the warning: what the client
+    does with a SessionStart hook's output is not measured here.
+
+.PARAMETER Root
+    The repository to read. The wiring gives "$CLAUDE_PROJECT_DIR". Defaults to the current
+    directory.
+
+.PARAMETER SelfTest
+    Build scratch repositories and prove: a clone with core.hooksPath unset, and one with it set
+    elsewhere, are warned of; one with a submodule not initialised is warned of, naming its path;
+    one that needs neither prints nothing; a .githooks-less repository is not warned of its hooks
+    path; a directory outside any repository is said to be not checked. Then the first example's
+    command, run through sh, where the project holds no script exits 0 and prints JSON naming the
+    missing path, and for this repository runs the script. With -Settings, the command that file
+    wires for this script, found by its name among the SessionStart entries, exits 0 for its own
+    repository and prints nothing or JSON. Needs git, and sh: the one on the path, or the one Git
+    for Windows ships.
+
+.PARAMETER Settings
+    With -SelfTest: a consumer's .claude/settings.json, whose SessionStart command naming this
+    script is run, with that file's repository as the project. The first command of any entry that
+    names it is taken (#315 ruling 3). Without it no settings file is read, since this repository
+    does not wire the hook.
+
+.EXAMPLE
+    The wired command: the SessionStart hook a consumer puts in its .claude/settings.json, as HOW A
+    CONSUMER WIRES IT says. It gives -Root, the one option, the project.
+
+        cat >/dev/null; h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/warn-skipped-install.ps1"; if [ -f "$h" ]; then pwsh -NoProfile -File "$h" -Root "$CLAUDE_PROJECT_DIR"; else m='warn-skipped-install: vendor/grado-factorio-tools/scripts/warn-skipped-install.ps1 was not found: the submodule is not initialised, so this clone was NOT checked for skipped install steps. git submodule update --init fetches it.'; printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}' "$m" "$m"; fi
+
+.EXAMPLE
+    To check it, from a repository root. It prints nothing where nothing was skipped:
+
+        pwsh -NoProfile -File scripts/warn-skipped-install.ps1 -Root .; $LASTEXITCODE
+#>
+
+#Requires -Version 7
+[CmdletBinding()]
+param(
+    [string] $Root = '.',
+    [switch] $SelfTest,
+    [string] $Settings
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+function Get-SkippedInstall {
+    <#  Each install step the repository at $Dir skipped, as a sentence that names the command
+        that takes it; one sentence saying it was not checked where git cannot read it.  #>
+    param([Parameter(Mandatory)] [string] $Dir)
+    $top = git -C $Dir rev-parse --show-toplevel 2>$null
+    if ($LASTEXITCODE -or -not $top) { return "git could not read $Dir as a repository, so it was NOT checked for skipped install steps." }
+    if (Test-Path -LiteralPath (Join-Path $top '.githooks') -PathType Container) {
+        # In a string, so an unset path is '' and not $null: [string] of no output is $null.
+        $path = "$(git -C $top config --get core.hooksPath 2>$null)"
+        if (($path.Trim() -replace '^\./', '' -replace '[\\/]+$', '') -cne '.githooks') {
+            $was = if ($path) { "is $path" } else { 'is not set' }
+            "core.hooksPath $was, so git runs none of this repository's hooks: git config core.hooksPath .githooks"
+        }
+    }
+    $status = @(git -C $top submodule status 2>$null)
+    if ($LASTEXITCODE) { return "git could not list the submodules of $top, so they were NOT checked." }
+    foreach ($line in $status) {
+        if ($line -match '^-\S+\s+(\S+)') { "the submodule $($Matches[1]) is not initialised: git submodule update --init" }
+    }
+}
+
+# The JSON a SessionStart hook prints for $Steps, or nothing where there are none.
+function Format-Warning {
+    param([string[]] $Steps)
+    if (-not $Steps) { return }
+    $text = "warn-skipped-install: this clone skipped an install step. $($Steps -join ' Also, ')"
+    @{ systemMessage = $text; hookSpecificOutput = @{ hookEventName = 'SessionStart'; additionalContext = $text } } | ConvertTo-Json -Compress
+}
+
+if ($SelfTest) {
+    $temp = Join-Path ([IO.Path]::GetTempPath()) "warn-skipped-install-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+    New-Item -ItemType Directory -Path $temp | Out-Null
+    $failures = 0; $n = 0
+    $check = {
+        param([string] $Name, [bool] $Ok, [string] $Said)
+        $script:n++
+        Write-Host ("self-test {0}: {1} -- {2}" -f $script:n, $Name, $(if ($Ok) { 'ok' } else { 'FAILED' }))
+        if (-not $Ok) { $script:failures++; if ($Said) { Write-Host "    $Said" } }
+    }
+    try {
+        # No param block: a declared parameter would take git's own -A as its name.
+        $git = { $at = $args[0]; $a = @($args | Select-Object -Skip 1); git -C $at -c protocol.file.allow=always @a 2>&1 | Out-Null; if ($LASTEXITCODE) { throw "git $($a -join ' ') failed in $at" } }
+        $commit = { param([string] $at) & $git $at add -A; & $git $at -c user.name=t -c user.email=t@t commit --quiet -m one }
+        # A repository to stand as the submodule, and one that holds it, with .githooks and the
+        # hooks path set: a clone that needs neither step.
+        $sub = Join-Path $temp 'sub'; $whole = Join-Path $temp 'whole'
+        foreach ($r in $sub, $whole) { New-Item -ItemType Directory -Path $r | Out-Null; & $git $r init --quiet }
+        Set-Content -LiteralPath (Join-Path $sub 'a.txt') -Value 'one'; & $commit $sub
+        New-Item -ItemType Directory -Path (Join-Path $whole '.githooks') | Out-Null
+        Set-Content -LiteralPath (Join-Path $whole '.githooks/commit-msg') -Value '#!/bin/sh'
+        & $git $whole submodule add --quiet $sub vendor/tools
+        & $commit $whole
+        & $git $whole config core.hooksPath .githooks
+        # A clone of it, which git makes with no hooks path and no submodule initialised.
+        $clone = Join-Path $temp 'clone'
+        & $git $temp clone --quiet $whole $clone
+        $none = @(Get-SkippedInstall $whole)
+        & $check 'a clone with the hooks path set and its submodule initialised is warned of nothing' (-not $none) ($none -join ' | ')
+        $both = @(Get-SkippedInstall $clone)
+        & $check 'a fresh clone is warned that core.hooksPath is not set, naming the command' ([bool] ($both -match 'core\.hooksPath is not set.*git config core\.hooksPath \.githooks')) ($both -join ' | ')
+        & $check 'and that its submodule is not initialised, naming its path and the command' ([bool] ($both -match 'the submodule vendor/tools is not initialised: git submodule update --init')) ($both -join ' | ')
+        & $git $clone config core.hooksPath hooks
+        $elsewhere = @(Get-SkippedInstall $clone)
+        & $check 'a hooks path set elsewhere is warned of, naming it' ([bool] ($elsewhere -match 'core\.hooksPath is hooks,')) ($elsewhere -join ' | ')
+        & $git $clone config core.hooksPath ./.githooks/
+        & $git $clone submodule update --init --quiet
+        $fixed = @(Get-SkippedInstall $clone)
+        & $check 'the clone with both steps taken, the hooks path written ./.githooks/, is warned of nothing' (-not $fixed) ($fixed -join ' | ')
+        $bare = Join-Path $temp 'bare'
+        New-Item -ItemType Directory -Path $bare | Out-Null; & $git $bare init --quiet
+        $noHooks = @(Get-SkippedInstall $bare)
+        & $check 'a repository with no .githooks directory is not warned of its hooks path' (-not $noHooks) ($noHooks -join ' | ')
+        $outside = Join-Path $temp 'outside'
+        New-Item -ItemType Directory -Path $outside | Out-Null
+        $notRepo = @(Get-SkippedInstall $outside)
+        & $check 'a directory outside any repository is said to be NOT checked' ([bool] ($notRepo -match 'NOT checked')) ($notRepo -join ' | ')
+        # The script itself: JSON for a clone that skipped a step, nothing for one that did not,
+        # exit 0 for both.
+        & $git $clone config --unset core.hooksPath
+        $warned = pwsh -NoProfile -File $PSCommandPath -Root $clone 2>&1 | Out-String; $warnedCode = $LASTEXITCODE
+        $quiet = pwsh -NoProfile -File $PSCommandPath -Root $whole 2>&1 | Out-String; $quietCode = $LASTEXITCODE
+        $told = try { $warned | ConvertFrom-Json } catch { $null }
+        $ok = $warnedCode -eq 0 -and $told -and $told.hookSpecificOutput.hookEventName -ceq 'SessionStart' -and
+            $told.hookSpecificOutput.additionalContext -match 'core\.hooksPath' -and $told.systemMessage -ceq $told.hookSpecificOutput.additionalContext -and
+            $quietCode -eq 0 -and -not $quiet.Trim()
+        & $check 'run on a clone that skipped a step it exits 0 and prints SessionStart JSON; on one that did not, exits 0 and prints nothing' $ok "warned: $warnedCode $warned | quiet: $quietCode $quiet"
+        # The first example's form, read from the header so the command shown is the command run.
+        $form = [regex]::Match((Get-Content -LiteralPath $PSCommandPath -Raw), 'cat >/dev/null;.*?; fi').Value
+        $sh = (Get-Command sh -ErrorAction SilentlyContinue)?.Source ?? (Join-Path (git --exec-path) '../../../usr/bin/sh.exe')
+        $env:PATH = "$(Split-Path $sh)$([IO.Path]::PathSeparator)$env:PATH"
+        $wire = {
+            param($project, $line)
+            $env:CLAUDE_PROJECT_DIR = $project
+            $text = '{"hook_event_name":"SessionStart"}' | & $sh -c $line 2>$null | Out-String
+            @{ Code = $LASTEXITCODE; Text = $text }
+        }
+        $absent = & $wire $outside $form
+        $here = & $wire $clone $form.Replace('$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/', ($PSScriptRoot -replace '\\', '/') + '/')
+        $ok = try {
+            $parsed = $absent.Text | ConvertFrom-Json
+            $form -and $absent.Code -eq 0 -and $parsed.hookSpecificOutput.hookEventName -ceq 'SessionStart' -and
+                $parsed.hookSpecificOutput.additionalContext -match 'vendor/grado-factorio-tools/scripts/warn-skipped-install\.ps1 was not found' -and
+                $parsed.systemMessage -ceq $parsed.hookSpecificOutput.additionalContext -and
+                $here.Code -eq 0 -and ($here.Text | ConvertFrom-Json).hookSpecificOutput.additionalContext -match 'core\.hooksPath is not set'
+        } catch { $false }
+        & $check 'the first example''s command, where the script is not there, exits 0 and names the missing path; where it is, runs it on the project' $ok "absent: $($absent.Code) $($absent.Text) | here: $($here.Code) $($here.Text)"
+        if ($Settings) {
+            $Settings = (Resolve-Path -LiteralPath $Settings).Path
+            $names = [regex]::Escape((Split-Path $PSCommandPath -Leaf))
+            $found = @((Get-Content -LiteralPath $Settings -Raw | ConvertFrom-Json).hooks.SessionStart) |
+                Where-Object { $_ -and @($_.hooks.command) -match $names } | Select-Object -First 1
+            $wired = if ($found) { @($found.hooks.command) -match $names | Select-Object -First 1 }
+            $ran = if ($wired) { & $wire (Split-Path (Split-Path $Settings -Parent) -Parent) $wired }
+            $ok = $wired -and $ran.Code -eq 0 -and (-not $ran.Text.Trim() -or $(try { ($ran.Text | ConvertFrom-Json).hookSpecificOutput.hookEventName -ceq 'SessionStart' } catch { $false }))
+            & $check "the SessionStart command $Settings wires for this script exits 0 for its repository, and prints nothing or SessionStart JSON" $ok $(if ($wired) { "$($ran.Code) $($ran.Text)" } else { "$Settings wires no SessionStart command that names this script" })
+        }
+    }
+    catch { & $check 'the fixture was built' $false $_.Exception.Message }
+    finally { Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue }
+    Write-Host ''
+    if ($failures) { Write-Host "FAILED - self-test: $failures of $n case(s) did not hold."; exit 1 }
+    Write-Host "OK - self-test passed: all $n cases."
+    exit 0
+}
+
+try { Format-Warning @(Get-SkippedInstall $Root) }
+catch {
+    # Loud, and not a stop: a session starts whatever this finds.
+    Format-Warning "it could not read $Root ($($_.Exception.Message)), so the clone was NOT checked for skipped install steps."
+}
+exit 0
