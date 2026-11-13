@@ -83,9 +83,10 @@
     Run the cases that hold the refusal of a folder this did not make, by a run and by -Clean, the
     use of one it made, a new one and an empty one, and the marker a run writes into the folder it
     builds, in folders under the temp directory, and the runner's own verdict on a case. A run is
-    refused, or cleans, or builds its folder from a mod zip for a game whose Factorio.exe is text
-    and fails at the launch, so no game is needed or started. Not run: a launch, a junction, a
-    bundled mod.
+    refused, or cleans, or builds its folder from a mod zip for a game whose Factorio.exe is text:
+    it is cut short by a copy that fails, or it writes steam_appid.txt into %TEMP%\dev-launch, as
+    every run does, and fails at the launch it attempts, as no system starts a text file. So no
+    game is needed or started. Not run: a launch that starts, a junction, a bundled mod.
 
 .EXAMPLE
     pwsh -File vendor/grado-factorio-tools/scripts/dev-launch.ps1 ./my-mod ./my-mod-assets
@@ -165,17 +166,19 @@ if ($SelfTest) {
     # there; so no game is needed or started.
     $fakeGame = {
         $game = Join-Path $temp 'game'
-        New-Item -ItemType Directory -Path (Join-Path $game 'bin/x64'), (Join-Path $game 'data') | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $game 'bin/x64'), (Join-Path $game 'data') -Force | Out-Null
         $exe = Join-Path $game 'bin/x64/Factorio.exe'; Set-Content -LiteralPath $exe -Value 'not a program'
         $exe
     }
-    # A mod zip, some-mod 1.0.0, in a folder of its own: a zip and not a directory, as a junction
-    # cannot be made on every system CI runs.
+    # A mod zip of version 1.0.0 whose info.json gives $Name, in a folder of its own: a zip and
+    # not a directory, as a junction cannot be made on every system CI runs.
     $modZip = {
-        $source = Join-Path $temp 'mod-source'
-        New-Item -ItemType Directory -Path (Join-Path $source 'some-mod') | Out-Null
-        Set-Content -LiteralPath (Join-Path $source 'some-mod/info.json') -Value '{"name": "some-mod", "version": "1.0.0"}'
-        $zip = Join-Path $temp 'some-mod_1.0.0.zip'
+        param([string] $Name = 'some-mod')
+        $key = $Name -replace '[^\w-]', '-'
+        $source = Join-Path $temp "mod-source-$key"
+        New-Item -ItemType Directory -Path (Join-Path $source 'mod') | Out-Null
+        Set-Content -LiteralPath (Join-Path $source 'mod/info.json') -Value (@{ name = $Name; version = '1.0.0' } | ConvertTo-Json)
+        $zip = Join-Path $temp "$($key)_1.0.0.zip"
         [IO.Compression.ZipFile]::CreateFromDirectory($source, $zip)
         $zip
     }
@@ -194,6 +197,18 @@ if ($SelfTest) {
             $second = & $run $folder @('-FactorioExe', $exe, $zip)
             $first.Code -ne 0 -and $first.Said.Contains("mod dir    : $folder") -and $marked -and $built -and
                 $second.Code -ne 0 -and -not $second.Said.Contains('Refusing -ModDirectory') -and $second.Said.Contains("mod dir    : $folder") } }
+        @{ Name = 'a run cut short while it builds, before mod-list.json, has marked the folder first, and a second run takes it (#423)'; Test = {
+            # A mod whose info.json names it bad/name: the zip's copy, to bad/name_1.0.0.zip in a
+            # folder bad/ that is not there, fails after the folder is made and before
+            # Write-ModList, which the marker followed until #423.
+            $exe = & $fakeGame; $zip = & $modZip 'bad/name'
+            $folder = Join-Path $temp 'cut'
+            $first = & $run $folder @('-FactorioExe', $exe, $zip)
+            $marked = Test-Path -LiteralPath (Join-Path $folder $MARKER) -PathType Leaf
+            $listed = Test-Path -LiteralPath (Join-Path $folder 'mod-list.json')
+            $second = & $run $folder @('-FactorioExe', $exe, $zip)
+            $first.Code -ne 0 -and -not $first.Said.Contains('mod dir    :') -and $marked -and -not $listed -and
+                $second.Code -ne 0 -and -not $second.Said.Contains('Refusing -ModDirectory') } }
         # The three cases below look for the whole refusal, which is longer than any console is
         # wide: a message wrapped at the width, as a thrown one is, fails them on any machine.
         @{ Name = 'a run refuses a folder holding a zip and a mod-list.json and no marker, says why in one piece, and leaves both files'; Test = {
