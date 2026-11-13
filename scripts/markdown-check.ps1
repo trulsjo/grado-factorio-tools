@@ -174,12 +174,12 @@
     -Body above says. Not with -Path, -All or -Range.
 
 .PARAMETER MaxLineLength
-    Also report a prose line longer than this many characters, 1 or more. Without it, length is
-    not read. Where a run reports such a line, its closing FAILED line names markdown-rewrap.ps1,
-    by its path from the current directory to the folder this script ran from, and the command
-    that rewraps what was read: the same -All, -Range, -Path or none, and this limit (#444). With
-    -Body, the command is `-Path <body>` where the body's name ends in .md; another file is not
-    named, since the rewrap refuses it without -Comment, which would read it as a script.
+    Also report a prose line longer than this many characters, 1 or more. Without it, length is not
+    read. Where a run reports such a line, its closing FAILED line names markdown-rewrap.ps1, by its
+    path from the current directory to the folder this script ran from, and the command that rewraps
+    what was read: the same -All, -Range, -Path or none, and this limit (#444). With -Body, the
+    command is `-Path <body>` where the body's name ends in .md; another file is not named, since
+    the rewrap refuses it without -Comment, which would read it as a script.
 
 .PARAMETER SelfTest
     Run the cases that hold the check to what this header says, naming each as it runs. Needs git,

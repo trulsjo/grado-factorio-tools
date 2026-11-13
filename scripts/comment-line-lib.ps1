@@ -9,8 +9,19 @@
     rule cannot see is in check.ps1's header, under A COMMENT OR HEADER LINE. The limit is the
     caller's.
 
-    Dot-source it; it has no -SelfTest of its own: check.ps1's holds Get-LongCommentLine, and
-    comment-line-check.ps1's holds Get-LongHashLine.
+    Dot-source it; it has no -SelfTest of its own: check.ps1's holds Get-LongCommentLine,
+    comment-line-check.ps1's holds Get-LongHashLine and Get-ShortHelpLine, and
+    markdown-rewrap.ps1's holds Get-HelpParagraph, through its -Fill.
+
+    A HELP PARAGRAPH (grado-factorio-tools#442) is read from the lines of a block comment whose
+    opening mark starts a line, to its closing mark, as markdown-rewrap.ps1 -Comment reads one:
+    it ends at a blank
+    line, a help keyword line, a change of indent, a line opening with a list marker, and a
+    section lead such as `WHY.` after a line ending in a full stop. The .EXAMPLE section is not
+    read, and nor is a paragraph indented deeper than the first of its section, which is taken
+    for code. What it cannot see: a block comment opened after code on its line, an opening mark
+    that starts a line of a here-string, and a list item's lines after its first, which are deeper and
+    so are left as code.
 #>
 
 # The numbers of a script's comment and header lines over $Limit characters: each line of a <# #>
@@ -36,6 +47,61 @@ function Get-LongCommentLine {
             $keyword = '^\s*\.(SYNOPSIS|DESCRIPTION|PARAMETER|EXAMPLE|INPUTS|OUTPUTS|NOTES|LINK|COMPONENT|ROLE|FUNCTIONALITY)(\s|$)'
             if ($lines[$n - 1] -cmatch $keyword) { $section = $Matches[1] }
             if ($section -ne 'EXAMPLE' -and (& $over $lines[$n - 1])) { $n }
+        }
+    }
+}
+
+# The prose paragraphs of the block comments in $Lines, as the header says, each as @{ Start;
+# End, 0-based and inclusive; First, the first line's indent and any `<#` opener; Rest, the
+# indent of the lines after it }.
+function Get-HelpParagraph {
+    param([Parameter(Mandatory)] [AllowEmptyCollection()] [AllowEmptyString()] [string[]] $Lines)
+    $keyword = '^\s*\.(SYNOPSIS|DESCRIPTION|PARAMETER|EXAMPLE|INPUTS|OUTPUTS|NOTES|LINK|COMPONENT|ROLE|FUNCTIONALITY)(\s|$)'
+    $lead = "^[A-Z]{2,}[A-Z0-9'-]*(?:,? [A-Z][A-Z0-9'-]*)*(?: \([^)]*\))?\.(?:\s|$)"
+    $item = '^(?:[-*+]|\d+[.)])\s'
+    $closes = '#>\s*$'
+    $open = $false; $section = ''; $base = -1; $i = 0
+    while ($i -lt $Lines.Count) {
+        $l = $Lines[$i]
+        if (-not $open) {
+            if ($l -notmatch '^\s*<#') { $i++; continue }
+            $open = $true; $section = ''; $base = -1
+        }
+        $opener = [regex]::Match($l, '^\s*(?:<#\s*)?')
+        $text = $l.Substring($opener.Length) -replace '\s*#>\s*$'
+        if ($l -cmatch $keyword) { $section = $Matches[1]; $base = -1 }
+        if ($l -cmatch $keyword -or $section -eq 'EXAMPLE' -or $text -notmatch '\S' -or $l -match '^\s*#>') {
+            if ($l -match $closes) { $open = $false }
+            $i++; continue
+        }
+        $indent = $opener.Length
+        if ($base -lt 0) { $base = $indent }
+        $e = $i
+        while ($Lines[$e] -notmatch $closes -and $e + 1 -lt $Lines.Count) {
+            $n = $Lines[$e + 1]
+            if ($n -notmatch '\S' -or $n -cmatch $keyword -or $n -match '^\s*#>' -or [regex]::Match($n, '^\s*').Length -ne $indent) { break }
+            $t = $n.Substring($indent)
+            if ($t -match $item -or ($Lines[$e].TrimEnd().EndsWith('.') -and $t -cmatch $lead)) { break }
+            $e++
+        }
+        if ($indent -eq $base) { @{ Start = $i; End = $e; First = $opener.Value; Rest = ' ' * $indent } }
+        if ($Lines[$e] -match $closes) { $open = $false }
+        $i = $e + 1
+    }
+}
+
+# The numbers of the help lines in $Lines that are under-filled (#442): a line of a help
+# paragraph, not its last, that the next line's first word would fit on within $Limit. A word is
+# a run with no space outside a code span, an HTML comment or a link, as markdown-rewrap.ps1
+# breaks between them; a figure grouped in thousands, which it keeps whole, is read as two here.
+function Get-ShortHelpLine {
+    param([Parameter(Mandatory)] [AllowEmptyCollection()] [AllowEmptyString()] [string[]] $Lines,
+        [Parameter(Mandatory)] [int] $Limit)
+    $word = '^(?:(`+)(?:(?!\1).)*?\1|<!--.*?-->|\[[^\]]*\]\([^)]*\)|\S)+'
+    foreach ($p in Get-HelpParagraph -Lines $Lines) {
+        for ($k = $p.Start; $k -lt $p.End; $k++) {
+            $first = [regex]::Match($Lines[$k + 1].Substring($p.Rest.Length), $word).Value
+            if ($Lines[$k].TrimEnd().Length + 1 + $first.Length -le $Limit) { $k + 1 }
         }
     }
 }
