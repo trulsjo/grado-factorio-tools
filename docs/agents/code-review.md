@@ -1,31 +1,31 @@
-# Code review — this repository's rules
+# Code review — this repository's values
 
-On top of the `/code-review` plugin. The evidence is in
-[code-review-evidence.md](code-review-evidence.md).
+**The procedure is [`docs/code-review-procedure.md`](../code-review-procedure.md), and the shared
+rules [`docs/code-review-rules.md`](../code-review-rules.md).** This page gives this repository's
+values and its own steps. The evidence is in [code-review-evidence.md](code-review-evidence.md).
 
 ## How a review is run
 
-- **Once per change, on the pull request.** Skip the review step inside `/implement` or any
-  skill: open the pull request first. Asked to review again, review only the commits since.
-  Before pushing any commit, the session runs whatever its diff or message says a script or a
-  command does, prints, refuses or exits with.
-- **Two lanes.** A bug scan; and a prose lane applying the rules in
-  [code-review-prose.md](code-review-prose.md), which that lane loads and the bug scan does
-  not. The prose lane takes in the plugin's `CLAUDE.md` and code-comment lanes.
-- **The bug scan runs `scripts/check.ps1` unless CI's check passes on the commit the review
-  reads.** It waits on a run not yet finished with `gh run watch <id> --exit-status`, and names a
-  run that passed instead of running the check. The session looks before the lane starts, with
+- **When: on the pull request.** Skip the review step inside `/implement` or any skill. Before
+  pushing any commit, the session runs whatever its diff or message says a script or a command
+  does, prints, refuses or exits with.
+- **Second pass: `on request`**, the panel of [review-panel.md](review-panel.md), when Truls asks.
+- **Trigger page:** this page. **Brief template:** [review-brief.md](review-brief.md).
+  **Reviewer's copy:** a clone. **Raw output:** none. **Merge workflow:** `check.yml`.
+- **Two lanes.** A bug scan; and a prose lane applying the **further reading**,
+  [code-review-prose.md](code-review-prose.md), which the bug scan does not load. It takes in
+  the `/code-review` plugin's `CLAUDE.md` and code-comment lanes.
+- **Check run: the bug scan runs `scripts/check.ps1` unless CI's check passes on the commit the
+  review reads.** The session looks before the lane starts, with
   `gh run list --workflow check.yml --commit <full SHA> --json databaseId,headSha,status,conclusion`.
   Either way the bug scan runs each self-test that script's header says the change calls for
-  and CI does not run, those that need the game among them. It reverts each claim of a script
-  on a copy, as the brief says, and each condition on a line the diff adds or changes that the
-  claims leave out; a revert that fails nothing is a finding, of either kind.
-- **One fresh agent runs both lanes** when the change touches no script, or when each commit
-  since the last review answers one of its findings; anything else gets an agent per lane.
-  It touches one when its diff changes a line of code in `scripts/`, `.githooks/` or
-  `.github/workflows`; help text and message strings alone do not.
-- **The session hands each lane [review-brief.md](review-brief.md)**, filled in with the change's
-  particulars.
+  and CI does not run, those that need the game among them.
+- **Test claims: `scripts/revert-run.ps1`.** The bug scan reverts each claim of a script on a
+  copy, and each condition on a line the diff adds or changes that the claims leave out; a
+  revert that fails nothing is a finding.
+- **One fresh agent runs both lanes** when the change touches no script; anything else gets an
+  agent per lane. It touches one when its diff changes a line of code in `scripts/`,
+  `.githooks/` or `.github/workflows`; help text and message strings alone do not.
 - **The working tree stays on the branch the lanes read until every lane has reported**: a
   check run across a switch reads two branches' files.
 - **The reviewing session scores each finding itself**, on the plugin's rubric. Where a rule on a
@@ -37,14 +37,12 @@ On top of the `/code-review` plugin. The evidence is in
 
 ## What is reported
 
-- **Each review posts one comment on the pull request** once its findings are acted on: every
-  finding, its score, whether it was verified and its outcome. A
-  review with no finding says so there. Its bug scan section says which check it stands on:
-  CI's run, by its id, or a local run. The comment is not edited once posted, and the
-  plugin's own comment format is not used.
-- **The threshold is a score of 80 or more**, by
-  [`docs/code-review-rules.md`](../code-review-rules.md): such a finding is fixed; the rest are
-  recorded.
+- **Where recorded: one comment on the pull request**, posted once the findings are acted on:
+  every finding, its score, whether it was verified and its outcome. A review with no finding
+  says so there. Its bug scan section says which check it stands on: CI's run, by its id, or a
+  local run. The comment is not edited once posted, and the plugin's own comment format is not
+  used.
+- **The threshold is a score of 80 or more**: such a finding is fixed; the rest are recorded.
 - **A change that does other than an acceptance criterion, the *Asked*, or a ruling of Truls's,
   on a ticket it closes asks is a finding scored 80**, in either lane, shown by a read of the
   change or an input that was run, unless the pull request cites Truls's comment allowing it.

@@ -1,7 +1,8 @@
 # Code review rules
 
 **This page holds the review rules the repositories that link to it share**: what the threshold
-does, and the prose checks every review makes. How and when a review runs is not on this page.
+does, and the prose checks every review makes. How and when a review runs is on
+[`docs/code-review-procedure.md`](code-review-procedure.md), not on this page.
 Each repository's `docs/agents/code-review.md` links this page and names its threshold.
 
 Ruled by Truls on 2026-11-06 in
