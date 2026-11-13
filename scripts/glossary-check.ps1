@@ -220,7 +220,7 @@ if ($SelfTest) {
             $leftEntry = @($withLeft | Where-Object Why | Where-Object Entry -eq 'verified')
             $f = @(Find-Avoided -Lines 'It was verified, and it confirms.' -Numbers 1 -Avoided $withLeft | ForEach-Object Word)
             $leftEntry.Count -eq 1 -and $leftEntry[0].Why -eq 'left here on purpose' -and $f.Count -eq 1 -and $f[0] -eq 'confirms' } }
-        @{ Name = 'over a range the script exits 1 on an unmarked use and names it, in a file whose name holds a space, 0 once the use is marked, and 0 where a file only loses the line below an unmarked use'; Test = {
+        @{ Name = 'over a range the script exits 1 on an unmarked use and names it, in a file whose name holds a space, 0 once the use is marked, and 0 where a file only loses the line below an unmarked use, saying it read no line'; Test = {
             $temp = Join-Path ([IO.Path]::GetTempPath()) "glossary-check-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
             New-Item -ItemType Directory -Path $temp -Force | Out-Null
             try {
@@ -241,7 +241,8 @@ if ($SelfTest) {
                 $removed = & $run 'HEAD~1..HEAD'
                 Write-Host ($red.Text.TrimEnd() -replace '(?m)^', '    ')
                 if ($removed.Code -ne 0) { Write-Host ($removed.Text.TrimEnd() -replace '(?m)^', '    ') }
-                $red.Code -eq 1 -and $red.Text -match '(?m)^a b\.md:2: "verified"' -and $green.Code -eq 0 -and $removed.Code -eq 0
+                $red.Code -eq 1 -and $red.Text -match '(?m)^a b\.md:2: "verified"' -and $green.Code -eq 0 -and $removed.Code -eq 0 -and
+                    $removed.Text -match 'OK - glossary-check: HEAD~1\.\.HEAD adds no line to a Markdown file but GLOSSARY\.md, so none was read'
             }
             finally { Remove-Item -LiteralPath $temp -Recurse -Force }
         } }
@@ -398,6 +399,7 @@ foreach ($f in $added.Keys) {
 Write-Host ''
 if ($found -and $Range) { Write-Host "FAILED - glossary-check: $found unmarked use(s) of an avoided word in $($added.Count) Markdown file(s). Reword each, or mark a deliberate one <!-- deliberate: word -->."; exit 1 }
 if ($found) { Write-Host "glossary-check: $found use(s) of an avoided word in $($added.Count) Markdown file(s). -All counts and does not fail."; exit 0 }
-if ($Range -and -not $added.Count) { Write-Host "OK - glossary-check: $Range adds no line to a Markdown file but GLOSSARY.md, so none was read."; exit 0 }
+# Lines, not files: a file the range only removes lines from is listed with none (PR #452's review).
+if ($Range -and -not @($added.Values | Where-Object { $_.Count }).Count) { Write-Host "OK - glossary-check: $Range adds no line to a Markdown file but GLOSSARY.md, so none was read."; exit 0 }
 Write-Host "OK - glossary-check: $($added.Count) Markdown file(s), no unmarked use of an avoided word."
 exit 0
