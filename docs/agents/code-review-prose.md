@@ -1,8 +1,7 @@
 # Code review — the prose rules
 
-The prose lane of a review loads this page, and the bug scan does not. How a review is run and
-what it reports are in [code-review.md](code-review.md); the evidence is in
-[code-review-evidence.md](code-review-evidence.md).
+The prose lane loads this page, after [code-review.md](code-review.md); the bug scan does not. The
+evidence is in [code-review-evidence.md](code-review-evidence.md).
 
 ## Review the prose, not only the code
 
@@ -16,9 +15,6 @@ and a pull request body is prose. This repository's own:
 - **An old figure struck through beside what replaced it is not a defect; an unmarked one is.**
 - **A statement about a sibling repository**, the diff's, a lane's or the session's, is read
   with the passage around it and carries the commit and the date; one without is a finding.
-  `pr-body-check.ps1 -CiteSiblings` holds a pull request body to this, not a commit or a page.
-  The session opens the place itself before the statement goes into the comment; unopened, it
-  is left out and told to Truls in the report.
 - **A sibling's ticket or pull request is written with its repository**, as
   `trulsjo/grado-factorio-modpack#267` or `grado-factorio-modpack#267`, in a commit message, a
   pull request body, a ticket and a page: a bare `#267` here is this repository's. One bare is a
@@ -29,3 +25,7 @@ and a pull request body is prose. This repository's own:
   what the visual needs is a finding.
 - **Flag a header or comment that lists what the code lists**: self-test cases, fixtures, a count
   of them, a list of refusals.
+- **Where a change writes in a ruling it cites, name what carries each rule it adds**: a cited
+  ruling, or the page it moved from unchanged; neither is a finding. Reasoning, an incident or a
+  quotation is no rule. PR #437 added two: a confirmer that "runs no check and no revert", and
+  one set of lines for a fix's turn and a later commit's (#447).

@@ -3,26 +3,17 @@
 The words a review's session hands each lane, written once so that every lane is briefed alike
 (#140). How a review is run is in [code-review.md](code-review.md) and the shared page it
 links, and the prose rules in
-[code-review-prose.md](code-review-prose.md). This page carries three of `code-review.md`'s rules
-to the lane, what the bug scan does not load, when the check is not run again, and the
-read-nothing rule, and adds three rules of its own. One is an exception to `code-review.md`'s
-rule that a revert that fails nothing is a finding: a default revert the pull request lists with
-why it passes (#390). The second, with nothing of it in `code-review.md`, is that a case reading
-a thrown message through a child's merged output is a finding (#435). The third, there until
-the stub of #355, is that a lane waits on a CI run not yet finished and names one that passed.
-Any other rule is changed there, or on the shared page where it is a shared step. How a lane
+[code-review-prose.md](code-review-prose.md). **Where a rule here is changed:** one that
+`code-review.md` states too is carried here to the lane, and is changed there first, or on the
+shared page where it is a shared step; any other is this page's, and is changed here. How a lane
 runs a command a rule names, and what of its output it reports, is the brief's
-(Truls, 2026-10-26, #232), and so is how the bug scan applies the read-nothing rule, step by step
-(#383). The session fills the blanks, written `<like this>`, with what is particular to the
-change, and sends the rest as it stands. A lane that runs both reviews is sent both *Reads first*
-lines.
+(Truls, 2026-10-26, #232). The session fills the blanks, written `<like this>`, with what is
+particular to the change, and sends the rest as it stands. A lane that runs both reviews is sent
+both *Reads first* lines.
 
 This page is the brief template
 [`docs/code-review-procedure.md`](../code-review-procedure.md) asks this repository to name, and
-it holds that page's steps for a lane (#355): what is not under review, with nothing of what the
-session thinks is right; the agent-facing files read whole; the report as a file, with what was
-not checked; and, below the brief, the turn that confirms a fix. What a turn runs, what
-follows a fix that is not confirmed and where a later commit goes are this page's own.
+it holds that page's steps for a lane (#355), and, below the brief, the turn that confirms a fix.
 
 ---
 
@@ -41,7 +32,8 @@ tickets the change closes, each with
   (`git log origin/main..<full SHA>`) and the pull request body (`gh pr view <number>`). It reads
   whole each agent-facing file the diff changes, a `CLAUDE.md`, a page under `docs/agents/`, a
   page under `docs/` that a stub page links, or a skill file: a sentence the change made false
-  and did not touch is in no hunk.
+  and did not touch is in no hunk. The rulings the change writes in, for the prose page's check
+  of a rule no ruling carries: `<each ruling's link, from the tickets and the body | "none">`.
 
 **The check.** `<CI's run <id> passed on this commit: name it and do not run the check again |
 CI's run <id> has not finished on this commit: in the Bash tool, run gh run watch <id>
@@ -50,6 +42,8 @@ that code and the run's closing line, grep -E '<id>$|\(<id>\) has already comple
 folder>/watch.txt | tail -1, not the whole file; if the watch exited 0, name the run and do not
 run the check, and if not, run pwsh -File scripts/check.ps1 and report what it printed | CI
 has not passed on this commit: run pwsh -File scripts/check.ps1 and report what it printed>`.
+That a lane waits on a CI run not yet finished, and names one that passed, is this page's rule
+since the stub of #355.
 
 **The self-tests CI does not run.** `<each, as pwsh -File scripts/<script> -SelfTest, or "none">`.
 Run each and report its last line.
@@ -100,18 +94,19 @@ review comment on PR #428, finding A). Each revert runs the script's whole self-
 at `4534a44`, `-Conditions` writes 133 reverts for `revert-run.ps1`, whose self-test took about
 100 s on PR #412's branch, close to 3.7 hours (#402's brief). It reports each run's table. A
 revert that fails nothing is a finding, unless it is a default revert the pull request lists
-with why it passes, as PR #389 listed `line-cite-check.ps1 -Foreign`. With "none", it reverts
+with why it passes, as PR #389 listed `line-cite-check.ps1 -Foreign` (#390): an exception to
+`code-review.md`'s rule. With "none", it reverts
 nothing. The session answering a review's findings runs its reverts the same way.
 
 **What reads nothing.** The bug scan applies `code-review.md`'s
 [read-nothing rule](code-review.md#how-a-review-is-run) step by step, not to the whole set at
-once. It names each step between what a check is given and what it reads: a pathspec, the files
-on disk, the exempt ones, an extension, a marker it looks for, a scope parameter. For each, the
-run where that step alone leaves nothing must fail, and a self-test case must hold that run; one
-that passes, or that no case holds, is a finding. The rule's own exception stands: a run that
-only has nothing to check this time, as a commit that stages none of the files, may pass, and
-says it read nothing. PR #374's checks passed on nothing five times,
-each at one such step, and no one review found them all (#383's table).
+once (#383). It names each step between what a check is given and what it reads: a pathspec, the
+files on disk, the exempt ones, an extension, a marker it looks for, a scope parameter. For each,
+the run where that step alone leaves nothing must fail, and a self-test case must hold that run; one
+that passes, or that no case holds, is a finding. The rule's own exception stands: a run that only
+has nothing to check this time, as a commit that stages none of the files, may pass, and says it
+read nothing. PR #374's checks passed on nothing five times, each at one such step, and no one
+review found them all (#383's table).
 
 **What a thrown message looks like to a case.** The bug scan reads each case the diff adds or
 changes that starts a script in a child `pwsh` and reads its merged output (`2>&1`) for text the
