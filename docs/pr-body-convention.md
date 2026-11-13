@@ -34,6 +34,10 @@ trulsjo/realistic-fusion-refreshed at `9fd78b5`.
 - **`-CiteSiblings`**: a statement about a sibling repository carries a commit and an ISO date.
   The script's header says which words make a sentence such a statement.
 - **`-RequireSummaryVisual`**: `## Summary` holds a fenced or an indented code block.
+- **`-CheckRuns`**, with `-Head` and the pull request's head commit: each run of the repository's
+  `check` workflow the body cites ran on the head, and its step that runs `scripts/check.ps1`
+  passed on every job. With no `-Head`, no run is read. The script's header says which words make
+  a number a cited run.
 
 **The switches are each repository's choice** (ruling 4). A repository turns one on in its own CI
 line and its own hook line.

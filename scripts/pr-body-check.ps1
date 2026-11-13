@@ -10,7 +10,9 @@
     each commit, each line, each heading and each marker that fails that. With -CiteSiblings, a
     fifth: each statement about a sibling repository carries a commit and an ISO date, and exit
     1 names each sentence that does not. With -RequireSummaryVisual, a sixth: `## Summary`
-    holds a fenced or an indented code block, and exit 1 says so where it holds none.
+    holds a fenced or an indented code block, and exit 1 says so where it holds none. With
+    -CheckRuns and -Head, a seventh: each run of the check workflow the body cites ran on the head
+    and passed its check.ps1 step on every job, and exit 1 names each run that did not.
 
 .DESCRIPTION
     WHY (grado-factorio-tools#96). Pull requests here are rebase-merged, which rewrites every
@@ -24,7 +26,7 @@
     address. Each is asked of git as a commit. One that names a commit is on main when
     `git merge-base --is-ancestor` says so. A word of digits alone is read like any other, since
     an abbreviated SHA can be all digits; a count or a run id is passed over unless it happens
-    to abbreviate a commit here.
+    to abbreviate a commit here. A run id is read as a run with -CheckRuns, below.
 
     A CLOSING KEYWORD THE AUTHOR DID NOT MEAN (grado-factorio-tools#112). GitHub closes an issue
     when a pull request merges with a closing keyword before a reference to it anywhere in the
@@ -108,6 +110,28 @@
     command before `gh pr create` in docs/agents/issue-tracker.md. Whether the visual is the
     smallest one that makes the point is a reader's call.
 
+    A CITED RUN OF THE CHECK WORKFLOW IS ON THE HEAD, WITH -CheckRuns AND -Head
+    (grado-factorio-tools#455). docs/agents/issue-tracker.md asks a body to cite check.ps1 by CI's
+    run on the pull request's tip; PR #452's body cited a local run, then a run on a tip that had
+    since moved, and its review found each by hand. A cited run is a run id the body gives in one of
+    two forms: the address of a run of this repository, github.com/<owner>/<name>/actions/runs/<id>
+    with what origin names on github.com, in any case; or the word `run`, or `run id`, then nine
+    digits or more, as "run 43513588892" or "CI's run 43513588892". Passed over: an address of
+    another repository's run, a number alone, one of fewer than nine digits, and `run` inside a
+    longer word, as "rerun". Each cited run is read with `gh run view <id> --json
+    headSha,workflowName,jobs` and fails the body, named, where gh cannot read it, where it is not
+    of the check workflow, where it ran on a commit other than -Head, or where the step that runs
+    scripts/check.ps1 did not conclude success on every job. The workflow's name and that step's are
+    read from .github/workflows/check.yml at the repository's top, so a rename is followed. The
+    run's other steps are not read, its body step among them, and nor is its conclusion (Truls,
+    triage of #455): that step runs last in the same run, so after a push it fails on the body
+    citing the run before, and the run's conclusion would hold the body to its own verdict. Every
+    cited run is held to the head, so a body that cites an earlier commit's run beside the head's
+    fails (the same ruling). With no -Head, as on `gh pr create` before CI has run, no run is read,
+    the run passes and says so. It is asked for: a consumer that does not ask checks what it did
+    before (the same ruling). This repository's CI asks, with the event's head, and so does the
+    refuse-pr-body.ps1 hook on `gh pr edit`, with the head gh names.
+
     A SHALLOW CLONE IS REFUSED, and nothing is checked: there an ancestor cannot be told from a
     commit whose history was cut off. CI therefore fetches the whole history for this. Whatever
     else git cannot answer fails the run too; nothing passes for not having been asked.
@@ -159,6 +183,11 @@
     through "modpack" in it, so "Realistic Fusion Refreshed" is not, nor is one named by any
     spelling but its name, the word, "modpack" and "RFR". A run id of 7 or more digits counts as
     a commit.
+    Of cited runs: a run cited in any other form, as "runs 1 and 2" or a number alone, which is
+    passed over; a sibling's run cited as `run` and its id, which is read as this repository's
+    and fails as one gh cannot find, so cite it by its address; whether the run is the one the
+    prose means, or what the prose says of it. A step that runs check.ps1 written over more than
+    one line, or under no `name:`, is not found, and the run fails for it.
 
 .PARAMETER Path
     The file holding the body, as handed to `gh pr create --body-file`.
@@ -176,6 +205,13 @@
 
 .PARAMETER RequireSummaryVisual
     Hold `## Summary` to a visual, as above. Off unless asked.
+
+.PARAMETER CheckRuns
+    Hold each cited run of the check workflow to -Head, as above. Needs gh, signed in to read the
+    repository's runs. Off unless asked.
+
+.PARAMETER Head
+    The pull request's head commit, in full, for -CheckRuns. With none, no run is read.
 
 .PARAMETER SelfTest
     Run the cases that hold the check to what this header says, naming each as it runs. Needs
@@ -197,7 +233,9 @@ param(
     [Parameter(ParameterSetName = 'SelfTest', Mandatory)] [switch] $SelfTest,
     [string] $Main = 'origin/main',
     [switch] $CiteSiblings,
-    [switch] $RequireSummaryVisual
+    [switch] $RequireSummaryVisual,
+    [switch] $CheckRuns,
+    [string] $Head
 )
 
 Set-StrictMode -Version Latest
@@ -365,6 +403,62 @@ function Get-SiblingProblem {
     }
 }
 
+function Get-CitedRun {
+    <#  Each run id $Text cites, once, in the order first cited: an address of $Repo's run,
+        github.com/<owner>/<name>/actions/runs/<id>, in any case; or `run` or `run id` as a word,
+        then nine digits or more.  #>
+    param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text, [string] $Repo)
+    $found = [System.Collections.Generic.List[object]]::new()
+    if ($Repo) {
+        foreach ($m in [regex]::Matches($Text, "github\.com/$([regex]::Escape($Repo))/actions/runs/(\d+)", 'IgnoreCase')) { $found.Add(@{ At = $m.Index; Id = $m.Groups[1].Value }) }
+    }
+    foreach ($m in [regex]::Matches($Text, '(?<![\w-])run(?:\s+id)?\s+(\d{9,})(?![\w-])', 'IgnoreCase')) { $found.Add(@{ At = $m.Index; Id = $m.Groups[1].Value }) }
+    @($found | Sort-Object { $_.At } | ForEach-Object { $_.Id } | Select-Object -Unique)
+}
+
+function Get-CheckWorkflow {
+    <#  The check workflow's name and the name of its step that runs scripts/check.ps1, read from
+        the workflow's text, as @{ Workflow; Step }. Throws where either is not there.  #>
+    param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text)
+    $workflow = $null; $step = $null; $last = $null
+    foreach ($line in $Text -split '\r?\n') {
+        if ($null -eq $workflow -and $line -match '^name:\s*(.+?)\s*$') { $workflow = $Matches[1] }
+        if ($line -match '^\s*-\s*name:\s*(.+?)\s*$') { $last = $Matches[1] }
+        if ($null -eq $step -and $line -match '^\s*run:\s*pwsh\b.*\sscripts/check\.ps1\s*$') { $step = $last }
+    }
+    if (-not $workflow) { throw 'the check workflow has no top-level name:, so a cited run cannot be told to be of it.' }
+    if (-not $step) { throw 'the check workflow has no step that runs scripts/check.ps1 under a name:, so a cited run cannot be read for it.' }
+    @{ Workflow = $workflow; Step = $step }
+}
+
+function Get-RunCheck {
+    <#  The runs $Text cites, and each problem with them, as @{ Ids; Problems }: with $Head, each
+        is read by $ReadRun, which gives gh's view of a run by its id, or a string of what went
+        wrong, and held to the check workflow at $Top, to $Head, and to its check.ps1 step's
+        success on every job. With no $Head, none is read.  #>
+    param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text, [string] $Head, [Parameter(Mandatory)] [string] $Top,
+        [string] $Repo, [Parameter(Mandatory)] [scriptblock] $ReadRun)
+    $ids = @(Get-CitedRun -Text $Text -Repo $Repo)
+    if (-not $Head -or -not $ids) { return @{ Ids = $ids; Problems = @() } }
+    $file = Join-Path $Top '.github/workflows/check.yml'
+    if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "there is no $file, so a cited run cannot be told to be of the check workflow." }
+    $wf = Get-CheckWorkflow -Text (Get-Content -LiteralPath $file -Raw)
+    $problems = @(foreach ($id in $ids) {
+            $r = & $ReadRun $id
+            if ($r -is [string]) { "run $id could not be read: $r"; continue }
+            if ($r.workflowName -cne $wf.Workflow) { "run $id is of the workflow $($r.workflowName), not $($wf.Workflow)"; continue }
+            if ($r.headSha -ne $Head) { "run $id ran on $($r.headSha), not on the head, $Head" }
+            $jobs = @($r.jobs)
+            if (-not $jobs.Count) { "run $id has no job"; continue }
+            foreach ($j in $jobs) {
+                $s = @($j.steps | Where-Object { $_.name -ceq $wf.Step })
+                $said = if ($s.Count) { $s[0].conclusion } else { 'nothing, having no such step,' }
+                if ($said -cne 'success') { "run $id's step `"$($wf.Step)`" concluded $(if ($said) { $said } else { 'nothing yet' }) on $($j.name)" }
+            }
+        })
+    @{ Ids = $ids; Problems = $problems }
+}
+
 function Invoke-SelfTest {
     $temp = Join-Path ([IO.Path]::GetTempPath()) "pr-body-check-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
     $repo = Join-Path $temp 'repo'
@@ -396,6 +490,26 @@ function Invoke-SelfTest {
         try { $text = (& pwsh -NoProfile -File $PSCommandPath @Arguments 2>&1 | Out-String) } finally { Pop-Location }
         @{ Code = $LASTEXITCODE; Text = $text }
     }
+    # Runs as `gh run view --json headSha,workflowName,jobs` gives them, by id, with gh stood in
+    # (#455): each with two jobs, whose body step failed, as it does after a push.
+    $step = 'Parse every script and run the self-tests'
+    $job = { param([string] $Os, [string] $Conclusion)
+        [pscustomobject]@{ name = $Os; steps = @([pscustomobject]@{ name = $step; conclusion = $Conclusion },
+                [pscustomobject]@{ name = 'Check the pull request body'; conclusion = 'failure' }) } }
+    $fakeRun = { param([string] $Sha, [string] $Last = 'success', [string] $Workflow = 'check')
+        [pscustomobject]@{ headSha = $Sha; workflowName = $Workflow; jobs = @((& $job 'windows-latest' 'success'), (& $job 'ubuntu-latest' $Last)) } }
+    $fakeRuns = @{
+        '111111111' = & $fakeRun $onBranch
+        '222222222' = & $fakeRun $onMain
+        '333333333' = & $fakeRun $onBranch 'failure'
+        '444444444' = & $fakeRun $onBranch 'skipped'
+        '555555555' = & $fakeRun $onBranch 'success' 'release'
+    }
+    $readRun = { param([string] $Id) if ($fakeRuns.ContainsKey($Id)) { $fakeRuns[$Id] } else { "could not find any workflow run with ID: $Id" } }
+    $workflowDir = Join-Path $repo '.github/workflows'
+    New-Item -ItemType Directory -Path $workflowDir -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $workflowDir 'check.yml') -Value "name: check`njobs:`n  check:`n    steps:`n      - name: $step`n        run: pwsh -NoProfile -File scripts/check.ps1"
+    $runCheck = { param([string] $Text) Get-RunCheck -Text $Text -Head $onBranch -Top $repo -Repo 'octo/repo' -ReadRun $readRun }
 
     # A case passes on one output, $true (#419). Any other output fails it, saying
     # why: [bool] of two values or more is true whatever they are, so a case that
@@ -614,6 +728,40 @@ function Invoke-SelfTest {
             $want = "$at $at"
             if ($dates -ne $want) { Write-Host "    $($dates -join ' | ')" }
             $dates.Count -eq 3 -and -not ($dates -ne $want) } }
+        @{ Name = 'a cited run is an address of this repository''s run, or run, run id or CI''s run before nine digits or more; another repository''s address, a bare number and a short one are passed over (#455)'; Test = {
+            $ids = @(Get-CitedRun -Repo 'octo/repo' -Text ("CI's run 43513588892 passed, as run id 40596186420 did; Run`n42486073408 too. " +
+                    'See https://github.com/octo/repo/actions/runs/123456789/job/5 and https://github.com/OCTO/REPO/actions/runs/123456789. ' +
+                    'Not https://github.com/other/repo/actions/runs/987654321, nor 1234567890 alone, nor run 12345678, nor rerun 555555555.'))
+            ($ids -join ',') -eq '43513588892,40596186420,42486073408,123456789' } }
+        @{ Name = 'the check workflow''s name and the name of the step that runs check.ps1 are read from the workflow (#455)'; Test = {
+            $wf = Get-CheckWorkflow -Text ("# a comment`nname: check`n`njobs:`n  check:`n    steps:`n      - uses: actions/checkout@x`n" +
+                "      - name: Parse every script`n        run: pwsh -NoProfile -File scripts/check.ps1`n      - name: Later`n        run: pwsh -File scripts/other.ps1")
+            $none = try { Get-CheckWorkflow -Text "name: check`n"; 'read' } catch { $_.Exception.Message }
+            $wf.Workflow -ceq 'check' -and $wf.Step -ceq 'Parse every script' -and $none -match 'no step' } }
+        @{ Name = 'a run on the head whose check.ps1 step passed on every job passes, though its body step failed (#455)'; Test = {
+            $got = & $runCheck "CI's run 111111111 passed."
+            @($got.Ids).Count -eq 1 -and @($got.Problems).Count -eq 0 } }
+        @{ Name = 'a run on another commit fails, naming the run and the commit it ran on (#455)'; Test = {
+            $got = @((& $runCheck 'run 222222222').Problems)
+            $got.Count -eq 1 -and $got[0] -ceq "run 222222222 ran on $onMain, not on the head, $onBranch" } }
+        @{ Name = 'a run whose check.ps1 step failed, or was skipped, on one job fails, naming the job (#455)'; Test = {
+            $failed = @((& $runCheck 'run 333333333').Problems); $skipped = @((& $runCheck 'run 444444444').Problems)
+            $failed.Count -eq 1 -and $failed[0] -ceq "run 333333333's step ""$step"" concluded failure on ubuntu-latest" -and
+                $skipped.Count -eq 1 -and $skipped[0] -ceq "run 444444444's step ""$step"" concluded skipped on ubuntu-latest" } }
+        @{ Name = 'a run of another workflow fails, naming it (#455)'; Test = {
+            $got = @((& $runCheck 'run 555555555').Problems)
+            $got.Count -eq 1 -and $got[0] -ceq 'run 555555555 is of the workflow release, not check' } }
+        @{ Name = 'an id gh cannot find fails, with what gh said (#455)'; Test = {
+            $got = @((& $runCheck 'run 999999999').Problems)
+            $got.Count -eq 1 -and $got[0] -ceq 'run 999999999 could not be read: could not find any workflow run with ID: 999999999' } }
+        @{ Name = 'with -CheckRuns and no head the check passes and says it read no run; without -CheckRuns a run id passes as unchecked, as before (#455)'; Test = {
+            $file = Join-Path $temp 'body.md'
+            Set-Content -LiteralPath $file -Value "## Summary`n`nCI's run 43513588892 passed.`n`n$marked"
+            $noHead = & $run @($file, '-CheckRuns')
+            $off = & $run @($file)
+            Write-Host ($noHead.Text.TrimEnd() -replace '(?m)^', '    ')
+            $noHead.Code -eq 0 -and $noHead.Text -match 'No head was given, so the 1 cited run\(s\) were NOT read\.' -and
+                $off.Code -eq 0 -and $off.Text -match '1 named no commit here and were NOT checked\.' -and $off.Text -notmatch 'cited run' } }
     )
 
     $failures = 0
@@ -664,12 +812,36 @@ $siblings = @(if ($CiteSiblings) { Get-SiblingProblem -Text "$Body" })
 foreach ($s in $siblings) {
     Write-Host "pr-body-check: line $($s.Line) says `"$($s.Sentence)`", a statement about a sibling with no $($s.Missing -replace '^an? ' -replace ' and an? ', ' and no '). Give it the commit and the date it was read at."
 }
+$runs = @()
+$runNote = ''
+if ($CheckRuns) {
+    # This repository, as origin names it on github.com, for the addresses of its runs.
+    $origin = git -C $top remote get-url origin 2>$null
+    $repo = if ("$origin" -match 'github\.com[/:]([^/]+/[^/]+?)(?:\.git)?/?$') { $Matches[1] } else { '' }
+    $readRun = {
+        param([string] $Id)
+        $said = @(gh run view $Id --json headSha,workflowName,jobs 2>&1 | ForEach-Object { "$_" })
+        if ($LASTEXITCODE -ne 0) { return ($said -join ' ').Trim() }
+        $said -join "`n" | ConvertFrom-Json
+    }
+    $check = Get-RunCheck -Text "$Body" -Head $Head -Top $top -Repo $repo -ReadRun $readRun
+    $runs = @($check.Problems)
+    foreach ($r in $runs) {
+        Write-Host "pr-body-check: $r. A cited run of the check workflow is on the pull request's head, $Head, and its check.ps1 step passed on every job."
+    }
+    $cited = @($check.Ids).Count
+    $runNote = if (-not $Head) { " No head was given, so the $cited cited run(s) were NOT read." }
+        elseif (-not $runs) { " $cited cited run(s) of the check workflow, each on the head, with its check.ps1 step passed on every job." }
+        else { '' }
+}
 $unchecked = if ($read.Unknown) { " $($read.Unknown) named no commit here and were NOT checked." } else { '' }
+$unchecked += $runNote
 $found = @("$($read.Off.Count) word(s) of the body name a commit that is not on $Main", "$($closing.Count) closing keyword(s) stand outside a Closes #N line",
     "$($headings.Count) problem(s) with the pr template's three headings", "$($markers.Count) marker(s) of the pr template missing")
 if ($RequireSummaryVisual) { $found += "$($visual.Count) Summary with no visual" }
 if ($CiteSiblings) { $found += "$($siblings.Count) statement(s) about a sibling lack a commit or an ISO date" }
-if ($read.Off -or $closing -or $headings -or $markers -or $visual -or $siblings) {
+if ($CheckRuns -and $Head) { $found += "$($runs.Count) problem(s) with the cited runs" }
+if ($read.Off -or $closing -or $headings -or $markers -or $visual -or $siblings -or $runs) {
     Write-Host ''
     Write-Host "FAILED - pr-body-check: $(($found | Select-Object -SkipLast 1) -join ', '), and $($found[-1]).$unchecked"
     exit 1
