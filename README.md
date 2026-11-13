@@ -533,7 +533,8 @@ can fail, in a scratch repository of its own.
 [docs/commit-convention.md](docs/commit-convention.md). This repository's `commit-msg` hook runs
 it on each message. Both siblings run it from the submodule, in their `commit-msg` hook and in
 CI: grado-factorio-modpack at `9cfcdd3` and realistic-fusion-refreshed at `4f2dc44`, each read at
-GitHub's `main` on 2026-10-29.
+GitHub's `main` on 2026-10-29. A consumer's `commit-msg` hook is the script's first `.EXAMPLE`
+(#361), which says what was not checked and exits 0 where `pwsh` or the submodule is missing.
 
     pwsh -File scripts/commit-check.ps1 -ScopeFile commit-scopes.txt -Range origin/main..HEAD -RequireCommits
     pwsh -File scripts/commit-check.ps1 -ScopeFile commit-scopes.txt -Title "<pull request title>"

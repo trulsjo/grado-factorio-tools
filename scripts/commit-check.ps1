@@ -100,7 +100,34 @@
     Prove this check can FAIL. A gate that only ever passes is a gate that has stopped reading, so
     this runs a table of messages that must each be rejected for a named reason, and a table that
     must be accepted, printing each and whether it held. One check runs this script as a hook, in
-    a throwaway repository that sets core.commentChar, so it needs git and starts pwsh twice.
+    a throwaway repository that sets core.commentChar, and another runs the first example's
+    wrapper in one with no submodule and in one whose vendor/ holds this script, so it needs git
+    and sh, the one on the path or the one Git for Windows ships, and starts pwsh four times.
+
+.EXAMPLE
+    A consumer's .githooks/commit-msg, committed executable
+    (`git add --chmod=+x .githooks/commit-msg`): off Windows, git ignores a hook that is not. It
+    is the one text each consumer's wrapper is held against (grado-factorio-tools#317 rulings 1
+    and 2). With no pwsh, or no script in vendor/ because the submodule was never fetched, it
+    says what was NOT checked and lets the commit through, the posture ADR 0001 asks for. It
+    passes the consumer's commit-scopes.txt as -ScopeFile. A consumer that chains a check of its
+    own, as the modpack's member-change-check.ps1, runs this one first with `|| exit 1` in place
+    of `exec`.
+
+        #!/bin/sh
+        # Checks the message against vendor/grado-factorio-tools/docs/commit-convention.md.
+        if ! command -v pwsh >/dev/null 2>&1; then
+            echo "commit-msg: pwsh not found, so the message format was NOT checked." >&2
+            exit 0
+        fi
+        ROOT="$(git rev-parse --show-toplevel)"
+        CHECK="$ROOT/vendor/grado-factorio-tools/scripts/commit-check.ps1"
+        if [ ! -f "$CHECK" ]; then
+            echo "commit-msg: $CHECK not found, so the message format was NOT checked." >&2
+            echo "commit-msg: run 'git submodule update --init' to fetch the shared check." >&2
+            exit 0
+        fi
+        exec pwsh -NoProfile -File "$CHECK" -ScopeFile "$ROOT/commit-scopes.txt" "$1"
 
 .EXAMPLE
     pwsh -File scripts/commit-check.ps1 .git/COMMIT_EDITMSG
@@ -493,6 +520,43 @@ if ($SelfTest) {
     catch { $wrong = "as a hook, the fixture threw: $($_.Exception.Message)" }
     finally { Remove-Item -LiteralPath $repo -Recurse -Force -ErrorAction SilentlyContinue }
     Write-Host "self-test: comment character ;, run as a hook in a repository that sets it -- $($wrong ? 'FAILED' : 'ok')"
+    if ($wrong) { $failures.Add($wrong) }
+
+    # THE FIRST EXAMPLE'S WRAPPER (#361), read from the header so the text shown is the text run.
+    # With no submodule it exits 0 and says the message was NOT checked; with this script in
+    # vendor/ it hands the consumer's commit-scopes.txt on, so an unlisted scope fails.
+    $checks++
+    $repo = Join-Path ([IO.Path]::GetTempPath()) "commit-check-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+    try {
+        $wrapper = [regex]::Match((Get-Content -LiteralPath $PSCommandPath -Raw), '(?ms)^ {8}#!/bin/sh\r?$.*?^ {8}exec pwsh[^\r\n]*').Value -replace '(?m)^ {8}', ''
+        if (-not $wrapper) { throw 'the header holds no wrapper from #!/bin/sh to exec pwsh' }
+        $null = New-Item -ItemType Directory -Path $repo
+        git -C $repo init --quiet
+        $hookFile = Join-Path $repo 'commit-msg'
+        [IO.File]::WriteAllText($hookFile, ($wrapper -replace '\r', '') + "`n")
+        Set-Content -LiteralPath (Join-Path $repo 'commit-scopes.txt') -Value 'listed'
+        $file = Join-Path $repo 'MSG'
+        $sh = (Get-Command sh -ErrorAction SilentlyContinue)?.Source ?? (Join-Path (git --exec-path) '../../../usr/bin/sh.exe')
+        $wrap = {
+            param([string] $subject)
+            Set-Content -LiteralPath $file -Encoding utf8 -Value $subject
+            Push-Location $repo
+            try { $out = & $sh $hookFile $file 2>&1 | Out-String; @{ Code = $LASTEXITCODE; Out = $out } } finally { Pop-Location }
+        }
+        $absent = & $wrap '🐛 fix(unlisted): run with no submodule'
+        $vendor = New-Item -ItemType Directory -Path (Join-Path $repo 'vendor/grado-factorio-tools/scripts')
+        Copy-Item -LiteralPath $PSCommandPath -Destination $vendor
+        $listed = & $wrap '🐛 fix(listed): run with the check in vendor'
+        $unlisted = & $wrap '🐛 fix(unlisted): run with the check in vendor'
+        $wrong = if ($absent.Code -ne 0 -or $absent.Out -notmatch 'NOT checked' -or $absent.Out -notmatch 'submodule update --init') {
+            "the wrapper with no submodule exited $($absent.Code) (want 0, saying it was NOT checked and naming the fetch): $($absent.Out.Trim())"
+        } elseif ($listed.Code -ne 0 -or $unlisted.Code -ne 1 -or $unlisted.Out -notmatch 'unlisted') {
+            "the wrapper with the check in vendor exited $($listed.Code) for a listed scope (want 0) and $($unlisted.Code) for an unlisted one (want 1, naming it): $($listed.Out.Trim()) | $($unlisted.Out.Trim())"
+        }
+    }
+    catch { $wrong = "the wrapper's fixture threw: $($_.Exception.Message)" }
+    finally { Remove-Item -LiteralPath $repo -Recurse -Force -ErrorAction SilentlyContinue }
+    Write-Host "self-test: the first example's wrapper lets a commit through with no submodule, and passes -ScopeFile with one -- $($wrong ? 'FAILED' : 'ok')"
     if ($wrong) { $failures.Add($wrong) }
 
     # AN EMPTY RANGE, both ways (#196): it passes and says it read nothing, and with

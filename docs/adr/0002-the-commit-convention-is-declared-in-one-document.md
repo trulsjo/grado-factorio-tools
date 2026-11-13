@@ -47,6 +47,17 @@ them is domain knowledge and stays local.
 in `commit-scopes.txt`, which the check reads, and no longer in its `CLAUDE.md`, which says what a
 scope is and points there. Both siblings still list theirs in their `CLAUDE.md` (read 2026-10-09).
 
+**Changed 2026-11-06, for the siblings**
+([#317](https://github.com/trulsjo/grado-factorio-tools/issues/317) rulings 1 and 2): each
+sibling's scope vocabulary moves to a `commit-scopes.txt` of its own, which its `commit-msg` hook
+passes as `-ScopeFile`, and its `CLAUDE.md` keeps what a scope is and points there, as this
+repository's did. The hook is the wrapper `scripts/commit-check.ps1`'s first `.EXAMPLE` holds
+([#361](https://github.com/trulsjo/grado-factorio-tools/issues/361)). Each sibling's first list
+starts from the scopes its history uses, and Truls prunes it on that sibling's ticket (ruling 3).
+The check reads new commits only, so no history is rewritten. Neither sibling's hook passes
+`-ScopeFile` yet: grado-factorio-modpack at `834ca0b` and realistic-fusion-refreshed at
+`fccbcc9`, each read at GitHub's `main` on 2026-11-13.
+
 The script's `$TYPES` and `$SITUATIONAL` literals are **not** checked against that document, and
 that is deliberate rather than an oversight.
 
