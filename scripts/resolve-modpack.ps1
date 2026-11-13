@@ -1,23 +1,23 @@
 <#
 .SYNOPSIS
-    Resolves a modpack's closure to the exact releases a given game build would install,
-    and checks that those releases satisfy each other. Exit 0 means every member resolved and no
-    constraint between the picks is violated.
+    Resolves a modpack's closure to the exact releases a given game build would install, and checks
+    that those releases satisfy each other. Exit 0 means every member resolved and no constraint
+    between the picks is violated.
 
 .DESCRIPTION
     A CHECK, to be run before every pack release. A pack names its members without versions, so each
     member is served its newest release for the declared line -- and when a member publishes a
-    release with a higher `base` floor, the pack's declared minimum silently stops being true.
-    Ruled on grado-factorio-modpack#16, 2026-09-24.
+    release with a higher `base` floor, the pack's declared minimum silently stops being true. Ruled
+    on grado-factorio-modpack#16, 2026-09-24.
 
     A BUILD OFF ITS LINE IS REFUSED, before the portal is asked: -Build must begin with -Line and a
     dot, so 2.0.77 is on 2.0 and 2.1.20 is not (grado-factorio-tools#143). The test is
-    grado-factorio-modpack's stage-pack.ps1's, and so is its reason, "A 2.1 game does not load a
-    mod declaring 2.0" (read at its 7a0bec5, 2026-10-14). The reason covers a newer build on an
-    older line; the test refuses every pair off the line, an older build on a newer line too.
-    The first direction was measured on Factorio 2.1.23 (build 87750) on 2026-10-25 (#204): a mod
-    declaring 2.0 is refused, "Incompatible Factorio version (current: 2.1, required: 2.0)". The
-    other needs a second build installed and was not measured.
+    grado-factorio-modpack's stage-pack.ps1's, and so is its reason, "A 2.1 game does not load a mod
+    declaring 2.0" (read at its 7a0bec5, 2026-10-14). The reason covers a newer build on an older
+    line; the test refuses every pair off the line, an older build on a newer line too. The first
+    direction was measured on Factorio 2.1.23 (build 87750) on 2026-10-25 (#204): a mod declaring
+    2.0 is refused, "Incompatible Factorio version (current: 2.1, required: 2.0)". The other needs a
+    second build installed and was not measured.
 
     THE METHOD is grado-factorio-modpack's docs/porting-notes.md, "Resolves on stable 2.0.77":
 
@@ -61,47 +61,47 @@
     this script re-measures them.
 
     WHAT IT CANNOT SEE. It reads portal metadata and loads nothing: two releases whose declarations
-    agree can still fail together in game, which is the load harness's question. It assumes the
-    mod manager takes the newest qualifying release. It does not check a game mod's constraints
-    beyond `base`, and it does not read a mod's `!` against a game mod (SpaceX's `! space-age` is
-    the designed ABCX/ABCS split). Whether the game or the portal downloads a `+` mod that is not
+    agree can still fail together in game, which is the load harness's question. It assumes the mod
+    manager takes the newest qualifying release. It does not check a game mod's constraints beyond
+    `base`, and it does not read a mod's `!` against a game mod (SpaceX's `! space-age` is the
+    designed ABCX/ABCS split). Whether the game or the portal downloads a `+` mod that is not
     installed: the changelog speaks of enabling, and the load harness measured loading only.
 
     THE PREFIXES are those of the 2.1.23 page of the mod structure
     (https://lua-api.factorio.com/2.1.23/auxiliary/mod-structure.html): `!` incompatible, `?`
     optional, `+` recommended, `(?)` hidden optional, `~` not affecting load order, and none for
-    required. A space after the prefix is optional: 2.1.23 reads `+lib` as `+ lib` (#208). A
-    prefix Factorio does not define, such as `*`, is read as part of the name, so it is reported
-    as a mod the portal does not know rather than silently dropped.
+    required. A space after the prefix is optional: 2.1.23 reads `+lib` as `+ lib` (#208). A prefix
+    Factorio does not define, such as `*`, is read as part of the name, so it is reported as a mod
+    the portal does not know rather than silently dropped.
 
-    A wrong case is detected as such only for a game mod. Any other mandatory line in the wrong
-    case is reported because the portal does not serve that spelling; if it ever served both, the
-    line would resolve to the other mod, silently -- which is what the game would load. A `?`,
-    `(?)` or `!` line that differs from a closure member only in case does not match that member,
-    so it is checked against nothing: `! Lib` beside a picked `lib` is not a violation. The game
-    agrees -- Factorio 2.0.77 (build 84539), measured headless on 2026-10-02 with load-harness.ps1
-    at grado-factorio-tools 499bf8d, loads a mod declaring `! Lib` beside `lib`, and one declaring
-    `? Lib >= 2.0.0` or `(?) Lib >= 2.0.0` beside `lib` 1.0.0, while it refuses each of those
-    lines spelled `lib`. Factorio 2.1.23 (build 87750) does the same, measured 2026-10-25 (#203);
-    that run, and how to repeat it, is in docs/measurements.md.
+    A wrong case is detected as such only for a game mod. Any other mandatory line in the wrong case
+    is reported because the portal does not serve that spelling; if it ever served both, the line
+    would resolve to the other mod, silently -- which is what the game would load. A `?`, `(?)` or
+    `!` line that differs from a closure member only in case does not match that member, so it is
+    checked against nothing: `! Lib` beside a picked `lib` is not a violation. The game agrees --
+    Factorio 2.0.77 (build 84539), measured headless on 2026-10-02 with load-harness.ps1 at
+    grado-factorio-tools 499bf8d, loads a mod declaring `! Lib` beside `lib`, and one declaring
+    `? Lib >= 2.0.0` or `(?) Lib >= 2.0.0` beside `lib` 1.0.0, while it refuses each of those lines
+    spelled `lib`. Factorio 2.1.23 (build 87750) does the same, measured 2026-10-25 (#203); that
+    run, and how to repeat it, is in docs/measurements.md.
 
 .PARAMETER InfoJson
     One or more pack info.json paths: a pack plus the packs it depends on. Each is reported. The
-    trailing arguments, so `pwsh -File` can pass several. Each is read before anything is looked
-    up, with or without -PinFile, through mod-info.ps1, which the packer and the load harness
-    share: a pack is a mod, and a file that reader refuses is refused here, naming it.
-    The resolve is refused too, naming the files, if two declare the same name or names that
-    differ only in case: a pin file holds one set per name, and the second file would silently
-    replace the first. The same file given twice is refused too, as two declarations of one
-    name -- one refusal is simpler than deciding when two paths are the same file.
+    trailing arguments, so `pwsh -File` can pass several. Each is read before anything is looked up,
+    with or without -PinFile, through mod-info.ps1, which the packer and the load harness share: a
+    pack is a mod, and a file that reader refuses is refused here, naming it. The resolve is refused
+    too, naming the files, if two declare the same name or names that differ only in case: a pin
+    file holds one set per name, and the second file would silently replace the first. The same file
+    given twice is refused too, as two declarations of one name -- one refusal is simpler than
+    deciding when two paths are the same file.
 
 .PARAMETER Line
     The declared line, `2.0` or `2.1`. A release qualifies only if its factorio_version is exactly
     this.
 
 .PARAMETER Build
-    The game build the pack must install on, e.g. `2.1.23`. It must be on -Line: `2.1.20` with
-    -Line 2.0 is refused.
+    The game build the pack must install on, e.g. `2.1.23`. It must be on -Line: `2.1.20` with -Line
+    2.0 is refused.
 
 .PARAMETER PinFile
     Where to write the pinned list: a .psd1 of one set per pack, named after the pack --
@@ -142,8 +142,8 @@ $ErrorActionPreference = 'Stop'
 
 function ConvertFrom-Dependency {
     <#  One info.json dependency string as Kind, Name, Op and Version. Kind is required, unordered
-        (`~`), recommended (`+`), optional (`?`), hidden (`(?)`) or incompatible (`!`). Names
-        may hold spaces, so the name ends where an operator starts, not at whitespace.  #>
+        (`~`), recommended (`+`), optional (`?`), hidden (`(?)`) or incompatible (`!`). Names may
+        hold spaces, so the name ends where an operator starts, not at whitespace.  #>
     param([Parameter(Mandatory)] [string] $Text)
 
     $m = [regex]::Match($Text, '^\s*(?<prefix>\(\?\)|[?!~+])?\s*(?<name>.+?)\s*(?:(?<op><=|>=|<|>|=)\s*(?<ver>\S+))?\s*$')
@@ -322,8 +322,8 @@ function Read-Packs {
     <#  The packs' info.json files, keyed by name in exact case. A file Read-ModInfo refuses is
         refused, and so are two names that are the same or differ only in case: the pin file keys
         its sets by pack name, and Import-PowerShellDataFile refuses to parse a file whose keys
-        differ only in case. One file given twice declares its name twice, and is refused the
-        same way.  #>
+        differ only in case. One file given twice declares its name twice, and is refused the same
+        way.  #>
     param([Parameter(Mandatory)] [string[]] $Path)
 
     $packs = [System.Collections.Specialized.OrderedDictionary]::new([StringComparer]::Ordinal)

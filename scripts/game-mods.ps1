@@ -1,6 +1,6 @@
-<#  The game's own mods, which come with the build rather than the portal, and how a name is
-    matched against them. Dot-sourced by resolve-modpack.ps1 and by grado-factorio-modpack's
-    stage-pack.ps1, so the list and its case rule have one home (grado-factorio-modpack#99).
+<#  The game's own mods, which come with the build rather than the portal, and how a name is matched
+    against them. Dot-sourced by resolve-modpack.ps1 and by grado-factorio-modpack's stage-pack.ps1,
+    so the list and its case rule have one home (grado-factorio-modpack#99).
 
     Five game mods on 2.1. `recycler` is new in 2.1.7, the changelog's first 2.1 section, which
     moved the `recycling` recipe category into it. space-age and quality each depend on it (their
@@ -22,8 +22,8 @@ function Test-GameMod {
 }
 
 function Get-MiscasedGameMod {
-    <#  The game mod a name spells in the wrong case, or nothing: `Space-Age` gives `space-age`,
-        and `space-age` or `krastorio2` give nothing.  #>
+    <#  The game mod a name spells in the wrong case, or nothing: `Space-Age` gives `space-age`, and
+        `space-age` or `krastorio2` give nothing.  #>
     param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Name)
     $GAME_MODS | Where-Object { $_ -eq $Name -and $_ -cne $Name }
 }

@@ -1,173 +1,163 @@
 <#
 .SYNOPSIS
-    Checks Markdown for four things a machine can decide: emphasis or a code span left open at
-    the end of its paragraph, or a `*` that can only close with nothing open to close; a table
-    row whose column count differs from its header's; a link to a file in the repository, or to
-    a heading, that is not there; and a figure grouped in thousands split across a line end.
-    Handed -MaxLineLength, a fifth: a prose line longer than that. Exit 0 means none was found in
-    the files read, with -All alone that there was at least one to read, and with -Path that each
-    file named was read; exit 1 names each as <file>:<line>: <what>. With -Body it reads one file,
-    in the repository or out, as a pull request's or issue's body, where a link that is not a
-    full address or a fragment of the body's own fails; exit 0 means that file was read and
-    nothing was found.
+    Checks Markdown for four things a machine can decide: emphasis or a code span left open at the
+    end of its paragraph, or a `*` that can only close with nothing open to close; a table row whose
+    column count differs from its header's; a link to a file in the repository, or to a heading,
+    that is not there; and a figure grouped in thousands split across a line end. Handed
+    -MaxLineLength, a fifth: a prose line longer than that. Exit 0 means none was found in the files
+    read, with -All alone that there was at least one to read, and with -Path that each file named
+    was read; exit 1 names each as <file>:<line>: <what>. With -Body it reads one file, in the
+    repository or out, as a pull request's or issue's body, where a link that is not a full address
+    or a fragment of the body's own fails; exit 0 means that file was read and nothing was found.
 
 .DESCRIPTION
-    A PRE-COMMIT CHECK (grado-factorio-modpack#149, where it was written). Run with no arguments,
-    as a pre-commit hook does, it reads the staged Markdown files as they are staged, not as they
-    are on disk. A review there on 2026-10-05 found emphasis that could not close, so the rest of
-    a note rendered wrongly, and a reviewer had to find it. Run with no arguments or with -All, it
-    then names each file it read whose working tree differs from the index: those edits were not
-    read. That is a note, which does not change the exit code (grado-factorio-tools#138). It
-    reads the repository it is run in, which need not be the one that holds it, and from any
-    directory inside that repository it reads the same files and says the same. In
-    grado-factorio-tools, which holds it, scripts/check.ps1 runs it with -All and a line limit.
+    A PRE-COMMIT CHECK (grado-factorio-modpack#149, where it was written). Run with no arguments, as
+    a pre-commit hook does, it reads the staged Markdown files as they are staged, not as they are
+    on disk. A review there on 2026-10-05 found emphasis that could not close, so the rest of a note
+    rendered wrongly, and a reviewer had to find it. Run with no arguments or with -All, it then
+    names each file it read whose working tree differs from the index: those edits were not read.
+    That is a note, which does not change the exit code (grado-factorio-tools#138). It reads the
+    repository it is run in, which need not be the one that holds it, and from any directory inside
+    that repository it reads the same files and says the same. In grado-factorio-tools, which holds
+    it, scripts/check.ps1 runs it with -All and a line limit.
 
     WITH -Path (grado-factorio-tools#191) it reads the files named as they are on disk, staged or
-    not, tracked or not, so an edit can be checked before it is staged. A name is read against
-    the current directory, and a finding names the file by its path from the root. A named file
-    counts as there for a link, as a tracked one does, and a fragment into one is read against
-    its headings on disk; every other file is answered by the index, as with no arguments. So a
-    link to a file on disk that git does not track and that is not named fails, and one to a
-    tracked file deleted from disk but not from the index passes. A name that git tracks in
-    another case is read under git's name, so a finding names it as git does and a link in the
-    typed case still fails; the case of a name git does not track is not checked. Where git's
-    core.ignorecase says the file system ignores case, two spellings are one file: a file named
-    twice, in one case or two, is read once, and a submodule's file is known in either case. A name
-    it cannot read as this repository's Markdown fails the run before anything is read, and says
-    why.
+    not, tracked or not, so an edit can be checked before it is staged. A name is read against the
+    current directory, and a finding names the file by its path from the root. A named file counts
+    as there for a link, as a tracked one does, and a fragment into one is read against its headings
+    on disk; every other file is answered by the index, as with no arguments. So a link to a file on
+    disk that git does not track and that is not named fails, and one to a tracked file deleted from
+    disk but not from the index passes. A name that git tracks in another case is read under git's
+    name, so a finding names it as git does and a link in the typed case still fails; the case of a
+    name git does not track is not checked. Where git's core.ignorecase says the file system ignores
+    case, two spellings are one file: a file named twice, in one case or two, is read once, and a
+    submodule's file is known in either case. A name it cannot read as this repository's Markdown
+    fails the run before anything is read, and says why.
 
-    WITH -Body (grado-factorio-tools#384, ruled by Truls on 2026-11-08) it reads one file as a
-    body that GitHub renders on a pull request or an issue: as it is on disk, inside the
-    repository or out, and asks git nothing, so it may be run outside any repository. -Path
-    keeps refusing a file outside the repository, as its links are read as the tree's. Every rule
-    below that is not about the tree holds a body: emphasis and code spans, table rows, a figure
-    split across a line end, and with -MaxLineLength the line length. Its links are read as A
-    LINK IN A BODY says, below. A finding names the file as it was given, and the summary line
-    says it read a body. Beside -Path, -All or -Range, naming no file, or naming one that holds
-    no text, as a failed write leaves, it fails before anything is checked, and says why. A
-    byte-order mark at the file's start is dropped.
+    WITH -Body (grado-factorio-tools#384, ruled by Truls on 2026-11-08) it reads one file as a body
+    that GitHub renders on a pull request or an issue: as it is on disk, inside the repository or
+    out, and asks git nothing, so it may be run outside any repository. -Path keeps refusing a file
+    outside the repository, as its links are read as the tree's. Every rule below that is not about
+    the tree holds a body: emphasis and code spans, table rows, a figure split across a line end,
+    and with -MaxLineLength the line length. Its links are read as A LINK IN A BODY says, below. A
+    finding names the file as it was given, and the summary line says it read a body. Beside -Path,
+    -All or -Range, naming no file, or naming one that holds no text, as a failed write leaves, it
+    fails before anything is checked, and says why. A byte-order mark at the file's start is
+    dropped.
 
     WHAT IT READS AS WHAT. A paragraph ends at a blank line, a heading, a list item, a table or a
     fenced or indented code block; nothing inside either is read, no emphasis and no link
-    (grado-factorio-tools#261), and a fence never closed is reported. A
-    number ends a paragraph only as `1.`; inside a numbered list any number is the next item.
-    Emphasis follows CommonMark's flanking rules and its rule of 3: a `*` or `_` with whitespace
-    on both sides is a literal, and so is a `_` inside a word. An opener still open when its
-    paragraph ends is reported, and a lone `*` that could open is one: `*.md` in prose wants a
-    code span or `\*`. A `*` that can only close, with nothing open to close, is reported too
-    (grado-factorio-tools#164): it renders as text, as `reach*.` does where an inverted italic
-    meant it to reopen, and `2.0.*` in prose wants a code span as well. A `_` closer with nothing
-    to close is a literal, and not reported. An HTML comment and a tag, attributes and all, on
-    one line, are not read for emphasis. A table is a line holding a `|` followed by a delimiter
-    row holding one; every line after it up to a blank line is a row, and each cell is read as a
-    paragraph of its own. A link is `[text](target)` or a `[label]: target` line, in prose or in
-    any row of a table; a target with a scheme (`https:`, `mailto:`) is not checked, and the
-    rest must name a file or directory git tracks, in exact case, as GitHub serves it.
-    A FRAGMENT, `#name` alone or after a `.md` file, must be the anchor of a heading in that
-    file, read as the file is read, in exact case (grado-factorio-tools#155). The anchor is
-    the one GitHub gives, asked of it 2026-10-15 and in docs/measurements.md: the heading's
-    text as it renders, lower-cased, with all but letters, marks, decimal digits, connector
-    punctuation such as `_`, `-` and spaces dropped and each space made a hyphen; a repeat takes
-    -1, -2 and on. A heading is a `#` line or a line alone after a blank one and underlined with
-    `=` or `-`.
-    A LINK IN A BODY, read with -Body, is read as GitHub reads it there, where a link that is no
-    full address resolves against the page's own address and not the repository's tree. Its
-    targets are those of a page, and also an empty one, `[x]()`, a `[label]:` line's target on
-    the line after it, and a raw `<a href="...">`'s, each with its backslash escapes and
+    (grado-factorio-tools#261), and a fence never closed is reported. A number ends a paragraph only
+    as `1.`; inside a numbered list any number is the next item. Emphasis follows CommonMark's
+    flanking rules and its rule of 3: a `*` or `_` with whitespace on both sides is a literal, and
+    so is a `_` inside a word. An opener still open when its paragraph ends is reported, and a lone
+    `*` that could open is one: `*.md` in prose wants a code span or `\*`. A `*` that can only
+    close, with nothing open to close, is reported too (grado-factorio-tools#164): it renders as
+    text, as `reach*.` does where an inverted italic meant it to reopen, and `2.0.*` in prose wants
+    a code span as well. A `_` closer with nothing to close is a literal, and not reported. An HTML
+    comment and a tag, attributes and all, on one line, are not read for emphasis. A table is a line
+    holding a `|` followed by a delimiter row holding one; every line after it up to a blank line is
+    a row, and each cell is read as a paragraph of its own. A link is `[text](target)` or a
+    `[label]: target` line, in prose or in any row of a table; a target with a scheme (`https:`,
+    `mailto:`) is not checked, and the rest must name a file or directory git tracks, in exact case,
+    as GitHub serves it. A FRAGMENT, `#name` alone or after a `.md` file, must be the anchor of a
+    heading in that file, read as the file is read, in exact case (grado-factorio-tools#155). The
+    anchor is the one GitHub gives, asked of it 2026-10-15 and in docs/measurements.md: the
+    heading's text as it renders, lower-cased, with all but letters, marks, decimal digits,
+    connector punctuation such as `_`, `-` and spaces dropped and each space made a hyphen; a repeat
+    takes -1, -2 and on. A heading is a `#` line or a line alone after a blank one and underlined
+    with `=` or `-`. A LINK IN A BODY, read with -Body, is read as GitHub reads it there, where a
+    link that is no full address resolves against the page's own address and not the repository's
+    tree. Its targets are those of a page, and also an empty one, `[x]()`, a `[label]:` line's
+    target on the line after it, and a raw `<a href="...">`'s, each with its backslash escapes and
     character references undone, as GitHub reads them. A full address is not checked: a scheme,
     `://` and a host, as `https://example.com`, or `mailto:`. A `#name` must be the anchor of a
     heading of the body, by the anchor rule above. Any other target fails, saying it wants a full
-    https:// address: so a drive letter, as `C:/x`, `//host`, `https:x` with no `//`, a
-    `/path` from the site's root, `notes.md:12` and a bare `#` fail in a body.
-    A BARE ADDRESS, `https://...` with no brackets, is not read for emphasis, and ends where
-    GitHub's renderer ends one, asked 2026-10-12 (grado-factorio-tools#124; the answers are in
-    docs/measurements.md, with what the GitHub Flavored Markdown spec says, read the same day).
-    It runs to the next whitespace or `<` and then gives back what stands last: any of
-    ?!.,:;*_~'" and an entity such as `&amp;`, and a `)` that no `(` in the address opened.
-    Inside square brackets it ends at the `]` that closes them, where GitHub makes no link.
-    So emphasis that closes straight after an address is closed, as in
-    `*see https://example.com*`, and a `*` or `_` inside one is part of it. The spec names
+    https:// address: so a drive letter, as `C:/x`, `//host`, `https:x` with no `//`, a `/path` from
+    the site's root, `notes.md:12` and a bare `#` fail in a body. A BARE ADDRESS, `https://...` with
+    no brackets, is not read for emphasis, and ends where GitHub's renderer ends one, asked
+    2026-10-12 (grado-factorio-tools#124; the answers are in docs/measurements.md, with what the
+    GitHub Flavored Markdown spec says, read the same day). It runs to the next whitespace or `<`
+    and then gives back what stands last: any of ?!.,:;*_~'" and an entity such as `&amp;`, and a
+    `)` that no `(` in the address opened. Inside square brackets it ends at the `]` that closes
+    them, where GitHub makes no link. So emphasis that closes straight after an address is closed,
+    as in `*see https://example.com*`, and a `*` or `_` inside one is part of it. The spec names
     fewer: not the two quotes, nor a `;` that ends no entity. The check follows the renderer.
 
     LINE LENGTH, ONLY WHEN HANDED A LIMIT (grado-factorio-tools#93). With no -MaxLineLength the
-    check is silent on length, so a repository that never asked is not held to one. With it, a
-    line longer than the limit is reported with its length, counted as written less the target
-    of each `[text](target)` link and each address, `https://...` bare or `<scheme:...>` in
-    angle brackets, none of which can be wrapped. What stands straight after a bare address,
-    where it ends as said above, is counted. A `<placeholder>` is counted. Not held to it: a
-    table row, a line in a fence, a `# heading`, a `[label]: target` line, a line of an indented
-    code block, and a line with no space to break at within the limit. A space inside a code span
-    is no such place, so a command in one is never wrapped. Trailing spaces are not counted. A
-    limit below 1 is refused.
-    A FIGURE GROUPED IN THOUSANDS SPLIT ACROSS A LINE END, WITH A LIMIT OR NONE
-    (grado-factorio-tools#345, from realistic-fusion-refreshed's #662, where a rewrap split
-    "133 423" and "580 000" and reviewers found them by reading). That repository held its
-    wrapped files alone to it; Truls ruled it on for every page, on #345. A prose line fails
-    when it ends in a number of one to three digits, or that and groups of three after it, less
-    trailing spaces, and the next line of its paragraph opens with exactly three digits. Before
-    the number comes a space, the line's start or punctuation, and not a letter, a digit, `#`,
-    `.`, `,` or `-`: "#656", "2026", "10.8", "1,580" and "2026-10-09" at a line's end head no
-    figure. Two numbers that are not one figure, "the first 12" above "100 lines", fail too, as
-    nothing in the lines tells them apart; break the line a word earlier or later.
-    markdown-rewrap.ps1 never breaks there. It cannot see a figure grouped with a comma or split
-    across a paragraph's end.
-    WHICH LINES ARE AN INDENTED CODE BLOCK IS ASKED OF POWERSHELL'S PARSER, ConvertFrom-Markdown
-    (grado-factorio-tools#95), for every rule and with or without a limit, and of nothing here:
-    the script follows no list, blank line or rule to work it out. A page with no line indented
-    four spaces or a tab, past any quote marks, can hold no such block and is not handed to it.
-    Fences, tables and headings are read by this script.
-    The parser is not GitHub's renderer, and where the two disagree the check follows the
-    parser. Where they were found to, each time over an indented line, is recorded in
-    docs/measurements.md (2026-10-10). Code to the parser and prose to GitHub: after a rule
-    that is itself indented into a list item, and straight after a `^^^` or a `:::` line. Prose
-    to the parser and code to GitHub: after a `term` line and a `:   definition` line, and on a
-    first line that follows a byte-order mark.
-    A page the parser gives up on, which it does on one nested too deep or holding a very large
-    table, is said to be unread by it, and then no line of the page is taken for code.
-    What this cannot see: a heading underlined with `===` is held to the limit as prose, and an
-    address with no scheme is counted.
-    OF A BARE ADDRESS, what neither rule sees: one with no scheme, as `www.example.com`, and an
-    e-mail address, both of which GitHub links, are prose here. An address ends at a `>`, which
-    the renderer takes in: an address in a raw tag's attribute would otherwise hide the text
-    after the tag. Whether GitHub makes a link of it at all is not asked: it makes none of
-    `xhttps://...`, nor of an address inside `[square brackets]`, and both are hidden here,
+    check is silent on length, so a repository that never asked is not held to one. With it, a line
+    longer than the limit is reported with its length, counted as written less the target of each
+    `[text](target)` link and each address, `https://...` bare or `<scheme:...>` in angle brackets,
+    none of which can be wrapped. What stands straight after a bare address, where it ends as said
+    above, is counted. A `<placeholder>` is counted. Not held to it: a table row, a line in a fence,
+    a `# heading`, a `[label]: target` line, a line of an indented code block, and a line with no
+    space to break at within the limit. A space inside a code span is no such place, so a command in
+    one is never wrapped. Trailing spaces are not counted. A limit below 1 is refused. A FIGURE
+    GROUPED IN THOUSANDS SPLIT ACROSS A LINE END, WITH A LIMIT OR NONE (grado-factorio-tools#345,
+    from realistic-fusion-refreshed's #662, where a rewrap split "133 423" and "580 000" and
+    reviewers found them by reading). That repository held its wrapped files alone to it; Truls
+    ruled it on for every page, on #345. A prose line fails when it ends in a number of one to three
+    digits, or that and groups of three after it, less trailing spaces, and the next line of its
+    paragraph opens with exactly three digits. Before the number comes a space, the line's start or
+    punctuation, and not a letter, a digit, `#`, `.`, `,` or `-`: "#656", "2026", "10.8", "1,580"
+    and "2026-10-09" at a line's end head no figure. Two numbers that are not one figure, "the first
+    12" above "100 lines", fail too, as nothing in the lines tells them apart; break the line a word
+    earlier or later. markdown-rewrap.ps1 never breaks there. It cannot see a figure grouped with a
+    comma or split across a paragraph's end. WHICH LINES ARE AN INDENTED CODE BLOCK IS ASKED OF
+    POWERSHELL'S PARSER, ConvertFrom-Markdown (grado-factorio-tools#95), for every rule and with or
+    without a limit, and of nothing here: the script follows no list, blank line or rule to work it
+    out. A page with no line indented four spaces or a tab, past any quote marks, can hold no such
+    block and is not handed to it. Fences, tables and headings are read by this script. The parser
+    is not GitHub's renderer, and where the two disagree the check follows the parser. Where they
+    were found to, each time over an indented line, is recorded in docs/measurements.md
+    (2026-10-10). Code to the parser and prose to GitHub: after a rule that is itself indented into
+    a list item, and straight after a `^^^` or a `:::` line. Prose to the parser and code to GitHub:
+    after a `term` line and a `:   definition` line, and on a first line that follows a byte-order
+    mark. A page the parser gives up on, which it does on one nested too deep or holding a very
+    large table, is said to be unread by it, and then no line of the page is taken for code. What
+    this cannot see: a heading underlined with `===` is held to the limit as prose, and an address
+    with no scheme is counted. OF A BARE ADDRESS, what neither rule sees: one with no scheme, as
+    `www.example.com`, and an e-mail address, both of which GitHub links, are prose here. An address
+    ends at a `>`, which the renderer takes in: an address in a raw tag's attribute would otherwise
+    hide the text after the tag. Whether GitHub makes a link of it at all is not asked: it makes
+    none of `xhttps://...`, nor of an address inside `[square brackets]`, and both are hidden here,
     so a `_` or `*` inside such an address is not read as the emphasis it may be to GitHub.
 
-    WHAT IT CANNOT SEE. Prose: numbers, dates and quantifiers stay the reviewer's. Of a
-    fragment: an anchor made by raw HTML, as `<a id="x">`, a heading inside a list item, and a
-    setext heading of more than one line, so a link to any of them fails; a heading holding a
-    reference link, `[text][label]`, read as written; whether GitHub follows a fragment that
-    differs from an anchor only in case, which is reported and was not asked; and a fragment
-    into a submodule, a directory or a file that is not `.md`, or after a `?query`, which is
-    not checked. A code block made by indenting, which all but the length rule read as text.
-    Emphasis that closes in the wrong place, or that a bullet nested in a numbered item leaves
-    open and the next numbered item closes. Markdown outside `.md` files. A link whose target
-    file or heading a commit deletes or renames, unless the linking file is staged too: -All sees
-    it. A link into a submodule is asked of the working tree, so neither its case nor whether git
-    tracks it is checked; into one not initialised it is said to be unchecked, and passes.
-    What a body is not held to: whether a full address leads anywhere, so a link to a file of
-    the repository by its https:// address is not checked, nor a fragment after one; what GitHub
-    makes of a body's own forms, an @name, a #number or a task list; a link in raw HTML other
-    than an `<a href>` on one line, as an `<img src>`; and whether the file is the body that is
-    posted. A body given inline, as gh's --body, or on standard input, is not read.
+    WHAT IT CANNOT SEE. Prose: numbers, dates and quantifiers stay the reviewer's. Of a fragment: an
+    anchor made by raw HTML, as `<a id="x">`, a heading inside a list item, and a setext heading of
+    more than one line, so a link to any of them fails; a heading holding a reference link,
+    `[text][label]`, read as written; whether GitHub follows a fragment that differs from an anchor
+    only in case, which is reported and was not asked; and a fragment into a submodule, a directory
+    or a file that is not `.md`, or after a `?query`, which is not checked. A code block made by
+    indenting, which all but the length rule read as text. Emphasis that closes in the wrong place,
+    or that a bullet nested in a numbered item leaves open and the next numbered item closes.
+    Markdown outside `.md` files. A link whose target file or heading a commit deletes or renames,
+    unless the linking file is staged too: -All sees it. A link into a submodule is asked of the
+    working tree, so neither its case nor whether git tracks it is checked; into one not initialised
+    it is said to be unchecked, and passes. What a body is not held to: whether a full address leads
+    anywhere, so a link to a file of the repository by its https:// address is not checked, nor a
+    fragment after one; what GitHub makes of a body's own forms, an @name, a #number or a task list;
+    a link in raw HTML other than an `<a href>` on one line, as an `<img src>`; and whether the file
+    is the body that is posted. A body given inline, as gh's --body, or on standard input, is not
+    read.
 
 .PARAMETER Range
-    Check the Markdown files changed in a commit range, as they are at its end:
-    -Range origin/main...HEAD. With three dots the files are those the branch at its end has
-    changed since it left the base; two dots would also list each file the base has edited or
-    deleted since then. The switch is commit-check.ps1's and the form is not: that script's range
-    is a list of commits, which two dots give.
+    Check the Markdown files changed in a commit range, as they are at its end: -Range
+    origin/main...HEAD. With three dots the files are those the branch at its end has changed since
+    it left the base; two dots would also list each file the base has edited or deleted since then.
+    The switch is commit-check.ps1's and the form is not: that script's range is a list of commits,
+    which two dots give.
 
 .PARAMETER All
     Check every tracked Markdown file, as staged, naming those whose unstaged edits were not read.
     With none tracked it fails, having checked nothing (grado-factorio-tools#168), as in a clone
-    whose checkout failed, which has an empty index. With no argument or with -Range, which
-    decides the files when given with -All, no file is no failure.
+    whose checkout failed, which has an empty index. With no argument or with -Range, which decides
+    the files when given with -All, no file is no failure.
 
 .PARAMETER Path
-    Check these Markdown files as they are on disk, named from the current directory and split
-    on commas: -Path README.md,docs/note.md. What that reads as there is under WITH -Path above.
-    Not with -All or -Range.
+    Check these Markdown files as they are on disk, named from the current directory and split on
+    commas: -Path README.md,docs/note.md. What that reads as there is under WITH -Path above. Not
+    with -All or -Range.
 
 .PARAMETER Body
     Check this one file as a pull request's or issue's body, inside the repository or out, as WITH
@@ -183,17 +173,16 @@
 
 .PARAMETER SelfTest
     Run the cases that hold the check to what this header says, naming each as it runs. Needs git,
-    for a fixture repository in a temp directory.
-    One case reads commonmark-examples.json beside this script: the examples of CommonMark
-    0.31.2's Emphasis and Raw HTML sections, under CC BY-SA 4.0 (grado-factorio-tools#167). It
-    runs each through the check and fails where emphasis left open, or a `*` with nothing to
-    close, is reported more often than the spec's HTML shows a literal `*` or `_`: a count, not
-    which mark each finding names. That proves no example holds more such findings than literal
-    marks. It cannot prove a literal mark is found, nor say anything of GitHub's renderer,
-    cmark-gfm, where it parts from the spec. Nor does it hold the hiding of HTML comments and
-    tags: no example puts a `*` in a comment, and examples 475 to 477, which put one in a tag's
-    attribute, pair it with a mark outside the tag, so reading the attribute drops a finding
-    rather than adding one. Their own case holds those.
+    for a fixture repository in a temp directory. One case reads commonmark-examples.json beside
+    this script: the examples of CommonMark 0.31.2's Emphasis and Raw HTML sections, under CC BY-SA
+    4.0 (grado-factorio-tools#167). It runs each through the check and fails where emphasis left
+    open, or a `*` with nothing to close, is reported more often than the spec's HTML shows a
+    literal `*` or `_`: a count, not which mark each finding names. That proves no example holds
+    more such findings than literal marks. It cannot prove a literal mark is found, nor say anything
+    of GitHub's renderer, cmark-gfm, where it parts from the spec. Nor does it hold the hiding of
+    HTML comments and tags: no example puts a `*` in a comment, and examples 475 to 477, which put
+    one in a tag's attribute, pair it with a mark outside the tag, so reading the attribute drops a
+    finding rather than adding one. Their own case holds those.
 
 .EXAMPLE
     pwsh -File scripts/markdown-check.ps1
@@ -226,10 +215,10 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/markdown-lib.ps1"
 
 function Invoke-Check {
-    <#  Check the Markdown files git names, read at $Revision ('' is the index); with -FromDisk,
-        the files the caller names, read from disk, which count as there for a link whether git
-        tracks them or not. Prints each finding and returns how many, as @{ Found; Long }, Long
-        those of a line over -MaxLineLength.  #>
+    <#  Check the Markdown files git names, read at $Revision ('' is the index); with -FromDisk, the
+        files the caller names, read from disk, which count as there for a link whether git tracks
+        them or not. Prints each finding and returns how many, as @{ Found; Long }, Long those of a
+        line over -MaxLineLength.  #>
     param([string[]] $Files, [string] $Revision = '', [Parameter(Mandatory)] [string] $Top, [int] $MaxLineLength = 0, [switch] $FromDisk)
 
     $entries = if ($Revision) { git -C $Top -c core.quotepath=off ls-tree -r $Revision } else { git -C $Top -c core.quotepath=off ls-files -s }

@@ -1,67 +1,67 @@
 <#
 .SYNOPSIS
-    A hook for agent sessions: refuses a shell command that runs Python with its script read
-    from a heredoc. Exit 2 refuses the command before it runs and says to write the script to a
-    file, with raw strings, and run that, or to use the Edit tool; exit 0 lets it run, and means
-    only that this saw no such command. Exit 1 says on stderr that the tool call could not be
-    read and was not checked; the command still runs.
+    A hook for agent sessions: refuses a shell command that runs Python with its script read from a
+    heredoc. Exit 2 refuses the command before it runs and says to write the script to a file, with
+    raw strings, and run that, or to use the Edit tool; exit 0 lets it run, and means only that this
+    saw no such command. Exit 1 says on stderr that the tool call could not be read and was not
+    checked; the command still runs.
 
 .DESCRIPTION
     WHY (grado-factorio-tools#240). In the session of PRs #235 to #238, 51 shell calls ran
-    `python - <<'PYEOF'`, and 16 of them printed `SyntaxWarning: invalid escape sequence`: a
-    Python string, not raw, holding a PowerShell or regex backslash. One such edit halved a
-    regex's backslashes, by that session's account. Python reads a string that is not raw the
-    same way from a file, so the refusal asks for raw strings too. What a file adds: it can be
-    read back, grepped and run again, which a heredoc's script cannot. And under the Bash tool a
-    heredoc holding quotes has failed to parse, and `python -` reading one has hung, by Truls's
-    agent memory (2026-10-08 to 2026-10-18). The Edit tool needs no script at all.
+    `python - <<'PYEOF'`, and 16 of them printed `SyntaxWarning: invalid escape sequence`: a Python
+    string, not raw, holding a PowerShell or regex backslash. One such edit halved a regex's
+    backslashes, by that session's account. Python reads a string that is not raw the same way from
+    a file, so the refusal asks for raw strings too. What a file adds: it can be read back, grepped
+    and run again, which a heredoc's script cannot. And under the Bash tool a heredoc holding quotes
+    has failed to parse, and `python -` reading one has hung, by Truls's agent memory (2026-10-08 to
+    2026-10-18). The Edit tool needs no script at all.
 
     HOW IT IS WIRED. In .claude/settings.json, a PreToolUse hook on the two shell tools, matcher
     `Bash|PowerShell`, as refuse-git-hook-skip.ps1 is. A consumer's command is the first example
-    below (ADR 0004), which names the script under vendor/grado-factorio-tools/ and, where it is
-    not there, lets the command run and tells the agent which path is missing. This repository's
-    own tracked settings wire it from scripts/. The session hands the hook the tool call as JSON
-    on stdin: this reads `tool_input.command`. The `case` keeps PowerShell from starting before
-    every shell command: whatever is refused holds `py` and `<<`.
+    below (ADR 0004), which names the script under vendor/grado-factorio-tools/ and, where it is not
+    there, lets the command run and tells the agent which path is missing. This repository's own
+    tracked settings wire it from scripts/. The session hands the hook the tool call as JSON on
+    stdin: this reads `tool_input.command`. The `case` keeps PowerShell from starting before every
+    shell command: whatever is refused holds `py` and `<<`.
 
-    WHAT IT REFUSES. A command in which the word `python`, with a version as `python3.12` or
-    none, `pythonw` or `py`, alone or at the end of a path, with or without `.exe`, is followed
-    by a heredoc, `<<` or `<<-`, before the command ends, and by no script before it: its other
-    words are options, `-`, or an output redirection, as `2>&1` or `> out.txt`. An option that takes
-    the next word as its value, -W, -X or -Q, is read with it. Every word of a command is read, so a
-    word before Python, as `env`, `exec`, `sudo` or a variable set for it, does not hide it.
+    WHAT IT REFUSES. A command in which the word `python`, with a version as `python3.12` or none,
+    `pythonw` or `py`, alone or at the end of a path, with or without `.exe`, is followed by a
+    heredoc, `<<` or `<<-`, before the command ends, and by no script before it: its other words are
+    options, `-`, or an output redirection, as `2>&1` or `> out.txt`. An option that takes the next
+    word as its value, -W, -X or -Q, is read with it. Every word of a command is read, so a word
+    before Python, as `env`, `exec`, `sudo` or a variable set for it, does not hide it.
 
-    WHAT IT LETS THROUGH. `python -c` and `python -m`, alone or after switches that take no
-    value, as -Imjson.tool, whose code is their argument and not the heredoc; `python <file>`,
-    with or without a heredoc, which is then the script's input; a script on stdin from a file,
+    WHAT IT LETS THROUGH. `python -c` and `python -m`, alone or after switches that take no value,
+    as -Imjson.tool, whose code is their argument and not the heredoc; `python <file>`, with or
+    without a heredoc, which is then the script's input; a script on stdin from a file,
     `python - < edit.py`; a here-string, `<<<`, which holds one line; and every command with no
     Python in it.
 
-    WHAT IT CANNOT SEE. A heredoc piped into Python, as `cat <<EOF | python -`, and Python
-    started from a script, an alias, a variable or inside a quoted string, as `sh -c`. A
-    here-string piped to Python under the PowerShell tool, @' '@ | python -. Other interpreters
-    reading a heredoc, as `node` and `perl` do. A person's own terminal: this is a session's
-    hook. And whether the settings still reach it, unless -SelfTest is run, which reads the
-    wired command and the matcher of its entry, and nothing else of the settings. It reads the
-    command as text and does not parse the shell, and so does not skip a heredoc's body. That
-    errs towards refusing where a body's line reads `python - <<EOF`, and the other way where a
-    body holds a lone apostrophe, as `it's`: the quote it opens runs to the next one, and a
-    Python heredoc after it is read as quoted text and let through.
+    WHAT IT CANNOT SEE. A heredoc piped into Python, as `cat <<EOF | python -`, and Python started
+    from a script, an alias, a variable or inside a quoted string, as `sh -c`. A here-string piped
+    to Python under the PowerShell tool, @' '@ | python -. Other interpreters reading a heredoc, as
+    `node` and `perl` do. A person's own terminal: this is a session's hook. And whether the
+    settings still reach it, unless -SelfTest is run, which reads the wired command and the matcher
+    of its entry, and nothing else of the settings. It reads the command as text and does not parse
+    the shell, and so does not skip a heredoc's body. That errs towards refusing where a body's line
+    reads `python - <<EOF`, and the other way where a body holds a lone apostrophe, as `it's`: the
+    quote it opens runs to the next one, and a Python heredoc after it is read as quoted text and
+    let through.
 
     TO CHECK IT, run the second example below.
 
 .PARAMETER SelfTest
-    Prove it refuses what it should and lets the rest through, that the wired command
-    reaches it, that the matcher beside that command starts the hook for the Bash tool and
-    for the PowerShell tool, and that the first example's form refuses where the script is and,
-    where it is not, exits 0 and prints JSON naming the missing path. The cases that run a
-    command need sh: the one on the path, or the one Git for Windows ships.
+    Prove it refuses what it should and lets the rest through, that the wired command reaches it,
+    that the matcher beside that command starts the hook for the Bash tool and for the PowerShell
+    tool, and that the first example's form refuses where the script is and, where it is not, exits
+    0 and prints JSON naming the missing path. The cases that run a command need sh: the one on the
+    path, or the one Git for Windows ships.
 
 .PARAMETER Settings
-    With -SelfTest: the .claude/settings.json read by the case that runs the wired command and
-    the one that reads its matcher, with that file's repository as the project. Defaults to
-    this repository's own. They take the first command, of any PreToolUse entry, that names this
-    script, as refuse-git-hook-skip.ps1's do.
+    With -SelfTest: the .claude/settings.json read by the case that runs the wired command and the
+    one that reads its matcher, with that file's repository as the project. Defaults to this
+    repository's own. They take the first command, of any PreToolUse entry, that names this script,
+    as refuse-git-hook-skip.ps1's do.
 
 .EXAMPLE
     The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json, as HOW

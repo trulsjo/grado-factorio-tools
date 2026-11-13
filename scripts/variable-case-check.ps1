@@ -1,37 +1,35 @@
 <#
 .SYNOPSIS
-    Reads each script in a directory and fails on a scope that spells one variable two ways
-    that differ only in case. Exit 0 means that in every *.ps1 there, each scope spells each of
-    its variables one way.
+    Reads each script in a directory and fails on a scope that spells one variable two ways that
+    differ only in case. Exit 0 means that in every *.ps1 there, each scope spells each of its
+    variables one way.
 
 .DESCRIPTION
-    WHY (grado-factorio-tools#285). PowerShell variable names ignore case, so $KEYWORD and
-    $keyword are one variable. In one session, by its account (2026-10-27/28), a scriptblock in
-    markdown-rewrap.ps1 set $keyword = '' and emptied the pattern held in $KEYWORD, and a
-    foreach ($b in ...) in follow-pin.ps1's self-test replaced the commit held in $B. Neither
-    showed an error where it went wrong.
+    WHY (grado-factorio-tools#285). PowerShell variable names ignore case, so $KEYWORD and $keyword
+    are one variable. In one session, by its account (2026-10-27/28), a scriptblock in
+    markdown-rewrap.ps1 set $keyword = '' and emptied the pattern held in $KEYWORD, and a foreach
+    ($b in ...) in follow-pin.ps1's self-test replaced the commit held in $B. Neither showed an
+    error where it went wrong.
 
     THE RULE. Within one scope, every variable is spelt one way. A scope is the script itself, a
     function, a scriptblock or a trap's body, each with its own parameters, a function's written
-    after its name as much as in a param block. A scope holds only the variables written in it,
-    not those of one nested in it, with one exception: a scriptblock handed to ForEach-Object or
-    Where-Object, or an alias of either ($CALLER_SCOPE_COMMANDS), module-qualified or not, bare,
-    in parentheses or after -Process:, is read as part of the scope it stands in, as PowerShell
-    runs it there (Truls, 2026-10-28, on #285); but not with -Parallel, which runs it in a
-    runspace of its own. A name with a scope or drive qualifier, as $script:x, $env:x, $global:x
-    or $using:x, is outside the rule. Two spellings in one scope fail, naming the script, each
-    spelling and the first line it stands on. A script that does not parse fails, named as such,
-    and so does a -Path that holds no *.ps1. Only the scripts in -Path are read, not those in its
-    subdirectories.
+    after its name as much as in a param block. A scope holds only the variables written in it, not
+    those of one nested in it, with one exception: a scriptblock handed to ForEach-Object or
+    Where-Object, or an alias of either ($CALLER_SCOPE_COMMANDS), module-qualified or not, bare, in
+    parentheses or after -Process:, is read as part of the scope it stands in, as PowerShell runs it
+    there (Truls, 2026-10-28, on #285); but not with -Parallel, which runs it in a runspace of its
+    own. A name with a scope or drive qualifier, as $script:x, $env:x, $global:x or $using:x, is
+    outside the rule. Two spellings in one scope fail, naming the script, each spelling and the
+    first line it stands on. A script that does not parse fails, named as such, and so does a -Path
+    that holds no *.ps1. Only the scripts in -Path are read, not those in its subdirectories.
 
     WHAT IT CANNOT SEE. A variable reached through Get-Variable, Set-Variable or a string. A
-    dot-sourced file's variables, which join the caller's scope. Any other scriptblock that runs
-    in its parent's scope, read here as its own, among them one run with `.` rather than `&`,
-    one held in a variable and then handed to ForEach-Object, one handed to a .ForEach() or
-    .Where() method, and one handed to Measure-Command. A child scope that reads its parent's
-    variable under another spelling, as & { $X } inside a scope that sets $x, which is one
-    variable read across scopes. An automatic variable spelt two ways, as $True and $true, fails
-    like any other.
+    dot-sourced file's variables, which join the caller's scope. Any other scriptblock that runs in
+    its parent's scope, read here as its own, among them one run with `.` rather than `&`, one held
+    in a variable and then handed to ForEach-Object, one handed to a .ForEach() or .Where() method,
+    and one handed to Measure-Command. A child scope that reads its parent's variable under another
+    spelling, as & { $X } inside a scope that sets $x, which is one variable read across scopes. An
+    automatic variable spelt two ways, as $True and $true, fails like any other.
 
 .PARAMETER Path
     The directory whose scripts are read.
@@ -58,9 +56,8 @@ $CALLER_SCOPE_COMMANDS = @('ForEach-Object', '%', 'foreach', 'Where-Object', '?'
 
 function Get-CallerScopeCommand {
     <#  The command that hands the scriptblock $Block to be run in its caller's scope, or nothing:
-        one of $CALLER_SCOPE_COMMANDS, module-qualified or not, the block given bare, in
-        parentheses or after -Process:, and without -Parallel, which runs it in a runspace of
-        its own.  #>
+        one of $CALLER_SCOPE_COMMANDS, module-qualified or not, the block given bare, in parentheses
+        or after -Process:, and without -Parallel, which runs it in a runspace of its own.  #>
     param([Parameter(Mandatory)] [System.Management.Automation.Language.ScriptBlockAst] $Block)
     $at = $Block.Parent
     if ($at -isnot [System.Management.Automation.Language.ScriptBlockExpressionAst]) { return }
@@ -75,9 +72,9 @@ function Get-CallerScopeCommand {
 }
 
 function Get-VariableScope {
-    <#  The scope $Variable is written in: the nearest scriptblock, or the function whose
-        parameters are written after its name, or a trap's body, which runs in a scope of its own;
-        past a block handed to a command that runs it in its caller's scope.  #>
+    <#  The scope $Variable is written in: the nearest scriptblock, or the function whose parameters
+        are written after its name, or a trap's body, which runs in a scope of its own; past a block
+        handed to a command that runs it in its caller's scope.  #>
     param([Parameter(Mandatory)] [System.Management.Automation.Language.VariableExpressionAst] $Variable)
     $at = $Variable.Parent
     while ($true) {
@@ -92,9 +89,9 @@ function Get-VariableScope {
 }
 
 function Get-CaseClash {
-    <#  Each variable that a scope of the script at $File spells more than one way, as
-        @{ Spellings = @(@{ Name; Line }) }, one entry per spelling at its first line, in order of
-        those lines.  #>
+    <#  Each variable that a scope of the script at $File spells more than one way, as @{ Spellings
+        = @(@{ Name; Line }) }, one entry per spelling at its first line, in order of those
+        lines.  #>
     param([Parameter(Mandatory)] [string] $File)
     $errors = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($File, [ref] $null, [ref] $errors)

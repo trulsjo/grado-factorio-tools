@@ -1,36 +1,36 @@
 <#
 .SYNOPSIS
     A SessionStart hook for agent sessions: warns when the clone a session starts in skipped an
-    install step, core.hooksPath not set to .githooks or a submodule not initialised. Where it
-    finds either, it prints JSON whose systemMessage and additionalContext name each step and the
-    command that takes it; where it finds neither, it prints nothing. It always exits 0: a
-    session is never stopped by it.
+    install step, core.hooksPath not set to .githooks or a submodule not initialised. Where it finds
+    either, it prints JSON whose systemMessage and additionalContext name each step and the command
+    that takes it; where it finds neither, it prints nothing. It always exits 0: a session is never
+    stopped by it.
 
 .DESCRIPTION
-    WHY (grado-factorio-tools#317 ruling 6, #357). A consumer's clone takes two install steps
-    that git does not track: `git config core.hooksPath .githooks`, without which git runs none of
-    the repository's hooks, and `git submodule update --init`, without which vendor/ is empty and
-    every script the consumer resolves from there is missing. A clone that skipped the first
-    commits and pushes past its gates and says nothing.
+    WHY (grado-factorio-tools#317 ruling 6, #357). A consumer's clone takes two install steps that
+    git does not track: `git config core.hooksPath .githooks`, without which git runs none of the
+    repository's hooks, and `git submodule update --init`, without which vendor/ is empty and every
+    script the consumer resolves from there is missing. A clone that skipped the first commits and
+    pushes past its gates and says nothing.
 
-    HOW A CONSUMER WIRES IT. In its tracked .claude/settings.json, a SessionStart hook whose
-    command is the first example below: the form ADR 0004 rules for a shared hook, with no `case`,
-    since a session starts once. Where the script is not there, the submodule was never fetched,
-    and the command's own branch says so, naming the missing path. Whether this repository wires
-    it in its own settings is not ruled (#357).
+    HOW A CONSUMER WIRES IT. In its tracked .claude/settings.json, a SessionStart hook whose command
+    is the first example below: the form ADR 0004 rules for a shared hook, with no `case`, since a
+    session starts once. Where the script is not there, the submodule was never fetched, and the
+    command's own branch says so, naming the missing path. Whether this repository wires it in its
+    own settings is not ruled (#357).
 
     WHAT IT WARNS OF, in the repository -Root names:
     - core.hooksPath, read with `git config --get`, not `.githooks` (a trailing slash and a
       leading ./ are let pass), where the root holds a .githooks directory. A repository with no
       such directory has no hooks to skip, and is not warned of.
-    - each submodule `git submodule status` marks `-`, not initialised, named by its path.
-    And where git cannot read the root as a repository, that the clone was NOT checked.
+    - each submodule `git submodule status` marks `-`, not initialised, named by its path. And where
+    git cannot read the root as a repository, that the clone was NOT checked.
 
     WHAT IT CANNOT SEE. A hooks directory that is not .githooks, or a hook file that is not
-    executable off Windows, where git skips it. A submodule initialised at a commit other than
-    the pin, which `git submodule status` marks `+` and follow-pin.ps1 is for. A hooks path set in
-    the environment, or for one command. Whether the session shows the warning: what the client
-    does with a SessionStart hook's output is not measured here.
+    executable off Windows, where git skips it. A submodule initialised at a commit other than the
+    pin, which `git submodule status` marks `+` and follow-pin.ps1 is for. A hooks path set in the
+    environment, or for one command. Whether the session shows the warning: what the client does
+    with a SessionStart hook's output is not measured here.
 
 .PARAMETER Root
     The repository to read. The wiring gives "$CLAUDE_PROJECT_DIR". Defaults to the current
@@ -43,17 +43,17 @@
     path; a directory outside any repository is said to be not checked. Then the first example's
     command, run through sh, where the project holds no script exits 0 and prints JSON naming the
     missing path, and for this repository runs the script. A settings file's command naming this
-    script, found by its name among the SessionStart entries, is run with this repository's
-    scripts: it must warn the clone that skipped a step and say nothing for the one that did not,
-    a command that never runs the script fails that, and a file with no SessionStart entry wires
-    none. With -Settings, that file's command is held to the same. Needs git, and sh: the one on
-    the path, or the one Git for Windows ships.
+    script, found by its name among the SessionStart entries, is run with this repository's scripts:
+    it must warn the clone that skipped a step and say nothing for the one that did not, a command
+    that never runs the script fails that, and a file with no SessionStart entry wires none. With
+    -Settings, that file's command is held to the same. Needs git, and sh: the one on the path, or
+    the one Git for Windows ships.
 
 .PARAMETER Settings
     With -SelfTest: a consumer's .claude/settings.json, whose SessionStart command naming this
-    script is run on the self-test's two clones, with this repository's scripts in place of the
-    path it names. The first command of any entry that names it is taken (#315 ruling 3). Without
-    it no settings file of a repository is read, since this repository does not wire the hook.
+    script is run on the self-test's two clones, with this repository's scripts in place of the path
+    it names. The first command of any entry that names it is taken (#315 ruling 3). Without it no
+    settings file of a repository is read, since this repository does not wire the hook.
 
 .EXAMPLE
     The wired command: the SessionStart hook a consumer puts in its .claude/settings.json, as HOW A
@@ -79,8 +79,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Get-SkippedInstall {
-    <#  Each install step the repository at $Dir skipped, as a sentence that names the command
-        that takes it; one sentence saying it was not checked where git cannot read it.  #>
+    <#  Each install step the repository at $Dir skipped, as a sentence that names the command that
+        takes it; one sentence saying it was not checked where git cannot read it.  #>
     param([Parameter(Mandatory)] [string] $Dir)
     $top = git -C $Dir rev-parse --show-toplevel 2>$null
     if ($LASTEXITCODE -or -not $top) { return "git could not read $Dir as a repository, so it was NOT checked for skipped install steps." }

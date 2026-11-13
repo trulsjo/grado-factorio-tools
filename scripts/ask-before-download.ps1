@@ -9,9 +9,9 @@
     WHERE IT CAME FROM (grado-factorio-tools#353, #323 ruling 1). grado-factorio-modpack's
     scripts/ask-before-download.ps1 at 0653339, read 2026-11-06. What changed in the move: the
     allowed host is -AllowedHost, mods.factorio.com unless more are given; the self-test finds the
-    wiring by this script's name in the settings file -Settings names, not by its place there
-    (#315 ruling 3), and runs the first example's missing-script branch; its cases name no file of
-    that repository.
+    wiring by this script's name in the settings file -Settings names, not by its place there (#315
+    ruling 3), and runs the first example's missing-script branch; its cases name no file of that
+    repository.
 
     WHY (grado-factorio-modpack#179). On 2026-10-07 a subagent surveying Markdown linters fetched
     five binaries from GitHub releases, and Node, Python and Ruby packages, into the session's
@@ -21,47 +21,44 @@
     HOW A CONSUMER WIRES IT. In its tracked .claude/settings.json, a PreToolUse hook on the two
     shell tools, matcher `Bash|PowerShell`, whose command is the first example below. The session
     hands the hook the tool call as JSON on stdin: this reads `tool_input.command`. The `case`
-    starts this script only when that JSON holds one of its words, since starting PowerShell takes
-    a second and the hook runs before every shell command. Where the script is not there, as in a
-    clone whose submodule was never fetched, the wired command lets the shell command run and
-    prints JSON that tells the agent it was not checked. A consumer that allows another host
-    names it after `-AllowedHost` on its own line, as #315 ruling 5 has it. This repository wires
-    it from scripts/.
+    starts this script only when that JSON holds one of its words, since starting PowerShell takes a
+    second and the hook runs before every shell command. Where the script is not there, as in a
+    clone whose submodule was never fetched, the wired command lets the shell command run and prints
+    JSON that tells the agent it was not checked. A consumer that allows another host names it after
+    `-AllowedHost` on its own line, as #315 ruling 5 has it. This repository wires it from scripts/.
 
-    WHAT IT REFUSES. Standing where a command can stand: npm install, i, ci, add or exec; npx;
-    pip install, also as python -m pip; gem install; cargo install; winget, choco and scoop
-    install; gh release download. And a command holding curl, wget, iwr, irm, Invoke-WebRequest,
+    WHAT IT REFUSES. Standing where a command can stand: npm install, i, ci, add or exec; npx; pip
+    install, also as python -m pip; gem install; cargo install; winget, choco and scoop install; gh
+    release download. And a command holding curl, wget, iwr, irm, Invoke-WebRequest,
     Invoke-RestMethod, Start-BitsTransfer or DownloadFile with an http address that ends in .exe,
     .msi, .zip, .tar.gz or .tgz and whose host is not an allowed one.
 
-    WHY IT REFUSES AND DOES NOT ASK. It first answered with a permission decision of "ask".
-    Measured 2026-10-08 in a session in auto mode, Claude Code 2.1.292, with `npx --version`: the
-    session's debug log shows the hook's "ask" taken ("Hook result has permissionBehavior=ask") and
-    then "Slow permission decision: 4386ms for Bash (mode=auto, behavior=allow)". The command ran
-    and Truls saw no prompt. What "ask" does in another mode was not measured. A refusal by exit 2
-    is what refuse-cd-into-mod-cache.ps1 does. The hook has no switch for a session to set: once
-    Truls has said yes he runs it himself, with the `!` prefix at the prompt. The refusal was
-    measured in the same session after the change: `npx --version` did not run and the session
-    was shown the reason.
+    WHY IT REFUSES AND DOES NOT ASK. It first answered with a permission decision of "ask". Measured
+    2026-10-08 in a session in auto mode, Claude Code 2.1.292, with `npx --version`: the session's
+    debug log shows the hook's "ask" taken ("Hook result has permissionBehavior=ask") and then "Slow
+    permission decision: 4386ms for Bash (mode=auto, behavior=allow)". The command ran and Truls saw
+    no prompt. What "ask" does in another mode was not measured. A refusal by exit 2 is what
+    refuse-cd-into-mod-cache.ps1 does. The hook has no switch for a session to set: once Truls has
+    said yes he runs it himself, with the `!` prefix at the prompt. The refusal was measured in the
+    same session after the change: `npx --version` did not run and the session was shown the reason.
 
-    WHAT IT LETS THROUGH. Everything else, and so a repository's own work: a read of the portal
-    API, a mod fetched from the portal, the scripts in vendor/grado-factorio-tools, gh and git. A
-    mod is Lua the game runs; grado-factorio-modpack#179 takes fetching one as the project's work
-    and not as downloading a program.
+    WHAT IT LETS THROUGH. Everything else, and so a repository's own work: a read of the portal API,
+    a mod fetched from the portal, the scripts in vendor/grado-factorio-tools, gh and git. A mod is
+    Lua the game runs; grado-factorio-modpack#179 takes fetching one as the project's work and not
+    as downloading a program.
 
     WHAT IT CANNOT SEE. A download made by a script or program it lets through. One made by a
-    subagent in a session without this hook, or by a session started outside a repository that
-    wires it. Another package manager (pnpm, yarn, pipx, uv, go, dotnet tool, Install-Module), a
-    git clone of a program, and an address that does not end in one of the five endings or is
-    built from a variable. An installer or fetcher named in another case than the wiring's words,
-    named with .exe or .cmd, or reached through cmd /c, sudo, an alias or a full path. An install
-    that opens a quoted string, as in bash -c "npm install x", and one with a flag between the
-    program and `install`. It reads the command as text and does not parse the shell, so
-    `npm install` is refused inside a quoted string too when it follows a newline or a separator
-    there. The cost: prose handed to the shell, a commit message or a pull request body in a
-    heredoc, is refused when one of its lines opens with a matched command, so pass such text as a
-    file (git commit -F, gh pr edit --body-file). And whether the settings still reach it, unless
-    -SelfTest is run on them.
+    subagent in a session without this hook, or by a session started outside a repository that wires
+    it. Another package manager (pnpm, yarn, pipx, uv, go, dotnet tool, Install-Module), a git clone
+    of a program, and an address that does not end in one of the five endings or is built from a
+    variable. An installer or fetcher named in another case than the wiring's words, named with .exe
+    or .cmd, or reached through cmd /c, sudo, an alias or a full path. An install that opens a
+    quoted string, as in bash -c "npm install x", and one with a flag between the program and
+    `install`. It reads the command as text and does not parse the shell, so `npm install` is
+    refused inside a quoted string too when it follows a newline or a separator there. The cost:
+    prose handed to the shell, a commit message or a pull request body in a heredoc, is refused when
+    one of its lines opens with a matched command, so pass such text as a file (git commit -F, gh pr
+    edit --body-file). And whether the settings still reach it, unless -SelfTest is run on them.
 
     TO CHECK IT, run the second example below.
 
@@ -70,19 +67,19 @@
     whole and in any case.
 
 .PARAMETER SelfTest
-    Prove it refuses what it should and lets the rest through: first by this script's own
-    pattern, an added host included, then with every refused case sent through the wired command,
-    so that a refused case the wiring never hands over turns the self-test red
-    (grado-factorio-modpack#190). Each of the wiring's words has a refused case that holds no
-    other of them, which the self-test checks (grado-factorio-modpack#196). The first example's
-    form, run for a project with no hook script, exits 0 and prints JSON telling the agent; and
-    the matcher of the entry that wires it starts it for both shell tools. The wired cases need
-    sh: the one on the path, or the one Git for Windows ships. It prints how long it took.
+    Prove it refuses what it should and lets the rest through: first by this script's own pattern,
+    an added host included, then with every refused case sent through the wired command, so that a
+    refused case the wiring never hands over turns the self-test red (grado-factorio-modpack#190).
+    Each of the wiring's words has a refused case that holds no other of them, which the self-test
+    checks (grado-factorio-modpack#196). The first example's form, run for a project with no hook
+    script, exits 0 and prints JSON telling the agent; and the matcher of the entry that wires it
+    starts it for both shell tools. The wired cases need sh: the one on the path, or the one Git for
+    Windows ships. It prints how long it took.
 
 .PARAMETER Settings
-    With -SelfTest: the .claude/settings.json whose PreToolUse command naming this script the
-    wired cases run, with that file's repository as the project. Defaults to this repository's
-    own. A consumer runs it on its own file to know its wiring still reaches the hook.
+    With -SelfTest: the .claude/settings.json whose PreToolUse command naming this script the wired
+    cases run, with that file's repository as the project. Defaults to this repository's own. A
+    consumer runs it on its own file to know its wiring still reaches the hook.
 
 .EXAMPLE
     The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json, as HOW A

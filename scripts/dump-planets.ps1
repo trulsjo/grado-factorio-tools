@@ -1,27 +1,26 @@
 <#
 .SYNOPSIS
-    Prints, as Markdown, what each planet's map generation settings hold in a --dump-data dump:
-    the resources, and with -Against what differs from another dump's settings. It also says
-    whether the settings name anything the dump does not have. Exit 0 means it was printed.
+    Prints, as Markdown, what each planet's map generation settings hold in a --dump-data dump: the
+    resources, and with -Against what differs from another dump's settings. It also says whether the
+    settings name anything the dump does not have. Exit 0 means it was printed.
 
 .DESCRIPTION
-    WHAT IT READS. One dump, or two, from get-dump.ps1. It writes nothing. Of each planet it
-    reads map_gen_settings: the autoplace controls, the entities, tiles and decoratives listed,
-    the cliff, the territory units and the property expressions (grado-factorio-modpack#133).
+    WHAT IT READS. One dump, or two, from get-dump.ps1. It writes nothing. Of each planet it reads
+    map_gen_settings: the autoplace controls, the entities, tiles and decoratives listed, the cliff,
+    the territory units and the property expressions (grado-factorio-modpack#133).
 
     A RESOURCE is an entity in a planet's list whose prototype type is `resource`.
 
-    NAMES THAT DO NOT EXIST. Every name in those lists is looked up in the dump, and so is the
-    name inside a property expression's key, as in `entity:coal:probability`. Every item or
-    fluid a listed entity gives when mined is looked up too. An entity, a territory unit and
-    what is mined are looked up under any prototype type, so another prototype of the same name
-    passes for one.
+    NAMES THAT DO NOT EXIST. Every name in those lists is looked up in the dump, and so is the name
+    inside a property expression's key, as in `entity:coal:probability`. Every item or fluid a
+    listed entity gives when mined is looked up too. An entity, a territory unit and what is mined
+    are looked up under any prototype type, so another prototype of the same name passes for one.
 
-    WHAT IT CANNOT SEE. A map: nothing is generated. What a mod places from its control script.
-    A mod that zeroes a resource's autoplace and places it itself shows here as the count of
-    resources whose probability is 0, and no further. Amounts: the richness and frequency of an
-    autoplace control are not compared. What a property expression's value names, since a value
-    may be an expression and not a name. Asteroids and routes.
+    WHAT IT CANNOT SEE. A map: nothing is generated. What a mod places from its control script. A
+    mod that zeroes a resource's autoplace and places it itself shows here as the count of resources
+    whose probability is 0, and no further. Amounts: the richness and frequency of an autoplace
+    control are not compared. What a property expression's value names, since a value may be an
+    expression and not a name. Asteroids and routes.
 
     CHECKED ON 2.1.23 (#219, 2026-10-25): what it reads, against the `Modding:` changes of 2.1.7,
     and a run on a dump of Space Age with Quality.

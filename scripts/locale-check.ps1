@@ -1,26 +1,25 @@
 <#
 .SYNOPSIS
-    Fails if a prototype of the mods' own would show a player something other than its name.
-    Exit 0 means every prototype whose name starts with -Prefix, of a type whose other prototypes
-    are named, has a locale entry that resolved, and that each description it carries resolved
-    too.
+    Fails if a prototype of the mods' own would show a player something other than its name. Exit 0
+    means every prototype whose name starts with -Prefix, of a type whose other prototypes are
+    named, has a locale entry that resolved, and that each description it carries resolved too.
 
 .DESCRIPTION
     A load does not do this: Factorio's data stage loads a prototype with no locale entry without
-    complaint, and the omission surfaces only in front of a player as
-    "Unknown key: item-name.<name>".
+    complaint, and the omission surfaces only in front of a player as "Unknown key:
+    item-name.<name>".
 
     WHERE IT CAME FROM. realistic-fusion-refreshed's scripts/locale-check.ps1, at c48fadf
-    (grado-factorio-tools#102). There it loaded that repository's own mods and held their prefix
-    as a constant. Here the mods are arguments, as load-harness.ps1 takes them, and so is the
-    prefix. The method and the comparison are that script's.
+    (grado-factorio-tools#102). There it loaded that repository's own mods and held their prefix as
+    a constant. Here the mods are arguments, as load-harness.ps1 takes them, and so is the prefix.
+    The method and the comparison are that script's.
 
     WHICH PROTOTYPES ARE THE MODS' OWN IS SAID BY -Prefix, and by nothing else. A prototype counts
-    when its name starts with it, exactly and in that case, whichever mod in the set defined it;
-    so a prototype the game derives from one of the mods' own and names after it, such as a
-    recycling recipe, counts too. A MOD WITH NO PREFIX CONVENTION CANNOT USE THIS CHECK: it has no
-    other way to tell the mods' prototypes from the game's. One that names a prototype outside its
-    prefix is not told so here; that prototype is simply not read.
+    when its name starts with it, exactly and in that case, whichever mod in the set defined it; so
+    a prototype the game derives from one of the mods' own and names after it, such as a recycling
+    recipe, counts too. A MOD WITH NO PREFIX CONVENTION CANNOT USE THIS CHECK: it has no other way
+    to tell the mods' prototypes from the game's. One that names a prototype outside its prefix is
+    not told so here; that prototype is simply not read.
 
     METHOD
 
@@ -36,92 +35,90 @@
 
     Turning up is not enough, though, which is the second half of the check. A dumped name is a
     resolved *value*, and the engine resolves a string containing something it cannot look up -- a
-    rich-text reference to a renamed item, a control code that names nothing -- by writing
-    "Unknown key" or "Unknown control sequence" into the text and carrying on. That value is
-    present, so membership alone reports it clean, and the player reads the error on the tooltip.
-    Get-LocaleFailure in load-harness-lib.ps1 holds what those strings are, and its comment
-    records what the engine does and does not do here. This check passes it -EngineOnly, so it
-    fails on the engine's own errors and not on a placeholder another mod ships deliberately.
+    rich-text reference to a renamed item, a control code that names nothing -- by writing "Unknown
+    key" or "Unknown control sequence" into the text and carrying on. That value is present, so
+    membership alone reports it clean, and the player reads the error on the tooltip.
+    Get-LocaleFailure in load-harness-lib.ps1 holds what those strings are, and its comment records
+    what the engine does and does not do here. This check passes it -EngineOnly, so it fails on the
+    engine's own errors and not on a placeholder another mod ships deliberately.
 
     The two failures are reported apart, because the fixes are not the same: an absent name wants a
     locale entry written, and an unresolved one wants an entry that is already there corrected.
 
     Which categories need a name is not hardcoded, because a hardcoded list goes stale the moment a
     mod adds a prototype type nobody thought about. Instead it is derived from the game: for each
-    type the mods define something in, look at where the other prototypes of that type appear in
-    the locale dump, and require the mods' in the same file. Types whose other members appear
-    nowhere -- recipe categories, fuel categories, anything with no player-visible name -- are
-    skipped on that evidence rather than by assumption.
+    type the mods define something in, look at where the other prototypes of that type appear in the
+    locale dump, and require the mods' in the same file. Types whose other members appear nowhere --
+    recipe categories, fuel categories, anything with no player-visible name -- are skipped on that
+    evidence rather than by assumption.
 
     A type with no other members at all is an error, not a skip. That is the case where this check
     would otherwise go quiet exactly when something new arrives.
 
     An item type is the exception. A type is an item type when some prototype of it carries
-    stack_size, as dump-walk.ps1 finds items. An item type with no other members is compared
-    against the game's prototypes of every item type, the item group, and its mapping line says
-    it came through the item group. The case it is for: 2.1 defines no `tool` of its own, its
-    science packs being plain items, so a mod's own `tool` has no other members.
+    stack_size, as dump-walk.ps1 finds items. An item type with no other members is compared against
+    the game's prototypes of every item type, the item group, and its mapping line says it came
+    through the item group. The case it is for: 2.1 defines no `tool` of its own, its science packs
+    being plain items, so a mod's own `tool` has no other members.
 
-    Any other type with no other members, such as an entity type the game stops defining, is
-    still the error. -Nameless is the answer to it: a type named there is declared to have no
-    visible name, and is skipped and reported as declared. `animation` and `custom-input` are
-    declared already; why the second, below.
+    Any other type with no other members, such as an entity type the game stops defining, is still
+    the error. -Nameless is the answer to it: a type named there is declared to have no visible
+    name, and is skipped and reported as declared. `animation` and `custom-input` are declared
+    already; why the second, below.
 
-    Descriptions are reported but not required: the count of prototypes carrying one is printed,
-    and any that fails to resolve fails the run. Factorio treats a description as optional, so an
-    absent one is not a finding -- but a parameterised localised string usually lives in a
-    description, and a parameter is the ordinary way to name something that has since been
-    renamed.
+    Descriptions are reported but not required: the count of prototypes carrying one is printed, and
+    any that fails to resolve fails the run. Factorio treats a description as optional, so an absent
+    one is not a finding -- but a parameterised localised string usually lives in a description, and
+    a parameter is the ordinary way to name something that has since been renamed.
 
     Expect the count to rise under -With space-age: the expansion generates a recycling recipe for
     every item, named after it, and those carry the prefix too.
 
-    WHAT IT CANNOT SEE. Anything that needs a map: it only dumps, so a pass says nothing about a
-    mod loading. A prototype outside the prefix. A type skipped because under half of its other
-    prototypes, the game's and any other mod's in the set, are named. The name of a custom
-    input: see below. An absent description. A placeholder another mod ships on purpose. And any
-    language but the one the isolated run dumps in.
+    WHAT IT CANNOT SEE. Anything that needs a map: it only dumps, so a pass says nothing about a mod
+    loading. A prototype outside the prefix. A type skipped because under half of its other
+    prototypes, the game's and any other mod's in the set, are named. The name of a custom input:
+    see below. An absent description. A placeholder another mod ships on purpose. And any language
+    but the one the isolated run dumps in.
 
-    A CUSTOM INPUT IS NOT READ. Its name is a [controls] entry, and --dump-prototype-locale
-    writes no file for those. Left to the method above, the type was matched to the shortcuts'
-    file, because 86% of the game's custom inputs share a name with a shortcut, and every custom
-    input of the mods' own was reported missing whether or not it had its entry. Measured on
-    2.0.77 on 2026-10-11, in the review of grado-factorio-tools#102, and on 2.1.23 (build 87750)
-    on 2026-10-25 (#206), whose run is in docs/measurements.md. So `custom-input` is
-    declared beside `animation`, and a custom input with no [controls] entry is not found here.
+    A CUSTOM INPUT IS NOT READ. Its name is a [controls] entry, and --dump-prototype-locale writes
+    no file for those. Left to the method above, the type was matched to the shortcuts' file,
+    because 86% of the game's custom inputs share a name with a shortcut, and every custom input of
+    the mods' own was reported missing whether or not it had its entry. Measured on 2.0.77 on
+    2026-10-11, in the review of grado-factorio-tools#102, and on 2.1.23 (build 87750) on 2026-10-25
+    (#206), whose run is in docs/measurements.md. So `custom-input` is declared beside `animation`,
+    and a custom input with no [controls] entry is not found here.
 
 .PARAMETER Mods
-    The mods to load: mod directories, mod zips, or directories of them. Everything the mods
-    depend on has to be among them, or bundled with the game.
+    The mods to load: mod directories, mod zips, or directories of them. Everything the mods depend
+    on has to be among them, or bundled with the game.
 
 .PARAMETER Prefix
     What the names of the mods' own prototypes start with, e.g. my-. Matched exactly, in case.
 
 .PARAMETER Nameless
     Prototype types this check must not ask a name of, beyond the two it declares itself: a type
-    with no player-visible name of which the set holds none but the mods' own. Several are
-    separated by commas.
+    with no player-visible name of which the set holds none but the mods' own. Several are separated
+    by commas.
 
 .PARAMETER FactorioExe
-    Path to Factorio.exe. Defaults to $env:FACTORIO_EXE, then the Steam install on the machine
-    the harness was written on.
+    Path to Factorio.exe. Defaults to $env:FACTORIO_EXE, then the Steam install on the machine the
+    harness was written on.
 
 .PARAMETER With
-    Bundled mods to enable, e.g. -With space-age. Several are separated by commas. Locale can
-    differ under an expansion, so this is worth running both ways before a release.
+    Bundled mods to enable, e.g. -With space-age. Several are separated by commas. Locale can differ
+    under an expansion, so this is worth running both ways before a release.
 
 .PARAMETER SelfTest
     Verify the check can fail. Runs in three halves. Once as normal, which must pass. Once with a
     mod carrying four planted prototypes -- one with no locale entry, one whose name resolves to an
-    engine error, one whose description does, and a tool with no locale entry, a type the game
-    has none of on 2.1 -- every one of which must be caught, and caught as the right kind. And
-    once on a synthetic dump holding a mod-data of the prefix's, a type the game has none of and
-    no item, which must be refused rather than matched through the item group. All three are
-    required: a check that never fires proves nothing, one that reported an unresolved name as a
-    missing one would send the fix to the wrong place, and one that matched any type through the
-    item group would send a non-item's fix there.
-    With mods and a prefix it runs on those, which must pass first; with neither it builds a small
-    mod of its own. Needs Factorio.
+    engine error, one whose description does, and a tool with no locale entry, a type the game has
+    none of on 2.1 -- every one of which must be caught, and caught as the right kind. And once on a
+    synthetic dump holding a mod-data of the prefix's, a type the game has none of and no item,
+    which must be refused rather than matched through the item group. All three are required: a
+    check that never fires proves nothing, one that reported an unresolved name as a missing one
+    would send the fix to the wrong place, and one that matched any type through the item group
+    would send a non-item's fix there. With mods and a prefix it runs on those, which must pass
+    first; with neither it builds a small mod of its own. Needs Factorio.
 
 .PARAMETER KeepTemp
     Keep the dumps for inspection. Junctions are always removed.

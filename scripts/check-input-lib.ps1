@@ -7,13 +7,13 @@
         if ($in.Failure) { Write-Host $in.Failure; exit 1 }
         foreach ($f in $in.Files) { ... Join-Path $in.Root $f ... }
 
-    WHY. cited-commit-check.ps1, line-cite-check.ps1 and comment-line-check.ps1 each carried a
-    copy of this routine, and each copy had the same three bugs, fixed three times in PR #374: a
-    non-ASCII file name read in the console's code page, the root read before UTF-8 was set, and
-    a run whose files were all gone from disk passing with 0 read.
+    WHY. cited-commit-check.ps1, line-cite-check.ps1 and comment-line-check.ps1 each carried a copy
+    of this routine, and each copy had the same three bugs, fixed three times in PR #374: a
+    non-ASCII file name read in the console's code page, the root read before UTF-8 was set, and a
+    run whose files were all gone from disk passing with 0 read.
 
-    Get-CheckInput -Name <check> [-Root <path>] -Path <pathspecs> [-Exempt <pathspecs>]
-    [-Staged] [-OnDisk]. Each pathspec is a glob from the repository root. In order, it:
+    Get-CheckInput -Name <check> [-Root <path>] -Path <pathspecs> [-Exempt <pathspecs>] [-Staged]
+    [-OnDisk]. Each pathspec is a glob from the repository root. In order, it:
     - sets [Console]::OutputEncoding to UTF-8, before its first git call, and leaves it so, so a
       caller's later git call reads git's UTF-8 too;
     - with no -Root, finds the root from the current location, with git rev-parse;
@@ -24,24 +24,24 @@
       folder standing where git lists a file not among them. Without
       it, as for a caller that reads the index, the list is as git gives it.
 
-    WHAT IT RETURNS. A hashtable: Root, with no -Root the repository's root as git gives it,
-    with / between its folders, and with -Root that as it was given, not checked to be the top
-    of a repository, so a subfolder given reads its pathspecs from that subfolder; Files, the
-    paths from Root, tracked or staged alike, in git's order; Listed, how many files the listing
-    gave after -Exempt and before -OnDisk; and Failure, $null or the line to print, which opens
+    WHAT IT RETURNS. A hashtable: Root, with no -Root the repository's root as git gives it, with /
+    between its folders, and with -Root that as it was given, not checked to be the top of a
+    repository, so a subfolder given reads its pathspecs from that subfolder; Files, the paths from
+    Root, tracked or staged alike, in git's order; Listed, how many files the listing gave after
+    -Exempt and before -OnDisk; and Failure, $null or the line to print, which opens
     `FAILED - <Name>: `. On the not-in-a-repository failure Root is '', Files empty, Listed 0.
 
-    WHAT FAILS. A run that leaves nothing to read fails, and Failure names the step that emptied
-    it: not in a git repository; no file for -Path; every file for -Path exempt; or, with
-    -OnDisk, none of them on disk. The empty runs that are not a failure: with -Staged, nothing
-    staged for -Path, or every staged file exempt, as a commit that stages only a page -Exempt
-    names; each returns no Files and no Failure, and the caller says it read nothing, as
-    docs/agents/code-review.md's read-nothing rule allows. A git listing that fails throws.
+    WHAT FAILS. A run that leaves nothing to read fails, and Failure names the step that emptied it:
+    not in a git repository; no file for -Path; every file for -Path exempt; or, with -OnDisk, none
+    of them on disk. The empty runs that are not a failure: with -Staged, nothing staged for -Path,
+    or every staged file exempt, as a commit that stages only a page -Exempt names; each returns no
+    Files and no Failure, and the caller says it read nothing, as docs/agents/code-review.md's
+    read-nothing rule allows. A git listing that fails throws.
 
-    WHAT IT CANNOT SEE. What the caller then reads of each file: a file read as empty, or one
-    the caller's own filter drops, as an extension, is the caller's to count. A file staged for
-    deletion, which -Staged leaves out. A pathspec's magic other than glob: each is given as
-    :(glob) and each exempt one as :(glob,exclude). A file name holding a line break.
+    WHAT IT CANNOT SEE. What the caller then reads of each file: a file read as empty, or one the
+    caller's own filter drops, as an extension, is the caller's to count. A file staged for
+    deletion, which -Staged leaves out. A pathspec's magic other than glob: each is given as :(glob)
+    and each exempt one as :(glob,exclude). A file name holding a line break.
 
     -SelfTest, run as a script, holds the cases on a scratch repository; it needs git.
 #>

@@ -1,23 +1,22 @@
 <#
 .SYNOPSIS
-    Measures what moving a sibling's vendor/grado-factorio-tools pin from -Old to -New changes:
-    each form the sibling lists is run at both pins, in two clones of the sibling at GitHub's
-    main, and its output and exit code are kept in -Out with a table that compares them. Exit 0
-    means the measurement was made, whatever it found; exit 1 means it could not be made, and
-    says why.
+    Measures what moving a sibling's vendor/grado-factorio-tools pin from -Old to -New changes: each
+    form the sibling lists is run at both pins, in two clones of the sibling at GitHub's main, and
+    its output and exit code are kept in -Out with a table that compares them. Exit 0 means the
+    measurement was made, whatever it found; exit 1 means it could not be made, and says why.
 
 .DESCRIPTION
     WHY (grado-factorio-tools#247). docs/agents/issue-tracker.md, Pin tickets, described the
     measurement in prose, and each sibling session wrote it by hand and got it wrong first: on
     grado-factorio-modpack's PR #387 (2026-10-26) the first run put the pin's copy at the wrong
-    path, gave a hook its input without a cwd and ran a -SelfTest -Settings with vendor/ empty,
-    and was discarded; PR #380 discarded a first run of its -Body form. The why of measuring in a
-    clone, and what the clone cannot see, stay on that page.
+    path, gave a hook its input without a cwd and ran a -SelfTest -Settings with vendor/ empty, and
+    was discarded; PR #380 discarded a first run of its -Body form. The why of measuring in a clone,
+    and what the clone cannot see, stay on that page.
 
     WHERE IT RUNS. From the sibling's vendor/grado-factorio-tools/scripts/, with the submodule
-    checked out at the new pin. The sibling is the repository the submodule sits in. Both pins
-    must be commits of the submodule's repository, from which both copies are made with
-    `git archive`; where either is not, it refuses, naming the commit.
+    checked out at the new pin. The sibling is the repository the submodule sits in. Both pins must
+    be commits of the submodule's repository, from which both copies are made with `git archive`;
+    where either is not, it refuses, naming the commit.
 
     WHAT IT DOES, in -Out, which must be empty or not there:
     - ls-remote.txt: `git ls-remote <origin> refs/heads/main`, origin being the sibling's.
@@ -40,19 +39,19 @@
       that no form runs, matched by script name: a hit is run when every script of this
       repository it names is a form's tools script, wherever the hit sits (#247's brief).
 
-    It reports and does not judge: a form that differs, or fails at both pins, is evidence for
-    the pull request, and the run still exits 0. It exits 1 only when it cannot measure: a pin
-    missing, a forms file it cannot read, a clone, fetch or archive that fails, gh or the remote
-    out of reach, or, for a {prbody} form, an origin that names no github.com/<owner>/<repository>.
-    It fetches, lists the remote and reads pull requests with gh; nothing downloaded is run but
-    the sibling's own forms and scripts, at origin's main.
+    It reports and does not judge: a form that differs, or fails at both pins, is evidence for the
+    pull request, and the run still exits 0. It exits 1 only when it cannot measure: a pin missing,
+    a forms file it cannot read, a clone, fetch or archive that fails, gh or the remote out of
+    reach, or, for a {prbody} form, an origin that names no github.com/<owner>/<repository>. It
+    fetches, lists the remote and reads pull requests with gh; nothing downloaded is run but the
+    sibling's own forms and scripts, at origin's main.
 
     THE FORMS FILE, the one contract between this repository and each sibling: a PowerShell data
     file the sibling keeps, at -Forms in its clone, read with Import-PowerShellDataFile. It holds
-    Forms, a list; each form has a Name, used in the file names; From, `tools` for a script of
-    this repository, found in the pin's copy, or `sibling` for one of the sibling's own, found
-    from its clone's root; Script, its path from there; and Args, a list of arguments. In an
-    argument these are replaced:
+    Forms, a list; each form has a Name, used in the file names; From, `tools` for a script of this
+    repository, found in the pin's copy, or `sibling` for one of the sibling's own, found from its
+    clone's root; Script, its path from there; and Args, a list of arguments. In an argument these
+    are replaced:
     - {tools}: the pin's copy of scripts/, in that clone.
     - {headmsg}: the path of a file holding the clone's HEAD commit message, as
       `git log -1 --format=%B` prints it, in UTF-8 with no BOM, each line ending in LF; a CR in
@@ -66,9 +65,9 @@
 
     WHAT IT CANNOT SEE. What Pin tickets says the copy cannot: the clone's own submodule is not
     initialised, its index matches HEAD, and a form over origin/main...HEAD reads nothing. A form
-    the sibling's file does not list, though the grep under the table names each reference no
-    form runs, by name only: a script one form runs may still be called with other arguments
-    elsewhere. And what a difference means, which is the pull request's to say.
+    the sibling's file does not list, though the grep under the table names each reference no form
+    runs, by name only: a script one form runs may still be called with other arguments elsewhere.
+    And what a difference means, which is the pull request's to say.
 
 .PARAMETER Old
     The commit the sibling's pin is at now.
@@ -83,17 +82,17 @@
     The forms file's path in the sibling's clone. Defaults to scripts/pin-forms.psd1.
 
 .PARAMETER SelfTest
-    Build, in a temp directory and offline, a tools repository whose pins have between them a
-    plain commit, a `!` with no footer, a BREAKING-CHANGE footer and a BREAKING CHANGE footer with
-    a trailer in its paragraph, and a sibling holding a forms file, whose origin is a local path,
-    and measure the move with pull request bodies read from a stub. Check each form's output and
-    exit at both pins, each placeholder, breaking.txt and breaking-lib.ps1's rule, forward, back
-    and over an empty range, table.md's rows, a "differs above the last line"
-    row among them, a sibling reference no form runs being listed, by script name, and that a
-    write into one clone does not show in the other's run. Then run this script itself: copied
-    into the tools repository, with a pin that is not there, it exits 1, naming it; copied into a
-    sibling that holds the tools repository as its submodule, with forms that differ and none
-    that reads gh, it exits 0. Needs git, and no game and no network.
+    Build, in a temp directory and offline, a tools repository whose pins have between them a plain
+    commit, a `!` with no footer, a BREAKING-CHANGE footer and a BREAKING CHANGE footer with a
+    trailer in its paragraph, and a sibling holding a forms file, whose origin is a local path, and
+    measure the move with pull request bodies read from a stub. Check each form's output and exit at
+    both pins, each placeholder, breaking.txt and breaking-lib.ps1's rule, forward, back and over an
+    empty range, table.md's rows, a "differs above the last line" row among them, a sibling
+    reference no form runs being listed, by script name, and that a write into one clone does not
+    show in the other's run. Then run this script itself: copied into the tools repository, with a
+    pin that is not there, it exits 1, naming it; copied into a sibling that holds the tools
+    repository as its submodule, with forms that differ and none that reads gh, it exits 0. Needs
+    git, and no game and no network.
 
 .EXAMPLE
     From the sibling's root, with the submodule at the new pin:

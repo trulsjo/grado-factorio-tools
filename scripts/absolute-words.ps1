@@ -7,40 +7,38 @@
     WHERE IT CAME FROM (grado-factorio-tools#354, #329 ruling 1). grado-factorio-modpack's
     scripts/absolute-words.ps1 at e7a9586, read 2026-11-06. What changed in the move: the header
     names that repository's tickets and pages as its own, the comment above $WORDS names the
-    ruling's repository, and the self-test's list is $listed. The review step that
-    walks the list is grado-factorio-tools#355's.
+    ruling's repository, and the self-test's list is $listed. The review step that walks the list is
+    grado-factorio-tools#355's.
 
-    WHY (grado-factorio-modpack#219). The review rules say "Treat a quantifier as an instruction
-    to enumerate", and the session that wrote the lines had not walked them: in the modpack, five
-    of the eleven findings of PR #210's first review were one such word, and three of the eight
-    of PR #216's (grado-factorio-modpack#213, counted 2026-10-10). The list is for the session to
-    walk before it hands the change to a reviewer: does the sentence hold for each thing it
-    covers.
+    WHY (grado-factorio-modpack#219). The review rules say "Treat a quantifier as an instruction to
+    enumerate", and the session that wrote the lines had not walked them: in the modpack, five of
+    the eleven findings of PR #210's first review were one such word, and three of the eight of PR
+    #216's (grado-factorio-modpack#213, counted 2026-10-10). The list is for the session to walk
+    before it hands the change to a reviewer: does the sentence hold for each thing it covers.
 
-    WHY IT DOES NOT FAIL. The words are in ordinary use. Of the 92 lines
-    grado-factorio-modpack#213 read, code and words it tried and left out among them, 30 used a
-    word in passing. Exit 0 says the range was read, and nothing about what was listed. A range
-    git cannot read exits non-zero.
+    WHY IT DOES NOT FAIL. The words are in ordinary use. Of the 92 lines grado-factorio-modpack#213
+    read, code and words it tried and left out among them, 30 used a word in passing. Exit 0 says
+    the range was read, and nothing about what was listed. A range git cannot read exits non-zero.
 
-    WHAT IT READS. The lines the range's diff adds, as they are at the end of the range. In a
-    `.md` file, each of them. In any other file, the comment lines: one that opens with `#`,
-    and one inside a PowerShell block comment. That covers the scripts, the workflow and the
-    hooks. Then each line of each commit message in the range but the `Co-Authored-By` line.
-    A word is matched whole and in any case: "overall" and "first-class" hold none.
+    WHAT IT READS. The lines the range's diff adds, as they are at the end of the range. In a `.md`
+    file, each of them. In any other file, the comment lines: one that opens with `#`, and one
+    inside a PowerShell block comment. That covers the scripts, the workflow and the hooks. Then
+    each line of each commit message in the range but the `Co-Authored-By` line. A word is matched
+    whole and in any case: "overall" and "first-class" hold none.
 
-    WHAT IT LEAVES. Code. On the two pull requests counted it added 15 and 6 lines, most of them
-    a result string or a parameter named `All`, and one faulted wording, a self-test case's name.
+    WHAT IT LEAVES. Code. On the two pull requests counted it added 15 and 6 lines, most of them a
+    result string or a parameter named `All`, and one faulted wording, a self-test case's name.
 
     WHAT IT CANNOT SEE. Whether a line makes a claim. A claim with none of the words in $WORDS. A
-    phrase broken over two lines. A comment after code on its line, the rest of a block comment
-    that opens there, and a comment in a file that marks them another way, such as Lua's. A
-    line of code that opens with `#` inside a string that runs over lines is read as a comment.
-    A line that was moved and not changed is listed as added. A file git calls binary, and
-    what a moved submodule pin brings in.
+    phrase broken over two lines. A comment after code on its line, the rest of a block comment that
+    opens there, and a comment in a file that marks them another way, such as Lua's. A line of code
+    that opens with `#` inside a string that runs over lines is read as a comment. A line that was
+    moved and not changed is listed as added. A file git calls binary, and what a moved submodule
+    pin brings in.
 
 .PARAMETER Range
-    The commit range, with both ends: -Range origin/main...HEAD. The diff is read as given,
-    and the commit messages are those of the same two ends with two dots.
+    The commit range, with both ends: -Range origin/main...HEAD. The diff is read as given, and the
+    commit messages are those of the same two ends with two dots.
 
 .PARAMETER SelfTest
     Prove a word is found whole and as a phrase, which lines are comment, and over a range in a

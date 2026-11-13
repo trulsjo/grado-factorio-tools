@@ -1,94 +1,92 @@
 <#
 .SYNOPSIS
     A hook for agent sessions: refuses a git command that would discard, overwrite or hide
-    uncommitted work in the working tree it runs against. Exit 2 refuses the command before it
-    runs and says what to do instead; exit 0 lets it run.
+    uncommitted work in the working tree it runs against. Exit 2 refuses the command before it runs
+    and says what to do instead; exit 0 lets it run.
 
 .DESCRIPTION
     WHY (grado-factorio-tools#224, from grado-factorio-modpack#366). On 2026-10-23 a reviewer
     subagent of a session ran `git checkout --detach` in that session's working tree and put the
     branch back. The tree was clean, so nothing was lost, by the reviewer's own report. On a tree
-    with uncommitted work a checkout carries or refuses the changes, and a reset discards them.
-    The risk is the same in every repository a session works in, so the hook lives here. Truls
-    ruled what it refuses on 2026-10-25, in grado-factorio-modpack#366's triage.
+    with uncommitted work a checkout carries or refuses the changes, and a reset discards them. The
+    risk is the same in every repository a session works in, so the hook lives here. Truls ruled
+    what it refuses on 2026-10-25, in grado-factorio-modpack#366's triage.
 
     HOW A CONSUMER WIRES IT. In its tracked .claude/settings.json, a PreToolUse hook on the two
     shell tools, matcher `Bash|PowerShell`, whose command is the first example below (ADR 0004).
     This repository wires it from scripts/ in its own (#323 ruling 3). The session hands the hook
     the tool call as JSON on stdin: this reads `tool_input.command` and `cwd`. The `case` starts
     this script only when that JSON names one of the six subcommands, since starting PowerShell
-    takes a second and the hook runs before every shell command. Where the script is not there,
-    as in a clone whose submodule was never fetched, the wired command lets the shell command run
-    and prints JSON that names the missing path and tells the agent it was not checked, as
+    takes a second and the hook runs before every shell command. Where the script is not there, as
+    in a clone whose submodule was never fetched, the wired command lets the shell command run and
+    prints JSON that names the missing path and tells the agent it was not checked, as
     refuse-cd-into-mod-cache.ps1's wiring does; -SelfTest runs both branches of the wiring.
 
     WHAT IT REFUSES. A tree is dirty when a tracked file has changed, staged or not; an untracked
     file does not count, since a checkout refuses to overwrite one and a reset keeps it. On a dirty
-    tree: `git checkout` with any argument but `-b`, so `git checkout <rev>`, `git checkout --
-    <path>` and `git checkout --detach`; `git switch` with any argument but `-c` or `--create`;
-    `git reset --hard`, `--merge` or `--keep`; `git restore` without `--staged` or `-S`, or with
-    `--worktree` or `-W`; and `git stash`, bare or with `push`, `save` or an option, which hides
-    the work. A redirection, as `2>&1` or `> out.log`, is not read as an argument, so
-    `git stash 2>&1` is a bare stash. On any tree with an untracked file: `git clean`, whatever
-    its options, a dry run included, since those files are what it deletes; with `-x` or `-X`,
-    alone or among other short options as in `-fdx`, on a tree with an ignored file too, which
-    those delete (PR #252's review, 2026-10-26). It binds every caller, the main session and a
-    subagent alike (Truls's ruling): the main session commits before it switches branches.
+    tree: `git checkout` with any argument but `-b`, so `git checkout <rev>`,
+    `git checkout -- <path>` and `git checkout --detach`; `git switch` with any argument but `-c` or
+    `--create`; `git reset --hard`, `--merge` or `--keep`; `git restore` without `--staged` or `-S`,
+    or with `--worktree` or `-W`; and `git stash`, bare or with `push`, `save` or an option, which
+    hides the work. A redirection, as `2>&1` or `> out.log`, is not read as an argument, so
+    `git stash 2>&1` is a bare stash. On any tree with an untracked file: `git clean`, whatever its
+    options, a dry run included, since those files are what it deletes; with `-x` or `-X`, alone or
+    among other short options as in `-fdx`, on a tree with an ignored file too, which those delete
+    (PR #252's review, 2026-10-26). It binds every caller, the main session and a subagent alike
+    (Truls's ruling): the main session commits before it switches branches.
 
     WHAT IT LETS THROUGH. On a dirty tree: `git switch -c` and `git checkout -b`, which carry the
     work to a new branch; `git reset --soft` and a mixed `git reset`; `git restore --staged`;
     `git stash list`, `show`, `pop`, `apply` and the rest that hide nothing; and every other git
     command. Each of those forms on a clean tree, and `git clean` where nothing is untracked.
 
-    WHERE IT READS THE TREE. In the repository the command would run in: the call's `cwd`, moved
-    by a `cd`, `Set-Location` or `pushd` earlier in the command to a literal path, and by each
-    `git -C <path>` the git call names. The tree is read as it stands before the command runs,
-    so `git commit -am x && git switch main` on a dirty tree is refused: commit in one call and
-    switch in the next. A git call in a compound, after `&&`, `||`, `;`, `|`, `&` or a newline,
-    or inside parentheses or braces, is found, and so is one after the assignments that lead a
-    command, as `MSYS_NO_PATHCONV=1 git ...`; a `x=y` word later in the call is an argument.
+    WHERE IT READS THE TREE. In the repository the command would run in: the call's `cwd`, moved by
+    a `cd`, `Set-Location` or `pushd` earlier in the command to a literal path, and by each
+    `git -C <path>` the git call names. The tree is read as it stands before the command runs, so
+    `git commit -am x && git switch main` on a dirty tree is refused: commit in one call and switch
+    in the next. A git call in a compound, after `&&`, `||`, `;`, `|`, `&` or a newline, or inside
+    parentheses or braces, is found, and so is one after the assignments that lead a command, as
+    `MSYS_NO_PATHCONV=1 git ...`; a `x=y` word later in the call is an argument.
 
     IT FAILS OPEN, LOUDLY (Truls's ruling). Where it cannot tell, it lets the command run and
-    prints, on stdout, JSON whose additionalContext tells the agent the command was NOT checked:
-    a call that holds no command, a git call it would judge outside a repository or where git
-    cannot read the tree, one that names its repository with `--git-dir` or `--work-tree`, and a
-    command whose quotes it cannot pair. A command with no git call it judges is let through in
-    silence.
+    prints, on stdout, JSON whose additionalContext tells the agent the command was NOT checked: a
+    call that holds no command, a git call it would judge outside a repository or where git cannot
+    read the tree, one that names its repository with `--git-dir` or `--work-tree`, and a command
+    whose quotes it cannot pair. A command with no git call it judges is let through in silence.
 
     WHAT IT CANNOT SEE. A git call it does not read as one: through an alias, git's own or the
     shell's, through a variable, or from a script or program that runs git itself. A directory
-    reached through a variable, a substitution or a wildcard, and a `cd` in a subshell, read as
-    if it lasted. Short options run together, as `git restore -SW`, and an option written
-    `-bnew` or `--create=x`. Both shells' quoting is read roughly: a word in double or single
-    quotes is one word with its quotes taken off, a backslash or backtick escapes the character
-    after it, and nothing is expanded. And whether a session hands a subagent's calls to the hook
-    at all, which is not measured. And whether the settings still reach it, unless -SelfTest is
-    run on them: that reads the wired command and the matcher of its entry, and nothing else of
-    the settings.
+    reached through a variable, a substitution or a wildcard, and a `cd` in a subshell, read as if
+    it lasted. Short options run together, as `git restore -SW`, and an option written `-bnew` or
+    `--create=x`. Both shells' quoting is read roughly: a word in double or single quotes is one
+    word with its quotes taken off, a backslash or backtick escapes the character after it, and
+    nothing is expanded. And whether a session hands a subagent's calls to the hook at all, which is
+    not measured. And whether the settings still reach it, unless -SelfTest is run on them: that
+    reads the wired command and the matcher of its entry, and nothing else of the settings.
 
     TO CHECK IT, run the second example below.
 
 .PARAMETER SelfTest
-    Build a scratch repository with a second branch, a clean one beside it and a directory
-    outside both, and prove: each refused form refused on a dirty tree and let through on a clean
-    one; a staged-only change counted as dirty; each let-through form let through on a dirty
-    tree; `git clean` refused with an untracked file and let through without, and with `-x` or
-    `-X` refused with an ignored file alone; a stash with a redirection refused; a form inside a
-    compound found; `git -C` and a `cd` moving where the tree is read; a call that holds no
-    command, one outside a repository, one with `--git-dir` and one with an unpaired quote let
-    through with the NOT-checked message. Then the first example's command, run through sh,
-    refuses with exit 2 and a reason, and where the project holds no hook script exits 0 and
-    prints JSON that names the missing path to the agent. Then the command -Settings wires,
-    found by this script's name: it refuses with exit 2 and passes a plain command, and the
-    matcher of its entry starts it for the Bash tool and for the PowerShell tool. Needs git, and
-    sh: the one on the path, or the one Git for Windows ships.
+    Build a scratch repository with a second branch, a clean one beside it and a directory outside
+    both, and prove: each refused form refused on a dirty tree and let through on a clean one; a
+    staged-only change counted as dirty; each let-through form let through on a dirty tree;
+    `git clean` refused with an untracked file and let through without, and with `-x` or `-X`
+    refused with an ignored file alone; a stash with a redirection refused; a form inside a compound
+    found; `git -C` and a `cd` moving where the tree is read; a call that holds no command, one
+    outside a repository, one with `--git-dir` and one with an unpaired quote let through with the
+    NOT-checked message. Then the first example's command, run through sh, refuses with exit 2 and a
+    reason, and where the project holds no hook script exits 0 and prints JSON that names the
+    missing path to the agent. Then the command -Settings wires, found by this script's name: it
+    refuses with exit 2 and passes a plain command, and the matcher of its entry starts it for the
+    Bash tool and for the PowerShell tool. Needs git, and sh: the one on the path, or the one Git
+    for Windows ships.
 
 .PARAMETER Settings
-    With -SelfTest: the .claude/settings.json whose PreToolUse command naming this script the
-    wired cases run, with that file's repository as the project. The first command of any entry
-    that names this script is taken, wherever it stands in the file (#315 ruling 3). Defaults to
-    this repository's own, which check.ps1, and so CI, runs. A consumer runs it on its own file
-    to know its wiring still reaches the hook.
+    With -SelfTest: the .claude/settings.json whose PreToolUse command naming this script the wired
+    cases run, with that file's repository as the project. The first command of any entry that names
+    this script is taken, wherever it stands in the file (#315 ruling 3). Defaults to this
+    repository's own, which check.ps1, and so CI, runs. A consumer runs it on its own file to know
+    its wiring still reaches the hook.
 
 .EXAMPLE
     The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json, as HOW A

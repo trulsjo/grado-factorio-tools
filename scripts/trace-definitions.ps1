@@ -8,43 +8,42 @@
 
 .DESCRIPTION
     THE TRACING MOD. This script writes it into the harness's temporary mod directory
-    (load-harness-lib.ps1), and nowhere else, and it is deleted with the harness. Its name,
-    $TRACER, has an empty dependencies list and sorts before `base`, so it loads after core and
-    before every other mod: the game orders mods by the depth of their dependency chain, then by
-    the natural sort of their names (lua-api.factorio.com/2.0.77, *Data lifecycle*), and a mod
-    whose info.json has no dependencies key depends on base (*Mod structure*, same version). Its
-    data.lua logs what core defined before
-    it, then wraps data.extend, which data:extend calls too. The original runs unchanged after
-    each call is logged. The three data stages share one Lua state, so the wrap holds for all of
-    them. The game runs with --dump-data, which stops after the data stage.
+    (load-harness-lib.ps1), and nowhere else, and it is deleted with the harness. Its name, $TRACER,
+    has an empty dependencies list and sorts before `base`, so it loads after core and before every
+    other mod: the game orders mods by the depth of their dependency chain, then by the natural sort
+    of their names (lua-api.factorio.com/2.0.77, *Data lifecycle*), and a mod whose info.json has no
+    dependencies key depends on base (*Mod structure*, same version). Its data.lua logs what core
+    defined before it, then wraps data.extend, which data:extend calls too. The original runs
+    unchanged after each call is logged. The three data stages share one Lua state, so the wrap
+    holds for all of them. The game runs with --dump-data, which stops after the data stage.
 
-    WHO DEFINED IT. Each call is logged with the mod whose stage file is running, the deepest
-    mod's frame of the Lua stack, and that file's name as the stage. That mod is the definer
-    (Truls, 2026-10-20, on #173). Where the frame that called data.extend is another mod's file,
-    a library's, that mod is named beside it as the caller.
+    WHO DEFINED IT. Each call is logged with the mod whose stage file is running, the deepest mod's
+    frame of the Lua stack, and that file's name as the stage. That mod is the definer (Truls,
+    2026-10-20, on #173). Where the frame that called data.extend is another mod's file, a
+    library's, that mod is named beside it as the caller.
 
     MEASURED ON 2.0.77, 2026-10-20, by `-SelfTest -KeepTemp`, reading the kept trace-stdout.txt
     (grado-factorio-tools#175). The game loaded core, then $TRACER, then base. debug.getinfo gave
     each frame's source as `@__<mod>__/<path>`, so the calling mod and the running one are both
     read: tdp-e's call through tdp-a's lib.lua was logged as run by tdp-e and called from tdp-a.
     log() reached the game's stdout, with 147 lines of core's. With the wrap removed, on a copy of
-    this script the same day (grado-factorio-tools#173), -SelfTest stopped on this script's
-    refusal, having logged only those 147.
+    this script the same day (grado-factorio-tools#173), -SelfTest stopped on this script's refusal,
+    having logged only those 147.
 
-    A SHARED NAME is a type and name that two or more mods define. A mod defining its own name
-    again is not one. A name core or base defines is a base-game name: those a mod defines again
-    are counted, not listed. What stands is the last definition logged.
+    A SHARED NAME is a type and name that two or more mods define. A mod defining its own name again
+    is not one. A name core or base defines is a base-game name: those a mod defines again are
+    counted, not listed. What stands is the last definition logged.
 
-    WHAT IT CANNOT SEE. A prototype made other than through data.extend: assigned into data.raw,
-    or extended through a reference to data.extend taken before the tracing mod ran. A mod that
-    replaces data.extend itself: calls after that go unlogged, or, if its replacement calls
-    through, are each logged as called from that mod. A prototype a later stage changes in place,
-    or deletes, which is not a definition: what stands is the last data.extend, not what data.raw
-    holds at the end. A definition whose data.extend errors inside a pcall is logged all the same.
-    A mod that loads before the tracing mod: one whose info.json gives an empty dependencies list
-    and whose name sorts before $TRACER. A type or name holding a tab or a line break, whose line
-    is not read. Anything after the data stage. And what core defines is read from data.raw as
-    the tracing mod finds it, not logged as calls.
+    WHAT IT CANNOT SEE. A prototype made other than through data.extend: assigned into data.raw, or
+    extended through a reference to data.extend taken before the tracing mod ran. A mod that
+    replaces data.extend itself: calls after that go unlogged, or, if its replacement calls through,
+    are each logged as called from that mod. A prototype a later stage changes in place, or deletes,
+    which is not a definition: what stands is the last data.extend, not what data.raw holds at the
+    end. A definition whose data.extend errors inside a pcall is logged all the same. A mod that
+    loads before the tracing mod: one whose info.json gives an empty dependencies list and whose
+    name sorts before $TRACER. A type or name holding a tab or a line break, whose line is not read.
+    Anything after the data stage. And what core defines is read from data.raw as the tracing mod
+    finds it, not logged as calls.
 
 .PARAMETER Mods
     Mod directories, mod zips, or directories of them, as load-harness.ps1 takes, comma-separated.
@@ -60,13 +59,13 @@
     load-harness.ps1's -KeepTemp does.
 
 .PARAMETER SelfTest
-    Load fixture mods from a temp directory with the tracing mod and check what is printed, and
-    read two logs written without the game. Needs the game.
+    Load fixture mods from a temp directory with the tracing mod and check what is printed, and read
+    two logs written without the game. Needs the game.
 
 .PARAMETER NoGame
-    With -SelfTest, only read the two logs written without the game. scripts/check.ps1 runs this,
-    so the cases that need no game run on every push and in CI; the cases that load the fixture
-    mods are left out, and it says nothing of them.
+    With -SelfTest, only read the two logs written without the game. scripts/check.ps1 runs this, so
+    the cases that need no game run on every push and in CI; the cases that load the fixture mods
+    are left out, and it says nothing of them.
 
 .EXAMPLE
     pwsh -File scripts/trace-definitions.ps1 .mod-cache/Grado_ABCS -With space-age

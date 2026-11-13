@@ -13,27 +13,27 @@
     split across two lines, a table row wrapped, a code span split, a `*` left that the check
     rejects, a list item's continuation left unindented. The wrap is mechanical, so it is a script.
 
-    WHAT IT READS. The same files the check would, by the same switches, read from disk: -Path
-    names them, -All is every Markdown file git tracks, -Range the files a commit range changes,
-    and with none of the three the staged ones. Which lines are over the limit, and which are
-    prose at all, is asked of Test-Markdown in markdown-lib.ps1, which the check runs too
-    (Truls, 2026-10-25, ruling 12 on #215), so the two cannot disagree on what is a table row,
-    code, a heading or a link target. A line is counted as the check counts it, Get-CountedLine.
+    WHAT IT READS. The same files the check would, by the same switches, read from disk: -Path names
+    them, -All is every Markdown file git tracks, -Range the files a commit range changes, and with
+    none of the three the staged ones. Which lines are over the limit, and which are prose at all,
+    is asked of Test-Markdown in markdown-lib.ps1, which the check runs too (Truls, 2026-10-25,
+    ruling 12 on #215), so the two cannot disagree on what is a table row, code, a heading or a link
+    target. A line is counted as the check counts it, Get-CountedLine.
 
-    WHAT IT DOES TO A FLAGGED LINE. From that line to the end of its paragraph, the words are
-    filled greedily back to the limit; lines before it are left as they are, and the sequence of
-    words is unchanged (ruling 13). It breaks only between words, never inside a code span, a
-    link with its text and target, an autolink or an HTML comment, and an HTML comment stays on
-    the line of the word before it. A list item's later lines are indented to its content, and a
-    block quote's `>` is kept on each line. A line is never started with what would make it a
-    list item, a heading, a block quote, a table row, a fence or an HTML block: the word before
-    goes down with it. Since every break is at a space, no emphasis delimiter changes its sides.
-    Nor is a space with a digit before it and exactly three digits after it a break, so a figure
-    grouped in thousands, "580 000", stays on one line (grado-factorio-tools#345), in a comment
-    too. That is wider than what the check fails: "in 2026 100 lines" is kept together here.
-    A paragraph ends at a blank line, a line that starts another block, or a hard line break. The
-    file is written back with its line endings and byte-order mark as they were, to the working
-    tree only, never staged (ruling 14). A second run changes nothing.
+    WHAT IT DOES TO A FLAGGED LINE. From that line to the end of its paragraph, the words are filled
+    greedily back to the limit; lines before it are left as they are, and the sequence of words is
+    unchanged (ruling 13). It breaks only between words, never inside a code span, a link with its
+    text and target, an autolink or an HTML comment, and an HTML comment stays on the line of the
+    word before it. A list item's later lines are indented to its content, and a block quote's `>`
+    is kept on each line. A line is never started with what would make it a list item, a heading, a
+    block quote, a table row, a fence or an HTML block: the word before goes down with it. Since
+    every break is at a space, no emphasis delimiter changes its sides. Nor is a space with a digit
+    before it and exactly three digits after it a break, so a figure grouped in thousands,
+    "580 000", stays on one line (grado-factorio-tools#345), in a comment too. That is wider than
+    what the check fails: "in 2026 100 lines" is kept together here. A paragraph ends at a blank
+    line, a line that starts another block, or a hard line break. The file is written back with its
+    line endings and byte-order mark as they were, to the working tree only, never staged (ruling
+    14). A second run changes nothing.
 
     WITH -Comment (ruling 15), for -Path files only, it finds the comment lines over the limit by
     their length, and rewraps each from that line to the end of its block: a run of lines with the
@@ -61,33 +61,32 @@
     which it leaves as code; .EXAMPLE is not read, and a `#` block is not filled. A paragraph whose
     lines are already full is not written or named.
 
-    WHAT IT LEAVES, and names: a line the check still reports once it is rewrapped, as one
-    holding a word and a token too long to share a line. A line of one token longer than the
-    limit is not named: the check passes it, having no space to break at. What the check exempts
-    is never flagged, so never touched. With -Comment, every comment line over the limit after
-    the run is named, rewrapped or not, a keyword line or a `##` line, which it never rewraps,
-    among them. It exempts what comment-line-lib.ps1 does, a line under `.EXAMPLE` and a line of
-    one word after its marker, and also a shebang and a line over only by its trailing spaces,
-    which the lib names.
+    WHAT IT LEAVES, and names: a line the check still reports once it is rewrapped, as one holding a
+    word and a token too long to share a line. A line of one token longer than the limit is not
+    named: the check passes it, having no space to break at. What the check exempts is never
+    flagged, so never touched. With -Comment, every comment line over the limit after the run is
+    named, rewrapped or not, a keyword line or a `##` line, which it never rewraps, among them. It
+    exempts what comment-line-lib.ps1 does, a line under `.EXAMPLE` and a line of one word after its
+    marker, and also a shebang and a line over only by its trailing spaces, which the lib names.
 
-    WHAT IT CANNOT SEE. Whether the wrap reads well: it is greedy, not balanced. A flagged line
-    that starts inside a code span opened on the line before, whose backticks it then pairs
-    wrongly: grado-factorio-modpack at 6d7a119 had one, a line starting `>= 4.17.10`, which
-    GitHub reads as a block quote. A paragraph that
-    continues lazily into a line the check reads as something else. In -Comment mode, a block
-    comment's opening or closing mark inside a string, which is taken as the block's edge, and a
-    hanging indent such as a help paragraph's term and its text, whose flagged line is rewrapped to
-    its own indent. A section lead after a line that ends other than in a full stop, as in a colon,
-    which is joined to that line's paragraph; and a prose line that wraps to open with an ALL-CAPS
-    word and a full stop after a line ending in a full stop, as an abbreviation such as e.g. does,
-    which starts a paragraph (#398). A list item's lines after its first, indented deeper, which
-    are a paragraph of their own: rewrapped where over, left by -Fill. A block comment opened after
-    code on its line, which is not read as one, and so not named. And a line starting `# ` inside a
-    here-string or a YAML block scalar, which is taken for a comment, rewrapped and named.
+    WHAT IT CANNOT SEE. Whether the wrap reads well: it is greedy, not balanced. A flagged line that
+    starts inside a code span opened on the line before, whose backticks it then pairs wrongly:
+    grado-factorio-modpack at 6d7a119 had one, a line starting `>= 4.17.10`, which GitHub reads as a
+    block quote. A paragraph that continues lazily into a line the check reads as something else. In
+    -Comment mode, a block comment's opening or closing mark inside a string, which is taken as the
+    block's edge, and a hanging indent such as a help paragraph's term and its text, whose flagged
+    line is rewrapped to its own indent. A section lead after a line that ends other than in a full
+    stop, as in a colon, which is joined to that line's paragraph; and a prose line that wraps to
+    open with an ALL-CAPS word and a full stop after a line ending in a full stop, as an
+    abbreviation such as e.g. does, which starts a paragraph (#398). A list item's lines after its
+    first, indented deeper, which are a paragraph of their own: rewrapped where over, left by -Fill.
+    A block comment opened after code on its line, which is not read as one, and so not named. And a
+    line starting `# ` inside a here-string or a YAML block scalar, which is taken for a comment,
+    rewrapped and named.
 
 .PARAMETER Range
-    Rewrap the Markdown files changed in this commit range, as markdown-check.ps1 takes it:
-    -Range origin/main...HEAD. They are read and written on disk.
+    Rewrap the Markdown files changed in this commit range, as markdown-check.ps1 takes it: -Range
+    origin/main...HEAD. They are read and written on disk.
 
 .PARAMETER All
     Rewrap every Markdown file git tracks.
@@ -110,8 +109,8 @@
 
 .PARAMETER SelfTest
     Run the cases that hold it to this header, against text in memory and a scratch file; the
-    ticket's five defects each against a naive greedy wrap too, which makes it. Needs no git and
-    no game.
+    ticket's five defects each against a naive greedy wrap too, which makes it. Needs no git and no
+    game.
 
 .EXAMPLE
     pwsh -File scripts/markdown-rewrap.ps1 -MaxLineLength 100
@@ -223,8 +222,8 @@ function Invoke-MarkdownRewrap {
 }
 
 function Invoke-CommentRewrap {
-    <#  As Invoke-MarkdownRewrap, for the comment lines of a script: a `#` block or a paragraph of
-        a block comment, found over $Max by length alone.  #>
+    <#  As Invoke-MarkdownRewrap, for the comment lines of a script: a `#` block or a paragraph of a
+        block comment, found over $Max by length alone.  #>
     param([AllowEmptyCollection()] [AllowEmptyString()] [string[]] $Lines, [int] $Max)
     # What each line is: in a block comment, and under which help keyword. A keyword is matched
     # in upper case, as PowerShell writes .SYNOPSIS: a line opening .github is prose.

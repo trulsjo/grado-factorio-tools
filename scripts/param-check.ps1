@@ -1,29 +1,29 @@
 <#
 .SYNOPSIS
-    Reads the param block of each script in a directory and fails on a list parameter that is
-    never split on commas. Exit 0 means every top-level [string[]] parameter of every *.ps1 there
-    takes the remaining arguments or is split on a comma by a statement of its script.
+    Reads the param block of each script in a directory and fails on a list parameter that is never
+    split on commas. Exit 0 means every top-level [string[]] parameter of every *.ps1 there takes
+    the remaining arguments or is split on a comma by a statement of its script.
 
 .DESCRIPTION
-    WHY (grado-factorio-tools#163). Under `pwsh -File`, a [string[]] parameter gets `-With a,b`
-    as one string, "a,b"; called from PowerShell it gets two. Other scripts here split their lists
-    in the body, each on its own, and count-resources.ps1, merged in PR #162, split neither of
-    its two: `-With space-age,quality` reached Resolve-BundledSelection as one name and threw.
-    A parameter that takes the remaining arguments binds each argument by itself, and is passed.
+    WHY (grado-factorio-tools#163). Under `pwsh -File`, a [string[]] parameter gets `-With a,b` as
+    one string, "a,b"; called from PowerShell it gets two. Other scripts here split their lists in
+    the body, each on its own, and count-resources.ps1, merged in PR #162, split neither of its two:
+    `-With space-age,quality` reached Resolve-BundledSelection as one name and threw. A parameter
+    that takes the remaining arguments binds each argument by itself, and is passed.
 
-    WHAT IT READS. With PowerShell's parser, the param block at the top of each *.ps1 in -Path,
-    not in its subdirectories. A parameter typed [string[]] is reported unless its [Parameter()]
-    names ValueFromRemainingArguments, or one of the script's top-level statements holds both a
-    reference to its variable and a -split whose right side is a string with a comma in it. So
-    `$With = @($With -split ',')` passes, and so does a foreach over several lists that splits
-    each. A function's param block is not read: a function is called from PowerShell, where a
-    comma list binds as an array. Nor is a split inside a function's body counted. A script that
-    does not parse fails, named as such, and so does a -Path that holds no *.ps1.
+    WHAT IT READS. With PowerShell's parser, the param block at the top of each *.ps1 in -Path, not
+    in its subdirectories. A parameter typed [string[]] is reported unless its [Parameter()] names
+    ValueFromRemainingArguments, or one of the script's top-level statements holds both a reference
+    to its variable and a -split whose right side is a string with a comma in it. So
+    `$With = @($With -split ',')` passes, and so does a foreach over several lists that splits each.
+    A function's param block is not read: a function is called from PowerShell, where a comma list
+    binds as an array. Nor is a split inside a function's body counted. A script that does not parse
+    fails, named as such, and so does a -Path that holds no *.ps1.
 
-    WHAT IT CANNOT SEE. Whether the split runs before the parameter's first use, or on every
-    path: a statement that names the variable and splits something else on a comma passes it.
-    ValueFromRemainingArguments = $false is read as taking the remaining arguments. A list
-    parameter typed other than [string[]], such as [object[]] or [int[]].
+    WHAT IT CANNOT SEE. Whether the split runs before the parameter's first use, or on every path: a
+    statement that names the variable and splits something else on a comma passes it.
+    ValueFromRemainingArguments = $false is read as taking the remaining arguments. A list parameter
+    typed other than [string[]], such as [object[]] or [int[]].
 
 .PARAMETER Path
     The directory whose scripts are read.
@@ -47,8 +47,8 @@ $ErrorActionPreference = 'Stop'
 
 function Get-UnsplitParameter {
     <#  The name of each top-level [string[]] parameter of the script at $File that neither takes
-        the remaining arguments nor is split on a comma by a top-level statement, and how many
-        such list parameters it has, as @{ Lists; Unsplit }.  #>
+        the remaining arguments nor is split on a comma by a top-level statement, and how many such
+        list parameters it has, as @{ Lists; Unsplit }.  #>
     param([Parameter(Mandatory)] [string] $File)
     $errors = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($File, [ref] $null, [ref] $errors)

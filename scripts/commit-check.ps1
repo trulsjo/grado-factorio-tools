@@ -6,15 +6,15 @@
 .DESCRIPTION
     A GATE, and the only one here that reads a commit message. It starts no game and touches no
     prototype, so it belongs with ship-check.ps1 and locale-check.ps1 rather than with the checks
-    that build a map -- and like ship-check it exists because the thing it reads is prose that
-    every other gate is blind to.
+    that build a map -- and like ship-check it exists because the thing it reads is prose that every
+    other gate is blind to.
 
     WHY IT EXISTS. `realistic-fusion-refreshed`, where this was written, had said "Wrap at 72" in
-    its CLAUDE.md since that repository started, and nothing was reading it. Measured by this
-    script against the last fifty commits on its main, 2026-09-06: 21 of the 50 are rejected, on
-    183 body lines over 72 and 5 subject lines over 72. A rule nothing enforces is a rule that
-    rots, and the fix is the enforcement rather than the excuse. The argument that count answered,
-    and an earlier count of 201 lines that was wrong, are in docs/measurements.md.
+    its CLAUDE.md since that repository started, and nothing was reading it. Measured by this script
+    against the last fifty commits on its main, 2026-09-06: 21 of the 50 are rejected, on 183 body
+    lines over 72 and 5 subject lines over 72. A rule nothing enforces is a rule that rots, and the
+    fix is the enforcement rather than the excuse. The argument that count answered, and an earlier
+    count of 201 lines that was wrong, are in docs/measurements.md.
 
     WHAT IT CHECKS, and every rule here is quoted from docs/commit-convention.md, which is where
     this repository and both consumers declare the convention -- see ADR 0002:
@@ -43,9 +43,9 @@
                 there was opened as `fix: ...` with none and retitled by hand.
 
     A CONSUMING REPOSITORY GETS THE SCOPE RULE ONLY BY SUPPLYING ITS VOCABULARY
-    (grado-factorio-tools#63). The vocabulary is each repository's own, so it is not written
-    here, and without -ScopeFile every scope passes as it always has. Bumping a pin therefore
-    changes no verdict in a repository that passes none.
+    (grado-factorio-tools#63). The vocabulary is each repository's own, so it is not written here,
+    and without -ScopeFile every scope passes as it always has. Bumping a pin therefore changes no
+    verdict in a repository that passes none.
 
     WHAT IT DELIBERATELY LETS THROUGH:
 
@@ -69,15 +69,15 @@
     The file holding the message to check. This is what git passes a `commit-msg` hook. Comment
     lines and everything below a scissors line are stripped first, the same as git does, with the
     comment character git is configured with where the check runs: core.commentChar or
-    core.commentString, and `#` when neither is set. With `auto` the character is read off git's
-    own instruction or scissors line, and is `#` where the message has neither. -Range strips
-    with it too. Reading the configuration needs git; without it, `#`. Git keeps comment lines
-    when it does not strip them, as `git commit -F` with no editor does, and the check does not
-    know which it did.
+    core.commentString, and `#` when neither is set. With `auto` the character is read off git's own
+    instruction or scissors line, and is `#` where the message has neither. -Range strips with it
+    too. Reading the configuration needs git; without it, `#`. Git keeps comment lines when it does
+    not strip them, as `git commit -F` with no editor does, and the check does not know which it
+    did.
 
 .PARAMETER Range
-    Check the messages of every commit in a revision range instead of a file, e.g. `-Range
-    origin/main..HEAD` before opening a pull request, or `-Range '-50 main'` to sweep recent
+    Check the messages of every commit in a revision range instead of a file, e.g.
+    `-Range origin/main..HEAD` before opening a pull request, or `-Range '-50 main'` to sweep recent
     history. Split on spaces and passed to `git rev-list`, so anything that takes is a range.
     Reports every commit that fails and exits non-zero if any did. A range with no commits passes
     and says so, unless -RequireCommits is given.
@@ -88,21 +88,21 @@
     yet need not.
 
 .PARAMETER Title
-    Check a pull request title instead of a file: the subject rules, with a scope required. A
-    title has no body, so a `!` asks for no footer here.
+    Check a pull request title instead of a file: the subject rules, with a scope required. A title
+    has no body, so a `!` asks for no footer here.
 
 .PARAMETER ScopeFile
-    The repository's scope vocabulary: one scope to a line, `#` starting a comment. With it, a
-    scope the file does not list is rejected, naming the scope and the list. Goes with a file,
-    -Range or -Title.
+    The repository's scope vocabulary: one scope to a line, `#` starting a comment. With it, a scope
+    the file does not list is rejected, naming the scope and the list. Goes with a file, -Range or
+    -Title.
 
 .PARAMETER SelfTest
     Prove this check can FAIL. A gate that only ever passes is a gate that has stopped reading, so
     this runs a table of messages that must each be rejected for a named reason, and a table that
-    must be accepted, printing each and whether it held. One check runs this script as a hook, in
-    a throwaway repository that sets core.commentChar, and another runs the first example's
-    wrapper in one with no submodule and in one whose vendor/ holds this script, so it needs git
-    and sh, the one on the path or the one Git for Windows ships, and starts pwsh four times.
+    must be accepted, printing each and whether it held. One check runs this script as a hook, in a
+    throwaway repository that sets core.commentChar, and another runs the first example's wrapper in
+    one with no submodule and in one whose vendor/ holds this script, so it needs git and sh, the
+    one on the path or the one Git for Windows ships, and starts pwsh four times.
 
 .EXAMPLE
     A consumer's .githooks/commit-msg, committed executable
@@ -278,9 +278,8 @@ function Test-Wrappable([string] $line) {
 
 <#
 .SYNOPSIS
-    Every rule broken by one message, as a list of sentences. An empty list means it passes.
-    $listed is the vocabulary to hold the scope to, or nothing; $isTitle reads $raw as a pull
-    request title.
+    Every rule broken by one message, as a list of sentences. An empty list means it passes. $listed
+    is the vocabulary to hold the scope to, or nothing; $isTitle reads $raw as a pull request title.
 #>
 function Test-CommitMessage([string[]] $raw, [string[]] $listed = $SCOPES, [bool] $isTitle = $false, [string] $comment = '#') {
     $bad   = [System.Collections.Generic.List[string]]::new()

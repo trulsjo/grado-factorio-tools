@@ -2,25 +2,24 @@
 .SYNOPSIS
     Reports each use, in the lines a commit range adds to tracked Markdown, of a word that
     GLOSSARY.md lists on an `_Avoid_` line: <file>:<line>: the word, and the term that avoids it.
-    Over a range it fails on a use that is not marked deliberate: exit 1 if it reports one. It
-    fails too on a GLOSSARY.md that gives it no word to match, which is a run that read nothing.
+    Over a range it fails on a use that is not marked deliberate: exit 1 if it reports one. It fails
+    too on a GLOSSARY.md that gives it no word to match, which is a run that read nothing.
 
 .DESCRIPTION
     WHERE IT CAME FROM (grado-factorio-tools#348, #319 ruling 7). grado-factorio-modpack's
-    scripts/glossary-check.ps1 at bf4b121, read 2026-11-06. What changed in the move: the words
-    left to the reviewer, a list in the modpack's script, are -Left, since each repository has
-    its own; and the self-test names no file of that repository.
+    scripts/glossary-check.ps1 at bf4b121, read 2026-11-06. What changed in the move: the words left
+    to the reviewer, a list in the modpack's script, are -Left, since each repository has its own;
+    and the self-test names no file of that repository.
 
-    WHY (grado-factorio-modpack#164). A GLOSSARY.md gives most terms an `_Avoid_` line, and
-    nothing read new prose against them. On the modpack's PR #163 (2026-10-06) a later review
-    found "confirms" in new text, a word its *Measured* avoids, after the first review had
-    passed it.
+    WHY (grado-factorio-modpack#164). A GLOSSARY.md gives most terms an `_Avoid_` line, and nothing
+    read new prose against them. On the modpack's PR #163 (2026-10-06) a later review found
+    "confirms" in new text, a word its *Measured* avoids, after the first review had passed it.
 
-    WHY IT FAILS (grado-factorio-modpack#198). Until 2026-10-09 it reported and exited 0, and
-    left each use to the reviewer. On the modpack's PR #193 a reported use was judged not wrong
-    and left with no marker, and only added lines are read, so that use is not reported again
-    while its line stands. Now a reported use is reworded or marked, and whether a marker is
-    honest is the reviewer's.
+    WHY IT FAILS (grado-factorio-modpack#198). Until 2026-10-09 it reported and exited 0, and left
+    each use to the reviewer. On the modpack's PR #193 a reported use was judged not wrong and left
+    with no marker, and only added lines are read, so that use is not reported again while its line
+    stands. Now a reported use is reworded or marked, and whether a marker is honest is the
+    reviewer's.
 
     WHAT RUNS IT. A consumer's CI, over a pull request's commits, with the self-test. Here,
     .github/workflows/check.yml's step and scripts/check.ps1, and so the pre-push hook, each over
@@ -28,21 +27,21 @@
     #438 passed the hook and went red in CI on an avoided word.
 
     WHAT IT READS AS WHAT. GLOSSARY.md is read as it is at the end of the range. A term is a line
-    opening `**Term**:`, and its avoid line runs from `_Avoid_:` to the next blank line. A remark
-    in parentheses belongs to the entry before it and is dropped; what is left is split at every
-    comma and semicolon, and `a/b` is two words. A word ending in -ed is matched in its other verb
-    forms too (confirmed: confirm, confirms, confirming), and any other with a plural -s. Case is
-    not read. Only added lines are read, as they are at the end of the range, and nothing inside a
+    opening `**Term**:`, and its avoid line runs from `_Avoid_:` to the next blank line. A remark in
+    parentheses belongs to the entry before it and is dropped; what is left is split at every comma
+    and semicolon, and `a/b` is two words. A word ending in -ed is matched in its other verb forms
+    too (confirmed: confirm, confirms, confirming), and any other with a plural -s. Case is not
+    read. Only added lines are read, as they are at the end of the range, and nothing inside a
     fenced code block.
 
     WHICH ENTRIES IT DOES NOT MATCH. -List prints them, each with why, from the glossary as it is:
-    an entry that carries a condition ("above/below without saying of what", a quoted word "for"
-    or "as" something) takes a reader, and so does a word -Left names, which is in ordinary use
-    in that repository and avoided only as a word for one term.
+    an entry that carries a condition ("above/below without saying of what", a quoted word "for" or
+    "as" something) takes a reader, and so does a word -Left names, which is in ordinary use in that
+    repository and avoided only as a word for one term.
 
     A DELIBERATE USE IS MARKED on its own line with an HTML comment naming the word as it stands
-    there: <!-- deliberate: confirms -->. A marked use is not reported. A word inside double
-    quotes or a code span is being mentioned and is not reported either.
+    there: <!-- deliberate: confirms -->. A marked use is not reported. A word inside double quotes
+    or a code span is being mentioned and is not reported either.
 
     WHAT FAILS WITH NOTHING READ (grado-factorio-modpack#362). A GLOSSARY.md that git cannot read at
     the range's end: exit 1 in every mode but -SelfTest. One that is empty, and one with no
@@ -70,9 +69,8 @@
 
 .PARAMETER Left
     The words left to the reviewer: a dictionary of patterns, each matched against one word of an
-    entry as it stands in a line, to why it is left. A dictionary binds when the script is run
-    from PowerShell, as a step with `shell: pwsh` runs it, not through `pwsh -File`. Empty unless
-    given.
+    entry as it stands in a line, to why it is left. A dictionary binds when the script is run from
+    PowerShell, as a step with `shell: pwsh` runs it, not through `pwsh -File`. Empty unless given.
 
 .PARAMETER LeftFile
     The words left to the reviewer, read from a file, so a run through `pwsh -File` can give them: a
@@ -83,10 +81,10 @@
     Prove an avoided word is reported and that a clean line, a marked use, a mention and a word
     -Left names pass, and that over a range the script exits 1 on an unmarked use, 0 once it is
     marked and 0 where the range only removes lines, and 1 where GLOSSARY.md has no matched
-    `_Avoid_` entry, is empty or is missing, while -List on the unmatched one exits 0 and says
-    why; and that -LeftFile leaves the words it names over a range and no other, and that a file
-    missing, empty or with no why, an end of the range not there, each exit 1, where a range that
-    adds nothing exits 0 saying so. Those three cases need git.
+    `_Avoid_` entry, is empty or is missing, while -List on the unmatched one exits 0 and says why;
+    and that -LeftFile leaves the words it names over a range and no other, and that a file missing,
+    empty or with no why, an end of the range not there, each exit 1, where a range that adds
+    nothing exits 0 saying so. Those three cases need git.
 
 .EXAMPLE
     From a CI step whose shell is pwsh, with the words left to the reviewer:
@@ -148,8 +146,8 @@ function Get-Avoided {
 }
 
 function Find-Avoided {
-    <#  The uses of a matched avoid entry on the numbered lines of one file, each as
-        @{ Line; Word; Term; Entry }.  #>
+    <#  The uses of a matched avoid entry on the numbered lines of one file, each as @{ Line; Word;
+        Term; Entry }.  #>
     param(
         [Parameter(Mandatory)] [AllowEmptyCollection()] [AllowEmptyString()] [string[]] $Lines,
         [Parameter(Mandatory)] [AllowEmptyCollection()] [int[]] $Numbers,

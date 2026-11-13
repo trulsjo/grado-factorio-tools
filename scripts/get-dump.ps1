@@ -1,48 +1,47 @@
 <#
 .SYNOPSIS
     Gives the path of a --dump-data dump of a directory of mods, making it only when the cache has
-    none for that set. The path is the last line printed. Exit 0 means the path names a dump of
-    the set its .key file lists.
+    none for that set. The path is the last line printed. Exit 0 means the path names a dump of the
+    set its .key file lists.
 
 .DESCRIPTION
-    A DUMP IS KEPT, NOT THROWN AWAY (grado-factorio-modpack#148, where this was written). A dump
-    of an overhaul pack takes about a minute, and measuring sessions there each made their own of
-    the same sets. This makes one through the load harness's Invoke-HarnessDump and keeps it in
-    the cache directory. Three files per dump:
+    A DUMP IS KEPT, NOT THROWN AWAY (grado-factorio-modpack#148, where this was written). A dump of
+    an overhaul pack takes about a minute, and measuring sessions there each made their own of the
+    same sets. This makes one through the load harness's Invoke-HarnessDump and keeps it in the
+    cache directory. Three files per dump:
 
       <name>[+<bundled>...]-<checksum>-<id>.json   the dump
       ....log                                      the game's output from the run that made it
       ....key                                      the set it is a dump of, as text
 
-    <name> is the last part of the mod directory's path. <checksum> is the prototype list
-    checksum the game prints in that log. <id> is the first twelve hex digits of the SHA-256 of
-    the .key file's text.
+    <name> is the last part of the mod directory's path. <checksum> is the prototype list checksum
+    the game prints in that log. <id> is the first twelve hex digits of the SHA-256 of the .key
+    file's text.
 
-    WHAT MAKES A SET. The .key lists the game build, the bundled mods enabled, and every enabled
-    mod in the directory as name, version, directory or zip, file count and total bytes. A
-    request is served from the cache only when a .key there holds exactly that text and its dump
-    is still beside it. So a member at another release, a mod disabled, another bundled
-    selection, another build, or a file added to or removed from a mod, is a different set and
-    gets a dump of its own. A disabled mod is left out of the key, so a set with a mod disabled
-    and a set without that mod are one set. A bundled mod disabled is left out of the bundled
-    mods in the key and the name, so -With space-age -Disabled quality is the set of space-age,
-    elevated-rails and recycler (#208). The directory's path and name are not in the key: the
-    same mods somewhere else are the same set.
+    WHAT MAKES A SET. The .key lists the game build, the bundled mods enabled, and every enabled mod
+    in the directory as name, version, directory or zip, file count and total bytes. A request is
+    served from the cache only when a .key there holds exactly that text and its dump is still
+    beside it. So a member at another release, a mod disabled, another bundled selection, another
+    build, or a file added to or removed from a mod, is a different set and gets a dump of its own.
+    A disabled mod is left out of the key, so a set with a mod disabled and a set without that mod
+    are one set. A bundled mod disabled is left out of the bundled mods in the key and the name, so
+    -With space-age -Disabled quality is the set of space-age, elevated-rails and recycler (#208).
+    The directory's path and name are not in the key: the same mods somewhere else are the same set.
 
     WHAT IT CANNOT SEE. A change inside a mod that leaves its version, file count and total bytes
-    the same: the key reads sizes, not contents, because hashing would read every file of every
-    mod. The mod settings: the harness loads every mod at its defaults. And whether the directory
-    is what its owner meant it to hold: it is dumped as it stands.
+    the same: the key reads sizes, not contents, because hashing would read every file of every mod.
+    The mod settings: the harness loads every mod at its defaults. And whether the directory is what
+    its owner meant it to hold: it is dumped as it stands.
 
-    IT WRITES NOTHING UNDER THE MOD DIRECTORY, and no info.json. The self-test measures that
-    against a stand-in for the game. For a real run it is read from the harness's source, not
-    measured: the mods are junctioned or copied into a temp directory, and the game writes there.
-    Keep the cache outside the mod directory, and out of git.
+    IT WRITES NOTHING UNDER THE MOD DIRECTORY, and no info.json. The self-test measures that against
+    a stand-in for the game. For a real run it is read from the harness's source, not measured: the
+    mods are junctioned or copied into a temp directory, and the game writes there. Keep the cache
+    outside the mod directory, and out of git.
 
-    A REAL RUN WAS MEASURED on Factorio 2.0.77 (build 84539), grado-factorio-tools#75, and on
-    2.1.23 (build 87750) with -With space-age, #207: the first request made a dump named by the
-    game's prototype list checksum, and the second was served it with nothing run. The runs are
-    in docs/measurements.md.
+    A REAL RUN WAS MEASURED on Factorio 2.0.77 (build 84539), grado-factorio-tools#75, and on 2.1.23
+    (build 87750) with -With space-age, #207: the first request made a dump named by the game's
+    prototype list checksum, and the second was served it with nothing run. The runs are in
+    docs/measurements.md.
 
     TO CLEAR IT, delete the cache directory, or the three files of one dump.
 
@@ -50,14 +49,14 @@
     The directory of mods to dump, as load-harness.ps1 takes one: mod directories and zips.
 
 .PARAMETER With
-    Bundled mods to enable, comma-separated, e.g. -With space-age. Dependencies are pulled in,
-    `+` ones too, so on 2.1 space-age brings quality (#208); -Disabled quality leaves it out.
-    Without it the dump is base only.
+    Bundled mods to enable, comma-separated, e.g. -With space-age. Dependencies are pulled in, `+`
+    ones too, so on 2.1 space-age brings quality (#208); -Disabled quality leaves it out. Without it
+    the dump is base only.
 
 .PARAMETER Disabled
     Mods to load disabled, comma-separated, in exact case: mods in the directory, or mods bundled
-    with the game, as quality, which -With space-age enables through its `+ quality` (#208). A
-    name that is neither is refused.
+    with the game, as quality, which -With space-age enables through its `+ quality` (#208). A name
+    that is neither is refused.
 
 .PARAMETER FactorioExe
     Path to Factorio.exe. Defaults as load-harness.ps1 does.
@@ -67,8 +66,8 @@
     fetch-mods.ps1's cache defaults to .mod-cache there.
 
 .PARAMETER SelfTest
-    Prove a second request is served from the cache and a changed set is not, against fixture
-    mods in a temp directory and a stand-in for the game. No network and no game.
+    Prove a second request is served from the cache and a changed set is not, against fixture mods
+    in a temp directory and a stand-in for the game. No network and no game.
 
 .EXAMPLE
     pwsh -File scripts/get-dump.ps1 .mod-cache/Grado_ABC

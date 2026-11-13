@@ -1,8 +1,8 @@
 <#
 .SYNOPSIS
     Rewords one commit of an unpushed branch from a message file, whether or not it is the tip,
-    replays the commits above it, and shows that no tree changed: one line per rewritten commit,
-    old hash and new.
+    replays the commits above it, and shows that no tree changed: one line per rewritten commit, old
+    hash and new.
 
 .DESCRIPTION
     WHERE IT CAME FROM (grado-factorio-tools#356, #329 ruling 2). grado-factorio-modpack's
@@ -14,27 +14,26 @@
     WHY (grado-factorio-modpack#207). A finding in a commit message is fixed by rewording that
     commit, and the reviewer is given the new hash and checks that the tree did not change.
     `git commit --amend` reaches the tip only, and a session has no interactive rebase. On
-    grado-factorio-modpack's PR #205 (2026-10-09) the ticket commit was reworded twice, the
-    second time under the commit of fixes.
+    grado-factorio-modpack's PR #205 (2026-10-09) the ticket commit was reworded twice, the second
+    time under the commit of fixes.
 
-    WHAT IT DOES. Each commit from the named one to the tip is written again with
-    `git commit-tree`: the same tree, author and author date, on the new parent. The named commit
-    takes the message file; the others keep their message. The commit check then reads the new
-    commits, and if it rejects one the branch is not moved. Until the move nothing has changed,
-    so a refusal or a rejected message leaves the branch where it was. The index and the working
-    tree are not touched.
+    WHAT IT DOES. Each commit from the named one to the tip is written again with `git commit-tree`:
+    the same tree, author and author date, on the new parent. The named commit takes the message
+    file; the others keep their message. The commit check then reads the new commits, and if it
+    rejects one the branch is not moved. Until the move nothing has changed, so a refusal or a
+    rejected message leaves the branch where it was. The index and the working tree are not touched.
 
     WHAT IT REFUSES, changing nothing: a name that is no commit; a commit that is not in
-    <base>..HEAD; a commit already on origin/<branch>, because once the branch is pushed the
-    message stays; staged changes in the index; a detached HEAD; a merge commit among those to
-    replay; a branch that moved while it ran, as by a commit made then, which is kept.
+    <base>..HEAD; a commit already on origin/<branch>, because once the branch is pushed the message
+    stays; staged changes in the index; a detached HEAD; a merge commit among those to replay; a
+    branch that moved while it ran, as by a commit made then, which is kept.
 
-    WHAT IT CANNOT SEE. Whether the new message is true: that is the reviewer's. A push to a
-    remote other than `origin`, or one this clone has not fetched. A commit-msg hook is not run:
-    the commit check beside this script is run directly, and a check of the repository's own
-    that its hook chains, as the modpack's member-change-check.ps1, is not. Where the commit check
-    is not there, it says the messages were NOT checked and goes on. The committer date is the
-    time of the rewrite. The replaced commits stay in the reflog.
+    WHAT IT CANNOT SEE. Whether the new message is true: that is the reviewer's. A push to a remote
+    other than `origin`, or one this clone has not fetched. A commit-msg hook is not run: the commit
+    check beside this script is run directly, and a check of the repository's own that its hook
+    chains, as the modpack's member-change-check.ps1, is not. Where the commit check is not there,
+    it says the messages were NOT checked and goes on. The committer date is the time of the
+    rewrite. The replaced commits stay in the reflog.
 
 .PARAMETER Commit
     The commit to reword: a hash, or anything `git rev-parse` takes.
@@ -46,19 +45,19 @@
     Where the branch left: commits in <Base>..HEAD can be reworded. origin/main unless said.
 
 .PARAMETER ScopeFile
-    The scope list the commit check holds the new messages to. Defaults to commit-scopes.txt at
-    the repository's top, where there is one; where there is none, any scope passes, as
-    commit-check.ps1 does without it.
+    The scope list the commit check holds the new messages to. Defaults to commit-scopes.txt at the
+    repository's top, where there is one; where there is none, any scope passes, as commit-check.ps1
+    does without it.
 
 .PARAMETER SelfTest
     Prove a tip and a commit below the tip are reworded with trees, authors, dates and later
-    messages kept, that a commit off the branch, one already pushed, staged changes, a detached
-    HEAD and a merge commit to replay are refused, and that a rejected message, a scope the
-    repository's commit-scopes.txt or -ScopeFile does not list among them, leaves the branch
-    where it was. A copy of the script beside a commit check that commits proves a branch moved
-    while it runs keeps that commit, and beside one that leaves the branch's lock file, that git's
-    reason is shown and no move is claimed. Needs git, for a fixture repository in a temp
-    directory, and commit-check.ps1 beside this script.
+    messages kept, that a commit off the branch, one already pushed, staged changes, a detached HEAD
+    and a merge commit to replay are refused, and that a rejected message, a scope the repository's
+    commit-scopes.txt or -ScopeFile does not list among them, leaves the branch where it was. A copy
+    of the script beside a commit check that commits proves a branch moved while it runs keeps that
+    commit, and beside one that leaves the branch's lock file, that git's reason is shown and no
+    move is claimed. Needs git, for a fixture repository in a temp directory, and commit-check.ps1
+    beside this script.
 
 .EXAMPLE
     From a consumer's root:

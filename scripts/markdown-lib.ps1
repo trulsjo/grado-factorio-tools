@@ -1,26 +1,26 @@
 #Requires -Version 7
 <#
-    What markdown-check.ps1 and markdown-rewrap.ps1 both read Markdown by: the inline rules,
-    the table rows, the links, and Test-Markdown, which classifies each line and reports what the
-    check reports. Moved out of markdown-check.ps1 unchanged (grado-factorio-tools#215), so the
-    rewrap cannot read a line as prose that the check reads as a table row, code or a heading.
-    Get-CountedLine, the length rule's count, was taken out of Test-Markdown in the same change,
-    so the rewrap measures a line as the check does. Dot-source it; it has no -SelfTest of its
-    own: markdown-check.ps1's holds Test-Markdown and the count.
+    What markdown-check.ps1 and markdown-rewrap.ps1 both read Markdown by: the inline rules, the
+    table rows, the links, and Test-Markdown, which classifies each line and reports what the check
+    reports. Moved out of markdown-check.ps1 unchanged (grado-factorio-tools#215), so the rewrap
+    cannot read a line as prose that the check reads as a table row, code or a heading.
+    Get-CountedLine, the length rule's count, was taken out of Test-Markdown in the same change, so
+    the rewrap measures a line as the check does. Dot-source it; it has no -SelfTest of its own:
+    markdown-check.ps1's holds Test-Markdown and the count.
 #>
 
 Set-StrictMode -Version Latest
 
 function Get-BareAddress {
     <#  Each bare address in $Text, as @{ Index; Length }, ended where GitHub's renderer ends one
-        (asked 2026-10-12, grado-factorio-tools#124; in docs/measurements.md). It runs to the
-        next whitespace or `<`, and then gives back what stands last: any of ?!.,:;*_~'" and
-        an entity such as &amp;, and a ) with no ( before it in the address to match. Where a
-        [ stands open before it in $Text, it ends at the ] that closes that one: GitHub makes
-        no link of an address inside square brackets, and reads the mark before the ] as one.
-        So the mark that closes emphasis straight after an address is not part of it. It ends
-        at a `>` too, which the renderer takes in: an address in a raw tag's attribute would
-        otherwise run on into the text after the tag.  #>
+        (asked 2026-10-12, grado-factorio-tools#124; in docs/measurements.md). It runs to the next
+        whitespace or `<`, and then gives back what stands last: any of ?!.,:;*_~'" and an entity
+        such as &amp;, and a ) with no ( before it in the address to match. Where a
+        [ stands open before it in $Text, it ends at the ] that closes that one: GitHub makes no
+        link of an address inside square brackets, and reads the mark before the ] as one. So the
+        mark that closes emphasis straight after an address is not part of it. It ends at a `>` too,
+        which the renderer takes in: an address in a raw tag's attribute would otherwise run on into
+        the text after the tag.  #>
     param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text)
 
     foreach ($m in [regex]::Matches($Text, '(?i)https?://[^\s<>]+')) {
@@ -49,16 +49,16 @@ function Get-BareAddress {
 
 function Get-HeadingAnchor {
     <#  The anchor GitHub gives each heading in $Lines, as a set, asked of it on 2026-10-15
-        (grado-factorio-tools#155; the answers are in docs/measurements.md). The anchor is made
-        from the heading's text as it renders: a code span's content kept, a link's text kept,
-        an image and a tag dropped, `_` emphasis that closes dropped, an escape and an entity
-        read. That is lower-cased, all but letters, marks, decimal digits, connector punctuation
-        such as `_`, hyphens and spaces dropped, and each space made a hyphen. A heading whose
-        anchor is taken gets the first of -1, -2 and on that is not, counted per anchor.
-        Ported from realistic-fusion-refreshed's ship-check.ps1, Get-HeadingAnchors, at
-        f3238c5 (read 2026-10-15). That one made the anchor from the text as written, less
-        each link's target, so it differed wherever rendering does; realistic-fusion-refreshed#712
-        removed it on 2026-10-15, and this is the only copy.  #>
+        (grado-factorio-tools#155; the answers are in docs/measurements.md). The anchor is made from
+        the heading's text as it renders: a code span's content kept, a link's text kept, an image
+        and a tag dropped, `_` emphasis that closes dropped, an escape and an entity read. That is
+        lower-cased, all but letters, marks, decimal digits, connector punctuation such as `_`,
+        hyphens and spaces dropped, and each space made a hyphen. A heading whose anchor is taken
+        gets the first of -1, -2 and on that is not, counted per anchor. Ported from
+        realistic-fusion-refreshed's ship-check.ps1, Get-HeadingAnchors, at f3238c5 (read
+        2026-10-15). That one made the anchor from the text as written, less each link's target, so
+        it differed wherever rendering does; realistic-fusion-refreshed#712 removed it on
+        2026-10-15, and this is the only copy.  #>
     param([Parameter(Mandatory)] [AllowEmptyCollection()] [AllowEmptyString()] [string[]] $Lines)
 
     $anchors = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
@@ -106,8 +106,8 @@ function Get-HeadingAnchor {
 
 function Test-Inline {
     <#  The openers left open in one paragraph: a backtick run with no partner, and `*` or `_`
-        emphasis never closed; and each `*` that can only close, with nothing open to close.
-        Each as @{ Offset; Message }, the offset into $Text.  #>
+        emphasis never closed; and each `*` that can only close, with nothing open to close. Each as
+        @{ Offset; Message }, the offset into $Text.  #>
     param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text)
 
     # Code spans and backslash escapes first, left to right, since each hides the other: what is
@@ -201,8 +201,8 @@ function Test-Inline {
 }
 
 function Split-TableRow {
-    <#  The cells of one table line: split on every `|` not behind a backslash, less the empty
-        piece outside a leading and a trailing one.  #>
+    <#  The cells of one table line: split on every `|` not behind a backslash, less the empty piece
+        outside a leading and a trailing one.  #>
     param([Parameter(Mandatory)] [string] $Line)
     $cells = [System.Collections.Generic.List[string]] ([regex]::Split($Line.Trim(), '(?<!\\)\|'))
     if ($cells.Count -gt 1 -and $cells[0] -notmatch '\S') { $cells.RemoveAt(0) }

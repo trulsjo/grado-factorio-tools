@@ -1,18 +1,18 @@
 <#
 .SYNOPSIS
-    Fill a cache directory with third-party mods at pinned versions, for a load to run against.
-    Exit 0 means every mod in the set is in the cache at its pinned version.
+    Fill a cache directory with third-party mods at pinned versions, for a load to run against. Exit
+    0 means every mod in the set is in the cache at its pinned version.
 
 .DESCRIPTION
     WHERE IT CAME FROM. Written in realistic-fusion-refreshed (#60 there) and moved here
     (grado-factorio-tools#15); the issue numbers below without a repository are that one's. It
-    carried that repository's pins inside the script. They are the consumer's version decisions,
-    not machinery, so they now come from -PinFile, and the only change to what a fetch does is
-    where the pins are read from.
+    carried that repository's pins inside the script. They are the consumer's version decisions, not
+    machinery, so they now come from -PinFile, and the only change to what a fetch does is where the
+    pins are read from.
 
     The one step that was missing (#60). A load that junctions whatever mod directories it finds
-    already existed; what did not was a way to GET a third-party mod onto disk at a version
-    somebody chose. load-harness.ps1 here takes the cache this writes as its mod source.
+    already existed; what did not was a way to GET a third-party mod onto disk at a version somebody
+    chose. load-harness.ps1 here takes the cache this writes as its mod source.
 
     GIT FIRST, PORTAL AS THE FALLBACK -- Truls's call, 2026-08-26 (#60). The ticket set out three
     shapes and declined to choose between them. Git-only is cheapest but cannot reach a mod that
@@ -53,13 +53,13 @@
     load together.
 
     ITS INFO.JSON READ IS ITS OWN. The packer, the load harness and the resolver read a mod's
-    info.json through mod-info.ps1 (grado-factorio-tools#59). This one wants only the version,
-    to hold against a pin, and answers "not a mod" for anything it cannot read. The shared reader
-    would refuse fetched mods this accepts today -- one with no `name` key, one whose info.json
-    is a one-element array holding an object, one whose version is not a string -- and each would
-    be reported as having no readable info.json. The load that follows reads through the shared
-    reader and refuses those by name. So an info.json this reads and the others do not, or the
-    reverse, is a defect to fix in Get-ModVersion as well as there.
+    info.json through mod-info.ps1 (grado-factorio-tools#59). This one wants only the version, to
+    hold against a pin, and answers "not a mod" for anything it cannot read. The shared reader would
+    refuse fetched mods this accepts today -- one with no `name` key, one whose info.json is a
+    one-element array holding an object, one whose version is not a string -- and each would be
+    reported as having no readable info.json. The load that follows reads through the shared reader
+    and refuses those by name. So an info.json this reads and the others do not, or the reverse, is
+    a defect to fix in Get-ModVersion as well as there.
 
 .PARAMETER PinFile
     The manifest: a .psd1 holding the pinned sets, which is the caller's and not this script's.
@@ -83,8 +83,7 @@
 
     A LANE IS A UNION OF SETS, composed rather than written out again, so a pin lives in one place:
     refreshing a set refreshes every lane it appears in. Which unions are possible at all is a
-    matter of what the mods declare -- a `!` between two sets means that lane is not meant to
-    exist.
+    matter of what the mods declare -- a `!` between two sets means that lane is not meant to exist.
 
 .PARAMETER Set
     Which set or lane of -PinFile to fetch. Defaults to the file's Default.
@@ -92,11 +91,11 @@
 .PARAMETER CacheDirectory
     Where the mods live between runs. Defaults to `.mod-cache/<set>/` under the current directory,
     so a consumer run from its own root caches there; git-ignore it. Deliberately NOT the temp mod
-    directory a check builds: that is torn down
-    per run, and refetching per run would be slow and rude. Measured in realistic-fusion-refreshed,
-    its Krastorio 2 set is 414 MB -- 376 of it Krastorio2Assets, which is the mod that actually
-    motivates caching. Nearly half of that total is .git: --depth 1 keeps the history shallow, not
-    absent, and an asset repository's single commit is still every sprite.
+    directory a check builds: that is torn down per run, and refetching per run would be slow and
+    rude. Measured in realistic-fusion-refreshed, its Krastorio 2 set is 414 MB -- 376 of it
+    Krastorio2Assets, which is the mod that actually motivates caching. Nearly half of that total is
+    .git: --depth 1 keeps the history shallow, not absent, and an asset repository's single commit
+    is still every sprite.
 
     PER SET, AND NOT BY PREFERENCE. One shared directory accumulates every set ever fetched, and a
     load junctions everything it finds -- so fetching seablock after krastorio2 there produced a
@@ -115,8 +114,8 @@
     Re-fetch even when the cache already holds the pinned version.
 
 .PARAMETER PlayerDataPath
-    Where to read the mod-portal credentials. Defaults to %APPDATA%\Factorio\player-data.json,
-    and has no default where there is no %APPDATA%, as off Windows: a fetch there is given it. A
+    Where to read the mod-portal credentials. Defaults to %APPDATA%\Factorio\player-data.json, and
+    has no default where there is no %APPDATA%, as off Windows: a fetch there is given it. A
     parameter rather than a constant so -SelfTest can point it at a file it controls.
 
 .PARAMETER PortalBaseUrl
@@ -125,10 +124,10 @@
     no real credentials.
 
 .PARAMETER SelfTest
-    Prove what a passing fetch does not show, against a portal on the loopback address and a
-    fixture manifest of its own: each check prints what it must show and whether it did. It uses
-    no real credentials and no network beyond loopback. Given -PinFile as well, it also certifies
-    that file's lanes.
+    Prove what a passing fetch does not show, against a portal on the loopback address and a fixture
+    manifest of its own: each check prints what it must show and whether it did. It uses no real
+    credentials and no network beyond loopback. Given -PinFile as well, it also certifies that
+    file's lanes.
 
 .EXAMPLE
     pwsh -File vendor/grado-factorio-tools/scripts/fetch-mods.ps1 -PinFile scripts/mod-sets.psd1 -Set krastorio2
@@ -195,10 +194,10 @@ function Join-ModSets {
     <#  One lane's mods from several sets, deduplicated by name.
 
         The overlap is real rather than defensive: in realistic-fusion-refreshed, `madclowns`
-        carries six Angel's mods that `angels` carries too. A name pinned at two DIFFERENT
-        versions is refused rather than resolved, because picking one would be a version decision
-        made silently by a helper -- `flib` was 0.16.2 in one of that repository's sets and 0.16.5
-        in another, so the case is real and only stayed out of its unions by luck.  #>
+        carries six Angel's mods that `angels` carries too. A name pinned at two DIFFERENT versions
+        is refused rather than resolved, because picking one would be a version decision made
+        silently by a helper -- `flib` was 0.16.2 in one of that repository's sets and 0.16.5 in
+        another, so the case is real and only stayed out of its unions by luck.  #>
     param([Parameter(Mandatory)] [string[]] $Names)
 
     $byName = [ordered]@{}
@@ -246,8 +245,8 @@ function Get-ModVersion {
 
         Read as a hashtable because an empty key is legal JSON and ConvertFrom-Json refuses it
         otherwise. fluid-connection-indicators 0.2.9's `package` table holds `"": ""`, and until
-        grado-factorio-tools#38 that ordinary zip was reported as having no readable info.json.
-        Not read through mod-info.ps1: see ITS INFO.JSON READ IS ITS OWN in the header.  #>
+        grado-factorio-tools#38 that ordinary zip was reported as having no readable info.json. Not
+        read through mod-info.ps1: see ITS INFO.JSON READ IS ITS OWN in the header.  #>
     param([Parameter(Mandatory)] [string] $Path)
 
     $info = Join-Path $Path 'info.json'
