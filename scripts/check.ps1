@@ -124,24 +124,23 @@
     Commits, and runs on every run, a skipped one and one of only what reads the index too. The
     main block's run of it on a skip is held by a read only, as the main block is.
 
-    A PASS IS RECORDED, AND -SkipIfPassed READS IT (grado-factorio-tools#176). The pre-push hook
-    ran this again on a tree it had just passed, minutes each time. A pass records the tree it
-    read in the repository's git directory, in check-passed, never in a tracked file: the working
-    tree's tracked and unignored files, written as a git tree, and the index's tree, since the
-    Markdown is read as staged. A tree that is not the same at the end of the run as at the
-    start fails the run, record or none, and the run names each path that changed in either
-    tree (grado-factorio-tools#366): no one tree passed. The tree ids decide; where git cannot
-    diff them, as after a prune of the start tree's objects, the run still fails and says it
-    could not name the paths. A changed file git cannot read makes no tree, so nothing is
-    compared or skipped, the record is deleted, an earlier pass's too, and the run says so
-    before its last line. A run that ends in
-    FAILED deletes the record; one cut short, by an error or Ctrl-C,
-    leaves it. A record that does not hold both trees and a time, such as an empty file, is no
-    record. With -SkipIfPassed, as the hook runs it, a tree that matches the record runs nothing,
-    and the run says so, naming both trees and when they passed. A skip shows that this same tree
-    passed once; it cannot see what is outside the tree: an ignored file, the pwsh or git in use,
-    the loopback port fetch-mods.ps1 needs, or a self-test that passes only sometimes. CI runs
-    without the switch.
+    A PASS IS RECORDED, AND -SkipIfPassed READS IT (grado-factorio-tools#176). The pre-push hook ran
+    this again on a tree it had just passed, minutes each time. A pass records the tree it read in
+    the repository's git directory, in check-passed, never in a tracked file: the working tree's
+    tracked and unignored files, written as a git tree, and the index's tree, since the Markdown is
+    read as staged. A tree that is not the same at the end of the run as at the start fails the run,
+    record or none, and the run names each path that changed in either tree
+    (grado-factorio-tools#366): no one tree passed. The tree ids decide; where git cannot diff them,
+    as after a prune of the start tree's objects, the run still fails and says it could not name the
+    paths. A changed file git cannot read makes no tree, so nothing is compared or skipped, the
+    record is deleted, an earlier pass's too, and the run says so before its last line. A run that
+    ends in FAILED deletes the record; one cut short, by an error or Ctrl-C, leaves it. A record
+    that does not hold both trees and a time, such as an empty file, is no record. With
+    -SkipIfPassed, as the hook runs it, a tree that matches the record runs nothing but the steps
+    marked Commits, which read commits no record holds (#443), and the run says so, naming both
+    trees and when they passed. A skip shows that this same tree passed once; it cannot see what is
+    outside the tree: an ignored file, the pwsh or git in use, the loopback port fetch-mods.ps1
+    needs, or a self-test that passes only sometimes. CI runs without the switch.
 
     A SKIP OF THE SELF-TESTS ON A CHANGE OF WHITESPACE BETWEEN TOKENS (grado-factorio-tools#405).
     On PR #403 one space put back in one line ran the whole check, follow-pin.ps1's self-test
@@ -219,10 +218,10 @@
     `git submodule update` (grado-factorio-tools#406).
 
 .PARAMETER SkipIfPassed
-    Run nothing when the record says this tree passed; less than all of it when the tree differs
-    from the one that passed only in its index, in whitespace between a script's tokens, or in
-    scripts and Markdown; as above. The glossary step, which reads commits and not the tree, runs
-    whatever the record says, a skipped run's one step.
+    Run only the steps marked Commits, the glossary step, when the record says this tree passed;
+    less than all of it when the tree differs from the one that passed only in its index, in
+    whitespace between a script's tokens, or in scripts and Markdown; as above. The glossary step,
+    which reads commits and not the tree, runs whatever the record says.
 
 .PARAMETER SelfTest
     Run the cases that hold the record and its reading, in a scratch repository, and those that hold
