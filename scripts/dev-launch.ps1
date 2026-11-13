@@ -23,18 +23,21 @@
     It writes mod-list.json, and a README-BEFORE-DELETING.txt that says how to remove the
     directory.
 
-    THE PLAYER'S MOD DIRECTORY IS NEVER USED, NOR ANY FOLDER THIS DID NOT MAKE (#423). A run
+    NO FOLDER THIS DID NOT MAKE IS USED UNLESS IT IS EMPTY, SO NOT THE PLAYER'S MOD DIRECTORY ONCE
+    THE GAME HAS STARTED ON IT (#423, #434). A run
     deletes the junctions and zips in -ModDirectory and overwrites its mod-list.json; -Clean deletes
     it whole. So a run and -Clean alike refuse, exit 1 before anything in it changes, naming it, an
     existing -ModDirectory that is a file, or a folder that is not empty and does not hold the
     README-BEFORE-DELETING.txt this writes into every folder it makes, first, before it changes
     anything there. That refuses the Steam build's %APPDATA%\Factorio\mods and a zip install's mods
-    beside the game, which the game fills as soon as it starts, and every other folder of anything;
-    the comparison with the Steam path that stood here until then is gone. A new folder, an empty
-    one and one holding the marker are used. It cannot see a folder that holds a file of that name
-    it did not write, which it then treats as its own. The game runs with the player's own
-    write-data, so saves and settings are the player's. That is the difference from the load
-    harness, which gives every run a write-data of its own.
+    beside the game, once the game has started on them, since it writes mod-list.json into an
+    empty mod directory when it starts (docs/factorio-facts.md, *Measured*, on 2.1.24 with
+    --dump-data, #434), and every other folder of anything; the comparison with the Steam path
+    that stood here until then is gone. A new folder, an empty one and one holding the marker are
+    used: so a player's folder the game has never started on, being empty, is taken. It cannot see
+    a folder that holds a file of that name it did not write, which it then treats as its own.
+    The game runs with the player's own write-data, so saves and settings are the player's. That
+    is the difference from the load harness, which gives every run a write-data of its own.
 
     ON A STEAM BUILD, running Factorio.exe directly makes the Steam API relaunch the game through
     Steam and exit ("Steam requires game restart, restarting..."), and Steam starts it WITHOUT
