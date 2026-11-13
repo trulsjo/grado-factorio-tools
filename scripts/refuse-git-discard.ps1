@@ -12,14 +12,14 @@
     The risk is the same in every repository a session works in, so the hook lives here. Truls
     ruled what it refuses on 2026-10-25, in grado-factorio-modpack#366's triage.
 
-    HOW A CONSUMER WIRES IT. This repository cannot: a session reads its hooks from the
-    consumer's own tracked settings. In .claude/settings.json, a PreToolUse hook on the two shell
-    tools, matcher `Bash|PowerShell`, whose command is the first example below. The session hands
-    the hook the tool call as JSON on stdin: this reads `tool_input.command` and `cwd`. The `case`
-    starts this script only when that JSON names one of the six subcommands, since starting
-    PowerShell takes a second and the hook runs before every shell command. Where the script is
-    not there, as in a clone whose submodule was never fetched, the wired command lets the shell
-    command run and prints JSON that tells the agent it was not checked, as
+    HOW A CONSUMER WIRES IT. In its tracked .claude/settings.json, a PreToolUse hook on the two
+    shell tools, matcher `Bash|PowerShell`, whose command is the first example below (ADR 0004).
+    This repository wires it from scripts/ in its own (#323 ruling 3). The session hands the hook
+    the tool call as JSON on stdin: this reads `tool_input.command` and `cwd`. The `case` starts
+    this script only when that JSON names one of the six subcommands, since starting PowerShell
+    takes a second and the hook runs before every shell command. Where the script is not there,
+    as in a clone whose submodule was never fetched, the wired command lets the shell command run
+    and prints JSON that names the missing path and tells the agent it was not checked, as
     refuse-cd-into-mod-cache.ps1's wiring does; -SelfTest runs both branches of the wiring.
 
     WHAT IT REFUSES. A tree is dirty when a tracked file has changed, staged or not; an untracked
@@ -62,7 +62,9 @@
     `-bnew` or `--create=x`. Both shells' quoting is read roughly: a word in double or single
     quotes is one word with its quotes taken off, a backslash or backtick escapes the character
     after it, and nothing is expanded. And whether a session hands a subagent's calls to the hook
-    at all, which is not measured.
+    at all, which is not measured. And whether the settings still reach it, unless -SelfTest is
+    run on them: that reads the wired command and the matcher of its entry, and nothing else of
+    the settings.
 
     TO CHECK IT, run the second example below.
 
@@ -74,14 +76,25 @@
     `-X` refused with an ignored file alone; a stash with a redirection refused; a form inside a
     compound found; `git -C` and a `cd` moving where the tree is read; a call that holds no
     command, one outside a repository, one with `--git-dir` and one with an unpaired quote let
-    through with the NOT-checked message. Then the wired command, run through sh, refuses with
-    exit 2 and a reason, and where the project holds no hook script exits 0 and prints JSON that
-    tells the agent. Needs git, and sh: the one on the path, or the one Git for Windows ships.
+    through with the NOT-checked message. Then the first example's command, run through sh,
+    refuses with exit 2 and a reason, and where the project holds no hook script exits 0 and
+    prints JSON that names the missing path to the agent. Then the command -Settings wires,
+    found by this script's name: it refuses with exit 2 and passes a plain command, and the
+    matcher of its entry starts it for the Bash tool and for the PowerShell tool. Needs git, and
+    sh: the one on the path, or the one Git for Windows ships.
+
+.PARAMETER Settings
+    With -SelfTest: the .claude/settings.json whose PreToolUse command naming this script the
+    wired cases run, with that file's repository as the project. The first command of any entry
+    that names this script is taken, wherever it stands in the file (#315 ruling 3). Defaults to
+    this repository's own, which check.ps1, and so CI, runs. A consumer runs it on its own file
+    to know its wiring still reaches the hook.
 
 .EXAMPLE
-    The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json.
+    The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json, as HOW A
+    CONSUMER WIRES IT says. The script takes no option.
 
-        i=$(cat); case $i in *checkout*|*switch*|*reset*|*restore*|*stash*|*clean*) h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-git-discard.ps1"; if [ -f "$h" ]; then printf '%s' "$i" | pwsh -NoProfile -File "$h"; else printf '%s' '{"systemMessage":"refuse-git-discard: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"refuse-git-discard: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it."}}'; fi;; esac
+        i=$(cat); case $i in *checkout*|*switch*|*reset*|*restore*|*stash*|*clean*) h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-git-discard.ps1"; if [ -f "$h" ]; then printf '%s' "$i" | pwsh -NoProfile -File "$h"; else m='refuse-git-discard: vendor/grado-factorio-tools/scripts/refuse-git-discard.ps1 was not found, so this command was NOT checked by the discard hook. git submodule update --init fetches the script.'; printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"%s"}}' "$m" "$m"; fi;; esac
 
 .EXAMPLE
     To check it, in a repository with an uncommitted edit to a tracked file. The first is refused
@@ -93,7 +106,10 @@
 
 #Requires -Version 7
 [CmdletBinding()]
-param([switch] $SelfTest)
+param(
+    [switch] $SelfTest,
+    [string] $Settings
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -315,24 +331,60 @@ if ($SelfTest) {
         # The wiring as the session runs it, through sh, for a project that holds this script and
         # for one that does not.
         # Read from the header's first example, so the command shown is the command run.
-        $wired = [regex]::Match((Get-Content -LiteralPath $PSCommandPath -Raw), 'i=\$\(cat\).*?esac').Value.Replace('/vendor/grado-factorio-tools/scripts/', '/scripts/')
+        $form = [regex]::Match((Get-Content -LiteralPath $PSCommandPath -Raw), 'i=\$\(cat\).*?esac').Value
+        $wired = $form.Replace('/vendor/grado-factorio-tools/scripts/', '/scripts/')
         $sh = (Get-Command sh -ErrorAction SilentlyContinue)?.Source ?? (Join-Path (git --exec-path) '../../../usr/bin/sh.exe')
         $env:PATH = "$(Split-Path $sh)$([IO.Path]::PathSeparator)$env:PATH"
         $wire = {
-            param($project, $command)
+            param($project, $command, $line = $wired)
             $env:CLAUDE_PROJECT_DIR = $project
-            $text = (@{ cwd = $repo; tool_input = @{ command = $command } } | ConvertTo-Json -Compress) | & $sh -c $wired 2>&1 | Out-String
+            $text = (@{ cwd = $repo; tool_input = @{ command = $command } } | ConvertTo-Json -Compress) | & $sh -c $line 2>&1 | Out-String
             @{ Code = $LASTEXITCODE; Text = $text }
         }
         $tools = Split-Path $PSScriptRoot -Parent
         $wRefused = & $wire $tools 'git switch other'
         $wPlain = & $wire $tools 'git status'
         $wAbsent = & $wire $outside 'git switch other'
-        $toldAbsent = try { ($wAbsent.Text | ConvertFrom-Json).hookSpecificOutput.hookEventName -ceq 'PreToolUse' -and ($wAbsent.Text | ConvertFrom-Json).hookSpecificOutput.additionalContext } catch { $false }
+        # The missing path is named in both fields (ADR 0004).
+        $toldAbsent = try {
+            $parsed = $wAbsent.Text | ConvertFrom-Json
+            $parsed.hookSpecificOutput.hookEventName -ceq 'PreToolUse' -and $parsed.hookSpecificOutput.additionalContext -match 'vendor/grado-factorio-tools/scripts/refuse-git-discard\.ps1 was not found' -and
+                $parsed.systemMessage -ceq $parsed.hookSpecificOutput.additionalContext
+        } catch { $false }
         # The advice leads with git show after committing, and names no git worktree, which a hook
         # on the development machine blocks (Truls, 2026-10-26, on grado-factorio-tools#224).
         $advice = $wRefused.Text -match 'Commit the work first\. To read another revision without leaving this one: git show ' -and $wRefused.Text -notmatch 'worktree add'
-        & $check 'the wired command refuses with exit 2, a reason and git show as the advice after committing, passes a plain command, and where the script is not there exits 0 and prints JSON telling the agent' ($wRefused.Code -eq 2 -and $wRefused.Text -match 'Refused' -and $advice -and $wPlain.Code -eq 0 -and -not $wPlain.Text.Trim() -and $wAbsent.Code -eq 0 -and $toldAbsent) "refused: $($wRefused.Code) $($wRefused.Text) | plain: $($wPlain.Code) $($wPlain.Text) | absent: $($wAbsent.Code) $($wAbsent.Text)"
+        & $check 'the first example''s command refuses with exit 2, a reason and git show as the advice after committing, passes a plain command, and where the script is not there exits 0 and prints JSON naming the missing path to the agent' ($wRefused.Code -eq 2 -and $wRefused.Text -match 'Refused' -and $advice -and $wPlain.Code -eq 0 -and -not $wPlain.Text.Trim() -and $wAbsent.Code -eq 0 -and $toldAbsent) "refused: $($wRefused.Code) $($wRefused.Text) | plain: $($wPlain.Code) $($wPlain.Text) | absent: $($wAbsent.Code) $($wAbsent.Text)"
+        # The wiring a settings file holds, found by this script's name wherever it stands among
+        # the PreToolUse entries (#315 ruling 3): this repository's own unless -Settings names one.
+        $names = [regex]::Escape((Split-Path $PSCommandPath -Leaf))
+        $findWired = {
+            param([string] $path)
+            $found = @((Get-Content -LiteralPath $path -Raw | ConvertFrom-Json).hooks.PreToolUse) |
+                Where-Object { $_ -and @($_.hooks.command) -match $names } | Select-Object -First 1
+            @{ Entry = $found; Command = $(if ($found) { @($found.hooks.command) -match $names | Select-Object -First 1 } else { '' }) }
+        }
+        $Settings = (Resolve-Path -LiteralPath ($Settings ? $Settings : (Join-Path $PSScriptRoot '../.claude/settings.json'))).Path
+        $read = & $findWired $Settings
+        $sRefused = $sPlain = $null
+        if ($read.Command) {
+            $project = Split-Path (Split-Path $Settings -Parent) -Parent
+            $sRefused = & $wire $project 'git switch other' $read.Command
+            $sPlain = & $wire $project 'git status' $read.Command
+        }
+        & $check "the command $Settings wires refuses with exit 2 and a reason, and passes a plain command" ($sRefused -and $sRefused.Code -eq 2 -and $sRefused.Text -match 'Refused' -and $sPlain.Code -eq 0 -and -not $sPlain.Text.Trim()) $(if (-not $read.Command) { "$Settings wires no command that names this script" } else { "refused: $($sRefused.Code) $($sRefused.Text) | plain: $($sPlain.Code) $($sPlain.Text)" })
+        . "$PSScriptRoot/hook-matcher.ps1"
+        $unstarted = @(if ($read.Entry) { Get-UnstartedShellTool -Entry $read.Entry })
+        & $check 'the matcher of the entry that wires the hook starts it for the Bash tool and for the PowerShell tool' ($read.Entry -and -not $unstarted) $(if ($read.Entry) { "$Settings`: the matcher ``$($read.Entry.matcher)`` does not start the hook for $($unstarted -join ' or ')" } else { "$Settings wires no entry that names this script" })
+        # The entry named, not the first: a settings file whose first entry, and whose named
+        # entry's first command, wire another command.
+        $fixture = Join-Path $temp 'settings.json'
+        @{ hooks = @{ PreToolUse = @(
+                    @{ matcher = 'Bash'; hooks = @(@{ type = 'command'; command = 'echo other' }) },
+                    @{ matcher = 'Bash|PowerShell'; hooks = @(@{ type = 'command'; command = 'echo first' }, @{ type = 'command'; command = $form }) }
+                ) } } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $fixture
+        $second = & $findWired $fixture
+        & $check 'the wiring is read from the command that names this script, not from the first entry or its first command' ($second.Entry -and $second.Entry.matcher -ceq 'Bash|PowerShell' -and $second.Command -ceq $form) "$($second.Command)"
     }
     finally { Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue }
     Write-Host ''

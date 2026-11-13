@@ -391,23 +391,21 @@ The refusal says to commit first, or to read another revision with `git show`, `
 #224). It reads the tree in the call's `cwd`, moved by a `cd` and
 by `git -C`, and finds a git call inside a compound command.
 
-A consumer wires it in its own `.claude/settings.json`, beside the mod-cache hook where it has
-that one:
-
-```json
-{
-  "type": "command",
-  "command": "i=$(cat); case $i in *checkout*|*switch*|*reset*|*restore*|*stash*|*clean*) h=\"$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-git-discard.ps1\"; if [ -f \"$h\" ]; then printf '%s' \"$i\" | pwsh -NoProfile -File \"$h\"; else printf '%s' '{\"systemMessage\":\"refuse-git-discard: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.\",\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"refuse-git-discard: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.\"}}'; fi;; esac"
-}
-```
+This repository wires it in its tracked `.claude/settings.json` (#360, #323 ruling 3). A
+consumer's line is the first `.EXAMPLE` in [the script's header](scripts/refuse-git-discard.ps1),
+beside the mod-cache hook where it has that one.
 
 The `case` keeps PowerShell from starting unless the call names one of the six subcommands.
 Exit 2 refuses. Where it cannot tell, it fails open and loudly: with no command, outside a
 repository, with `--git-dir` or `--work-tree`, or with quotes it cannot pair, it lets the
 command run and prints JSON whose `additionalContext` tells the agent it was NOT checked, as the
-wiring does where the script is not there. `-SelfTest` proves each form on a dirty and a clean
-tree in a scratch repository, and runs both branches of the command above. What it cannot see is
-in its header: an alias, a script that runs git itself, and both shells' quoting, read roughly.
+example's command does where the script is not there, naming the missing path. `-SelfTest`
+proves each form on a dirty and a clean tree in a scratch repository, runs both branches of the
+example's command, and runs the command this repository's settings wire;
+`-SelfTest -Settings .claude/settings.json` runs a consumer's, found by the script's name, and
+fails a wiring whose `matcher` would not start the hook for both shell tools. What it cannot see
+is in its header: an alias, a script that runs git itself, and both shells' quoting, read
+roughly.
 
 ## Keeping an agent session from opening a pull request with a failing body
 
