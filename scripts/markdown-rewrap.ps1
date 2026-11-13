@@ -36,18 +36,21 @@
     tree only, never staged (ruling 14). A second run changes nothing.
 
     WITH -Comment (ruling 15), for -Path files only, it finds the comment lines over the limit by
-    their length, and rewraps each from that line to the end of its block: a run of lines with
-    the same indent, `#` and one space, ended by a line of that prefix alone or another prefix;
-    or a paragraph of a PowerShell block comment, between its opening and closing marks, ended by
-    a blank line, a help keyword line such as `.SYNOPSIS`, or a change of indent. In either, a
-    line whose text opens with a section lead, ALL-CAPS words with an optional parenthesis and
-    then a full stop, as `WHY.` or `WHAT IT READS (#1).`, starts a paragraph (#377) where the line
-    before it ends in a full stop; one after a line that does not, as `see the` and then
-    `DESCRIPTION.`, is prose that wrapped there and stays in its paragraph (#398). An ALL-CAPS
-    word with no full stop after its lead, or one mid-line, does not start one. A keyword is
-    a `.` and upper-case letters, matched with case (#254): a line opening `.github/` is prose of
-    its paragraph. The indent is kept on each line written, and lines under `.EXAMPLE` are left as
-    they are. A shebang and code are never touched.
+    their length, and rewraps each from that line to the end of its block: a run of lines with the
+    same indent, `#` and one space, ended by a line of that prefix alone or another prefix; or a
+    paragraph of a PowerShell block comment, as comment-line-lib.ps1's Get-HelpParagraph reads one,
+    which -Fill reads too (Truls's ruling on #442): ended by a blank line, a help keyword line such
+    as `.SYNOPSIS`, one of the closed list matched with case (#254), a change of indent, or a line
+    opening with a list marker, so a list item over the limit is not joined to the prose before it.
+    A paragraph indented deeper than its section's first is rewrapped here where a line of it is
+    over, and left by -Fill. In either kind, a line whose text opens with a section lead, ALL-CAPS
+    words with an optional parenthesis and then a full stop, as `WHY.` or `WHAT IT READS (#1).`,
+    starts a paragraph (#377) where the line before it ends in a full stop; one after a line that
+    does not, as `see the` and then `DESCRIPTION.`, is prose that wrapped there and stays in its
+    paragraph (#398). An ALL-CAPS word with no full stop after its lead, or one mid-line, does not
+    start one. A line opening `.github/` or `.NET` is prose of its paragraph. A closing mark is
+    measured with the word before it. The indent is kept on each line written, and lines under
+    `.EXAMPLE` are left as they are. A shebang and code outside a comment are never touched.
 
     WITH -Fill (grado-factorio-tools#442), for -Comment only, it fills every help paragraph of the
     -Path scripts, or with -Line only the paragraphs holding those lines, greedily to the limit, so
@@ -77,12 +80,10 @@
     its own indent. A section lead after a line that ends other than in a full stop, as in a colon,
     which is joined to that line's paragraph; and a prose line that wraps to open with an ALL-CAPS
     word and a full stop after a line ending in a full stop, as an abbreviation such as e.g. does,
-    which starts a paragraph (#398). A prose line in a block comment opening with `.` and upper-case
-    letters, as `.NET`, which is taken for a keyword: it is left, and named where over, and under
-    `.EXAMPLE` it ends that section, so a command after it is rewrapped, where the lib's closed list
-    of keywords ends none. A block comment opened after code on its line, which is not read as one,
-    and so not named. And a line starting `# ` inside a here-string or a YAML block scalar, which is
-    taken for a comment, rewrapped and named.
+    which starts a paragraph (#398). A list item's lines after its first, indented deeper, which
+    are a paragraph of their own: rewrapped where over, left by -Fill. A block comment opened after
+    code on its line, which is not read as one, and so not named. And a line starting `# ` inside a
+    here-string or a YAML block scalar, which is taken for a comment, rewrapped and named.
 
 .PARAMETER Range
     Rewrap the Markdown files changed in this commit range, as markdown-check.ps1 takes it:
@@ -140,28 +141,14 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 
 . "$PSScriptRoot/markdown-lib.ps1"
-# Get-HelpParagraph, which -Fill fills and comment-line-check.ps1 reports by, so the two agree.
+# Get-HelpParagraph, which -Comment and -Fill read a block comment's paragraphs by, and
+# Split-Token, the words every rewrap breaks between: comment-line-check.ps1 reports by both, so
+# a paragraph this fills is one it does not report (#442, PR #452's review).
 . "$PSScriptRoot/comment-line-lib.ps1"
 
-# A token is a run of text with no space outside a code span, a link, an autolink or an HTML
-# comment, which may hold spaces and are never broken.
-$TOKEN = '(?:(`+)(?:(?!\1).)*?\1|<!--.*?-->|\[(?:\\.|[^\[\]\\]|\[[^\]]*\])*\](?:\([^)]*\)|\[[^\]]*\])?|<[a-zA-Z][a-zA-Z0-9+.-]*:[^>\s]*>|[^\s`<\[]|[`<\[])+'
 # What a line must not start with: it would begin a list item, a heading, a block quote, a table
 # row, a fence, a setext underline or an HTML block.
 $OPENS = '^(?:[-*+]|\d+[.)]|#{1,6}|=+|-+|>.*|\|.*|```.*|~~~.*|<[a-zA-Z/!].*)$'
-
-function Split-Token {
-    <#  The tokens of $Text. An HTML comment is one, and stays beside the word before it because
-        $OPENS keeps it from starting a line. A figure grouped in thousands is one too: a space
-        with a digit before it and exactly three digits after it is no place to break
-        (grado-factorio-tools#345), so "580 000" is one token. That is wider than what
-        markdown-check.ps1 fails, as "in 2026 100 lines" is kept together here too.  #>
-    param([AllowEmptyString()] [string] $Text)
-    # Held by a character that is no whitespace while the tokens are found, then put back.
-    $glue = [string] [char] 0x2063
-    $glued = [regex]::Replace($Text, '(?<=\d) (?=\d{3}(?!\d))', $glue)
-    , @([regex]::Matches($glued, $TOKEN) | ForEach-Object { $_.Value.Replace($glue, ' ') })
-}
 
 function Join-Greedy {
     <#  $Tokens filled into lines no longer than $Max as $Measure counts them, the first behind
@@ -265,44 +252,36 @@ function Invoke-CommentRewrap {
         @{ InBlock = $inBlock; Section = $section }
     }
     $seen = & $read $Lines
-    $inBlock = $seen.InBlock; $section = $seen.Section
+    $inBlock = $seen.InBlock
+    # A block comment's paragraphs are Get-HelpParagraph's, as -Fill reads them (Truls's ruling
+    # on #442): code among them too, which is rewrapped where a line of it is over.
+    $paragraphs = @(Get-HelpParagraph -Lines $Lines)
+    $join = { param($words, $first, $rest, $max) Join-Greedy -Tokens $words -First $first -Rest $rest -Max $max -Measure { $args[0].Length } }
     $out = [System.Collections.Generic.List[string]]::new()
     $rewrapped = @(); $left = @()
     $next = 0
     for ($f = 0; $f -lt $Lines.Count; $f++) {
         if ($f -lt $next -or $Lines[$f].TrimEnd().Length -le $Max) { continue }
         if ($inBlock[$f]) {
-            if ($section[$f] -eq 'EXAMPLE' -or $Lines[$f] -cmatch $HELP_KEYWORD) { continue }
-            $opener = [regex]::Match($Lines[$f], '^\s*<#\s*')
-            $first = if ($opener.Success) { $opener.Value } else { [regex]::Match($Lines[$f], '^\s*').Value }
-            $rest = ' ' * $first.Length
-            $e = $f
-            while ($e + 1 -lt $Lines.Count -and $inBlock[$e + 1] -and $Lines[$e] -notmatch '#>\s*$') {
-                $n = $Lines[$e + 1]
-                if ($n -notmatch '\S' -or $n -cmatch $HELP_KEYWORD -or $n -match '^\s*#>' -or [regex]::Match($n, '^\s*').Length -ne $rest.Length) { break }
-                if (& $leads $Lines[$e] $n.Substring($rest.Length)) { break }
-                $e++
-            }
+            # None holds a keyword line or a line under .EXAMPLE, which are left.
+            $p = $paragraphs | Where-Object { $f -ge $_.Start -and $f -le $_.End } | Select-Object -First 1
+            if (-not $p) { continue }
+            $e = $p.End
+            $new = Format-HelpParagraph -Lines $Lines -Paragraph $p -From $f -Max $Max -Join $join
         }
         else {
             $hash = [regex]::Match($Lines[$f], '^(\s*)# ')
             if (-not $hash.Success -or $Lines[$f] -match '^#!') { continue }
             # The text's own indent past the `# ` is kept, and a change of it ends the paragraph.
             $first = $hash.Value + [regex]::Match($Lines[$f].Substring($hash.Length), '^\s*').Value
-            $rest = $first
             $e = $f
             while ($e + 1 -lt $Lines.Count -and $Lines[$e + 1].StartsWith($first) -and $Lines[$e + 1].Substring($first.Length) -match '^\S' -and
                 -not (& $leads $Lines[$e] $Lines[$e + 1].Substring($first.Length))) { $e++ }
+            # Each line less its `# `.
+            $text = (@($Lines[$f..$e] | ForEach-Object { ($_ -replace '^\s*# ').Trim() }) -join ' ')
+            $new = Join-Greedy -Tokens (Split-Token $text) -First $first -Rest $first -Max $Max -Measure { $args[0].Length }
         }
-        # Each line less its prefix: the `# ` of a `#` block, or the `<#` that opens a block
-        # comment.
-        $strip = if ($inBlock[$f]) { '^\s*<#' } else { '^\s*# ' }
-        $text = (@($Lines[$f..$e] | ForEach-Object { ($_ -replace $strip).Trim() }) -join ' ')
-        $close = [regex]::Match($text, '\s*#>$')
-        if ($close.Success) { $text = $text.Substring(0, $close.Index) }
         for ($k = $next; $k -lt $f; $k++) { $out.Add($Lines[$k]) }
-        $new = Join-Greedy -Tokens (Split-Token $text) -First $first -Rest $rest -Max $Max -Measure { $args[0].Length }
-        if ($close.Success) { $new[-1] += $close.Value }
         $start = $out.Count + 1
         foreach ($l in $new) { $out.Add($l) }
         $rewrapped += "$start-$($out.Count)"
@@ -327,14 +306,12 @@ function Invoke-CommentFill {
     $out = [System.Collections.Generic.List[string]]::new()
     $rewrapped = @(); $left = @()
     $next = 0
-    foreach ($p in Get-HelpParagraph -Lines $Lines) {
-        if ($At -and -not ($At | Where-Object { $_ - 1 -ge $p.Start -and $_ - 1 -le $p.End })) { continue }
+    $join = { param($words, $first, $rest, $max) Join-Greedy -Tokens $words -First $first -Rest $rest -Max $max -Measure { $args[0].Length } }
+    # Code is left: a fill of it would join its lines.
+    foreach ($p in Get-HelpParagraph -Lines $Lines | Where-Object { -not $_.Code }) {
+        if ($At.Count -and -not ($At | Where-Object { $_ - 1 -ge $p.Start -and $_ - 1 -le $p.End })) { continue }
         for ($k = $next; $k -lt $p.Start; $k++) { $out.Add($Lines[$k]) }
-        $text = (@($Lines[$p.Start..$p.End] | ForEach-Object { ($_ -replace '^\s*<#').Trim() }) -join ' ')
-        $close = [regex]::Match($text, '\s*#>$')
-        if ($close.Success) { $text = $text.Substring(0, $close.Index) }
-        $new = Join-Greedy -Tokens (Split-Token $text) -First $p.First -Rest $p.Rest -Max $Max -Measure { $args[0].Length }
-        if ($close.Success) { $new[-1] += $close.Value }
+        $new = Format-HelpParagraph -Lines $Lines -Paragraph $p -From $p.Start -Max $Max -Join $join
         $start = $out.Count + 1
         foreach ($l in $new) {
             $out.Add($l)
@@ -585,11 +562,47 @@ function Invoke-SelfTest {
                 $LASTEXITCODE -eq 0 -and $got -ceq '<#|.SYNOPSIS|    One two||    three four||    five|    six|#>'
             }
             finally { Remove-Item -LiteralPath $file -ErrorAction SilentlyContinue } }
-        'a doc comment opened on its paragraph keeps <# and #> under -Fill, and -Fill without -Comment, or -Line without -Fill, is refused (#442)' = {
+        'a doc comment opened on its paragraph keeps <# and #> under -Fill; -Fill without -Comment, -Line without -Fill, and -Line 0 are refused, each on a line of its own (#442, #435)' = {
             $r = Invoke-CommentFill -Lines @('    <#  One two', '        three #>') -Max $max
-            $noComment = & pwsh -NoProfile -File $PSCommandPath -Fill -Path 'x.ps1' -MaxLineLength 40 2>&1 | Out-String; $c1 = $LASTEXITCODE
-            $noFill = & pwsh -NoProfile -File $PSCommandPath -Comment -Line 3 -Path 'x.ps1' -MaxLineLength 40 2>&1 | Out-String; $c2 = $LASTEXITCODE
-            ($r.Lines -join '|') -ceq '    <#  One two three #>' -and $c1 -ne 0 -and $noComment -match 'give -Comment' -and $c2 -ne 0 -and $noFill -match 'give -Fill' }
+            # Each refusal is written whole to stderr, and read whole here, a line at a time.
+            $said = foreach ($a in @('-Fill', '-Path', 'x.ps1'), @('-Comment', '-Line', '3', '-Path', 'x.ps1'), @('-Comment', '-Fill', '-Line', '0', '-Path', 'x.ps1')) {
+                $lines = @(& pwsh -NoProfile -File $PSCommandPath @a -MaxLineLength 40 2>&1 | ForEach-Object { "$_" })
+                @{ Code = $LASTEXITCODE; Lines = $lines }
+            }
+            $want = 'markdown-rewrap: -Fill and -Line fill the help paragraphs of a script: give -Comment and -Path.',
+                'markdown-rewrap: -Line names the paragraphs -Fill fills: give -Fill too.',
+                'markdown-rewrap: -Line takes line numbers, 1 or more, split on commas: 0'
+            $held = for ($i = 0; $i -lt 3; $i++) { $said[$i].Code -eq 1 -and $said[$i].Lines -ccontains $want[$i] }
+            if ($held -contains $false) { $said | ForEach-Object { $_.Lines | ForEach-Object { Write-Host "    $_" } } }
+            ($r.Lines -join '|') -ceq '    <#  One two three #>' -and -not ($held -contains $false) }
+        'the closing mark is measured with the last word, by the fill, the over-limit rewrap and the report alike (PR #452''s review)' = {
+            # At 40, "ab" fits after a 37-character line and "ab #>" does not: moved up, it makes
+            # 43.
+            $in = @('    <#  two three four five six seven', '        ab #>')
+            $fill = Invoke-CommentFill -Lines $in -Max $max
+            $over = Invoke-CommentRewrap -Lines @("    <#  two three four five six seven $('x' * 29)", '        ab #>') -Max $max
+            $ok = ($fill.Lines -join '|') -ceq ($in -join '|') -and @(Get-ShortHelpLine -Lines $in -Limit $max).Count -eq 0 -and
+                -not @($over.Lines | Where-Object { $_.Length -gt $max }) -and $over.Lines[-1] -ceq '        ab #>'
+            if (-not $ok) { $fill.Lines + $over.Lines | ForEach-Object { Write-Host "    |$_" } }
+            $ok }
+        '-Comment and -Fill share a paragraph''s bounds: a list item starts one, and a deeper paragraph''s long line is still rewrapped by -Comment, where -Fill leaves it (Truls on #442)' = {
+            $in = @('<#', '.DESCRIPTION', "    A prose line that runs past the limit of forty here.", '    - item one', '    - item two',
+                '    Prose.', "        a deeper line well past the limit of forty chars", '#>')
+            $over = Invoke-CommentRewrap -Lines $in -Max $max
+            $fill = Invoke-CommentFill -Lines $in -Max $max
+            $deeper = @($over.Lines | Where-Object { $_ -like '        *' })
+            $ok = $over.Lines -ccontains '    - item one' -and $over.Lines -ccontains '    - item two' -and $fill.Lines -ccontains '    - item one' -and
+                $deeper.Count -eq 2 -and -not @($deeper | Where-Object { $_.Length -gt $max }) -and
+                $fill.Lines -ccontains '        a deeper line well past the limit of forty chars'
+            if (-not $ok) { $over.Lines | ForEach-Object { Write-Host "    |$_" } }
+            $ok }
+        'a paragraph the fill has filled is one the report names no line of, a grouped figure and a reference link among its words (PR #452''s review)' = {
+            $paragraphs = @(
+                @('<#', '.SYNOPSIS', '    Alpha beta gamma delta', '    580 000 rows.', '#>'),
+                @('<#', '.SYNOPSIS', '    One two three four five six', '    [a link][ref] and more words here', '    end.', '#>'),
+                @('<#', '.SYNOPSIS', '    One', '    two three', '    four five six seven eight nine #>'))
+            $named = foreach ($in in $paragraphs) { foreach ($w in 30, 40) { @(Get-ShortHelpLine -Lines (Invoke-CommentFill -Lines $in -Max $w).Lines -Limit $w).Count } }
+            -not ($named | Where-Object { $_ }) }
         'no -MaxLineLength is refused, and so is a script without -Comment, -Comment without -Path, -Path with -All, and a missing file' = {
             $said = & pwsh -NoProfile -File $PSCommandPath -Path 'x.md' 2>&1 | Out-String
             $code = $LASTEXITCODE
@@ -620,11 +633,15 @@ $Path = @($Path -split ',' | Where-Object { $_ })
 if ($Comment -and -not $Path) { throw '-Comment reads only the files -Path names.' }
 # Under pwsh -File a comma list arrives as one string.
 $Line = @($Line | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-if ($Line -notmatch '^\d+$') { throw "-Line takes line numbers, 1 or more, split on commas: $($Line -join ', ')" }
+# Written whole to stderr, not thrown: the error view wraps a thrown message at the console's
+# width, and a case reading it would pass or fail by that width (#435).
+$refuse = { param([string] $Why) [Console]::Error.WriteLine("markdown-rewrap: $Why"); exit 1 }
+# 0 would match no line, and @(0) reads as false, which would fill every paragraph.
+if ($Line -notmatch '^[1-9]\d*$') { & $refuse "-Line takes line numbers, 1 or more, split on commas: $($Line -join ', ')" }
 $Line = @($Line | ForEach-Object { [int] $_ })
-if (($Fill -or $Line) -and -not $Comment) { throw '-Fill and -Line fill the help paragraphs of a script: give -Comment and -Path.' }
-if ($Line -and -not $Fill) { throw '-Line names the paragraphs -Fill fills: give -Fill too.' }
-if ($Line -and $Path.Count -ne 1) { throw '-Line is a line of one file: give -Path one script.' }
+if (($Fill -or $Line.Count) -and -not $Comment) { & $refuse '-Fill and -Line fill the help paragraphs of a script: give -Comment and -Path.' }
+if ($Line.Count -and -not $Fill) { & $refuse '-Line names the paragraphs -Fill fills: give -Fill too.' }
+if ($Line.Count -and $Path.Count -ne 1) { & $refuse '-Line is a line of one file: give -Path one script.' }
 if ($Path -and ($All -or $Range)) { throw '-Path cannot be combined with -All or -Range: it names the files itself.' }
 # As markdown-check.ps1 refuses it: a script read as Markdown would have its code rewrapped.
 $notMarkdown = @($Path | Where-Object { $_ -notmatch '\.md$' })
