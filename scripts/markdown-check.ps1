@@ -175,7 +175,11 @@
 
 .PARAMETER MaxLineLength
     Also report a prose line longer than this many characters, 1 or more. Without it, length is
-    not read.
+    not read. Where a run reports such a line, its closing FAILED line names markdown-rewrap.ps1,
+    by its path from the current directory to the folder this script ran from, and the command
+    that rewraps what was read: the same -All, -Range, -Path or none, and this limit (#444). With
+    -Body, the command is `-Path <body>` where the body's name ends in .md; another file is not
+    named, since the rewrap refuses it without -Comment, which would read it as a script.
 
 .PARAMETER SelfTest
     Run the cases that hold the check to what this header says, naming each as it runs. Needs git,
@@ -224,7 +228,8 @@ $ErrorActionPreference = 'Stop'
 function Invoke-Check {
     <#  Check the Markdown files git names, read at $Revision ('' is the index); with -FromDisk,
         the files the caller names, read from disk, which count as there for a link whether git
-        tracks them or not. Prints each finding and returns how many.  #>
+        tracks them or not. Prints each finding and returns how many, as @{ Count; Long }, Long
+        those of a line over -MaxLineLength.  #>
     param([string[]] $Files, [string] $Revision = '', [Parameter(Mandatory)] [string] $Top, [int] $MaxLineLength = 0, [switch] $FromDisk)
 
     $entries = if ($Revision) { git -C $Top -c core.quotepath=off ls-tree -r $Revision } else { git -C $Top -c core.quotepath=off ls-files -s }
@@ -287,18 +292,35 @@ function Invoke-Check {
         if (-not $known.ContainsKey($p)) { $known[$p] = Get-HeadingAnchor -Lines (& $readLines $p) }
         , $known[$p]
     }
-    $count = 0
+    $count = 0; $long = 0
     try {
         foreach ($f in $Files | Where-Object { $_ -match '\.md$' }) {
             $lines = & $readLines $f
             foreach ($finding in Test-Markdown -Lines $lines -Path $f -Exists $exists -Anchors $anchors -MaxLineLength $MaxLineLength | Sort-Object { $_.Line }) {
                 Write-Host "${f}:$($finding.Line): $($finding.Message)"
                 $count++
+                if (Test-LongLineFinding $finding) { $long++ }
             }
         }
     }
     finally { $git.StandardInput.Close(); $git.WaitForExit(); $git.Dispose() }
-    $count
+    @{ Count = $count; Long = $long }
+}
+
+function Test-LongLineFinding {
+    <#  Whether a finding of Test-Markdown is of a line over -MaxLineLength, which
+        markdown-rewrap.ps1 rewraps.  #>
+    param([hashtable] $Finding)
+    $Finding.Message -clike 'the line is * characters, over the limit of *'
+}
+
+function Get-RewrapHint {
+    <#  The words that name markdown-rewrap.ps1 for $Long lines over $Max, with the command that
+        rewraps what was read: $Reading, the switch the check read by, and the rewrap's path from
+        the current directory, beside this script, so a consumer is told its own (#444).  #>
+    param([int] $Long, [int] $Max, [string] $Reading)
+    $rewrap = [IO.Path]::GetRelativePath($PWD.ProviderPath, (Join-Path $PSScriptRoot 'markdown-rewrap.ps1')) -replace '\\', '/'
+    " $Long line(s) over $Max are rewrapped by markdown-rewrap.ps1: pwsh -File '$($rewrap -replace "'", "''")'$Reading -MaxLineLength $Max"
 }
 
 function Invoke-SelfTest {
@@ -838,6 +860,37 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             $folded = if (Test-Path -LiteralPath (Join-Path $own 'A.md')) { $cased.Code -eq 1 -and @([regex]::Matches($cased.Text, '(?mi)^a\.md:1:')).Count -eq 1 -and $cased.Text -match '1 finding\(s\) in 1 Markdown file' }
                 else { $cased.Code -eq 1 -and $cased.Text -match 'A\.md is no file' }
             $folded -and @($same, $other | Where-Object { $_.Code -eq 1 -and @([regex]::Matches($_.Text, '(?m)^a\.md:1:')).Count -eq 1 -and $_.Text -match '1 finding\(s\) in 1 Markdown file' }).Count -eq 2 } }
+        @{ Name = 'a long line makes the closing line name markdown-rewrap.ps1 beside the check that ran, with the switch it read by; a run with no long line, and a body not .md, do not name it (#444)'; Test = {
+            $own = Join-Path $temp 'rewrap-hint'; $tools = Join-Path $temp 'elsewhere/tools'
+            New-Item -ItemType Directory -Path $own, $tools -Force | Out-Null
+            # A copy of the check run from a folder of its own, as a consumer runs it through its
+            # pin.
+            Copy-Item -LiteralPath $PSCommandPath, (Join-Path $PSScriptRoot 'markdown-lib.ps1') -Destination $tools
+            $copy = Join-Path $tools (Split-Path -Leaf $PSCommandPath)
+            git -C $own init --quiet
+            Set-Content -LiteralPath (Join-Path $own 'long.md') -Value ('word ' * 6).Trim()
+            Set-Content -LiteralPath (Join-Path $own 'open.md') -Value 'and *open'
+            Set-Content -LiteralPath (Join-Path $own 'long.txt') -Value ('word ' * 6).Trim()
+            git -C $own add long.md open.md
+            git -C $own -c user.name=selftest -c user.email=selftest@example.invalid -c commit.gpgsign=false commit --quiet -m one
+            $go = { param([string[]] $a) Push-Location $own; try { $t = (& pwsh -NoProfile -File $copy @a 2>&1 | Out-String) } finally { Pop-Location }; @{ Code = $LASTEXITCODE; Text = $t } }
+            $at = "pwsh -File '../elsewhere/tools/markdown-rewrap.ps1'"
+            git -C $own rm --cached --quiet open.md; Set-Content -LiteralPath (Join-Path $own 'long.md') -Value ('word ' * 7).Trim(); git -C $own add long.md
+            $staged = & $go @('-MaxLineLength', '20')
+            $all = & $go @('-All', '-MaxLineLength', '20')
+            git -C $own -c user.name=selftest -c user.email=selftest@example.invalid -c commit.gpgsign=false commit --quiet -m two
+            $range = & $go @('-Range', 'HEAD~1...HEAD', '-MaxLineLength', '20')
+            $path = & $go @('-Path', 'long.md,open.md', '-MaxLineLength', '20')
+            $short = & $go @('-Path', 'open.md', '-MaxLineLength', '20')
+            $body = & $go @('-Body', 'long.md', '-MaxLineLength', '20')
+            $text = & $go @('-Body', 'long.txt', '-MaxLineLength', '20')
+            $runs = $staged, $all, $range, $path, $short, $body, $text
+            $runs | ForEach-Object { Write-Host ($_.Text.TrimEnd() -replace '(?m)^', '    ') }
+            $closing = { param($r) @($r.Text.TrimEnd() -split '\r?\n')[-1] }
+            $named = { param($r, [string] $reading) $r.Code -eq 1 -and (& $closing $r).EndsWith(" 1 line(s) over 20 are rewrapped by markdown-rewrap.ps1: $at$reading -MaxLineLength 20") }
+            (& $named $staged '') -and (& $named $all ' -All') -and (& $named $range ' -Range HEAD~1...HEAD') -and (& $named $path " -Path 'long.md,open.md'") -and
+                (& $named $body " -Path 'long.md'") -and
+                $short.Code -eq 1 -and (& $closing $short) -notmatch 'markdown-rewrap' -and $text.Code -eq 1 -and (& $closing $text) -notmatch 'markdown-rewrap' } }
     )
 
     $failures = 0
@@ -877,14 +930,18 @@ if ($PSBoundParameters.ContainsKey('Body')) {
     if ($refused) { Write-Host "FAILED - markdown-check: $refused, so nothing was checked."; exit 1 }
     $reader = [IO.StringReader]::new($text)
     $lines = @(while ($null -ne ($l = $reader.ReadLine())) { $l })
-    $found = 0
+    $found = 0; $long = 0
     foreach ($finding in Test-Markdown -Lines $lines -Path $Body -Body -Exists { $false } -Anchors { $null } -MaxLineLength $MaxLineLength | Sort-Object { $_.Line }) {
         Write-Host "${Body}:$($finding.Line): $($finding.Message)"
         $found++
+        if (Test-LongLineFinding $finding) { $long++ }
     }
     if ($found) {
+        # The rewrap takes a body by -Path where it ends in .md, and refuses another file
+        # without -Comment, which would read it as a script.
+        $hint = if ($long -and $Body -match '\.md$') { Get-RewrapHint -Long $long -Max $MaxLineLength -Reading " -Path '$($Body -replace "'", "''")'" }
         Write-Host ''
-        Write-Host "FAILED - markdown-check: $found finding(s) in $Body, read as a body. What it reads as what: the header of markdown-check.ps1, under WITH -Body."
+        Write-Host "FAILED - markdown-check: $found finding(s) in $Body, read as a body. What it reads as what: the header of markdown-check.ps1, under WITH -Body.$hint"
         exit 1
     }
     Write-Host "OK - markdown-check: $Body read as a body, nothing found."
@@ -955,7 +1012,8 @@ if ($All -and -not $Range -and -not $files) {
     exit 1
 }
 
-$found = Invoke-Check -Files $files -Revision $revision -Top $top -MaxLineLength $MaxLineLength -FromDisk:$named
+$checked = Invoke-Check -Files $files -Revision $revision -Top $top -MaxLineLength $MaxLineLength -FromDisk:$named
+$found = $checked.Count
 # What was read is the index; a file whose working tree differs passed or failed on what is staged.
 if (-not $Range -and -not $named) {
     # safecrlf off: under autocrlf git would otherwise warn of each LF file it compares.
@@ -967,8 +1025,11 @@ if (-not $Range -and -not $named) {
     }
 }
 if ($found) {
+    # The rewrap reads by the check's own switches; with none, the staged files, read from disk.
+    $reading = if ($named) { " -Path '$(($Path -join ',') -replace "'", "''")'" } elseif ($Range) { " -Range $Range" } elseif ($All) { ' -All' } else { '' }
+    $hint = if ($checked.Long) { Get-RewrapHint -Long $checked.Long -Max $MaxLineLength -Reading $reading }
     Write-Host ''
-    Write-Host "FAILED - markdown-check: $found finding(s) in $($files.Count) Markdown file(s). What it reads as what: the header of markdown-check.ps1."
+    Write-Host "FAILED - markdown-check: $found finding(s) in $($files.Count) Markdown file(s). What it reads as what: the header of markdown-check.ps1.$hint"
     exit 1
 }
 Write-Host "OK - markdown-check: $($files.Count) Markdown file(s), nothing found."
