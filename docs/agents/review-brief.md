@@ -152,16 +152,18 @@ check, with why: the session answers each one.
 **The confirmation turn** is sent to the lane that raised a finding, continued, once its fix is
 committed. It holds the lines below and no account of what was done; the session fills their
 blanks. Where the lane cannot be continued, a fresh agent is sent the brief's *Reads first* and
-*Read-only* paragraphs as they were filled, and the lines below, with the words "Run no check
-and no revert, and do not review the change again" after their first sentence. The review's
-comment is posted after this turn, and a
+*Read-only* paragraphs as they were filled, and the lines below. A confirmation reads the diff and
+runs nothing, whoever makes it (Truls, 2026-11-13, #355): the session's reverts and CI's run on the
+fix commit cover a fix to a script. The review's comment is posted after this turn, and a
 `not fixed` gets another fix and another turn, or is recorded as left.
 
-Confirm the fixes of the review whose report is `<the report file's full path>`, which read the
-change at `<the reviewed full SHA>`. The fixes are in `<each fix commit, by full SHA>`: read
+Confirm the fixes of the review of pull request `#<number>`, in `<the repository's path>`,
+whose report is `<the report file's full path>` and which read the change at
+`<the reviewed full SHA>`. The fixes are in `<each fix commit, by full SHA>`: read
 `git diff <the reviewed full SHA>..<the last fix's full SHA>`. Not fixed, and why:
 `<each finding, by its number | "none">`. Read the diff as new diff: against the report's
-findings, and by each rule a review here reads by. Still read-only. Add a section
+findings, and by each rule a review here reads by. Run no check and no revert, and do not review
+the change again. Still read-only. Add a section
 **Confirmation** to the report file, a line for each finding by its number, `fixed`,
 `not fixed: <what is left>` or `left unfixed, as said`, with a new finding numbered on under
 **Findings**. End your turn on at most three lines: how many are fixed, what is left, and the

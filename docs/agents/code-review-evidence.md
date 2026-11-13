@@ -275,7 +275,17 @@ Two of this repository's steps changed with it, by
   Both left the page, and [review-brief.md](review-brief.md) gained the confirmation turn.
 - **A lane's report is a file outside the repository.** It had been the lane's reply.
 
-The stub is 3,761 bytes of its 3,779, from `wc -c docs/agents/code-review.md`, where the page
+Truls ruled two more things in the session that built it, on 2026-11-13
+([his rulings](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6852591475)):
+
+- **A confirmation of a fix reads the fix diff and runs no check and no revert**, whether the
+  lane that raised the finding makes it or a fresh agent. #332's ruling 5 says who confirms, not
+  what the confirmer runs.
+- **The absolute-words list is walked before the first push here**, where the shared page says
+  before the reviewer is started: the review runs after the push, and a pushed commit message
+  below the tip is not rewritten.
+
+The stub is 3,775 bytes of its 3,779, from `wc -c docs/agents/code-review.md`, where the page
 stood at 3,751. The room for the values came from these, each quoted as it stood:
 
 - "On top of the `/code-review` plugin", which the page no longer says: it names the plugin
@@ -283,6 +293,8 @@ stood at 3,751. The room for the values came from these, each quoted as it stood
 - "Once per change", which left with the fresh review of the commits since: a change has one
   review, and each fix a confirmation turn.
 - "open the pull request first", which "on the pull request" says.
+- shortened, with the meaning kept: "anything else gets an agent per lane" to "otherwise an
+  agent per lane"; "such as a commit" to "as a commit"; "says so there" to "says so".
 - of a run not yet finished, "It waits on a run not yet finished with
   `gh run watch <id> --exit-status`, and names a run that passed instead of running the check":
   the brief's *The check* holds the command and the three cases.
