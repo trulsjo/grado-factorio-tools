@@ -248,6 +248,43 @@ limit of its own, 3,000 bytes for the rules page as before and 2,000 for the pro
 the split left them the rules page was 2,021 bytes and the prose page 1,366, each
 from `tr -d '\r' < <page> | wc -c`.
 
+**The rules page became a stub page on 2026-11-13**, for
+[#355](https://github.com/trulsjo/grado-factorio-tools/issues/355): the steps the repositories
+share are on [`docs/code-review-procedure.md`](../code-review-procedure.md), and
+[code-review.md](code-review.md) gives this repository's value for each of that page's
+parameters, each under the parameter's name, and keeps this repository's own steps. Truls ruled
+the second pass `on request` at that ticket's triage
+([its brief](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6851050659)):
+the survey's `none` was read before the review panel was defined here. The stub opens with no
+warning about `/setup-matt-pocock-skills`, since that skill does not write the page
+([read 2026-11-13](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6851088596)).
+
+Two of this repository's steps changed with it, by
+[#332](https://github.com/trulsjo/grado-factorio-tools/issues/332)'s rulings 5 and 6:
+
+- **A fix is confirmed by the lane that raised the finding, from the fix diff.** The rule had
+  been a fresh review, "Asked to review again, review only the commits since", and one fresh
+  agent ran both lanes "when each commit since the last review answers one of its findings".
+  Both left the page, and [review-brief.md](review-brief.md) gained the confirmation turn.
+- **A lane's report is a file outside the repository.** It had been the lane's reply.
+
+The stub is 3,767 bytes of its 3,779, from `wc -c docs/agents/code-review.md`, where the page
+stood at 3,751. The room for the values came from these, each quoted as it stood:
+
+- "On top of the `/code-review` plugin", which the page now says where it first names the
+  plugin.
+- "open the pull request first", which "on the pull request" says.
+- of a run not yet finished, "It waits on a run not yet finished with
+  `gh run watch <id> --exit-status`, and names a run that passed instead of running the check":
+  the brief's *The check* holds the command and the three cases.
+- of the reverts, "as the brief says" and "of either kind".
+- "The session hands each lane [review-brief.md](review-brief.md), filled in with the change's
+  particulars": the brief template's value, and the shared page's step 2.
+- of the threshold, "by [`docs/code-review-rules.md`](../code-review-rules.md)", which the
+  page's opening links.
+- of the comment, "Each review posts one comment on the pull request once its findings are
+  acted on" became the *Where recorded* value.
+
 ## Where the first two rules came from
 
 Both were decided by Truls in the sibling

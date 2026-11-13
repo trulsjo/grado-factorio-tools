@@ -14,20 +14,30 @@ there. How a lane runs a command a rule names, and what of its output it reports
 change, and sends the rest as it stands. A lane that runs both reviews is sent both *Reads first*
 lines.
 
+This page is the brief template
+[`docs/code-review-procedure.md`](../code-review-procedure.md) asks this repository to name, and
+it holds that page's steps for a lane (#355): what is not under review, with nothing of what the
+session thinks is right; the agent-facing files read whole; the report as a file, with what was
+not checked; and, below the brief, the turn that confirms a fix.
+
 ---
 
 You are the `<bug scan | prose lane | both>` of the review of pull request `#<number>`,
 `<title>`, at `<full SHA>`, in `C:\src\factorio\grado-factorio-tools`. The change:
-`<what it does, and the tickets it closes>`.
+`<what it does, and the tickets it closes>`. Not under review:
+`<each decision of Truls's that the change records, with where he made it | "nothing">`.
 
-**Reads first.** `CLAUDE.md`, `docs/agents/code-review.md`, and the tickets the change closes,
-each with
+**Reads first.** `CLAUDE.md`, `docs/code-review-rules.md`, `docs/agents/code-review.md`, and the
+tickets the change closes, each with
 `gh issue view <number> --json title,body,labels,comments --jq '{title, body, labels: [.labels[].name], comments: [.comments[].body]}'`.
 
 - The bug scan: the diff, `git diff origin/main...<full SHA>`, and each file it touches, whole.
   It does not load `docs/agents/code-review-prose.md`.
 - The prose lane: `docs/agents/code-review-prose.md`, then the diff, the commit messages
-  (`git log origin/main..<full SHA>`) and the pull request body (`gh pr view <number>`).
+  (`git log origin/main..<full SHA>`) and the pull request body (`gh pr view <number>`). It reads
+  whole each agent-facing file the diff changes, a `CLAUDE.md`, a page under `docs/agents/`, a
+  page under `docs/` that a stub page links, or a skill file: a sentence the change made false
+  and did not touch is in no hunk.
 
 **The check.** `<CI's run <id> passed on this commit: name it and do not run the check again |
 CI's run <id> has not finished on this commit: in the Bash tool, run gh run watch <id>
@@ -111,7 +121,11 @@ older case of that shape, in a file the diff touches elsewhere, is no finding of
 **Read-only.** Edit no file in the repository, commit nothing, push nothing, and post nothing to
 GitHub: the session acts on the findings and posts the review.
 
-**Each finding** is reported as:
+**The report is a file.** Write it to `<a scratch folder outside the repository>/<lane>.md` with
+the file tool, and end your turn on at most three lines: how many findings, which one matters
+most, and the file's path. It has three sections.
+
+**Findings.** Each is reported as:
 
 - **Place:** file and line, or the commit by subject, or the pull request body.
 - **Text:** the words or code in question, quoted.
@@ -119,6 +133,26 @@ GitHub: the session acts on the findings and posts the review.
 - **Right:** what would be right.
 - **Score:** a suggested score, 0 to 100, on the plugin's rubric.
 
-**Nothing found** is said plainly, as "Nothing found", with what was read and run.
+Nothing found is said plainly there, as "Nothing found".
+
+**Checked and found right.** A line for each thing read or run that held, with how it was
+checked, and each file read whole.
+
+**Not checked.** A line for each thing this brief or a rule asks for that the lane did not
+check, with why: the session answers each one.
 
 `<anything particular to this change: a claim to check, a sibling to open, a case to run>`
+
+---
+
+**The confirmation turn** is sent to the lane that raised a finding, continued, once its fix is
+committed. It holds the lines below and no account of what was done. Where the lane cannot be
+continued, a fresh agent is sent this page's brief as it was filled, the lane's report file and
+the lines below.
+
+The fixes are in `<each fix commit, by full SHA>`: read `git diff <the SHA you reviewed>..<the
+last fix's full SHA>`. Not fixed, and why: `<each finding, by its number | "none">`. Read the
+diff as new diff: against your own findings, and by each rule you reviewed by. Still read-only.
+Add a section **Confirmation** to your report file, a line for each finding, `fixed`,
+`not fixed: <what is left>` or `left unfixed, as said`, with a new finding under **Findings**,
+and end your turn on at most three lines, as before.
