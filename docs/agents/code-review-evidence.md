@@ -351,11 +351,15 @@ came from its opening, "How a review is run and what it reports are in
 "`pr-body-check.ps1 -CiteSiblings` holds a pull request body to this, not a commit or a page", which
 says what a script checks and binds no lane, as that script's header does; and from "The session
 opens the place itself before the statement goes into the comment; unopened, it is left out and told
-to Truls in the report", a step of the session's, not the lane's, moved unchanged to the stub's
-*What is reported*. The prose page's incident, PR #437's two rules no ruling carried, is in #447's
+to Truls in the report", a step of the session's, not the lane's, moved to the stub's *What is
+reported* with its subject, "A statement about a sibling repository", named there as a lane's or
+the session's. PR #452's first form named it as a lane's alone, and called the move unchanged,
+which narrowed it: the session's own statements go into the comment too (its review, finding 5).
+The prose page's incident, PR #437's two rules no ruling carried, is in #447's
 body: "runs no check and no revert" for a confirmer, which ruling 1 above later carried, and one set
-of lines for a fix's turn and a later commit's, which the fourth did. The stub is then 4,006 bytes
-and the prose page 1,978, each from `tr -d '\r' < <page> | wc -c`.
+of lines for a fix's turn and a later commit's, which the fourth did. The stub is then ~~4,006~~
+4,028 bytes and the prose page ~~1,978~~ 1,990, after the review's findings 5 and 8, each from
+`tr -d '\r' < <page> | wc -c`.
 
 The brief has the prose lane read whole one kind of file the shared page's step 4 does not
 list, a page under `docs/` that a stub page links: this repository's own addition, since its
