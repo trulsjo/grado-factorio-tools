@@ -22,8 +22,10 @@
     while its line stands. Now a reported use is reworded or marked, and whether a marker is
     honest is the reviewer's.
 
-    WHAT RUNS IT. A consumer's CI, over a pull request's commits, with the self-test; here,
-    .github/workflows/check.yml, whose step gives this repository's -Left. No git hook does.
+    WHAT RUNS IT. A consumer's CI, over a pull request's commits, with the self-test. Here,
+    .github/workflows/check.yml's step and scripts/check.ps1, and so the pre-push hook, each over
+    origin/main...HEAD with -LeftFile glossary-left.txt (grado-factorio-tools#443): PR #437 and
+    PR #438 passed the hook and went red in CI on an avoided word.
 
     WHAT IT READS AS WHAT. GLOSSARY.md is read as it is at the end of the range. A term is a line
     opening `**Term**:`, and its avoid line runs from `_Avoid_:` to the next blank line. A remark
@@ -46,8 +48,10 @@
     at the range's end: exit 1 in every mode but -SelfTest. One that is empty, and one with no
     `_Avoid_` entry whose word is matched: exit 1 with -Range and -All, since there is no word to
     read a line against. -List still prints what it found and exits 0, since it lists and shows
-    why an entry is not matched. A range that adds no Markdown line passes, and says it read 0
-    files: that run had nothing to check.
+    why an entry is not matched. A range that adds no Markdown line passes, and says it read no
+    file: that run had nothing to check. A -LeftFile not there, one that leaves no word, or one
+    with a line giving no why: exit 1. An end of -Range git cannot resolve, as an origin/main never
+    fetched: exit 1, naming it.
 
     WHAT IT CANNOT SEE. Whether a use is wrong. A phrase or a quotation broken over two lines. A
     line that was moved and not changed is reported as added. GLOSSARY.md itself, where the words
@@ -70,17 +74,30 @@
     from PowerShell, as a step with `shell: pwsh` runs it, not through `pwsh -File`. Empty unless
     given.
 
+.PARAMETER LeftFile
+    The words left to the reviewer, read from a file, so a run through `pwsh -File` can give them:
+    a pattern and its why to a line, split at the first space, with blank lines and `#` lines
+    skipped. Added to -Left, which wins on a pattern both name. This repository's is
+    glossary-left.txt.
+
 .PARAMETER SelfTest
     Prove an avoided word is reported and that a clean line, a marked use, a mention and a word
     -Left names pass, and that over a range the script exits 1 on an unmarked use, 0 once it is
     marked and 0 where the range only removes lines, and 1 where GLOSSARY.md has no matched
     `_Avoid_` entry, is empty or is missing, while -List on the unmatched one exits 0 and says
-    why. Those two cases need git.
+    why; and that -LeftFile leaves the words it names over a range and no other, and that a file
+    missing, empty or with no why, an end of the range not there, each exit 1, where a range that
+    adds nothing exits 0 saying so. Those three cases need git.
 
 .EXAMPLE
     From a CI step whose shell is pwsh, with the words left to the reviewer:
 
         ./vendor/grado-factorio-tools/scripts/glossary-check.ps1 -Range origin/main...HEAD -Left ([ordered] @{ '^mods?$' = 'what every member is; avoided only as a word for a pack' })
+
+.EXAMPLE
+    With the words left read from a file, as this repository's CI and check.ps1 run it:
+
+        pwsh -File scripts/glossary-check.ps1 -Range origin/main...HEAD -LeftFile glossary-left.txt
 
 .EXAMPLE
     With none left:
@@ -95,6 +112,7 @@ param(
     [switch] $All,
     [switch] $List,
     [System.Collections.IDictionary] $Left = @{},
+    [string] $LeftFile,
     [switch] $SelfTest
 )
 
@@ -259,6 +277,42 @@ if ($SelfTest) {
             }
             finally { Remove-Item -LiteralPath $temp -Recurse -Force }
         } }
+        @{ Name = 'over a range -LeftFile leaves the words it names and no other, a missing or empty file or one with no why fails, an end not there fails, and an empty range says it read nothing (#443)'; Test = {
+            $temp = Join-Path ([IO.Path]::GetTempPath()) "glossary-check-selftest-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+            New-Item -ItemType Directory -Path $temp -Force | Out-Null
+            try {
+                $git = { git -C $temp -c user.name=selftest -c user.email=selftest@example.invalid -c core.autocrlf=false -c commit.gpgsign=false @args | Out-Null; if ($LASTEXITCODE -ne 0) { throw "git $args failed; the self-test needs git." } }
+                $commit = { param([string] $text) Set-Content -LiteralPath (Join-Path $temp 'a.md') -Value ($text -split "`n"); & $git add -A; & $git commit --quiet -m x }
+                $run = { param([string] $range, [string] $file) Push-Location $temp; try { $text = (& pwsh -NoProfile -File $PSCommandPath -Range $range -LeftFile $file 2>&1 | Out-String) } finally { Pop-Location }; @{ Code = $LASTEXITCODE; Text = $text } }
+                $leftFile = { param([string] $name, [string[]] $lines) $p = Join-Path ([IO.Path]::GetTempPath()) "$name-$([guid]::NewGuid().ToString('N').Substring(0, 8)).txt"; Set-Content -LiteralPath $p -Value $lines; $p }
+                & $git init --quiet
+                Set-Content -LiteralPath (Join-Path $temp 'GLOSSARY.md') -Value $glossary
+                & $commit 'fine'
+                & $commit "fine`nIt was verified."
+                & $commit "fine`nIt was verified.`nIt confirms."
+                & $git commit --quiet --allow-empty -m empty
+                $left = & $leftFile 'left' '# why each is left', '^verified$ left here on purpose'
+                $files = @($left, (& $leftFile 'empty' '# a comment and nothing else'), (& $leftFile 'nowhy' '^verified$'))
+                try {
+                    $leftOne = & $run 'HEAD~3..HEAD~2' $left
+                    $other = & $run 'HEAD~2..HEAD~1' $left
+                    $missing = & $run 'HEAD~3..HEAD~2' (Join-Path $temp 'not-there.txt')
+                    $empty = & $run 'HEAD~3..HEAD~2' $files[1]
+                    $noWhy = & $run 'HEAD~3..HEAD~2' $files[2]
+                    $noEnd = & $run 'not-there...HEAD' $left
+                    $nothing = & $run 'HEAD~1..HEAD' $left
+                }
+                finally { Remove-Item -LiteralPath $files -Force -ErrorAction SilentlyContinue }
+                foreach ($r in $leftOne, $other, $missing, $empty, $noWhy, $noEnd, $nothing) { Write-Host ($r.Text.TrimEnd() -replace '(?m)^', '    ') }
+                $leftOne.Code -eq 0 -and $other.Code -eq 1 -and $other.Text -match '(?m)^a\.md:3: "confirms"' -and $other.Text -notmatch '"verified"' -and
+                    $missing.Code -eq 1 -and $missing.Text -match 'FAILED - glossary-check: -LeftFile .*not-there\.txt is not there' -and
+                    $empty.Code -eq 1 -and $empty.Text -match 'FAILED - glossary-check: -LeftFile .* leaves no word' -and
+                    $noWhy.Code -eq 1 -and $noWhy.Text -match 'FAILED - glossary-check: -LeftFile .* has a line with no why' -and
+                    $noEnd.Code -eq 1 -and $noEnd.Text -match 'FAILED - glossary-check: not-there is not there, so no line of not-there\.\.\.HEAD was read' -and
+                    $nothing.Code -eq 0 -and $nothing.Text -match 'OK - glossary-check: HEAD~1\.\.HEAD adds no line to a Markdown file but GLOSSARY\.md, so none was read'
+            }
+            finally { Remove-Item -LiteralPath $temp -Recurse -Force }
+        } }
     )
     $failures = 0
     $n = 0
@@ -277,6 +331,25 @@ if ($SelfTest) {
 
 if ($Range -and $Range -notmatch '\.\.+[^.]') { throw '-Range needs both ends, as origin/main...HEAD: the files are read at its end.' }
 $revision = if ($Range) { $Range -replace '^.*\.\.+' } else { 'HEAD' }
+# A file that leaves nothing is a file misnamed or emptied, not a choice to leave nothing (#443).
+if ($PSBoundParameters.ContainsKey('LeftFile')) {
+    if (-not (Test-Path -LiteralPath $LeftFile -PathType Leaf)) { Write-Host "FAILED - glossary-check: -LeftFile $LeftFile is not there, so no line was read."; exit 1 }
+    $fromFile = [ordered] @{}
+    foreach ($l in Get-Content -LiteralPath $LeftFile | Where-Object { $_ -match '\S' -and $_ -notmatch '^\s*#' }) {
+        if ($l -notmatch '^\s*(\S+)\s+(\S.*?)\s*$') { Write-Host "FAILED - glossary-check: -LeftFile $LeftFile has a line with no why after its pattern: $l"; exit 1 }
+        $fromFile[$Matches[1]] = $Matches[2]
+    }
+    if (-not $fromFile.Count) { Write-Host "FAILED - glossary-check: -LeftFile $LeftFile leaves no word, so no line was read."; exit 1 }
+    foreach ($k in $Left.Keys) { $fromFile[$k] = $Left[$k] }
+    $Left = $fromFile
+}
+# Both ends there before a line is read: a range git cannot resolve is no range read (#443).
+if ($Range) {
+    foreach ($end in @($Range -split '\.\.\.?') | Where-Object { $_ }) {
+        git rev-parse --verify --quiet "$end^{commit}" *> $null
+        if ($LASTEXITCODE -ne 0) { Write-Host "FAILED - glossary-check: $end is not there, so no line of $Range was read. Fetch it, or run where it is."; exit 1 }
+    }
+}
 # A glossary that gives the script no word to match leaves nothing it reads able to fail
 # (grado-factorio-modpack#362).
 $glossary = @(git show "${revision}:GLOSSARY.md" 2>$null)
@@ -326,5 +399,6 @@ foreach ($f in $added.Keys) {
 Write-Host ''
 if ($found -and $Range) { Write-Host "FAILED - glossary-check: $found unmarked use(s) of an avoided word in $($added.Count) Markdown file(s). Reword each, or mark a deliberate one <!-- deliberate: word -->."; exit 1 }
 if ($found) { Write-Host "glossary-check: $found use(s) of an avoided word in $($added.Count) Markdown file(s). -All counts and does not fail."; exit 0 }
+if ($Range -and -not $added.Count) { Write-Host "OK - glossary-check: $Range adds no line to a Markdown file but GLOSSARY.md, so none was read."; exit 0 }
 Write-Host "OK - glossary-check: $($added.Count) Markdown file(s), no unmarked use of an avoided word."
 exit 0

@@ -1,0 +1,11 @@
+# The words glossary-check.ps1 leaves to the reviewer here, one to a line: a pattern matched
+# against one word of a GLOSSARY.md _Avoid_ entry, then why it is left. CI's glossary step and
+# scripts/check.ps1 both hand this file to the check by -LeftFile, so the two cannot differ
+# (grado-factorio-tools#443). Ruled on #348: on 2026-11-11, -All with none left counted 104
+# uses of copy, 76 of branch, 20 of share and 3 of port.
+^copy$ an ordinary word here; avoided only as a word for one term
+^port$ an ordinary word here; avoided only as a word for one term
+^share$ an ordinary word here; avoided only as a word for one term
+^branch$ an ordinary word here; avoided only as a word for one term
+^upgrade$ an ordinary word here; avoided only as a word for one term
+^patch$ an ordinary word here; avoided only as a word for one term

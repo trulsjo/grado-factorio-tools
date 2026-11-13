@@ -613,10 +613,12 @@ what is not, and `-All` counts over the whole tree without failing.
 
     pwsh -File scripts/glossary-check.ps1 -Range origin/main...HEAD
 
-CI runs it here on a pull request with six words left, ruled on #348. `-Left` is a dictionary, so
-a step passes it from PowerShell, `shell: pwsh`, not through `pwsh -File`; its first `.EXAMPLE`
-shows the form. `-SelfTest` builds scratch repositories and needs git. What it cannot see is in its
-header: whether a use is wrong is one.
+CI runs it here on a pull request, and `scripts/check.ps1` on every run, over
+`origin/main...HEAD` with six words left, ruled on #348: both name `glossary-left.txt` by
+`-LeftFile`, a pattern and its why to a line, so the two cannot differ (#443). `-Left` is a
+dictionary, so a step passes it from PowerShell, `shell: pwsh`, not through `pwsh -File`; its
+first `.EXAMPLE` shows the form. `-SelfTest` builds scratch repositories and needs git. What it
+cannot see is in its header: whether a use is wrong is one.
 
 ## Listing the absolute words a range adds
 
