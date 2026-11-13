@@ -151,10 +151,11 @@ if ($SelfTest) {
            Err = ($lines | Where-Object { & $isErr $_ } | ForEach-Object { "$_" } | Out-String) }
     }
     # A run refused as $Refusal says: exit 1, the whole refusal in one line on stderr, and nothing
-    # on stdout, where a caller reading a run's result would take it for output (#429).
+    # on stdout, where a caller reading a run's result would take it for output (#429). An empty
+    # $Refusal, a folder not refused, is no refusal: every string contains ''.
     $refused = {
         param([hashtable] $Got, [string] $Refusal)
-        $Got.Code -eq 1 -and $Got.Err.Contains($Refusal) -and $Got.Out.Trim() -eq ''
+        $Refusal -ne '' -and $Got.Code -eq 1 -and $Got.Err.Contains($Refusal) -and $Got.Out.Trim() -eq ''
     }
     # A folder of a player's mods: a zip and a mod-list.json, no marker.
     $theirs = {
@@ -226,8 +227,9 @@ if ($SelfTest) {
             $second = & $run $folder @('-FactorioExe', $exe, $zip)
             $first.Code -ne 0 -and -not $first.Said.Contains('mod dir    :') -and $marked -and -not $listed -and
                 $second.Code -ne 0 -and -not $second.Said.Contains('Refusing -ModDirectory') } }
-        # The four cases below look for the whole refusal, which is longer than any console is
-        # wide: a message wrapped at the width, as a thrown one is, fails them on any machine.
+        # The refusal cases below, through $refused, look for the whole refusal, which is longer
+        # than any console is wide: a message wrapped at the width, as a thrown one is, fails them
+        # on any machine.
         @{ Name = 'a run refuses a folder holding a zip and a mod-list.json and no marker, says why in one piece on stderr and nothing on stdout, and leaves both files'; Test = {
             $folder = & $theirs 'run'
             $got = & $run $folder @('some-mod')
@@ -243,7 +245,8 @@ if ($SelfTest) {
             $refusal.Contains('it is a file') -and (& $refused $got $refusal) -and (Test-Path -LiteralPath $file -PathType Leaf) } }
         @{ Name = 'a folder whose one file is hidden is not empty: a run and -Clean refuse it, say why, and leave the file (#430)'; Test = {
             # Hidden as the system it runs on reads it: by a leading dot off Windows, and by the
-            # attribute on it. A listing without -Force must not see it, or the case holds nothing.
+            # Hidden attribute on Windows. A listing without -Force must not see it, or the case
+            # holds nothing.
             $folder = Join-Path $temp 'hidden'; New-Item -ItemType Directory -Path $folder | Out-Null
             $file = Join-Path $folder '.hidden-file'; Set-Content -LiteralPath $file -Value 'x'
             if ($IsWindows) { $item = Get-Item -LiteralPath $file -Force; $item.Attributes = $item.Attributes -bor [IO.FileAttributes]::Hidden }
