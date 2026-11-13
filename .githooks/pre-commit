@@ -1,22 +1,35 @@
 #!/bin/sh
-# Runs two checks before a commit is made, each with check.ps1's line limit, so a problem is
-# refused in seconds and not minutes later by pre-push:
+# Runs three checks before a commit is made, so a problem is refused in seconds and not minutes
+# later by pre-push:
 #
 # - scripts/markdown-check.ps1 -All (grado-factorio-tools#182), which reads every tracked Markdown
 #   file as staged;
 # - the comment-line rule check.ps1 holds every script to, scripts/comment-line-check.ps1
 #   (grado-factorio-tools#225, #344), which reads each staged scripts/*.ps1 as staged, and says
-#   so when none is staged.
+#   so when none is staged;
+# - scripts/strict-list-check.ps1 (grado-factorio-tools#456), on each staged scripts/*.ps1 that
+#   sets strict mode, as staged, which check.ps1 runs over the whole of scripts/. On PR #452 a
+#   read strict mode throws on passed this hook on three commits and was refused only by the
+#   full check before the push. The staged scripts are written out of the index into a folder
+#   under the git directory, and the check is run from there, so it names each by its path from
+#   the root. The fixtures in scripts/strict-list-check/ are left out, as check.ps1's run leaves
+#   them. With no script staged, or none of those staged setting strict mode, it says it read none.
 #
-# This file is only the wiring, as commit-msg is, and is installed by the same one step:
+# The first two take check.ps1's line limit. This file is only the wiring, as commit-msg is, and
+# is installed by the same one step:
 #
 #     git config core.hooksPath .githooks
 #
-# Both read what the commit commits: with `git commit -a` or a path, the index git hands the
+# All three read what the commit commits: with `git commit -a` or a path, the index git hands the
 # hook. An edit not staged is not read; markdown-check.ps1 names each Markdown file that has one.
 # What each checks, and what it cannot see, is in its header. Nothing else is run here: the rest
-# of check.ps1 and the self-tests are pre-push's. Both run, so a commit that fails both is told
-# of both.
+# of check.ps1 and the self-tests are pre-push's. All run, so a commit that fails more than one
+# is told of each.
+#
+# What the third cannot see, beyond its own header's list: a script is taken as setting strict
+# mode where a line of it begins with Set-StrictMode, after any indent, which a here-string can
+# hold too; one that sets it otherwise is not read. A path holding a comma or a line break is
+# split there, and the check then names a path that is not there.
 #
 # The limit is $MARKDOWN_LINE_LIMIT, read from scripts/check.ps1, so the checks cannot drift
 # apart. The posture on a missing pwsh, script or limit is commit-msg's: say what was not checked,
@@ -33,7 +46,7 @@ if [ -z "$LIMIT" ]; then
     exit 0
 fi
 
-# Both read the repository they stand in.
+# All read the repository they stand in.
 cd "$ROOT" || exit 1
 STATUS=0
 
@@ -47,6 +60,29 @@ if [ -f scripts/comment-line-check.ps1 ]; then
     pwsh -NoProfile -File scripts/comment-line-check.ps1 -Limit "$LIMIT" || STATUS=1
 else
     echo "pre-commit: scripts/comment-line-check.ps1 not found, so the scripts were NOT checked." >&2
+fi
+
+if [ -f scripts/strict-list-check.ps1 ]; then
+    STAGED="$(git diff --cached --name-only --diff-filter=ACMR -- 'scripts/*.ps1' ':(exclude)scripts/strict-list-check/*')"
+    if [ -z "$STAGED" ]; then
+        echo "OK - strict-list check: no scripts/*.ps1 is staged, so none was read."
+    else
+        # Under the git directory, a path git and pwsh both read alike on every system.
+        SCRATCH="$(git rev-parse --absolute-git-dir)/strict-list-staged-$$"
+        printf '%s\n' "$STAGED" | git checkout-index --stdin --prefix="$SCRATCH/"
+        STRICT="$(cd "$SCRATCH" && printf '%s\n' "$STAGED" | while IFS= read -r f; do
+            if grep -q '^[[:space:]]*Set-StrictMode' "$f"; then printf '%s\n' "$f"; fi
+        done)"
+        if [ -z "$STRICT" ]; then
+            echo "OK - strict-list check: none of the staged scripts sets strict mode, so none was read."
+        else
+            LIST="$(printf '%s\n' "$STRICT" | paste -sd, -)"
+            (cd "$SCRATCH" && pwsh -NoProfile -File "$ROOT/scripts/strict-list-check.ps1" "$LIST") || STATUS=1
+        fi
+        rm -rf "${SCRATCH:?}"
+    fi
+else
+    echo "pre-commit: scripts/strict-list-check.ps1 not found, so no script's strict-mode reads were checked." >&2
 fi
 
 exit $STATUS
