@@ -24,8 +24,8 @@
 
     WHAT RUNS IT. A consumer's CI, over a pull request's commits, with the self-test. Here,
     .github/workflows/check.yml's step and scripts/check.ps1, and so the pre-push hook, each over
-    origin/main...HEAD with -LeftFile glossary-left.txt (grado-factorio-tools#443): PR #437 and
-    PR #438 passed the hook and went red in CI on an avoided word.
+    origin/main...HEAD with -LeftFile glossary-left.txt (grado-factorio-tools#443): PR #437 and PR
+    #438 passed the hook and went red in CI on an avoided word.
 
     WHAT IT READS AS WHAT. GLOSSARY.md is read as it is at the end of the range. A term is a line
     opening `**Term**:`, and its avoid line runs from `_Avoid_:` to the next blank line. A remark
@@ -44,13 +44,13 @@
     there: <!-- deliberate: confirms -->. A marked use is not reported. A word inside double
     quotes or a code span is being mentioned and is not reported either.
 
-    WHAT FAILS WITH NOTHING READ (grado-factorio-modpack#362). A GLOSSARY.md that git cannot read
-    at the range's end: exit 1 in every mode but -SelfTest. One that is empty, and one with no
+    WHAT FAILS WITH NOTHING READ (grado-factorio-modpack#362). A GLOSSARY.md that git cannot read at
+    the range's end: exit 1 in every mode but -SelfTest. One that is empty, and one with no
     `_Avoid_` entry whose word is matched: exit 1 with -Range and -All, since there is no word to
-    read a line against. -List still prints what it found and exits 0, since it lists and shows
-    why an entry is not matched. A range that adds no Markdown line passes, and says it read no
-    file: that run had nothing to check. A -LeftFile not there, one that leaves no word, or one
-    with a line giving no why: exit 1. An end of -Range git cannot resolve, as an origin/main never
+    read a line against. -List still prints what it found and exits 0, since it lists and shows why
+    an entry is not matched. A range that adds no Markdown line passes, and says it read no file:
+    that run had nothing to check. A -LeftFile not there, one that leaves no word, or one with a
+    line giving no why: exit 1. An end of -Range git cannot resolve, as an origin/main never
     fetched: exit 1, naming it.
 
     WHAT IT CANNOT SEE. Whether a use is wrong. A phrase or a quotation broken over two lines. A
@@ -75,10 +75,9 @@
     given.
 
 .PARAMETER LeftFile
-    The words left to the reviewer, read from a file, so a run through `pwsh -File` can give them:
-    a pattern and its why to a line, split at the first space, with blank lines and `#` lines
-    skipped. Added to -Left, which wins on a pattern both name. This repository's is
-    glossary-left.txt.
+    The words left to the reviewer, read from a file, so a run through `pwsh -File` can give them: a
+    pattern and its why to a line, split at the first space, with blank lines and `#` lines skipped.
+    Added to -Left, which wins on a pattern both name. This repository's is glossary-left.txt.
 
 .PARAMETER SelfTest
     Prove an avoided word is reported and that a clean line, a marked use, a mention and a word

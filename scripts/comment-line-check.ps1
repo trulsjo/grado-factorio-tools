@@ -33,6 +33,14 @@
     reads the working tree, not what this read, so the refusal warns that staging the file again
     stages any edit to it that was not staged.
 
+    WHAT IT REPORTS AND DOES NOT FAIL (grado-factorio-tools#442). In a script's help, each line of a
+    paragraph, not its last, that the next line's first word would fit on within the limit, by
+    comment-line-lib.ps1's Get-ShortHelpLine, with the markdown-rewrap.ps1 -Comment -Fill command
+    that fills that script. The run exits as it would without them, as Truls ruled at triage: on PR
+    #438 such lines were found by a reviewer alone. A # line is not read for it, being wrapped by
+    sense more often than by width, nor a file that is not PowerShell. On 2026-11-13, `-All` over
+    scripts/*.ps1 named 1120 lines in 49 scripts.
+
     WHAT IT CANNOT SEE. An edit not staged. In a file that is not PowerShell, whether a # line is
     a comment, and a block comment of another language. What the PowerShell rule cannot see is in
     check.ps1's header, under A COMMENT OR HEADER LINE. -SelfTest runs the reading and the rule
@@ -93,19 +101,30 @@ function Invoke-CommentLineCheck {
                     else { Get-LongHashLine -Lines ([IO.File]::ReadAllLines($copy)) -Limit $Limit })
                 if ($long) { @{ File = $f; Lines = $long } }
             })
+        # Reported, never failed (Truls, triage of #442): a help line the next line's first
+        # word would fit on. A script's help only, not its # lines or another file's.
+        $short = @(foreach ($f in $files | Where-Object { $_ -like '*.ps1' }) {
+                $under = @(Get-ShortHelpLine -Lines ([IO.File]::ReadAllLines((Join-Path $scratch $f))) -Limit $Limit)
+                if ($under) { @{ File = $f; Lines = $under } }
+            })
     }
     finally { Remove-Item -LiteralPath $scratch -Recurse -Force -ErrorAction SilentlyContinue }
     $as = if ($All) { '' } else { ', as staged' }
-    if (-not $refused) {
-        return @{ Code = 0; Lines = @("OK - comment-line check$($as): $($files.Count) file(s) read, no comment line over $Limit.") }
-    }
     $rewrap = [IO.Path]::GetRelativePath($Root, (Join-Path $PSScriptRoot 'markdown-rewrap.ps1')) -replace '\\', '/'
-    $lines = @($refused | ForEach-Object { "$($_.File): comment lines over $Limit characters, line $($_.Lines -join ', ')." })
-    $lines += 'Rewrap each with its command, then stage it again. The rewrap reads the file on disk, so staging it again stages with it any edit that was not staged:'
     # Each path quoted for PowerShell, each kind of single quote it reads doubled, the curly
     # ones too, so the command runs as printed for any path git lists (#378).
     $quote = { param([string] $s) "'$([System.Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent($s))'" }
+    $report = @(foreach ($s in $short) {
+            "$($s.File): help lines the next line's first word would fit on, line $($s.Lines -join ', '); not a failure. Fill them:"
+            "    pwsh -NoProfile -File $(& $quote $rewrap) -Comment -Fill -MaxLineLength $Limit -Path $(& $quote $s.File)"
+        })
+    if (-not $refused) {
+        return @{ Code = 0; Lines = $report + @("OK - comment-line check$($as): $($files.Count) file(s) read, no comment line over $Limit.") }
+    }
+    $lines = @($refused | ForEach-Object { "$($_.File): comment lines over $Limit characters, line $($_.Lines -join ', ')." })
+    $lines += 'Rewrap each with its command, then stage it again. The rewrap reads the file on disk, so staging it again stages with it any edit that was not staged:'
     $lines += @($refused | ForEach-Object { "    pwsh -NoProfile -File $(& $quote $rewrap) -Comment -MaxLineLength $Limit -Path $(& $quote $_.File)" })
+    $lines += $report
     $lines += "FAILED - comment-line check$($as): $($refused.Count) of $($files.Count) file(s) read have a comment line over $Limit."
     @{ Code = 1; Lines = $lines }
 }
@@ -165,6 +184,16 @@ if ($SelfTest) {
                 $fixedUnstaged.Code -eq 1 -and $fixedUnstaged.Lines[0] -eq 'scripts/b.ps1: comment lines over 100 characters, line 2.' -and
                     $fixedUnstaged.Lines[-1] -eq 'FAILED - comment-line check, as staged: 1 of 1 file(s) read have a comment line over 100.' -and
                     $longUnstaged.Code -eq 0 -and $longUnstaged.Lines[-1] -eq 'OK - comment-line check, as staged: 1 file(s) read, no comment line over 100.' }
+            'a help line the next line''s first word would fit on is reported with the fill command and does not fail; a full one, a paragraph''s last and a # comment are not reported (#442)' = {
+                & $file 'scripts/h.ps1' '<#', '.SYNOPSIS', '    One two', '    three four five six seven eight ten', '    nine', '#>', '# a code comment', '# short', '$x = 1'
+                & $git add scripts/h.ps1
+                $got = & $run -Limit 40
+                & $git rm --cached --quiet -f scripts/h.ps1; Remove-Item -LiteralPath (Join-Path $repo 'scripts/h.ps1')
+                $got.Lines | ForEach-Object { Write-Host "    $_" }
+                $got.Code -eq 0 -and @($got.Lines).Count -eq 3 -and
+                    $got.Lines[0] -ceq "scripts/h.ps1: help lines the next line's first word would fit on, line 3; not a failure. Fill them:" -and
+                    $got.Lines[1] -ceq "    pwsh -NoProfile -File '$rewrap' -Comment -Fill -MaxLineLength 40 -Path 'scripts/h.ps1'" -and
+                    $got.Lines[2] -ceq 'OK - comment-line check, as staged: 1 file(s) read, no comment line over 40.' }
             '-All reads a tracked file that is not staged, which the run with no switch does not' = {
                 & $file 'scripts/old.ps1' '<#', "    $long", '#>'; & $git add scripts/old.ps1; & $git commit --quiet -m old
                 $all = & $run -All; $staged = & $run

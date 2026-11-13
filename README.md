@@ -599,7 +599,9 @@ or another block. It takes the check's `-Range`, `-All` and `-Path`, and with no
 it writes the working tree only, and never stages. Which lines are prose and which are over is the
 check's own reading, through `scripts/markdown-lib.ps1`, which both load. `-Comment` does the same
 for a script's or a workflow's comment lines over the limit, a `#` block or a paragraph of a block
-comment, found by length. `-SelfTest` needs no git and no game.
+comment, found by length. `-Comment -Fill` fills every help paragraph of the `-Path` scripts
+greedily to the limit, short lines too, or with `-Line` only the paragraphs holding those lines
+(#442). `-SelfTest` needs no git and no game.
 
 ## Checking prose against the glossary
 
@@ -770,7 +772,9 @@ fail.
 exempt; in a hook or a workflow, each line that begins with `#`. It reads the files `-Path` names,
 git pathspecs from the repository root, `scripts/*.ps1` unless said, as staged: the staged ones,
 or with `-All` every tracked one. A refusal names the `markdown-rewrap.ps1 -Comment` command that
-rewraps each refused file. The `pre-commit` hook runs it on the staged scripts; a sibling that
+rewraps each refused file. It also names each help line the next line's first word would fit on,
+with the `-Comment -Fill` command, and does not fail on one (#442). The `pre-commit` hook runs it
+on the staged scripts; a sibling that
 also reads its hooks and workflows passes them:
 
     pwsh -File scripts/comment-line-check.ps1 -All -Path 'scripts/*.ps1,.githooks/*,.github/workflows/*.yml'
@@ -879,7 +883,8 @@ scripts/     PowerShell entry points, one job each, and the libraries they
              mod-info.ps1, which reads a mod's info.json for four of them,
              markdown-lib.ps1, the reading markdown-check.ps1 and markdown-rewrap.ps1 share,
              comment-line-lib.ps1, the comment-line rule check.ps1 and
-             comment-line-check.ps1 share,
+             comment-line-check.ps1 share, and the help paragraphs
+             markdown-rewrap.ps1 -Fill fills,
              check-input-lib.ps1, which lists the files cited-commit-check.ps1,
              line-cite-check.ps1 and comment-line-check.ps1 are given, with
              its own -SelfTest,

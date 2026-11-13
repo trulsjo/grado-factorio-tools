@@ -79,10 +79,10 @@
     every turn and the code-review rules before every review; grado-factorio-tools#65 cut both, and
     the next edit took CLAUDE.md back over its limit before anyone looked. The prose rules are a
     page of their own, which a review's prose lane loads, with a limit of its own
-    (grado-factorio-tools#116). The limits are in
-    $PAGE_LIMITS and nowhere else. A page is measured with LF line endings, which is how the
-    repository stores it, so a checkout with CRLF gets the same answer. A page not there fails,
-    and so does a $PAGE_LIMITS that names none (grado-factorio-tools#451).
+    (grado-factorio-tools#116). The limits are in $PAGE_LIMITS and nowhere else. A page is measured
+    with LF line endings, which is how the repository stores it, so a checkout with CRLF gets the
+    same answer. A page not there fails, and so does a $PAGE_LIMITS that names none
+    (grado-factorio-tools#451).
 
     THE TRACKED MARKDOWN IS READ BY markdown-check.ps1 -All (grado-factorio-tools#74). A page that
     moves leaves its links behind, and nothing else reads them. This script had a link check of
@@ -114,15 +114,15 @@
     And fetch-mods.ps1's self-test listens on a loopback port, so it fails where that is refused.
 
     THE GLOSSARY STEP READS COMMITS, NOT THE TREE (grado-factorio-tools#443). It runs
-    glossary-check.ps1 over origin/main...HEAD with glossary-left.txt, as CI does, since PR #437
-    and PR #438 passed the pre-push hook and failed CI's step on an avoided word. It reads what
-    the branch's commits add, so an edit not committed is not seen, and origin/main as last
-    fetched: this makes no fetch, so a stale origin/main widens the range past CI's. On main
-    itself the range is empty, and the step passes saying it read nothing; where origin/main is
-    not there, as in a clone with no remote, it fails, naming it. A record for -SkipIfPassed is
-    of a tree, and two commits can hold one tree, so a skip, or a run of only what reads the
-    index, can leave out a range that a later fetch or a commit's message alone has changed: a
-    commit that adds a line changes the tree, and with it the run.
+    glossary-check.ps1 over origin/main...HEAD with glossary-left.txt, as CI does, since PR #437 and
+    PR #438 passed the pre-push hook and failed CI's step on an avoided word. It reads what the
+    branch's commits add, so an edit not committed is not seen, and origin/main as last fetched:
+    this makes no fetch, so a stale origin/main widens the range past CI's. On main itself the range
+    is empty, and the step passes saying it read nothing; where origin/main is not there, as in a
+    clone with no remote, it fails, naming it. A record for -SkipIfPassed is of a tree, and two
+    commits can hold one tree, so a skip, or a run of only what reads the index, can leave out a
+    range that a later fetch or a commit's message alone has changed: a commit that adds a line
+    changes the tree, and with it the run.
 
     A PASS IS RECORDED, AND -SkipIfPassed READS IT (grado-factorio-tools#176). The pre-push hook
     ran this again on a tree it had just passed, minutes each time. A pass records the tree it
@@ -224,28 +224,28 @@
     skipped with the rest, and not run where only the index changed.
 
 .PARAMETER SelfTest
-    Run the cases that hold the record and its reading, in a scratch repository, and those that
-    hold the functions each script and each self-test's run are judged by, on strings and on files
-    outside it, and those that hold the two loops, Test-ScriptFolder and Invoke-SelfTestRun, over
-    a folder of fixture scripts outside it with lists of their own, some of them run as
-    self-tests, and the one that holds Get-ReadmeProblem over a fixture script and README there,
-    those that hold $TOOL_STEPS's line-cite-check.ps1 step and Invoke-ToolStep over fixture scripts,
-    and its glossary step over a scratch repository with an origin/main of its own (#443),
-    and Get-TokenOnlyChange, Get-RunPlan, Get-ChangedPath, Get-RunStart and, through it,
+    Run the cases that hold the record and its reading, in a scratch repository, and those that hold
+    the functions each script and each self-test's run are judged by, on strings and on files
+    outside it, and those that hold the two loops, Test-ScriptFolder and Invoke-SelfTestRun, over a
+    folder of fixture scripts outside it with lists of their own, some of them run as self-tests,
+    and the one that holds Get-ReadmeProblem over a fixture script and README there, those that hold
+    $TOOL_STEPS's line-cite-check.ps1 step and Invoke-ToolStep over fixture scripts, and its
+    glossary step over a scratch repository with an origin/main of its own (#443), and
+    Get-TokenOnlyChange, Get-RunPlan, Get-ChangedPath, Get-RunStart and, through it,
     Get-SelfTestSubset in the scratch repository, Get-RunStart also called with the lists the run
-    leaves to its defaults, and Invoke-RunPlan with blocks of its own; the run's own SelfTests
-    block in $runBlocks, through Invoke-RunPlan with Invoke-SelfTestRun stood in, for a plan
-    naming a subset, which it must hand on with this folder (#432); its Pages block, through
-    Invoke-RunPlan, over pages in a scratch folder and a $PAGE_LIMITS each case gives it (#451);
-    Complete-Run on a folder with no .git, and .githooks/pre-push run by sh in one (#445); and those
-    that hold this runner's own verdict on a case, $judgeCase, and the loop's line, by a case giving
-    two values that the loop must fail (#419); and nothing else. Of the Pages block, no case holds
-    the figures in $PAGE_LIMITS themselves, which a read of the diff or the run's printed line
-    holds. The run's other blocks, Scripts, Step, Readme and Markdown, with their call of each loop
-    and of Get-ReadmeProblem with this folder, this README and this script's lists, are not run, nor
-    its run of param-check.ps1, variable-case-check.ps1, help-check.ps1 and strict-list-check.ps1
-    over this folder: a run that stopped making a call, or passed it a list less, would still pass.
-    Nor is the main block's handing of $runBlocks to Invoke-RunPlan, its reading of the record for
+    leaves to its defaults, and Invoke-RunPlan with blocks of its own; the run's own SelfTests block
+    in $runBlocks, through Invoke-RunPlan with Invoke-SelfTestRun stood in, for a plan naming a
+    subset, which it must hand on with this folder (#432); its Pages block, through Invoke-RunPlan,
+    over pages in a scratch folder and a $PAGE_LIMITS each case gives it (#451); Complete-Run on a
+    folder with no .git, and .githooks/pre-push run by sh in one (#445); and those that hold this
+    runner's own verdict on a case, $judgeCase, and the loop's line, by a case giving two values
+    that the loop must fail (#419); and nothing else. Of the Pages block, no case holds the figures
+    in $PAGE_LIMITS themselves, which a read of the diff or the run's printed line holds. The run's
+    other blocks, Scripts, Step, Readme and Markdown, with their call of each loop and of
+    Get-ReadmeProblem with this folder, this README and this script's lists, are not run, nor its
+    run of param-check.ps1, variable-case-check.ps1, help-check.ps1 and strict-list-check.ps1 over
+    this folder: a run that stopped making a call, or passed it a list less, would still pass. Nor
+    is the main block's handing of $runBlocks to Invoke-RunPlan, its reading of the record for
     -SkipIfPassed, its exit where Get-RunStart says skip, its call of Complete-Run, or its exit with
     the code that returns: the cases hold the record, the skip and the code, not that the run reads
     the one or exits with the others. Needs git, and sh, as Git for Windows has it, and no game. Two
