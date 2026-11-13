@@ -1,18 +1,18 @@
 <#
 .SYNOPSIS
     Parses every script under scripts/, holds their comment lines to a width, reads their list
-    parameters with param-check.ps1, their variables' spelling with variable-case-check.ps1,
-    their help with help-check.ps1 and their strict-mode reads with strict-list-check.ps1, holds
-    README.md to naming each of their parameters, runs every
-    self-test that needs neither the game nor the network, holds the agent pages to their size
-    limits, and runs markdown-check.ps1 over the tracked Markdown. Exit 0 means all of that held, on
-    a tree that did not change while it was read, or one git could write no tree of, which it says.
-    With -SkipIfPassed, as the pre-push hook runs it, exit 0 may instead mean that nothing ran,
-    because a run recorded that this same tree passed it; that only what reads the index ran,
+    parameters with param-check.ps1, their variables' spelling with variable-case-check.ps1, their
+    help with help-check.ps1 and their strict-mode reads with strict-list-check.ps1, holds README.md
+    to naming each of their parameters, runs every self-test that needs neither the game nor the
+    network, holds the agent pages to their size limits, and runs markdown-check.ps1 over the
+    tracked Markdown. Exit 0 means all of that held, on a tree that did not change while it was
+    read, or one git could write no tree of, which it says. With -SkipIfPassed, as the pre-push hook
+    runs it, exit 0 may instead mean that only the steps that read commits ran, because a run
+    recorded that this same tree passed it; that only what reads the index, and the commits, ran,
     because only the index differs from a tree that passed; that the self-tests ran none, because
-    the tree differs from one that passed only in whitespace between a script's tokens; or that
-    only some self-tests ran, because only scripts and Markdown changed since a pass. The run then
-    says so. CI runs without the switch, and so runs all of it.
+    the tree differs from one that passed only in whitespace between a script's tokens; or that only
+    some self-tests ran, because only scripts and Markdown changed since a pass. The run then says
+    so. CI runs without the switch, and so runs all of it.
 
 .DESCRIPTION
     THE ONE COMMAND BEFORE A PUSH (grado-factorio-tools#60). The only gate here was commit-msg,
@@ -119,10 +119,10 @@
     branch's commits add, so an edit not committed is not seen, and origin/main as last fetched:
     this makes no fetch, so a stale origin/main widens the range past CI's. On main itself the range
     is empty, and the step passes saying it read nothing; where origin/main is not there, as in a
-    clone with no remote, it fails, naming it. A record for -SkipIfPassed is of a tree, and two
-    commits can hold one tree, so a skip, or a run of only what reads the index, can leave out a
-    range that a later fetch or a commit's message alone has changed: a commit that adds a line
-    changes the tree, and with it the run.
+    clone with no remote, it fails, naming it. A record for -SkipIfPassed is of the working tree
+    and the index, never of HEAD, so committing what was staged changes neither: the step is marked
+    Commits, and runs on every run, a skipped one and one of only what reads the index too. The
+    main block's run of it on a skip is held by a read only, as the main block is.
 
     A PASS IS RECORDED, AND -SkipIfPassed READS IT (grado-factorio-tools#176). The pre-push hook
     ran this again on a tree it had just passed, minutes each time. A pass records the tree it
@@ -160,21 +160,22 @@
     offset order, which such a change keeps. It cannot see a self-test that reads a script by
     column, as a parse error's message names one, or one written after that search.
 
-    A RUN OF WHAT READS THE INDEX, WHERE ONLY THE INDEX CHANGED (grado-factorio-tools#426). On
-    PR #425 a pass was recorded with README.md edited and not staged; staging it changed the index
+    A RUN OF WHAT READS THE INDEX, WHERE ONLY THE INDEX CHANGED (grado-factorio-tools#426). On PR
+    #425 a pass was recorded with README.md edited and not staged; staging it changed the index
     tree, and the push ran the whole check for ten minutes, where the one step that reads the index
     took 10.7 s. With -SkipIfPassed, where the record's working tree is this working tree and the
-    index trees differ, the run names the working tree and both index trees and runs only what
-    reads the index: each of $TOOL_STEPS marked Index, line-cite-check.ps1, which lists its files
-    with git ls-files; each self-test in $INDEX_SELF_TESTS, refuse-hanging-bash.ps1's, which asks
-    git check-ignore of a path, which a tracked file answers otherwise; and the Markdown check,
-    which reads the staged blobs. A pass is recorded for this tree. The parse, the width check, the
-    steps that read the scripts, README's reading, the page limits and every other self-test read
-    the working tree, which is the one that passed. Found by a search of scripts/ for git calls
-    that read the index (ls-files, --cached, --staged, cat-file, :0:, write-tree, GIT_INDEX_FILE),
-    for git -C on a path built from $PSScriptRoot, and for git with no -C, which runs in this
-    repository, on 2026-11-12. It cannot see a step or a self-test that reads the index otherwise,
-    or one written after that search, which then runs on a tree that passed on another index.
+    index trees differ, the run names the working tree and both index trees and runs only what reads
+    the index, and each step marked Commits: each of $TOOL_STEPS marked Index, line-cite-check.ps1,
+    which lists its files with git ls-files; each self-test in $INDEX_SELF_TESTS,
+    refuse-hanging-bash.ps1's, which asks git check-ignore of a path, which a tracked file answers
+    otherwise; and the Markdown check, which reads the staged blobs. A pass is recorded for this
+    tree. The parse, the width check, the steps that read the scripts, README's reading, the page
+    limits and every other self-test read the working tree, which is the one that passed. Found by a
+    search of scripts/ for git calls that read the index (ls-files, --cached, --staged, cat-file,
+    :0:, write-tree, GIT_INDEX_FILE), for git -C on a path built from $PSScriptRoot, and for git
+    with no -C, which runs in this repository, on 2026-11-12. It cannot see a step or a self-test
+    that reads the index otherwise, or one written after that search, which then runs on a tree that
+    passed on another index.
 
     A RUN OF ONLY SOME SELF-TESTS, WHERE ONLY SCRIPTS AND MARKDOWN CHANGED
     (grado-factorio-tools#427; Truls ruled for it in triage, 2026-11-12, with CI running all).
@@ -220,8 +221,8 @@
 .PARAMETER SkipIfPassed
     Run nothing when the record says this tree passed; less than all of it when the tree differs
     from the one that passed only in its index, in whitespace between a script's tokens, or in
-    scripts and Markdown; as above. The glossary step, which reads commits and not the tree, is
-    skipped with the rest, and not run where only the index changed.
+    scripts and Markdown; as above. The glossary step, which reads commits and not the tree, runs
+    whatever the record says, a skipped run's one step.
 
 .PARAMETER SelfTest
     Run the cases that hold the record and its reading, in a scratch repository, and those that hold
@@ -280,6 +281,8 @@ $COMMENT_LINE_LIMIT = $MARKDOWN_LINE_LIMIT
 # parsed scripts, which a change of whitespace between tokens alone leaves as they were (#405).
 # line-cite-check.ps1 has CI's floors, so the pre-push hook refuses what CI would (#404). Index, a
 # check that reads the index, as line-cite-check.ps1 lists its files with git ls-files (#426).
+# Commits, a check that reads commits, which no record of a tree holds, so it runs on every run,
+# a skipped one too (#443).
 $TOOL_STEPS = @(
     @{ Script = 'param-check.ps1'; Args = @('scripts'); Parsed = $true; Failure = 'param-check.ps1 found a list parameter never split on a comma' }
     @{ Script = 'variable-case-check.ps1'; Args = @('scripts'); Parsed = $true; Failure = 'variable-case-check.ps1 found a variable spelt two ways in one scope' }
@@ -287,7 +290,7 @@ $TOOL_STEPS = @(
     @{ Script = 'strict-list-check.ps1'; Args = @('scripts'); Parsed = $true; Failure = 'strict-list-check.ps1 found a read strict mode can throw on, or read no strict-mode script' }
     @{ Script = 'line-cite-check.ps1'; Args = @('-MinCitations', '50', '-MinContinuations', '4'); Parsed = $false; Index = $true
        Failure = 'line-cite-check.ps1 found prose citing our own code by line number, or fewer citations than its floors' }
-    @{ Script = 'glossary-check.ps1'; Args = @('-Range', 'origin/main...HEAD', '-LeftFile', 'glossary-left.txt'); Parsed = $false
+    @{ Script = 'glossary-check.ps1'; Args = @('-Range', 'origin/main...HEAD', '-LeftFile', 'glossary-left.txt'); Parsed = $false; Commits = $true
        Failure = 'glossary-check.ps1 found an unmarked avoided word in a Markdown line the branch adds, or could not read the range' }
 )
 # Of $SELF_TESTS, each that reads this repository's index (#426): refuse-hanging-bash.ps1 asks
@@ -437,11 +440,17 @@ function Get-TokenOnlyChange {
 # On a tree whose only change since the recorded pass is whitespace between tokens (#405), no
 # step that reads the parsed scripts, no README reading and no self-test. On one whose working
 # tree is the one that passed (#426), only what reads the index: the steps marked Index, the
-# self-tests in $INDEX_SELF_TESTS, and the Markdown check.
+# self-tests in $INDEX_SELF_TESTS, and the Markdown check. A step marked Commits reads commits,
+# which no record of a tree holds, so it is in every plan, and with -CommitsOnly, the plan of a
+# skipped run, it is all there is (#443).
 function Get-RunPlan {
-    param([object[]] $Steps, [switch] $TokensOnly, [switch] $IndexOnly, [string[]] $SelfTests = $SELF_TESTS, [string[]] $NoGameCases = $NO_GAME_CASES)
+    param([object[]] $Steps, [switch] $TokensOnly, [switch] $IndexOnly, [switch] $CommitsOnly, [string[]] $SelfTests = $SELF_TESTS,
+          [string[]] $NoGameCases = $NO_GAME_CASES)
+    if ($CommitsOnly) {
+        return @{ Scripts = $false; Steps = @($Steps | Where-Object { $_.Commits }); Readme = $false; SelfTests = @(); NoGameCases = @(); Pages = $false; Markdown = $false }
+    }
     if ($IndexOnly) {
-        return @{ Scripts = $false; Steps = @($Steps | Where-Object { $_.Index }); Readme = $false; SelfTests = @($SelfTests | Where-Object { $_ -in $INDEX_SELF_TESTS })
+        return @{ Scripts = $false; Steps = @($Steps | Where-Object { $_.Index -or $_.Commits }); Readme = $false; SelfTests = @($SelfTests | Where-Object { $_ -in $INDEX_SELF_TESTS })
                   NoGameCases = @($NoGameCases | Where-Object { $_ -in $INDEX_SELF_TESTS }); Pages = $false; Markdown = $true }
     }
     @{ Scripts = $true; Steps = @($Steps | Where-Object { -not ($TokensOnly -and $_.Parsed) }); Readme = -not $TokensOnly
@@ -511,7 +520,9 @@ function Get-RunStart {
           [string[]] $NoGameCases = $NO_GAME_CASES)
     # No record reads as no tree: $null.Tree is $null, never equal to a tree.
     if ($Passed.Tree -eq $Tree) {
-        return @{ Skip = "OK - check skipped: this tree (working $($Passed.Working), index $($Passed.Index)) passed it at $($Passed.At). Nothing was run." }
+        $plan = Get-RunPlan -Steps $Steps -CommitsOnly
+        $ran = if ($plan.Steps) { "Only what reads the commits, which a record of a tree cannot vouch for, is run: $(@($plan.Steps | ForEach-Object { $_.Script }) -join ', ')." } else { 'Nothing was run.' }
+        return @{ Skip = "OK - check skipped: this tree (working $($Passed.Working), index $($Passed.Index)) passed it at $($Passed.At). $ran"; Plan = $plan }
     }
     $lists = @{ SelfTests = $SelfTests; NoGameCases = $NoGameCases }
     $game = "Not run, because each needs the game: -SelfTest of $($NEEDS_GAME -join ', '); of $($NO_GAME_CASES -join ', '), only the cases that need no game ran."
@@ -523,7 +534,7 @@ function Get-RunStart {
         $runs = @($plan.Steps | ForEach-Object { $_.Script }) + @($plan.SelfTests | ForEach-Object { "$_ -SelfTest" }) + @($plan.NoGameCases | ForEach-Object { "$_ -SelfTest -NoGame" }) + 'markdown-check.ps1 -All'
         $start.Index = $true; $start.Plan = $plan
         $start.Notice = "check: the working tree (working $($is[0])) is the one that passed at $($Passed.At), and only the index changed, from $($Passed.Index) " +
-            "to $($is[1]). Only what reads the index is run: $($runs -join ', ')."
+            "to $($is[1]). Only what reads the index or the commits is run: $($runs -join ', ')."
         $start.Pass = "OK - check passed, running only what reads the index: the working tree is the one that passed at $($Passed.At)."
         return $start
     }
@@ -1038,7 +1049,7 @@ if ($SelfTest) {
                 $cite.Count -eq 1 -and ($cite[0].Args -join ' ') -ceq '-MinCitations 50 -MinContinuations 4' -and
                     @($full.Steps | Where-Object { $_.Script -eq 'line-cite-check.ps1' }).Count -eq 1 -and @($skip.Steps | Where-Object { $_.Script -eq 'line-cite-check.ps1' }).Count -eq 1 -and
                     ($got -join '|') -ceq 'bad-x.ps1 failed|mute-x.ps1 failed' }
-            'the glossary step runs glossary-check.ps1 over origin/main...HEAD with glossary-left.txt, fails a branch adding an unmarked avoided word, naming the check, passes a word the file leaves, and runs where tokens alone changed and not where the index alone did (#443)' = {
+            'the glossary step runs glossary-check.ps1 over origin/main...HEAD with glossary-left.txt, fails a branch adding an unmarked avoided word, naming the check, passes a word the file leaves, and is in every plan, where tokens alone or the index alone changed, and alone in a skipped run''s (#443)' = {
                 $glossaryStep = @($TOOL_STEPS | Where-Object { $_.Script -eq 'glossary-check.ps1' })
                 $g = Join-Path $temp 'glossary-repo'; New-Item -ItemType Directory -Path $g | Out-Null
                 $git = { git -C $g -c user.name=selftest -c user.email=selftest@example.invalid -c core.autocrlf=false -c commit.gpgsign=false @args | Out-Null; if ($LASTEXITCODE) { throw "git $args failed" } }
@@ -1055,7 +1066,8 @@ if ($SelfTest) {
                 $fails = @(Invoke-ToolStep -Root $g -Folder $PSScriptRoot -Step $glossaryStep[0] 6>$null)
                 $inPlan = { param($plan) @($plan.Steps | Where-Object { $_.Script -eq 'glossary-check.ps1' }).Count -eq 1 }
                 $glossaryStep.Count -eq 1 -and $passes.Count -eq 0 -and ($fails -join '|') -ceq $glossaryStep[0].Failure -and $fails[0] -match '^glossary-check\.ps1 ' -and
-                    (& $inPlan (Get-RunPlan -Steps $TOOL_STEPS)) -and (& $inPlan (Get-RunPlan -Steps $TOOL_STEPS -TokensOnly)) -and -not (& $inPlan (Get-RunPlan -Steps $TOOL_STEPS -IndexOnly)) }
+                    (& $inPlan (Get-RunPlan -Steps $TOOL_STEPS)) -and (& $inPlan (Get-RunPlan -Steps $TOOL_STEPS -TokensOnly)) -and (& $inPlan (Get-RunPlan -Steps $TOOL_STEPS -IndexOnly)) -and
+                    (@((Get-RunPlan -Steps $TOOL_STEPS -CommitsOnly).Steps | ForEach-Object { $_.Script }) -join '|') -ceq 'glossary-check.ps1' }
             'a tree whose only change since the pass is whitespace between tokens in a .ps1 names the file, and its plan runs no self-test and no step that reads the parsed scripts (#405)' = {
                 $script = "param([switch] `$SelfTest)`n# A comment.`nif (`$SelfTest) { `$a = 1 }`n"
                 $spaced = "param( [switch]  `$SelfTest )`n# A comment.`nif (`$SelfTest)   {  `$a = 1 }`n"
@@ -1142,7 +1154,7 @@ if ($SelfTest) {
                     Invoke-RunPlan -Plan $s.Plan -Do $do -Failed $failed
                     $failed -join '|'
                 }
-                $same.Skip -ceq "OK - check skipped: this tree (working $($record.Working), index $($record.Index)) passed it at 2026-11-10T00:00:00Z. Nothing was run." -and
+                $same.Skip -ceq "OK - check skipped: this tree (working $($record.Working), index $($record.Index)) passed it at 2026-11-10T00:00:00Z. Only what reads the commits, which a record of a tree cannot vouch for, is run: glossary-check.ps1." -and
                     -not $spaced.Skip -and ($spaced.Files -join '|') -ceq 'r.ps1' -and $spaced.Notice -like '*only whitespace between tokens changed, in r.ps1.*' -and
                     $spaced.Pass -like 'OK - check passed, with no self-test run:*' -and $ran[0] -ceq 'scripts|line-cite-check.ps1|glossary-check.ps1|pages|markdown' -and
                     -not $none.Skip -and -not $none.Files -and -not $none.Notice -and $none.Pass -like 'OK - check passed. Not run, because each needs the game:*' -and
@@ -1169,7 +1181,7 @@ if ($SelfTest) {
                 $was[0] -ceq $is[0] -and $was[1] -cne $is[1] -and $index.Index -and -not $index.Skip -and
                     $index.Notice -clike "check: the working tree (working $($is[0])) is the one that passed at 2026-11-12T00:00:00Z, and only the index changed, from $($was[1]) to $($is[1]). *" -and
                     $index.Pass -clike 'OK - check passed, running only what reads the index:*' -and
-                    ($failed -join '|') -ceq 'line-cite-check.ps1|self-tests refuse-hanging-bash.ps1|markdown' -and -not $edited.Index -and $edited.Plan.Scripts }
+                    ($failed -join '|') -ceq 'line-cite-check.ps1|glossary-check.ps1|self-tests refuse-hanging-bash.ps1|markdown' -and -not $edited.Index -and $edited.Plan.Scripts }
             'a change of scripts and Markdown alone runs the self-tests of each changed script and of each whose code names a changed file, in turn, and names those not run, or none; a comment naming one is no dependency; a page no script names runs none, and says so; another file, or check.ps1, runs them all (#427)' = {
                 $dir = Join-Path $repo 'scripts'; New-Item -ItemType Directory -Path $dir | Out-Null
                 $put = { param($name, $text) [IO.File]::WriteAllText((Join-Path $dir $name), $text) }
@@ -1279,7 +1291,13 @@ $record = git -C $root rev-parse --path-format=absolute --git-path check-passed 
 $tree = Get-CheckedTree -Root $root
 $passed = if ($SkipIfPassed -and $tree) { Read-PassRecord $record }
 $start = Get-RunStart -Root $root -Passed $passed -Tree $tree -Steps $TOOL_STEPS
-if ($start.Skip) { Write-Host $start.Skip; exit 0 }
+# A skip still runs what reads the commits, which can change while the tree does not (#443).
+if ($start.Skip) {
+    Write-Host $start.Skip
+    Invoke-RunPlan -Plan $start.Plan -Failed $failed -Do $runBlocks
+    if ($failed.Count) { Write-Host ''; Write-Host "FAILED - check: $($failed -join '; ')."; exit 1 }
+    exit 0
+}
 if ($start.Notice) { Write-Host $start.Notice }
 
 Invoke-RunPlan -Plan $start.Plan -Failed $failed -Do $runBlocks
