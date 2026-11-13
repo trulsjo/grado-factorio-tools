@@ -37,8 +37,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       # The whole history, for the body check below: it asks whether a commit is on main, and a
-      # shallow clone cannot say. pr-body-check.ps1 refuses to run in one.
-      - uses: actions/checkout@v4
+      # shallow clone cannot say. pr-body-check.ps1 refuses to run in one. Pinned to a commit,
+      # the modpack's (grado-factorio-tools#362, #320 ruling 5): a tag can be moved, a commit
+      # cannot.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
