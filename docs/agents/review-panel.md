@@ -13,7 +13,7 @@ running.
 |---|---|---|
 | codex | `codex --no-daemon` | `/clear` |
 | antigravity | `agy` | `/clear` |
-| fable | `claude --model claude-fable-5-1` | `/clear` |
+| fable | `claude --model claude-fable-5-2` | `/clear` |
 
 - **Agent**: the space's suffix and the answer file's name; `a-z`, `0-9`, `-` and `_`.
 - **Command**: the bare command with its model; the app wraps it in `pwsh -NoExit -Command`.
