@@ -81,7 +81,8 @@
     page of their own, which a review's prose lane loads, with a limit of its own
     (grado-factorio-tools#116). The limits are in
     $PAGE_LIMITS and nowhere else. A page is measured with LF line endings, which is how the
-    repository stores it, so a checkout with CRLF gets the same answer.
+    repository stores it, so a checkout with CRLF gets the same answer. A page not there fails,
+    and so does a $PAGE_LIMITS that names none (grado-factorio-tools#451).
 
     THE TRACKED MARKDOWN IS READ BY markdown-check.ps1 -All (grado-factorio-tools#74). A page that
     moves leaves its links behind, and nothing else reads them. This script had a link check of
@@ -221,10 +222,13 @@
     Get-SelfTestSubset in the scratch repository, Get-RunStart also called with the lists the run
     leaves to its defaults, and Invoke-RunPlan with blocks of its own; the run's own SelfTests
     block in $runBlocks, through Invoke-RunPlan with Invoke-SelfTestRun stood in, for a plan
-    naming a subset, which it must hand on with this folder (#432); and those that hold this
-    runner's own verdict on a case, $judgeCase, and the loop's line, by a case giving two values
-    that the loop must fail (#419); and nothing else. The run's other blocks, Scripts, Step,
-    Readme, Pages and Markdown, with their call of each loop and of Get-ReadmeProblem with this
+    naming a subset, which it must hand on with this folder (#432); its Pages block, through
+    Invoke-RunPlan, over pages in a scratch folder and a $PAGE_LIMITS each case gives it (#451);
+    and those that hold this runner's own verdict on a case, $judgeCase, and the loop's line, by a
+    case giving two values that the loop must fail (#419); and nothing else. Of the Pages block,
+    no case holds the figures in $PAGE_LIMITS themselves, which a read of the diff or the run's
+    printed line holds. The run's other blocks, Scripts, Step,
+    Readme and Markdown, with their call of each loop and of Get-ReadmeProblem with this
     folder, this README and this script's lists, are not run, nor its run of param-check.ps1,
     variable-case-check.ps1, help-check.ps1 and strict-list-check.ps1 over this folder: a run
     that stopped making a call, or passed it a list less, would still pass. Nor is the main
@@ -682,8 +686,14 @@ $runBlocks = @{
         $unnamed
     }
     SelfTests = { param($names, $noGame) Invoke-SelfTestRun -Folder $PSScriptRoot -SelfTests $names -NoGameCases $noGame }
+    # Reads $root and $PAGE_LIMITS when it runs, so a case gives it a folder and a table of its own.
     Pages = {
         $clock.Restart()
+        # No page measured is no pass: a table emptied would otherwise pass in silence (#451).
+        if (-not $PAGE_LIMITS.Count) {
+            Write-Host 'check: $PAGE_LIMITS names no page, so no page was measured -- FAILED'
+            return '$PAGE_LIMITS names no page, so no page was measured'
+        }
         foreach ($page in $PAGE_LIMITS.Keys) {
             $path = Join-Path $root $page
             # A page that is not there fails too: renamed, its limit would otherwise lapse in
@@ -780,6 +790,20 @@ if ($SelfTest) {
             $to = "$(& $tree $Before $staged $After) $index"
             if ($Trees) { return $to }
             @(Get-TokenOnlyChange -Root $repo -From "$from $from" -To $to)
+        }
+        # The run's own Pages block, through Invoke-RunPlan, over $Pages, names to bytes, written
+        # to a new folder, and $Limits for $PAGE_LIMITS; each set here, where the block reads
+        # them when it runs (#451). Returns its failures; its lines are not shown.
+        $pageRun = {
+            param([System.Collections.IDictionary] $Limits, [hashtable] $Pages)
+            $root = Join-Path $temp "pages-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+            New-Item -ItemType Directory -Path $root -Force | Out-Null
+            foreach ($p in $Pages.Keys) { [IO.File]::WriteAllBytes((Join-Path $root $p), [byte[]] $Pages[$p]) }
+            $PAGE_LIMITS = $Limits
+            $failed = [System.Collections.Generic.List[string]]::new()
+            $plan = @{ Scripts = $false; Steps = @(); Readme = $false; SelfTests = @(); NoGameCases = @(); Pages = $true; Markdown = $false }
+            Invoke-RunPlan -Plan $plan -Do @{ Pages = $runBlocks.Pages } -Failed $failed 6>$null
+            , @($failed)
         }
         # A case passes on one output, $true (#419). Any other output fails it, saying
         # why: [bool] of two values or more is true whatever they are, so a case that
@@ -1168,6 +1192,22 @@ if ($SelfTest) {
                 $plan = @{ Scripts = $false; Steps = @(); Readme = $false; SelfTests = @('check.ps1'); NoGameCases = @('n.ps1'); Pages = $false; Markdown = $false }
                 Invoke-RunPlan -Plan $plan -Do @{ SelfTests = $runBlocks.SelfTests } -Failed $failed
                 ($failed -join '|') -ceq "$PSScriptRoot [check.ps1] [n.ps1]" }
+            'the run''s own Pages block fails a page at its limit, from a folder and a table of the case''s own (#451)' = {
+                $said = & $pageRun ([ordered] @{ 'at.md' = 10 }) @{ 'at.md' = [Text.Encoding]::ASCII.GetBytes('x' * 10) }
+                ($said -join '|') -ceq 'at.md is 10 bytes and must be under 10' }
+            'the run''s own Pages block passes a page one byte under its limit (#451)' = {
+                $said = & $pageRun ([ordered] @{ 'under.md' = 10 }) @{ 'under.md' = [Text.Encoding]::ASCII.GetBytes('x' * 9) }
+                @($said).Count -eq 0 }
+            'the run''s own Pages block fails a page that is not there, and measures the next (#451)' = {
+                $said = & $pageRun ([ordered] @{ 'gone.md' = 10; 'at.md' = 1 }) @{ 'at.md' = [Text.Encoding]::ASCII.GetBytes('x') }
+                ($said -join '|') -ceq 'gone.md, which has a size limit, was not found|at.md is 1 bytes and must be under 1' }
+            'the run''s own Pages block fails an empty table, saying no page was measured (#451)' = {
+                $said = & $pageRun ([ordered] @{}) @{ 'at.md' = [Text.Encoding]::ASCII.GetBytes('x') }
+                ($said -join '|') -ceq '$PAGE_LIMITS names no page, so no page was measured' }
+            'the run''s own Pages block counts a page stored with CRLF as LF, and counts a byte-order mark (#451)' = {
+                $crlf = & $pageRun ([ordered] @{ 'crlf.md' = 5 }) @{ 'crlf.md' = [Text.Encoding]::ASCII.GetBytes("a`r`nb`r`n") }
+                $bom = & $pageRun ([ordered] @{ 'bom.md' = 5 }) @{ 'bom.md' = [byte[]] (0xEF, 0xBB, 0xBF, 0x61, 0x62) }
+                @($crlf).Count -eq 0 -and ($bom -join '|') -ceq 'bom.md is 5 bytes and must be under 5' }
         }
         $failures = 0; $n = 0
         foreach ($name in $cases.Keys) {
