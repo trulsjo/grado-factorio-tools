@@ -13,6 +13,16 @@
 #
 # It checks the working tree, not the commits being pushed, so it reads nothing git hands it.
 #
+# A working tree that is gone stops the push, exit 1, before anything else is tried (#445): git
+# runs a hook from the working tree's root, and with no .git there the push cannot succeed, and
+# the check would only list failures that do not say why. On 2026-11-13 a linked worktree was
+# emptied while its push ran. A tree that goes after this line is the check's to name: its
+# closing line says so first.
+if [ ! -e "$PWD/.git" ]; then
+    echo "pre-push: $PWD has no .git, so it is no working tree; the push stops here." >&2
+    exit 1
+fi
+
 # The posture on a missing pwsh or a missing check is commit-msg's, for commit-msg's reason: a
 # machine that was never going to run the gates is told so and not blocked.
 if ! command -v pwsh >/dev/null 2>&1; then
