@@ -71,6 +71,49 @@ Compare-Object @($before) @($after)
 their write-data outside `saves` and `temp`, which were not listed. A file the listing could not
 read would have been left out unnamed, by `-ErrorAction SilentlyContinue`.
 
-What it cannot see: a start of the game with its window, which `--dump-data` is not; that such a
-start writes the file too is read from both loading the mods the same way, not measured. A zip
-install was not run.
+What it cannot see: a start of the game with its window, which `--dump-data` is not; ~~that such
+a start writes the file too is read from both loading the mods the same way, not measured. A zip
+install was not run.~~ both, and the zip install, were run on 2026-11-13 for
+trulsjo/grado-factorio-tools#439, below: the zip install's `--dump-data` start wrote the file as
+this one did, and a start with the window, closed by its pid at the main menu, wrote nothing.
+
+### A start with the game's window, closed at the main menu, writes nothing there
+
+Measured on 2026-11-13 for trulsjo/grado-factorio-tools#439, on the development machine, three
+starts, each on a new, empty `mods` folder in a new scratch folder under `%TEMP%`, with a
+write-data of its own, `<scratch>/write-data`, given by a `--config` file as the load harness
+writes one. Each was started from `<scratch>`, which held `steam_appid.txt` (`427520`), as
+`dev-launch.ps1` starts the game. No Factorio was running before each, by `Get-Process -Name
+factorio`. Each run's log names the `--mod-directory` given and that write-data on its `Program
+arguments` and `Write data path` lines.
+
+| Start | Build, from `--version` | Folder after |
+|---|---|---|
+| The zip install, headless, 19:06 UTC | `Version: 2.1.24 (build 87808, win64, full)` | `mod-list.json`, 355 bytes |
+| The Steam build, with its window, 20:11 UTC | `Version: 2.1.24 (build 87808, win64, steam)` | empty |
+| The zip install, with its window, 20:13 UTC | `Version: 2.1.24 (build 87808, win64, full)` | empty |
+
+The zip install is `D:\factorio-2.1\bin\x64\factorio.exe`, the Steam build
+`D:\SteamLibrary\steamapps\common\Factorio\bin\x64\Factorio.exe`. The headless start was the
+command #434 ran above, through `Invoke-Factorio`; it exited 0, and its `mod-list.json` held the
+five entries #434's did, in the same order. A start with the window was
+
+```text
+Factorio.exe --config "<scratch>/factorio-config.ini" --mod-directory "<scratch>/mods"
+```
+
+run by `Start-Process -WorkingDirectory <scratch> -PassThru`. Once `factorio-current.log` in its
+write-data held the line `Factorio initialised`, the main menu, at 92.1 s for the Steam build and
+within 88 s for the zip install, it ran 5 s more and was closed by its pid alone,
+`Stop-Process -Id <pid> -Force`. Then `Get-ChildItem -Force <scratch>/mods` printed nothing for
+either.
+
+The player's folders were listed before and after each start as #434's record lists them, by
+the `$watch` block above: `%APPDATA%\Factorio` for the Steam build, 65 files, and for the zip
+install `D:\factorio-2.1`, 21168 files, its own write-data and mod folder by its
+`config-path.cfg`, `use-system-read-write-data-directories=false`. `Compare-Object` returned 0
+differences each time.
+
+What it cannot see: a start the player ends by quitting from the game's menu, which may write
+the file as it exits where a kill by pid gives it no chance to; that was not run. A start with
+the window that loads a save or a mod. A build other than these two.

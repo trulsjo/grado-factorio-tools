@@ -32,12 +32,14 @@
     with the Steam path that stood here until #423 is gone. So the player's mod directory, the Steam
     build's %APPDATA%\Factorio\mods or a zip install's mods beside the game, is refused where it
     holds a file, and taken where it is empty. The game writes mod-list.json into an empty mod
-    directory when it starts with --dump-data, measured on the Steam build 2.1.24
-    (docs/factorio-facts.md, *Measured*, #434), so a folder that build has loaded mods from is not
-    empty; a start with the game's window and a zip install were not run there. It cannot see a
-    folder that holds a file of that name it did not write, which it then treats as its own. The
-    game runs with the player's own write-data, so saves and settings are the player's. That is the
-    difference from the load harness, which gives every run a write-data of its own.
+    directory when it starts with --dump-data, measured on the Steam build 2.1.24 and the zip
+    install of that build (docs/factorio-facts.md, *Measured*, #434, #439). A start with the game's
+    window, on either, closed by its pid at the main menu, wrote nothing there (#439): so a folder
+    the game has been started on can still be empty after that start, and is then taken. Whether a
+    start the player quits from the menu writes the file was not measured. It cannot see a folder
+    that holds a file of that name it did not write, which it then treats as its own. The game runs
+    with the player's own write-data, so saves and settings are the player's. That is the difference
+    from the load harness, which gives every run a write-data of its own.
 
     ON A STEAM BUILD, running Factorio.exe directly makes the Steam API relaunch the game through
     Steam and exit ("Steam requires game restart, restarting..."), and Steam starts it WITHOUT
