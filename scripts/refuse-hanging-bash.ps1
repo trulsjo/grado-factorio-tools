@@ -126,21 +126,21 @@
     TO CHECK IT, run the second example below.
 
 .PARAMETER SelfTest
-    Prove it judges each of rf's cases as wanted; that a case whose reading throws, by a
-    stand-in for Get-HangReason, is failed with its threw: line and the cases after it run
-    (#431); that a pass of ConvertTo-Blanked's walk that leaves its index where it was throws,
-    naming the index, on a copy made to stall, run in a pwsh of its own and killed after 30 s
-    (#421); that a refusal is logged once, a pass not at all, and a log that cannot be written
-    refuses all the same; that a pair is the reason on Windows only, after a hang and before a
-    long heredoc; that the wired command refuses for the Bash tool, passes the PowerShell tool's
-    call and an unreadable one with exit 1, refuses a lone pair on Windows, and is started by a
-    pair but not by quotes, line breaks, the paths of a call's `cwd`, one backslash or a
-    PowerShell call; that the first example's cases are the wired one's; that the first
-    example's form, where the project has no hook script, exits 0 and prints JSON telling the
-    agent; that the matcher of the wired entry starts it for both shell tools; and that git
-    ignores the settings' repository's .claude/refused-bash.log. The run fails where the cases
-    it reported are not the total it names (#431). The wired cases need git and sh: the one on
-    the path, or the one Git for Windows ships.
+    Prove it judges each of rf's cases as wanted; that a case whose reading throws, by a stand-in
+    for Get-HangReason, is failed with its threw: line and the cases after it run, and that the
+    stand-in is gone after them (#431); that a pass of ConvertTo-Blanked's walk that leaves its
+    index where it was throws, naming the index, on a copy made to stall, run in a pwsh of its own
+    and given 30 s before it is killed (#421); that a refusal is logged once, a pass not at all, and
+    a log that cannot be written refuses all the same; that a pair is the reason on Windows only,
+    after a hang and before a long heredoc; that the wired command refuses for the Bash tool, passes
+    the PowerShell tool's call and an unreadable one with exit 1, refuses a lone pair on Windows,
+    and is started by a pair but not by quotes, line breaks, the paths of a call's `cwd`, one
+    backslash or a PowerShell call; that the first example's cases are the wired one's; that the
+    first example's form, where the project has no hook script, exits 0 and prints JSON telling the
+    agent; that the matcher of the wired entry starts it for both shell tools; and that git ignores
+    the settings' repository's .claude/refused-bash.log. The run fails where the cases it reported
+    are not the total it names (#431). The wired cases need git and sh: the one on the path, or the
+    one Git for Windows ships.
 
 .PARAMETER Settings
     With -SelfTest: the .claude/settings.json whose PreToolUse command naming this script the
@@ -409,7 +409,7 @@ if ($SelfTest) {
     )
     $failures = 0
     $n = 0
-    $total = $cases.Count + 1 + 3 + 5 + 13
+    $total = $cases.Count + 1 + 1 + 3 + 5 + 13
     $report = {
         param([string] $what, [bool] $ok, [string] $why)
         $script:n++
@@ -441,6 +441,8 @@ if ($SelfTest) {
     # A throw the loop's line let out stops the run here, saying so, not with the error view.
     catch { Write-Host "`nFAILED - self-test: a command case threw out of the loop, which must fail that case and go on (#431): $($_.Exception.Message)"; exit 1 }
     ${function:Get-HangReason} = $real
+    $after = try { Get-HangReason -Command $THROWS; 'read' } catch { "threw: $($_.Exception.Message)" }
+    & $report 'the stand-in is gone after the loop: the real Get-HangReason reads that command without throwing (#431)' ($after -ceq 'read') $after
 
     # The walk's guard (#421), on a copy of ConvertTo-Blanked made to stall as PR #420's bug scan
     # made it: the comment branch without `$c -eq '#' -and`, which at a line break after a space
