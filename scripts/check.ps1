@@ -237,18 +237,20 @@
     block in $runBlocks, through Invoke-RunPlan with Invoke-SelfTestRun stood in, for a plan
     naming a subset, which it must hand on with this folder (#432); its Pages block, through
     Invoke-RunPlan, over pages in a scratch folder and a $PAGE_LIMITS each case gives it (#451);
-    and those that hold this runner's own verdict on a case, $judgeCase, and the loop's line, by a
-    case giving two values that the loop must fail (#419); and nothing else. Of the Pages block,
-    no case holds the figures in $PAGE_LIMITS themselves, which a read of the diff or the run's
-    printed line holds. The run's other blocks, Scripts, Step,
-    Readme and Markdown, with their call of each loop and of Get-ReadmeProblem with this
-    folder, this README and this script's lists, are not run, nor its run of param-check.ps1,
-    variable-case-check.ps1, help-check.ps1 and strict-list-check.ps1 over this folder: a run
-    that stopped making a call, or passed it a list less, would still pass. Nor is the main
-    block's handing of $runBlocks to Invoke-RunPlan, its reading of the record for -SkipIfPassed,
-    its exit where Get-RunStart says skip, its call of Complete-Run, or its exit with the code
-    that returns: the cases hold the record, the skip and the code, not that the run reads the
-    one or exits with the others. Needs git, and no game.
+    Complete-Run on a folder with no .git, and .githooks/pre-push run by sh in one (#445); and those
+    that hold this runner's own verdict on a case, $judgeCase, and the loop's line, by a case giving
+    two values that the loop must fail (#419); and nothing else. Of the Pages block, no case holds
+    the figures in $PAGE_LIMITS themselves, which a read of the diff or the run's printed line
+    holds. The run's other blocks, Scripts, Step, Readme and Markdown, with their call of each loop
+    and of Get-ReadmeProblem with this folder, this README and this script's lists, are not run, nor
+    its run of param-check.ps1, variable-case-check.ps1, help-check.ps1 and strict-list-check.ps1
+    over this folder: a run that stopped making a call, or passed it a list less, would still pass.
+    Nor is the main block's handing of $runBlocks to Invoke-RunPlan, its reading of the record for
+    -SkipIfPassed, its exit where Get-RunStart says skip, its call of Complete-Run, or its exit with
+    the code that returns: the cases hold the record, the skip and the code, not that the run reads
+    the one or exits with the others. Needs git, and sh, as Git for Windows has it, and no game. Two
+    cases read beside scripts/, the glossary step's glossary-left.txt and the hook: run from a copy
+    of scripts/ alone, as a pin's, they fail.
 
 .EXAMPLE
     pwsh -File scripts/check.ps1
@@ -354,6 +356,8 @@ function Get-TreeChange {
 function Complete-Run {
     param([string] $Root, [string] $Record, [string] $Tree, [string[]] $Failed, [string] $Pass)
     $failures = @($Failed | Where-Object { $_ })
+    # A tree gone during the run is named first: every other failure follows from it (#445).
+    if (-not (Test-Path -LiteralPath (Join-Path $Root '.git'))) { $failures = @("$Root has no .git, so the working tree is gone or was never one; what follows is read from it") + $failures }
     $lines = @()
     $change = Get-TreeChange -Root $Root -Tree $Tree
     if (-not $change.Compared) {
@@ -905,6 +909,19 @@ if ($SelfTest) {
                 $unread -eq '' -and (Get-CheckedTree -Root $outside) -eq '' -and
                     (& $notCompared $atEnd) -and (& $notCompared $atStart) -and -not $keptAtEnd -and -not $keptAtStart -and
                     $failedToo.Code -eq 1 -and $failedToo.Lines[0] -match 'not compared' -and $failedToo.Lines[0] -notmatch 'this pass' -and $failedToo.Lines[-1] -eq 'FAILED - check: x broke.' }
+            'a run whose working tree is gone at its end fails, its closing line saying so first; the pre-push hook, started in a folder with no .git, says so on one line and exits 1 without starting the check (#445)' = {
+                $gone = Join-Path $temp 'gone'; New-Item -ItemType Directory -Path $gone | Out-Null
+                $end = Complete-Run -Root $gone -Record '' -Tree $base -Failed 'x broke' -Pass 'OK'
+                $alone = Complete-Run -Root $gone -Record '' -Tree $base -Pass 'OK'
+                # Git for Windows' sh where none is on the PATH, as ask-before-download.ps1 finds
+                # it.
+                $sh = (Get-Command sh -ErrorAction SilentlyContinue)?.Source ?? (Join-Path (git --exec-path) '../../../usr/bin/sh.exe')
+                Push-Location $gone
+                try { $said = @(& $sh (Join-Path (Split-Path $PSScriptRoot -Parent) '.githooks/pre-push') 2>&1 | ForEach-Object { "$_" }); $code = $LASTEXITCODE } finally { Pop-Location }
+                $first = "FAILED - check: $gone has no .git, so the working tree is gone or was never one; what follows is read from it"
+                if ($code -ne 1 -or $said.Count -ne 1) { $said | ForEach-Object { Write-Host "    hook: $_" } }
+                $end.Code -eq 1 -and $end.Lines[-1] -ceq "$first; x broke." -and $alone.Code -eq 1 -and $alone.Lines[-1] -ceq "$first." -and
+                    $code -eq 1 -and $said.Count -eq 1 -and $said[0] -like 'pre-push: * has no .git, so it is no working tree; the push stops here.' }
             'a comment or header line over the limit is named; code, a here-string, .EXAMPLE and an address are not' = {
                 $long = 'word ' * 20 + 'x'; $script = Join-Path $outside 'long.ps1'
                 Set-Content -LiteralPath $script -Value @(
