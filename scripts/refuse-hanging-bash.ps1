@@ -126,17 +126,21 @@
     TO CHECK IT, run the second example below.
 
 .PARAMETER SelfTest
-    Prove it judges each of rf's cases as wanted; that a refusal is logged once, a pass not at
-    all, and a log that cannot be written refuses all the same; that a pair is the reason on
-    Windows only, after a hang and before a long heredoc; that the wired command refuses for the
-    Bash tool, passes the PowerShell tool's call and an unreadable one with exit 1, refuses a lone
-    pair on Windows, and is started by a pair but not by quotes, line breaks, the paths of a
-    call's `cwd`, one backslash or a PowerShell call; that the first example's cases are the
-    wired one's; that the first
+    Prove it judges each of rf's cases as wanted; that a case whose reading throws, by a
+    stand-in for Get-HangReason, is failed with its threw: line and the cases after it run
+    (#431); that a pass of ConvertTo-Blanked's walk that leaves its index where it was throws,
+    naming the index, on a copy made to stall, run in a pwsh of its own and killed after 30 s
+    (#421); that a refusal is logged once, a pass not at all, and a log that cannot be written
+    refuses all the same; that a pair is the reason on Windows only, after a hang and before a
+    long heredoc; that the wired command refuses for the Bash tool, passes the PowerShell tool's
+    call and an unreadable one with exit 1, refuses a lone pair on Windows, and is started by a
+    pair but not by quotes, line breaks, the paths of a call's `cwd`, one backslash or a
+    PowerShell call; that the first example's cases are the wired one's; that the first
     example's form, where the project has no hook script, exits 0 and prints JSON telling the
     agent; that the matcher of the wired entry starts it for both shell tools; and that git
-    ignores the settings' repository's .claude/refused-bash.log. The wired cases need git and sh:
-    the one on the path, or the one Git for Windows ships.
+    ignores the settings' repository's .claude/refused-bash.log. The run fails where the cases
+    it reported are not the total it names (#431). The wired cases need git and sh: the one on
+    the path, or the one Git for Windows ships.
 
 .PARAMETER Settings
     With -SelfTest: the .claude/settings.json whose PreToolUse command naming this script the
@@ -345,8 +349,12 @@ function Get-Refusal {
 }
 
 if ($SelfTest) {
-    # rf's cases: the command, and whether it is refused, with the pair on as on Windows.
+    # rf's cases: the command, and whether it is refused, with the pair on as on Windows. The first
+    # is no command but $THROWS, whose reading throws (#431): the loop's line must fail it with a
+    # threw: line and go on, and it is reported ok where it was so failed.
+    $THROWS = 'a command whose reading throws'
     $cases = @(
+        @($THROWS, $false),
         @('cat > /dev/null', $true),
         @("cat > /dev/null; python - `"`$@`" <<'PY'`nprint(1)`nPY", $true),
         @("python - <<'PY' < /dev/null`nPY`n", $true),
@@ -408,14 +416,27 @@ if ($SelfTest) {
         Write-Host ("self-test {0}/{1}: {2} -- {3}" -f $script:n, $total, $what, $(if ($ok) { 'ok' } else { 'FAILED' }))
         if (-not $ok) { $script:failures++; if ($why) { Write-Host "    $why" } }
     }
+    # Get-HangReason, but throwing on $THROWS as the walk does when it stalls; the loop's line is
+    # the same for every case. Removed after the loop, so the cases below read the real one.
+    $real = ${function:Get-HangReason}
+    function Get-HangReason {
+        param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Command, [switch] $NoPairs)
+        if ($Command -ceq $THROWS) { throw 'the walk over the command stalled at index 0, a stand-in' }
+        & $real -Command $Command -NoPairs:$NoPairs
+    }
     foreach ($c in $cases) {
         $shown = $c[0] -replace '\r', '\r' -replace '\n', '\n'
         if ($shown.Length -gt 120) { $shown = $shown.Substring(0, 120) + '...' }
         # A throw, as the walk's when it stalls, fails the case and not the run (#421).
         $why = ''
         $held = try { [bool] (Get-HangReason -Command $c[0]) -eq $c[1] } catch { $why = "threw: $($_.Exception.Message)"; $false }
+        if ($c[0] -ceq $THROWS) {
+            & $report 'a case whose reading throws is failed with its threw: line, and the cases after it run (#431); ok here means it was failed' (-not $held -and $why -ceq 'threw: the walk over the command stalled at index 0, a stand-in') "held: $held; $why"
+            continue
+        }
         & $report "$(if ($c[1]) { 'refused' } else { 'allowed' }): $shown" $held $why
     }
+    ${function:Get-HangReason} = $real
 
     # The walk's guard (#421), on a copy of ConvertTo-Blanked made to stall as PR #420's bug scan
     # made it: the comment branch without `$c -eq '#' -and`, which at a line break after a space
@@ -641,6 +662,9 @@ if ($SelfTest) {
         Remove-Item -LiteralPath $scratch -Recurse -Force -ErrorAction SilentlyContinue
     }
     Write-Host ''
+    # $total is written by hand, so a case added or dropped without it would make the count false
+    # (#431).
+    if ($n -ne $total) { Write-Host "FAILED - self-test: $n case(s) reported, where `$total says $total."; exit 1 }
     if ($failures) { Write-Host "FAILED - self-test: $failures of $total case(s) did not hold."; exit 1 }
     Write-Host "OK - self-test passed: all $total cases."
     exit 0
