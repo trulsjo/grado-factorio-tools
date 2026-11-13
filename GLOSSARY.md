@@ -69,9 +69,11 @@ range is the commits between the old pin and the new one.
 _Avoid_: pin bump, upgrade
 
 **Stub page**:
-A page at the path a skill expects, such as `docs/agents/issue-tracker.md`, that holds one
-repository's own parts and links a shared page here for the rest. Its first line warns that
-re-running `/setup-matt-pocock-skills` rewrites it in place and drops the link. A sibling's stub
+A page at a fixed path that a skill or a repository's `CLAUDE.md` sends a session to, such as
+`docs/agents/issue-tracker.md`, that holds one repository's own parts and links a shared page
+here for the rest. Where `/setup-matt-pocock-skills` writes the page, its first line warns that
+re-running the skill rewrites it in place and drops the link. A stub the skill does not write,
+as `docs/agents/code-review.md`, which `CLAUDE.md` sends a review to, carries none. A sibling's stub
 links the shared page by its `vendor/` path with the GitHub URL beside it; this repository's own
 by a relative link ([ADR 0003](docs/adr/0003-shared-agent-docs-are-linked-from-the-pin-never-imported.md)).
 _Avoid_: pointer page, shim, copy — a stub holds none of the shared page's rules.
