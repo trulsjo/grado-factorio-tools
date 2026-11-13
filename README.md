@@ -761,7 +761,8 @@ statement that always gives one object `# strict-lists: one`.
 
 `-SelfTest` runs it on its fixtures in `scripts/strict-list-check/`, and runs those under strict
 mode to prove each flagged read throws and no other does. `scripts/check.ps1` runs the self-test,
-and the check over `scripts/` (#373). What it cannot see, and what it flags wrongly, are in its
+and the check over `scripts/` (#373). The `pre-commit` hook runs the check on each staged script
+that sets strict mode, as staged (#456). What it cannot see, and what it flags wrongly, are in its
 header.
 
 ## Checking that a script's help is read
@@ -787,7 +788,8 @@ exempt; in a hook or a workflow, each line that begins with `#`. It reads the fi
 git pathspecs from the repository root, `scripts/*.ps1` unless said, as staged: the staged ones,
 or with `-All` every tracked one. A refusal names the `markdown-rewrap.ps1 -Comment` command that
 rewraps each refused file. It also names each help line the next line's first word would fit on,
-with the `-Comment -Fill` command, and does not fail on one (#442). The `pre-commit` hook runs it
+with the `-Comment -Fill` command, and does not fail on one (#442): with `-All` by their line
+numbers, and without it by their count, one line a file (#457). The `pre-commit` hook runs it
 on the staged scripts; a sibling that
 also reads its hooks and workflows passes them:
 
@@ -909,8 +911,9 @@ scripts/     PowerShell entry points, one job each, and the libraries they
              strict-list-check/, the fixtures strict-list-check.ps1 -SelfTest reads;
              commonmark-examples.json, CommonMark's examples, which
              markdown-check.ps1 -SelfTest reads (CC BY-SA 4.0)
-.githooks/   this repo's own pre-commit (the staged Markdown and scripts), commit-msg and
-             pre-push hooks, opted into once per clone
+.githooks/   this repo's own pre-commit (the staged Markdown, the scripts' comment lines and
+             their strict-mode reads), commit-msg and pre-push hooks,
+             opted into once per clone
 .claude/     settings.json, which wires the session hooks: one refuses a commit
              or push skipping those, one Python run from a heredoc, one a
              pull request body the check fails, one a Bash command bash
