@@ -35,12 +35,30 @@ Factorio.exe --config <scratch>/factorio-config.ini --mod-directory <scratch>/mo
 
 `<scratch>` was a new folder under `%TEMP%`; `mods` in it was new and empty, and the config gave
 the run a write-data of its own, `<scratch>/write-data`, as the load harness gives every run. The
-game exited 0. `mods` then held one file, `mod-list.json`, 355 bytes, enabling `base` and the
-four bundled mods: `elevated-rails`, `quality`, `recycler` and `space-age`. The run's log names
-the `--mod-directory` given and that write-data. A listing of the player's `%APPDATA%\Factorio`,
-each file's path, time and size, its `saves` and `temp` folders left out, was the same before
-and after: the run touched neither the player's mods nor the rest of their write-data.
+game exited 0. The run's log names the `--mod-directory` given and that write-data. Then
+`Get-ChildItem -Force <scratch>/mods` printed one file, `mod-list.json`, 355 bytes, which enables
+`base` and the four bundled mods. Its content, each entry here on one line where the file spreads
+it over four, with blank lines between:
 
-What it cannot see: a start of the client with its window, which `--dump-data` is not; that the
-client writes the file too is read from both loading the mods the same way, not measured. A zip
+```json
+{
+  "mods":
+  [
+    { "name": "base", "enabled": true },
+    { "name": "elevated-rails", "enabled": true },
+    { "name": "quality", "enabled": true },
+    { "name": "recycler", "enabled": true },
+    { "name": "space-age", "enabled": true }
+  ]
+}
+```
+
+The player's `%APPDATA%\Factorio` was listed before and after the run, with
+`Get-ChildItem -Recurse -Force -File`, as each file's path, last write time and size, leaving out
+the `saves` and `temp` folders. `Compare-Object` of the two listings found no difference: the run
+changed neither the player's mods nor their write-data outside `saves` and `temp`, which were not
+listed.
+
+What it cannot see: a start of the game with its window, which `--dump-data` is not; that such a
+start writes the file too is read from both loading the mods the same way, not measured. A zip
 install was not run.
