@@ -301,8 +301,9 @@ Truls ruled six more things in the session that built it, on 2026-11-13
   scan's**, by a sixth, in the same comment: the third said "the lane", and a change that
   touches a script has two.
 
-The stub is 3,775 bytes of its 3,779, from `wc -c docs/agents/code-review.md`, where the page
-stood at 3,751. The room for the values came from these, each quoted as it stood:
+The stub is 3,775 bytes of its ~~3,779~~ 4,200, from `wc -c docs/agents/code-review.md`, where
+the page stood at 3,751. Under the limit of 3,779 the room for the values came from these, each
+quoted as it stood:
 
 - "On top of the `/code-review` plugin", which the page no longer says: it names the plugin
   where the prose lane takes in two of its lanes.
@@ -324,6 +325,11 @@ stood at 3,751. The room for the values came from these, each quoted as it stood
 - of the comment, "Each review posts one comment on the pull request once its findings are
   acted on" became the *Where recorded* value, posted once each fix is confirmed, and "every
   finding" and "and its outcome" left it, which the shared page's step 9 says.
+
+**The limit was raised to 4,200 on 2026-11-13**
+([#449](https://github.com/trulsjo/grado-factorio-tools/issues/449), the figure Truls's, which
+is `CLAUDE.md`'s too). Five of PR #437's eight commits changed the stub, each leaving it within
+18 bytes of 3,779, and the review's finding 21 was left for want of room; #449 has the sizes.
 
 The brief has the prose lane read whole one kind of file the shared page's step 4 does not
 list, a page under `docs/` that a stub page links: this repository's own addition, since its
