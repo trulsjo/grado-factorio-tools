@@ -1,8 +1,8 @@
 <#
 .SYNOPSIS
-    A hook for agent sessions: refuses a shell command that changes directory into the mod cache,
-    .mod-cache/ under the repository root it is given. Exit 2 refuses the command before it runs
-    and says what to do instead; exit 0 lets it run.
+    A hook for agent sessions: refuses a shell command that changes directory into a mod cache,
+    .mod-cache/ under the repository root it is given, or each directory -CacheName names there.
+    Exit 2 refuses the command before it runs and says what to do instead; exit 0 lets it run.
 
 .DESCRIPTION
     WHY (grado-factorio-modpack#150, where this was written). An agent session's tooling writes
@@ -11,10 +11,11 @@
     mod, and a file inside a mod is part of what the game loads. Reading the cache by path from
     the repository root leaves nothing behind.
 
-    HOW A CONSUMER WIRES IT. This repository cannot: a session reads its hooks from the
-    consumer's own tracked settings. In .claude/settings.json, a PreToolUse hook on the two shell
-    tools, matcher `Bash|PowerShell`, whose command is the first example below, the wired
-    command.
+    HOW A CONSUMER WIRES IT. This repository cannot, and keeps no mod cache to guard (#323
+    ruling 7): a session reads its hooks from the consumer's own tracked settings. In
+    .claude/settings.json, a PreToolUse hook on the two shell tools, matcher `Bash|PowerShell`,
+    whose command is the first example below, the wired command (ADR 0004). A consumer that
+    names other caches gives them after -CacheName on its own line, and in the `case`.
 
     The session hands the hook the tool call as JSON on stdin: this reads `tool_input.command`
     and `cwd`. The `case` starts this script only when that JSON holds the cache's name, because
@@ -71,8 +72,10 @@
     nothing is checked, which is said on stderr with exit 1, not 2.
 
 .PARAMETER CacheName
-    The cache directory's name under the root. Defaults to .mod-cache, which is where
-    fetch-mods.ps1 puts one. A consumer with another name gives it here and in the wiring's `case`.
+    The cache directories' names under the root, comma-separated, each guarded alike (#323
+    ruling 7). Defaults to .mod-cache, which is where fetch-mods.ps1 puts one. A consumer with
+    other names gives them here and in the wiring's `case`. The refusal names the cache the
+    command would stand in.
 
 .PARAMETER SelfTest
     Prove it refuses what it should and lets the rest through, that a wired command reaches
@@ -85,20 +88,23 @@
 
 .PARAMETER Settings
     With -SelfTest: a consumer's .claude/settings.json. The cases that run the wiring then run
-    the command wired there, its first PreToolUse hook, with that file's repository as the
-    project, where they would otherwise run the wired command against this script. A consumer
-    runs this to know its wiring still reaches the hook, and still tells the agent when it cannot.
-    A last case, run only with -Settings, reads the matcher of that first PreToolUse entry
+    the command wired there, the first command of any PreToolUse entry that names this script,
+    found by its name and not by its place (#315 ruling 3), with that file's repository as the
+    project, where they would otherwise run the first example's command against this script. A
+    consumer runs this to know its wiring still reaches the hook, and still tells the agent when
+    it cannot. A last case, run only with -Settings, reads the matcher of that entry
     (grado-factorio-tools#120) and fails, naming the tool and the file, unless a session would
     start the hook for the Bash tool and for the PowerShell tool. An entry with no matcher
     passes: it is started for every tool. How a matcher is read is in hook-matcher.ps1. The
-    wired command comes from no file and has no matcher, so without -Settings none is read.
+    example's command comes from no file and has no matcher, so without -Settings none is read.
 
 .EXAMPLE
     The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json, as
-    HOW A CONSUMER WIRES IT says.
+    HOW A CONSUMER WIRES IT says. It gives -CacheName its default, .mod-cache; a consumer with
+    other caches names each there and in the `case`. Where the script is not there, it names the
+    missing path to the agent and lets the command run.
 
-        i=$(cat); case $i in *mod-cache*) h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-cd-into-mod-cache.ps1"; if [ -f "$h" ]; then printf '%s' "$i" | pwsh -NoProfile -File "$h" -Root "$CLAUDE_PROJECT_DIR"; else printf '%s' '{"systemMessage":"refuse-cd-into-mod-cache: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"refuse-cd-into-mod-cache: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it."}}'; fi;; esac
+        i=$(cat); case $i in *mod-cache*) h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-cd-into-mod-cache.ps1"; if [ -f "$h" ]; then printf '%s' "$i" | pwsh -NoProfile -File "$h" -Root "$CLAUDE_PROJECT_DIR" -CacheName .mod-cache; else m='refuse-cd-into-mod-cache: vendor/grado-factorio-tools/scripts/refuse-cd-into-mod-cache.ps1 was not found, so this command was NOT checked by the mod-cache hook. git submodule update --init fetches the script.'; printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"%s"}}' "$m" "$m"; fi;; esac
 
 .EXAMPLE
     To check it, from a repository root. The first is refused with exit 2, the second passes
@@ -112,13 +118,16 @@
 [CmdletBinding()]
 param(
     [string] $Root,
-    [string] $CacheName = '.mod-cache',
+    [string[]] $CacheName = @('.mod-cache'),
     [switch] $SelfTest,
     [string] $Settings
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# Under pwsh -File, -CacheName a,b arrives as one string.
+$CacheName = @($CacheName | ForEach-Object { $_ -split ',' } | ForEach-Object Trim | Where-Object { $_ })
 
 function Test-EntersCache {
     <#  Whether $Command, run by a shell standing in $Cwd, would stand in $Root/$CacheName.  #>
@@ -205,7 +214,7 @@ if ($SelfTest) {
     $skipped = 0
     $n = 0
     # The last case reads a settings file, and without -Settings there is none.
-    $total = $cases.Count + 4 + [bool] $Settings
+    $total = $cases.Count + 6 + [bool] $Settings
     foreach ($c in $cases) {
         $n++
         if ($c.Count -gt 3 -and -not $IsWindows) {
@@ -232,19 +241,62 @@ if ($SelfTest) {
     $ok = (& $named 'cd kept-mods/a-set') -and (& $named 'cd "$HERE/kept-mods"') -and -not (& $named 'cd .mod-cache')
     Write-Host ("self-test {0}/{1}: a cache given another name is the one guarded, and .mod-cache is then not -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++ }
+    # -CacheName as a list (#323 ruling 7), given as the wiring gives it, one comma-separated
+    # string under pwsh -File: each cache is refused, and named in the refusal; the rest passes.
+    $n++
+    $listed = {
+        param($command)
+        $text = (@{ cwd = $fixture; tool_input = @{ command = $command } } | ConvertTo-Json -Compress) |
+            pwsh -NoProfile -File $PSCommandPath -Root $fixture -CacheName '.mod-cache,kept-mods' 2>&1 | Out-String
+        @{ Code = $LASTEXITCODE; Text = $text }
+    }
+    $first = & $listed 'cd .mod-cache/a-set'
+    $second = & $listed 'cd kept-mods/a-set'
+    $neither = & $listed 'cd docs'
+    $ok = $first.Code -eq 2 -and $first.Text -match '\.mod-cache/<set>' -and $second.Code -eq 2 -and $second.Text -match 'kept-mods/<set>' -and
+        $neither.Code -eq 0 -and -not $neither.Text.Trim()
+    Write-Host ("self-test {0}/{1}: run with -CacheName '.mod-cache,kept-mods', a cd into either is refused and names it, and a cd elsewhere passes -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
+    if (-not $ok) { $failures++; foreach ($r in $first, $second, $neither) { Write-Host "    $($r.Code) $($r.Text)" } }
     # The wiring as the session runs it: a hook's command, through sh, with the tool call on
     # stdin. Exit 2 and the reason for one, exit 0 and silence for the others. The command is the
     # consumer's when -Settings names its file, and otherwise the one the header shows, with
     # this repository as the project so that it finds this script.
+    # The entry is found by the script's name, wherever it stands among the PreToolUse entries
+    # (#315 ruling 3), and its first command that names the script is the one run.
+    $names = [regex]::Escape((Split-Path $PSCommandPath -Leaf))
+    $findWired = {
+        param([string] $path)
+        $found = @((Get-Content -LiteralPath $path -Raw | ConvertFrom-Json).hooks.PreToolUse) |
+            Where-Object { $_ -and @($_.hooks.command) -match $names } | Select-Object -First 1
+        @{ Entry = $found; Command = $(if ($found) { @($found.hooks.command) -match $names | Select-Object -First 1 } else { '' }) }
+    }
+    # The first example's form, read from the header so the command shown is the command run.
+    $form = [regex]::Match((Get-Content -LiteralPath $PSCommandPath -Raw), 'i=\$\(cat\).*?esac').Value
+    # The entry named, not the first: a settings file whose first entry wires another command.
+    $n++
+    $other = Join-Path ([IO.Path]::GetTempPath()) "refuse-cd-settings-$([guid]::NewGuid().ToString('N').Substring(0, 8)).json"
+    try {
+        @{ hooks = @{ PreToolUse = @(
+                    @{ matcher = 'Bash'; hooks = @(@{ type = 'command'; command = 'echo other' }) },
+                    @{ matcher = 'Bash|PowerShell'; hooks = @(@{ type = 'command'; command = 'echo first' }, @{ type = 'command'; command = $form }) }
+                ) } } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $other
+        $second = & $findWired $other
+    }
+    finally { Remove-Item -LiteralPath $other -Force -ErrorAction SilentlyContinue }
+    $ok = $second.Entry -and $second.Entry.matcher -ceq 'Bash|PowerShell' -and $second.Command -ceq $form
+    Write-Host ("self-test {0}/{1}: the wiring is read from the command that names this script, not from the first entry or its first command -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
+    if (-not $ok) { $failures++ }
     $n++
     if ($Settings) {
         $Settings = (Resolve-Path -LiteralPath $Settings).Path
-        $entry = (Get-Content -LiteralPath $Settings -Raw | ConvertFrom-Json).hooks.PreToolUse[0]
-        $wired = $entry.hooks[0].command
+        $read = & $findWired $Settings
+        $entry = $read.Entry
+        $wired = $read.Command
+        if (-not $wired) { Write-Host "    $Settings wires no command that names this script" }
         $project = Split-Path (Split-Path $Settings -Parent) -Parent
     }
     else {
-        $wired = 'i=$(cat); case $i in *mod-cache*) h="$CLAUDE_PROJECT_DIR/scripts/refuse-cd-into-mod-cache.ps1"; if [ -f "$h" ]; then printf ''%s'' "$i" | pwsh -NoProfile -File "$h" -Root "$CLAUDE_PROJECT_DIR"; else printf ''%s'' ''{"systemMessage":"refuse-cd-into-mod-cache: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"refuse-cd-into-mod-cache: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it."}}''; fi;; esac'
+        $wired = $form.Replace('/vendor/grado-factorio-tools/scripts/', '/scripts/')
         $project = Split-Path $PSScriptRoot -Parent
     }
     $env:CLAUDE_PROJECT_DIR = $project
@@ -257,12 +309,12 @@ if ($SelfTest) {
         @{ Code = $LASTEXITCODE; Text = $text }
     }
     $refused = & $through 'cd .mod-cache/Grado_ABC && ls'
-    $read = & $through 'ls .mod-cache/Grado_ABC'
+    $byPath = & $through 'ls .mod-cache/Grado_ABC'
     $plain = & $through 'git status'
     $ok = $refused.Code -eq 2 -and $refused.Text -match 'Refused' -and $refused.Text -match 'repository root' -and
-        $read.Code -eq 0 -and -not $read.Text.Trim() -and $plain.Code -eq 0 -and -not $plain.Text.Trim()
+        $byPath.Code -eq 0 -and -not $byPath.Text.Trim() -and $plain.Code -eq 0 -and -not $plain.Text.Trim()
     Write-Host ("self-test {0}/{1}: the wired hook refuses a cd into the cache with exit 2 and a reason, and passes a read by path and a plain command -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
-    if (-not $ok) { $failures++; Write-Host "    refused: $($refused.Code) $($refused.Text)"; Write-Host "    read: $($read.Code) $($read.Text)"; Write-Host "    plain: $($plain.Code) $($plain.Text)" }
+    if (-not $ok) { $failures++; Write-Host "    refused: $($refused.Code) $($refused.Text)"; Write-Host "    read: $($byPath.Code) $($byPath.Text)"; Write-Host "    plain: $($plain.Code) $($plain.Text)" }
     # The same command for a project with no hook script, as a clone without the submodule is:
     # the command runs, and what is printed tells the agent it was not checked.
     $n++
@@ -271,11 +323,15 @@ if ($SelfTest) {
     # to read is its stdout.
     $absent = @{ Text = (@{ cwd = $project; tool_input = @{ command = 'cd .mod-cache/Grado_ABC && ls' } } | ConvertTo-Json -Compress) | & $sh -c $wired 2>$null | Out-String }
     $absent.Code = $LASTEXITCODE
+    # The first example's form names the missing path in both fields (ADR 0004); a consumer's own
+    # wording is held only to telling the agent.
     $ok = $absent.Code -eq 0 -and $(try {
-            $told = ($absent.Text | ConvertFrom-Json).hookSpecificOutput
-            $told.hookEventName -ceq 'PreToolUse' -and [bool] ([string] $told.additionalContext).Trim()
+            $parsed = $absent.Text | ConvertFrom-Json
+            $told = $parsed.hookSpecificOutput
+            $told.hookEventName -ceq 'PreToolUse' -and [bool] ([string] $told.additionalContext).Trim() -and
+                ($Settings -or ($told.additionalContext -match "vendor/grado-factorio-tools/scripts/$names" -and $parsed.systemMessage -ceq $told.additionalContext))
         } catch { $false })
-    Write-Host ("self-test {0}/{1}: where the project holds no hook script, the wired command exits 0 and prints JSON telling the agent the command was not checked -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
+    Write-Host ("self-test {0}/{1}: where the project holds no hook script, the wired command exits 0 and prints JSON telling the agent the command was not checked$(if (-not $Settings) { ', naming the missing path' }) -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++; Write-Host "    $($absent.Code) $($absent.Text)" }
     # Which tools the session starts that command for: the matcher of the entry it was read
     # from. The command the header shows comes from no file, and has no matcher to read.
@@ -296,9 +352,11 @@ if ($SelfTest) {
 
 try {
     if (-not $Root) { throw 'no -Root was given, and the cache is found under it' }
+    if (-not $CacheName) { throw 'no -CacheName was given, and each cache is named by it' }
     $Root = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Root)
     $call = [Console]::In.ReadToEnd() | ConvertFrom-Json
-    $refuse = Test-EntersCache -Command ([string] $call.tool_input.command) -Cwd ([string] $call.cwd) -Root $Root -CacheName $CacheName
+    # The first cache the command would stand in, which the refusal names.
+    $refuse = $CacheName | Where-Object { Test-EntersCache -Command ([string] $call.tool_input.command) -Cwd ([string] $call.cwd) -Root $Root -CacheName $_ } | Select-Object -First 1
 }
 catch {
     # Loud, and not a refusal: a hook that cannot read its input must not stop every command.
@@ -307,10 +365,10 @@ catch {
 }
 if ($refuse) {
     [Console]::Error.WriteLine(@"
-Refused: this command would stand in the mod cache, $(Join-Path $Root $CacheName).
+Refused: this command would stand in the mod cache, $(Join-Path $Root $refuse).
 A session's tooling writes state files into the directory its shell stands in, and a file inside a
 mod there is part of what the game loads. Run it from the repository root and name the cache by
-path instead: ls $CacheName/<set>, Get-ChildItem -LiteralPath $CacheName/<set>, git -C <path>, or
+path instead: ls $refuse/<set>, Get-ChildItem -LiteralPath $refuse/<set>, git -C <path>, or
 a script given the path. If the shell already stands there, cd out first.
 "@)
     exit 2
