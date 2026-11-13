@@ -329,19 +329,16 @@ is a hook that refuses a shell command running `git commit` or `git push` with `
 the switch. `git push -n`, which is a dry run, passes, and so does a switch that is only named in
 a quoted message.
 
-This repository wires it for its own sessions in its tracked `.claude/settings.json`. A consumer
-adds it to its own, beside the mod-cache hook where it has that one:
-
-```json
-{
-  "type": "command",
-  "command": "i=$(cat); case $i in *commit*|*push*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-git-hook-skip.ps1\";; esac"
-}
-```
+This repository wires it for its own sessions in its tracked `.claude/settings.json`. A
+consumer's line is the first `.EXAMPLE` in
+[the script's header](scripts/refuse-git-hook-skip.ps1), beside the mod-cache hook where it has
+that one.
 
 The `case` keeps PowerShell from starting before every shell command. Exit 2 refuses; a tool
-call it cannot read exits 1 and says on stderr that the command was not checked. `-SelfTest`
-proves what is refused and what is not, and runs the command this repository's settings wire;
+call it cannot read exits 1 and says on stderr that the command was not checked. Where the
+script is not there, the example's command lets the shell command run and names the missing path
+to the agent. `-SelfTest` proves what is refused and what is not, runs both branches of the
+example's command, and runs the command this repository's settings wire;
 `-SelfTest -Settings .claude/settings.json` runs a consumer's. Either way it fails a wiring
 whose `matcher` would not start the hook for both shell tools. What the hook cannot see is in
 its header: a script or an alias that passes the switch itself and a hook manager turned off
@@ -358,18 +355,14 @@ says to write the script to a file with the Write tool, with raw strings, and ru
 heredoc as its input, `python - < edit.py`, and a here-string, `<<<`, pass.
 
 This repository wires it for its own sessions in its tracked `.claude/settings.json`, beside the
-hook-skip hook. A consumer adds it to its own:
-
-```json
-{
-  "type": "command",
-  "command": "i=$(cat); case $i in *py*'<<'*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-python-heredoc.ps1\";; esac"
-}
-```
+hook-skip hook. A consumer's line is the first `.EXAMPLE` in
+[the script's header](scripts/refuse-python-heredoc.ps1).
 
 The `case` keeps PowerShell from starting unless the command holds `py` and `<<`. Exit 2
 refuses; a tool call it cannot read exits 1 and says on stderr that the command was not checked.
-`-SelfTest` proves what is refused and what is not, and runs the command this repository's
+Where the script is not there, the example's command lets the shell command run and names the
+missing path to the agent. `-SelfTest` proves what is refused and what is not, runs both
+branches of the example's command, and runs the command this repository's
 settings wire; `-SelfTest -Settings .claude/settings.json` runs a consumer's, and fails a wiring
 whose `matcher` would not start the hook for both shell tools. What the hook cannot see is in
 its header: a heredoc piped into Python, `cat <<EOF | python -`, is one.
@@ -424,18 +417,16 @@ one with an inline body, or no body file, is let through. The wiring's `case` ha
 holding `gh` and `issue` for these.
 
 This repository wires it in its tracked `.claude/settings.json`, with the arguments CI hands the
-check. A consumer adds it to its own, with the arguments its own gate uses:
-
-```json
-{
-  "type": "command",
-  "command": "i=$(cat); case $i in *gh*pr*|*gh*issue*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-pr-body.ps1\" -CiteSiblings;; esac"
-}
-```
+check, `-CiteSiblings -RequireSummaryVisual`. A consumer's line is the first `.EXAMPLE` in
+[the script's header](scripts/refuse-pr-body.ps1), which passes none, and the consumer adds the
+arguments its own gate uses after the script's path
+([ADR 0004](docs/adr/0004-a-shared-hook-is-wired-from-the-pin-by-each-consumer.md), decision 5).
 
 Every argument after the script, `-CheckArgs`, goes to `pr-body-check.ps1` after the body
 file. Exit 2 refuses; a tool call it cannot read exits 1 and says on stderr that the command was
-not checked. `-SelfTest` proves each refusal and pass, and runs the command the settings wire;
+not checked. Where the script is not there, the example's command lets the shell command run and
+names the missing path to the agent. `-SelfTest` proves each refusal and pass, runs both
+branches of the example's command, and runs the command the settings wire;
 `-SelfTest -Settings .claude/settings.json` runs a consumer's. What it cannot see is in its
 header: a command inside `sh -c`, and a body written by `gh api`, are two.
 
@@ -451,17 +442,13 @@ also inside `"$(...)"` as `git commit -m "$(cat <<'EOF' … EOF )"` writes, and 
 tool call pass. The refusal asks
 for `$(…)`, or for literal text to be written to a file with the Write tool.
 
-This repository wires it in its tracked `.claude/settings.json`. A consumer adds it to its own:
-
-```json
-{
-  "type": "command",
-  "command": "i=$(cat); case $i in *'`'*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-backtick-substitution.ps1\";; esac"
-}
-```
+This repository wires it in its tracked `.claude/settings.json`. A consumer's line is the first
+`.EXAMPLE` in [the script's header](scripts/refuse-backtick-substitution.ps1).
 
 Exit 2 refuses; a tool call it cannot read exits 1 and says on stderr that the command was not
-checked. `-SelfTest` proves each refusal and pass, and runs the command the settings wire;
+checked. Where the script is not there, the example's command lets the shell command run and
+names the missing path to the agent. `-SelfTest` proves each refusal and pass, runs both
+branches of the example's command, and runs the command the settings wire;
 `-SelfTest -Settings .claude/settings.json` runs a consumer's. What it cannot see is in its
 header: a substitution in a script the command runs, and a command inside `sh -c`, are two.
 
