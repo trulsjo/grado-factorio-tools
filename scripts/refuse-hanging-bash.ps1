@@ -424,18 +424,22 @@ if ($SelfTest) {
         if ($Command -ceq $THROWS) { throw 'the walk over the command stalled at index 0, a stand-in' }
         & $real -Command $Command -NoPairs:$NoPairs
     }
-    foreach ($c in $cases) {
-        $shown = $c[0] -replace '\r', '\r' -replace '\n', '\n'
-        if ($shown.Length -gt 120) { $shown = $shown.Substring(0, 120) + '...' }
-        # A throw, as the walk's when it stalls, fails the case and not the run (#421).
-        $why = ''
-        $held = try { [bool] (Get-HangReason -Command $c[0]) -eq $c[1] } catch { $why = "threw: $($_.Exception.Message)"; $false }
-        if ($c[0] -ceq $THROWS) {
-            & $report 'a case whose reading throws is failed with its threw: line, and the cases after it run (#431); ok here means it was failed' (-not $held -and $why -ceq 'threw: the walk over the command stalled at index 0, a stand-in') "held: $held; $why"
-            continue
+    try {
+        foreach ($c in $cases) {
+            $shown = $c[0] -replace '\r', '\r' -replace '\n', '\n'
+            if ($shown.Length -gt 120) { $shown = $shown.Substring(0, 120) + '...' }
+            # A throw, as the walk's when it stalls, fails the case and not the run (#421).
+            $why = ''
+            $held = try { [bool] (Get-HangReason -Command $c[0]) -eq $c[1] } catch { $why = "threw: $($_.Exception.Message)"; $false }
+            if ($c[0] -ceq $THROWS) {
+                & $report 'a case whose reading throws is failed with its threw: line, and the cases after it run (#431); ok here means it was failed' (-not $held -and $why -ceq 'threw: the walk over the command stalled at index 0, a stand-in') "held: $held; $why"
+                continue
+            }
+            & $report "$(if ($c[1]) { 'refused' } else { 'allowed' }): $shown" $held $why
         }
-        & $report "$(if ($c[1]) { 'refused' } else { 'allowed' }): $shown" $held $why
     }
+    # A throw the loop's line let out stops the run here, saying so, not with the error view.
+    catch { Write-Host "`nFAILED - self-test: a command case threw out of the loop, which must fail that case and go on (#431): $($_.Exception.Message)"; exit 1 }
     ${function:Get-HangReason} = $real
 
     # The walk's guard (#421), on a copy of ConvertTo-Blanked made to stall as PR #420's bug scan
