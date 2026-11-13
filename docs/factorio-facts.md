@@ -117,3 +117,28 @@ differences each time.
 What it cannot see: a start the player ends by quitting from the game's menu, which may write
 the file as it exits where a kill by pid gives it no chance to; that was not run. A start with
 the window that loads a save or a mod. A build other than these two.
+
+## Read
+
+### A zip install keeps its mods at its root, two folders above its executable
+
+Read on 2026-11-14 for trulsjo/grado-factorio-tools#454, on the development machine, from the
+zip install at `D:\factorio-2.1`, whose `bin\x64\factorio.exe --version` printed
+`Version: 2.1.24 (build 87808, win64, full)`. No game was started.
+
+- Its `config-path.cfg` holds `config-path=__PATH__executable__/../../config` and
+  `use-system-read-write-data-directories=false`, which its own comment says is the zip package's
+  default: the paths are generated from the application's root directory, not from
+  `%APPDATA%\Factorio`.
+- Its `config\config.ini`, under `[path]`, holds `write-data=__PATH__executable__\..\..`: two
+  folders above `bin\x64`, the install's root.
+- `D:\factorio-2.1\mods` is there, and holds `mod-list.json` beside the player's mods.
+
+So a zip install's player mod directory is `<root>\mods` for `<root>\bin\x64\factorio.exe`, which
+`dev-launch.ps1`'s `Get-PlayerModDirectory` refuses. The Steam build's is
+`%APPDATA%\Factorio\mods`, as #434's record above lists it.
+
+What it cannot see: a `config.ini` whose `write-data` the player changed, or a `config-path.cfg`
+that names another config folder; the comment says the generated values stand once written. An
+install by the game's installer, which that comment says uses the system's directories, as the
+Steam build does. A build other than this one.

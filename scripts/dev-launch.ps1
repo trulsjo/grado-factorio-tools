@@ -28,18 +28,20 @@
     and -Clean alike refuse, exit 1 before anything in it changes, naming it, an existing
     -ModDirectory that is a file, or a folder that is not empty and does not hold the
     README-BEFORE-DELETING.txt this writes into every folder it makes, first, before it changes
-    anything there. A new folder, an empty one and one holding the marker are used. The comparison
-    with the Steam path that stood here until #423 is gone. So the player's mod directory, the Steam
-    build's %APPDATA%\Factorio\mods or a zip install's mods beside the game, is refused where it
-    holds a file, and taken where it is empty. The game writes mod-list.json into an empty mod
-    directory when it starts with --dump-data, measured on the Steam build 2.1.24 and the zip
-    install of that build (docs/factorio-facts.md, *Measured*, #434, #439). A start with the game's
-    window, on either, closed by its pid at the main menu, wrote nothing there (#439): so a folder
-    the game has been started on can still be empty after that start, and is then taken. Whether a
-    start the player quits from the menu writes the file was not measured. It cannot see a folder
-    that holds a file of that name it did not write, which it then treats as its own. The game runs
-    with the player's own write-data, so saves and settings are the player's. That is the difference
-    from the load harness, which gives every run a write-data of its own.
+    anything there. A new folder, an empty one and one holding the marker are used, but for one
+    exception: a player's mod directory, refused by its path whether it is there, empty or marked
+    (#454). Those are the Steam build's %APPDATA%\Factorio\mods and the mods folder at the root of
+    the install whose Factorio.exe this starts, <root>\bin\x64\Factorio.exe, where a zip install
+    keeps its mods (docs/factorio-facts.md, *Read*). Each path is compared in full, in any case and
+    without a trailing separator, so another spelling of it is refused too. The marker alone did
+    not cover them, as #423 took it to: a start of the game with its window, on the Steam build
+    2.1.24 and the zip install of that build, closed by its pid at the main menu, left an empty mod
+    directory empty (docs/factorio-facts.md, *Measured*, #439), which was then taken. It cannot see
+    any other folder the player's game loads mods from, a --mod-directory the player chose or one a
+    config-path.cfg or a config.ini moves; nor a folder that holds a file of the marker's name it
+    did not write, which it then treats as its own. The game runs with the player's own write-data,
+    so saves and settings are the player's. That is the difference from the load harness, which
+    gives every run a write-data of its own.
 
     ON A STEAM BUILD, running Factorio.exe directly makes the Steam API relaunch the game through
     Steam and exit ("Steam requires game restart, restarting..."), and Steam starts it WITHOUT
@@ -87,13 +89,14 @@
 .PARAMETER SelfTest
     Run the cases that hold the refusal of a folder this did not make, by a run and by -Clean,
     written whole to stderr with nothing on stdout (#429), a folder whose one file is hidden among
-    them (#430); the use of one it made, a new one and an empty one; and the marker a run writes
-    into the folder it builds; in folders under the temp directory; and the runner's own verdict on
-    a case. A run is refused, or cleans, or builds its folder from a mod zip for a game whose
-    Factorio.exe is text: it is cut short by a copy that fails, or it writes steam_appid.txt into
-    %TEMP%\dev-launch, as every run does, and fails at the launch it attempts, as no system starts a
-    text file. So no game is needed or started. Not run: a launch that starts, a junction, a bundled
-    mod.
+    them (#430); the refusal of a player's mod directory by its path, in any spelling, under a
+    scratch %APPDATA% (#454); the use of one it made, a new one and an empty one; and the marker a
+    run writes into the folder it builds; in folders under the temp directory; and the runner's own
+    verdict on a case. A run is refused, or cleans, or builds its folder from a mod zip for a game
+    whose Factorio.exe is text: it is cut short by a copy that fails, or it writes steam_appid.txt
+    into %TEMP%\dev-launch, as every run does, and fails at the launch it attempts, as no system
+    starts a text file. So no game is needed or started. Not run: a launch that starts, a junction,
+    a bundled mod.
 
 .EXAMPLE
     pwsh -File vendor/grado-factorio-tools/scripts/dev-launch.ps1 ./my-mod ./my-mod-assets
@@ -127,14 +130,35 @@ $MARKER = 'README-BEFORE-DELETING.txt'
 # Why $Path may not be used as the mod directory, or nothing: it is a file, or a folder that holds
 # anything and not $MARKER, so this did not make it (#423). Its junctions and zips would be
 # deleted and its mod-list.json overwritten, or with -Clean the whole of it.
+# A folder of $Player, a player's mod directory, is refused first, empty, missing or marked
+# (#454): the game loads its mods from it.
 function Get-ModDirectoryRefusal {
-    param([Parameter(Mandatory)] [string] $Path)
+    param([Parameter(Mandatory)] [string] $Path, [string[]] $Player = @())
+    # A full path, without a trailing separator, compared in any case: one folder, however spelt.
+    $full = { param([string] $p) [IO.Path]::GetFullPath($p).TrimEnd('\', '/') }
+    foreach ($p in $Player) {
+        if ((& $full $Path) -ieq (& $full $p)) {
+            return "Refusing -ModDirectory $Path`: it is a player's mod directory, $p, which the game loads its mods from. " +
+                'A run would put these mods there and -Clean would delete it, empty or not. Name a new or empty folder of its own.'
+        }
+    }
     if (-not (Test-Path -LiteralPath $Path)) { return }
     $isFolder = Test-Path -LiteralPath $Path -PathType Container
     if ($isFolder -and (Test-Path -LiteralPath (Join-Path $Path $MARKER) -PathType Leaf)) { return }
     if ($isFolder -and -not (Get-ChildItem -LiteralPath $Path -Force | Select-Object -First 1)) { return }
     "Refusing -ModDirectory $Path`: it is $($isFolder ? "a folder that holds files and no $MARKER" : 'a file'), so dev-launch.ps1 did not make it. " +
         'A run would delete its zips and junctions and overwrite its mod-list.json, and -Clean would delete it. Name a new or empty folder.'
+}
+
+# The player's mod directories a run must not take (#454): the Steam build's, under %APPDATA%,
+# and the mods folder at the root of the install whose Factorio.exe this starts,
+# <root>\bin\x64\Factorio.exe, where a zip install keeps its mods (docs/factorio-facts.md,
+# *Read*). No game found, as for a -Clean on a machine without one, gives the first alone.
+function Get-PlayerModDirectory {
+    param([string] $FactorioExe)
+    if ($env:APPDATA) { Join-Path $env:APPDATA 'Factorio' 'mods' }
+    $exe = try { Resolve-FactorioExe -Path $FactorioExe } catch { $null }
+    if ($exe) { Join-Path (Split-Path (Split-Path (Split-Path $exe -Parent) -Parent) -Parent) 'mods' }
 }
 
 if ($SelfTest) {
@@ -202,6 +226,20 @@ if ($SelfTest) {
         [IO.Compression.ZipFile]::CreateFromDirectory($source, $zip)
         $zip
     }
+    # A player's mod directory, $Folder, for the game at $Exe: a run and -Clean each refuse it,
+    # naming it, empty and then holding the marker, and it is left as it was (#454).
+    $playerRefused = {
+        param([string] $Folder, [string] $Exe)
+        $refusal = Get-ModDirectoryRefusal $Folder -Player @(Get-PlayerModDirectory -FactorioExe $Exe)
+        $said = @(foreach ($marked in $false, $true) {
+                if ($marked) { Set-Content -LiteralPath (Join-Path $Folder $MARKER) -Value 'made by dev-launch.ps1' }
+                & $run $Folder @('-FactorioExe', $Exe, 'some-mod')
+                & $run $Folder @('-FactorioExe', $Exe, '-Clean')
+            })
+        $kept = Test-Path -LiteralPath (Join-Path $Folder $MARKER) -PathType Leaf
+        $kept -and $refusal -and $refusal.Contains("it is a player's mod directory") -and
+            @($said | Where-Object { & $refused $_ $refusal }).Count -eq 4
+    }
     $cases = @(
         @{ Name = $leakCase; Test = { $null; $false } }
         @{ Name = 'a case passes on one $true; two values, a string or none fail it, and say so (#419)'; Test = {
@@ -262,6 +300,21 @@ if ($SelfTest) {
             Set-Content -LiteralPath (Join-Path $folder $MARKER) -Value 'made by dev-launch.ps1'
             $got = & $run $folder @('-Clean')
             $got.Code -eq 0 -and $got.Said.Contains("removed $folder") -and -not (Test-Path -LiteralPath $folder) } }
+        @{ Name = 'a run and -Clean refuse the Steam build''s mod directory under %APPDATA%, empty and holding the marker, and leave it (#454)'; Test = {
+            $exe = & $fakeGame
+            $folder = Join-Path $env:APPDATA 'Factorio/mods'; New-Item -ItemType Directory -Path $folder -Force | Out-Null
+            & $playerRefused $folder $exe } }
+        @{ Name = 'a run and -Clean refuse the mods folder of the install whose Factorio.exe it starts, empty and holding the marker, and leave it (#454)'; Test = {
+            $exe = & $fakeGame
+            $folder = Join-Path $temp 'game/mods'; New-Item -ItemType Directory -Path $folder -Force | Out-Null
+            & $playerRefused $folder $exe } }
+        @{ Name = 'a player''s mod directory in another spelling, other case, a trailing separator or a relative path, is refused too (#454)'; Test = {
+            $exe = & $fakeGame
+            $folder = Join-Path $temp 'game/mods'; New-Item -ItemType Directory -Path $folder -Force | Out-Null
+            $spellings = @($folder.ToUpperInvariant(), "$folder$([IO.Path]::DirectorySeparatorChar)", [IO.Path]::GetRelativePath((Get-Location).Path, $folder))
+            $got = @(foreach ($s in $spellings) { & $run $s @('-FactorioExe', $exe, '-Clean') })
+            $ok = @($got | Where-Object { & $refused $_ "it is a player's mod directory" })
+            $ok.Count -eq 3 -and (Test-Path -LiteralPath $folder -PathType Container) } }
         @{ Name = 'a new folder, an empty one and one holding the marker are not refused; -Clean of a new one says there is nothing'; Test = {
             $empty = Join-Path $temp 'empty'; New-Item -ItemType Directory -Path $empty | Out-Null
             $made = & $theirs 'made-too'; Set-Content -LiteralPath (Join-Path $made $MARKER) -Value 'x'
@@ -272,6 +325,9 @@ if ($SelfTest) {
     )
     $failures = 0
     $n = 0
+    # A scratch %APPDATA%, which each run started here inherits, so no case reaches the player's.
+    $appData = $env:APPDATA
+    $env:APPDATA = Join-Path $temp 'appdata'
     try {
         foreach ($c in $cases) {
             $n++
@@ -281,7 +337,10 @@ if ($SelfTest) {
             if (-not $ok) { $failures++ }
         }
     }
-    finally { Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue }
+    finally {
+        $env:APPDATA = $appData
+        Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
+    }
     Write-Host ''
     if ($failures) { Write-Host "FAILED - self-test: $failures of $($cases.Count) case(s) did not hold."; exit 1 }
     Write-Host "OK - self-test passed: all $($cases.Count) cases."
@@ -293,7 +352,7 @@ $ModDirectory = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFro
 
 # Before anything in it changes, for a run and for -Clean alike (#423). Written whole, not thrown:
 # the error view wraps a thrown message at the console's width, breaking the path inside it.
-$refusal = Get-ModDirectoryRefusal -Path $ModDirectory
+$refusal = Get-ModDirectoryRefusal -Path $ModDirectory -Player @(Get-PlayerModDirectory -FactorioExe $FactorioExe)
 if ($refusal) { [Console]::Error.WriteLine($refusal); exit 1 }
 
 if ($Clean) {
