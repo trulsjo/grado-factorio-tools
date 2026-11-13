@@ -1,6 +1,7 @@
 # Code review — the evidence behind the rules
 
-The rules are in [code-review.md](code-review.md), which is what a review loads, and since
+The rules are in [code-review.md](code-review.md), which is what a review loads and since
+2026-11-13 a stub page of [`docs/code-review-procedure.md`](../code-review-procedure.md), and since
 2026-10-12 the prose rules are in [code-review-prose.md](code-review-prose.md), which its prose
 lane loads. This page holds what was measured and what was found, so those pages can stay short
 and nothing measured is lost.
@@ -59,6 +60,10 @@ The room came from three sentences the rules page carried beside its rules, each
 list at the head of this section already held: that each session had run the review twice, that
 up to 14 subagents a review had posted two comments across eight pull requests, and that the two
 dropped lanes came back empty in nearly every review. Nothing had to move here.
+
+**Changed 2026-11-13** (#355, by #332's ruling 5): the lane that raised a finding confirms its
+fix, and the rule of the next paragraph left the rules page; *The rules page became a stub page*,
+below, has the change. The paragraph stands as it was written.
 
 **A second review of review fixes is run by one agent.** Ruled by Truls on 2026-10-09, settling
 [#87](https://github.com/trulsjo/grado-factorio-tools/issues/87): when each commit since the last
@@ -164,10 +169,12 @@ PR #105's review comment gives its bug scan as "No finding", and what that scan 
 the same day, on the ticket: the diff changes a line of code in `scripts/`, `.githooks/` or
 `.github/workflows`, and help text and message strings alone do not. So the rule reads what
 changed and not only the paths. PR #107 is the case it was decided by: it changed comment-based
-help and one message string inside a script, and by the rule touches none. With the rule of #87
+help and one message string inside a script, and by the rule touches none. ~~With the rule of #87
 above there is one sentence on the rules page for both, joined by "or": one agent when no script
 is touched, one agent when each commit since the last review answers a finding of it, and an
-agent for each lane otherwise. No case falls outside the three.
+agent for each lane otherwise. No case falls outside the three.~~ **Changed 2026-11-13** (#355):
+#87's half left the page, so the sentence has two cases, one agent when no script is touched and
+an agent for each lane otherwise.
 
 **The body of the tip commit may be amended.** Ruled by Truls on 2026-10-11, settling
 [#108](https://github.com/trulsjo/grado-factorio-tools/issues/108). The review runs on the pull
@@ -268,11 +275,13 @@ Two of this repository's steps changed with it, by
   Both left the page, and [review-brief.md](review-brief.md) gained the confirmation turn.
 - **A lane's report is a file outside the repository.** It had been the lane's reply.
 
-The stub is 3,767 bytes of its 3,779, from `wc -c docs/agents/code-review.md`, where the page
+The stub is 3,761 bytes of its 3,779, from `wc -c docs/agents/code-review.md`, where the page
 stood at 3,751. The room for the values came from these, each quoted as it stood:
 
-- "On top of the `/code-review` plugin", which the page now says where it first names the
-  plugin.
+- "On top of the `/code-review` plugin", which the page no longer says: it names the plugin
+  where the prose lane takes in two of its lanes.
+- "Once per change", which left with the fresh review of the commits since: a change has one
+  review, and each fix a confirmation turn.
 - "open the pull request first", which "on the pull request" says.
 - of a run not yet finished, "It waits on a run not yet finished with
   `gh run watch <id> --exit-status`, and names a run that passed instead of running the check":
@@ -283,7 +292,12 @@ stood at 3,751. The room for the values came from these, each quoted as it stood
 - of the threshold, "by [`docs/code-review-rules.md`](../code-review-rules.md)", which the
   page's opening links.
 - of the comment, "Each review posts one comment on the pull request once its findings are
-  acted on" became the *Where recorded* value.
+  acted on" became the *Where recorded* value, posted once each fix is confirmed, and "every
+  finding" and "and its outcome" left it, which the shared page's step 9 says.
+
+The brief has the prose lane read whole one kind of file the shared page's step 4 does not
+list, a page under `docs/` that a stub page links: this repository's own addition, since its
+changes edit the shared pages.
 
 ## Where the first two rules came from
 

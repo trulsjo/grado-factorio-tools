@@ -13,8 +13,8 @@ values and its own steps. The evidence is in [code-review-evidence.md](code-revi
 - **Trigger page:** this page. **Brief template:** [review-brief.md](review-brief.md).
   **Reviewer's copy:** a clone. **Raw output:** none. **Merge workflow:** `check.yml`.
 - **Two lanes.** A bug scan; and a prose lane applying the **further reading**,
-  [code-review-prose.md](code-review-prose.md), which the bug scan does not load. It takes in
-  the `/code-review` plugin's `CLAUDE.md` and code-comment lanes.
+  [code-review-prose.md](code-review-prose.md), which the bug scan does not load. The prose
+  lane takes in the `/code-review` plugin's `CLAUDE.md` and code-comment lanes.
 - **Check run: the bug scan runs `scripts/check.ps1` unless CI's check passes on the commit the
   review reads.** The session looks before the lane starts, with
   `gh run list --workflow check.yml --commit <full SHA> --json databaseId,headSha,status,conclusion`.
@@ -37,11 +37,10 @@ values and its own steps. The evidence is in [code-review-evidence.md](code-revi
 
 ## What is reported
 
-- **Where recorded: one comment on the pull request**, posted once the findings are acted on:
-  every finding, its score, whether it was verified and its outcome. A review with no finding
-  says so there. Its bug scan section says which check it stands on: CI's run, by its id, or a
-  local run. The comment is not edited once posted, and the plugin's own comment format is not
-  used.
+- **Where recorded: one comment on the pull request**, posted once each fix is confirmed, with
+  each finding's score and whether it was verified. A review with no finding says so there.
+  Its bug scan section says which check it stands on: CI's run, by its id, or a local run.
+  The comment is not edited once posted, and the plugin's own comment format is not used.
 - **The threshold is a score of 80 or more**: such a finding is fixed; the rest are recorded.
 - **A change that does other than an acceptance criterion, the *Asked*, or a ruling of Truls's,
   on a ticket it closes asks is a finding scored 80**, in either lane, shown by a read of the
