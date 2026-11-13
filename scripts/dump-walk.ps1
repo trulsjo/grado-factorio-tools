@@ -1,19 +1,19 @@
 <#
 .SYNOPSIS
     Walks the recipe graph of a --dump-data dump from what the surfaces supply, and prints, as
-    Markdown, what can be researched and made. With -Against it prints what became of another
-    dump's recipes, technologies and science packs in this one, and what each surface makes from
-    its own materials in both. Exit 0 means the tables were printed, not that anything is playable.
+    Markdown, what can be researched and made. With -Against it prints what became of another dump's
+    recipes, technologies and science packs in this one, and what each surface makes from its own
+    materials in both. Exit 0 means the tables were printed, not that anything is playable.
 
 .DESCRIPTION
-    WHAT IT READS. One dump, or two: get-dump.ps1 gives a path. Nothing else. A walk writes
-    nothing; the self-test may make a dump, as below. It reads a 2.1 dump and a 2.0 one: a
-    recipe's `categories`, or 2.0's `category` and `additional_categories`; what a nest drops by
-    its `name`, or 2.0's `item`.
+    WHAT IT READS. One dump, or two: get-dump.ps1 gives a path. Nothing else. A walk writes nothing;
+    the self-test may make a dump, as below. It reads a 2.1 dump and a 2.0 one: a recipe's
+    `categories`, or 2.0's `category` and `additional_categories`; what a nest drops by its `name`,
+    or 2.0's `item`.
 
     THE WALK (grado-factorio-modpack#132, where the rules were first written down, in
-    docs/catalogue/Grado_ABCS.md under "How the walk was made"). Three rules, repeated until
-    nothing new is added:
+    docs/catalogue/Grado_ABCS.md under "How the walk was made"). Three rules, repeated until nothing
+    new is added:
 
       A surface supplies   what is in $SOURCE_RULES below, each rule with what it reads.
       A recipe counts      when it is not hidden, every ingredient can be had, a machine of one
@@ -37,20 +37,19 @@
       - A fluid's temperature is not read, and neither is an amount or a probability.
       - An item and a fluid of one name are one thing here.
 
-    FROM ITS OWN MATERIALS asks the opposite question: what one surface makes from what that
-    surface supplies, with nothing brought in. There every technology is taken as researched; a
-    recipe counts when it is not hidden or is a recycling recipe, every ingredient can be had,
-    its surface conditions hold on that surface, and so do those of some machine of one of its
-    categories, where any machine crafts them (ruled on #132). A
-    machine is any prototype with crafting categories. An entity is on a planet when the
-    planet's settings list it; a tree, a plant or a nest also when its autoplace control is one
-    of the planet's. A pump's own fluid is given to a planet whose tiles give water, which is a
-    guess at where such a pump can stand.
+    FROM ITS OWN MATERIALS asks the opposite question: what one surface makes from what that surface
+    supplies, with nothing brought in. There every technology is taken as researched; a recipe
+    counts when it is not hidden or is a recycling recipe, every ingredient can be had, its surface
+    conditions hold on that surface, and so do those of some machine of one of its categories, where
+    any machine crafts them (ruled on #132). A machine is any prototype with crafting categories. An
+    entity is on a planet when the planet's settings list it; a tree, a plant or a nest also when
+    its autoplace control is one of the planet's. A pump's own fluid is given to a planet whose
+    tiles give water, which is a guess at where such a pump can stand.
 
-    WHERE THAT IS LOOSER THAN THE GAME. Of machines it errs toward counting, so that what a
-    surface makes is an upper bound as far as machines go: where the dump does not settle
-    whether a recipe's machine is there, the recipe counts. What a surface supplies is not held
-    to that: the pump above is a guess, and WHAT IT CANNOT SEE names what is not supplied.
+    WHERE THAT IS LOOSER THAN THE GAME. Of machines it errs toward counting, so that what a surface
+    makes is an upper bound as far as machines go: where the dump does not settle whether a recipe's
+    machine is there, the recipe counts. What a surface supplies is not held to that: the pump above
+    is a guess, and WHAT IT CANNOT SEE names what is not supplied.
 
       - Whether a machine can be built from the surface's materials is not asked, only whether
         it may stand there. So a machine that is hidden, or that no item places, speaks for its
@@ -59,37 +58,37 @@
       - A character has no surface conditions, so a recipe crafted by hand counts on a platform.
 
     WHAT IS COUNTED THERE (ruled on #126) is every item and fluid the surface can then have, less
-    what it supplies. A thing the surface supplies is not counted as made, whichever recipe gives
-    it back: an ore a recycling recipe returns is not, and neither is coal where coal is mined
-    and a recipe makes it too. Steam where there is water is counted, and so is what an item
-    had there spoils into, burns into or gives when launched, whether or not a recipe gives it.
-    With -Against, a thing counted in the other dump is "not in" this one when this dump's
-    surface cannot have it at all, supplied or made, so what an overhaul turns from made to
-    mined is not missing. On a surface this dump does not have, everything counted is missing.
-    -BroughtIn adds names to every surface's supply in the first dump, so a name brought in is
-    not itself missing on a surface that dump has.
+    what it supplies. A thing the surface supplies is not counted as made, whichever recipe gives it
+    back: an ore a recycling recipe returns is not, and neither is coal where coal is mined and a
+    recipe makes it too. Steam where there is water is counted, and so is what an item had there
+    spoils into, burns into or gives when launched, whether or not a recipe gives it. With -Against,
+    a thing counted in the other dump is "not in" this one when this dump's surface cannot have it
+    at all, supplied or made, so what an overhaul turns from made to mined is not missing. On a
+    surface this dump does not have, everything counted is missing. -BroughtIn adds names to every
+    surface's supply in the first dump, so a name brought in is not itself missing on a surface that
+    dump has.
 
-    THE TABLE OF SCIENCE PACKS, with -Against, lists for this dump every pack the other dump's
-    labs take that the surface can have, so it can list a pack the other dump's column does not.
-    With -BroughtIn it has a second column for this dump, which asks the same of the surface
-    with the names brought in (ruled on #130).
+    THE TABLE OF SCIENCE PACKS, with -Against, lists for this dump every pack the other dump's labs
+    take that the surface can have, so it can list a pack the other dump's column does not. With
+    -BroughtIn it has a second column for this dump, which asks the same of the surface with the
+    names brought in (ruled on #130).
 
-    WHAT IT CANNOT SEE. Play: nothing is crafted, researched or shipped. Amounts and rates. What
-    a control script places or removes at run time, so a resource a mod places from its script
-    and not from the planet's settings is not supplied, and one whose autoplace a mod zeroed
-    still is. Whether a technology the walk does not reach is unreachable in the game or only
-    here: a source rule may be missing.
+    WHAT IT CANNOT SEE. Play: nothing is crafted, researched or shipped. Amounts and rates. What a
+    control script places or removes at run time, so a resource a mod places from its script and not
+    from the planet's settings is not supplied, and one whose autoplace a mod zeroed still is.
+    Whether a technology the walk does not reach is unreachable in the game or only here: a source
+    rule may be missing.
 
     THE WALK KNOWS THREE NAMES OF SPACE AGE: the surface `space-platform`, where the chunks are; the
-    item `capture-robot-rocket`; and the category `recycling`. A dump without them is walked
-    without them.
+    item `capture-robot-rocket`; and the category `recycling`. A dump without them is walked without
+    them.
 
     THE SELF-TEST runs the walk on a dump of Space Age alone, where the answer is known: Space Age
-    with the mods it requires and Quality, which 2.1 makes optional but recommended (ruled on
-    #211). The answer, and the rules $NOT_SHOWN_BY_SPACE_AGE lists, were taken on 2.1.23. Then it
-    removes each source rule in turn and fails unless the answer changes. A rule
-    the Space Age dump cannot show is named in the self-test's output, and is not proven. It
-    needs the game, unless -Dump names a dump of Space Age with Quality.
+    with the mods it requires and Quality, which 2.1 makes optional but recommended (ruled on #211).
+    The answer, and the rules $NOT_SHOWN_BY_SPACE_AGE lists, were taken on 2.1.23. Then it removes
+    each source rule in turn and fails unless the answer changes. A rule the Space Age dump cannot
+    show is named in the self-test's output, and is not proven. It needs the game, unless -Dump
+    names a dump of Space Age with Quality.
 
     CHECKED ON 2.1.23 (#219, 2026-10-25): what it reads, against the `Modding:` changes of 2.1.7,
     and a run on a dump of Space Age with Quality.
@@ -102,8 +101,8 @@
 
 .PARAMETER BroughtIn
     Items or fluids, comma-separated, that every surface is also given in the first dump. With
-    -Against they give the table of own materials and the table of science packs a last column
-    each, and the lines of names under the tables are of the surface with them brought in.
+    -Against they give the table of own materials and the table of science packs a last column each,
+    and the lines of names under the tables are of the surface with them brought in.
 
 .PARAMETER SelfTest
     See above. With -Dump, reads that dump; without, makes or reuses one through get-dump.ps1.
@@ -149,8 +148,8 @@ function Get-MinedNames {
 }
 
 function Read-WalkData {
-    <#  What the walk needs of one dump: the recipes, technologies, machines and labs, prepared,
-        and each surface with what it supplies under each source rule.  #>
+    <#  What the walk needs of one dump: the recipes, technologies, machines and labs, prepared, and
+        each surface with what it supplies under each source rule.  #>
     param([Parameter(Mandatory)] [string] $Path)
     $doc = Open-Dump $Path
     try {
@@ -264,8 +263,8 @@ function Read-WalkData {
 }
 
 function Get-Supply {
-    <#  The names supplied by the rules not in $Without: on one surface, or on all of them with
-        what is on no planet's list.  #>
+    <#  The names supplied by the rules not in $Without: on one surface, or on all of them with what
+        is on no planet's list.  #>
     param([Parameter(Mandatory)] $Data, [string] $Surface, [string[]] $Without = @())
     $names = [Collections.Generic.HashSet[string]]::new()
     $from = if ($Surface) { @($Data.Surfaces[$Surface].Supply) } else { @($Data.Surfaces.Values | ForEach-Object { $_.Supply }) + $Data.Everywhere }
@@ -276,9 +275,8 @@ function Get-Supply {
 }
 
 function Invoke-Walk {
-    <#  The walk from $Supply. With -Surface it is the walk of own materials on that surface.
-        Gives what can be had, the recipes that count and the technologies that can be
-        researched.  #>
+    <#  The walk from $Supply. With -Surface it is the walk of own materials on that surface. Gives
+        what can be had, the recipes that count and the technologies that can be researched.  #>
     param([Parameter(Mandatory)] $Data, [Parameter(Mandatory)] [AllowEmptyCollection()] [Collections.Generic.HashSet[string]] $Supply, [string] $Surface, [string[]] $Without = @())
     $have = [Collections.Generic.HashSet[string]]::new($Supply)
     $used = [Collections.Generic.HashSet[string]]::new()
@@ -360,8 +358,8 @@ function Invoke-Walk {
 }
 
 function Get-OwnWalk {
-    <#  The walk of own materials on one surface, and what is counted there: what the surface
-        can have, less what it supplies. $BroughtIn is supplied too.  #>
+    <#  The walk of own materials on one surface, and what is counted there: what the surface can
+        have, less what it supplies. $BroughtIn is supplied too.  #>
     param([Parameter(Mandatory)] $Data, [Parameter(Mandatory)] [string] $Surface, [string[]] $BroughtIn = @())
     $supply = Get-Supply $Data -Surface $Surface
     $supply.UnionWith($BroughtIn)

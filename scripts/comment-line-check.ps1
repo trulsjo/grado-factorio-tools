@@ -1,56 +1,55 @@
 <#
 .SYNOPSIS
-    Holds the comment lines of the files it is given to a width: in a PowerShell script each line
-    of a block comment and each # line, and in any other file, a hook or a workflow, each line
-    that begins with #, a shebang aside. Exit 0 means no line it read is over the limit, or, with
-    no -All, that nothing -Path names is staged, which it says.
+    Holds the comment lines of the files it is given to a width: in a PowerShell script each line of
+    a block comment and each # line, and in any other file, a hook or a workflow, each line that
+    begins with #, a shebang aside. Exit 0 means no line it read is over the limit, or, with no
+    -All, that nothing -Path names is staged, which it says.
 
 .DESCRIPTION
-    WHY (grado-factorio-tools#344, #316 ruling 4). Two checks held comment lines to 100
-    characters: this repository's pre-commit hook, through comment-line-lib.ps1, on the staged
-    scripts, and grado-factorio-modpack's header-length-check.ps1, on its scripts, hooks and
-    workflows. This is one check, the rule the library's and the scope a call: the modpack's is
-    the second example below.
+    WHY (grado-factorio-tools#344, #316 ruling 4). Two checks held comment lines to 100 characters:
+    this repository's pre-commit hook, through comment-line-lib.ps1, on the staged scripts, and
+    grado-factorio-modpack's header-length-check.ps1, on its scripts, hooks and workflows. This is
+    one check, the rule the library's and the scope a call: the modpack's is the second example
+    below.
 
-    WHAT IT READS. The files git lists for each pathspec in -Path, a glob from the repository
-    root, as staged: with no -All the staged ones, added, copied, modified or renamed, which is
-    what the commit will hold; with -All every tracked one. check-input-lib.ps1's Get-CheckInput
-    lists them, and names what a run that read nothing failed at. They are written out of the index
-    by checkout-index into a scratch directory, so the working tree is neither read nor touched. It
-    may be run from anywhere in the repository.
+    WHAT IT READS. The files git lists for each pathspec in -Path, a glob from the repository root,
+    as staged: with no -All the staged ones, added, copied, modified or renamed, which is what the
+    commit will hold; with -All every tracked one. check-input-lib.ps1's Get-CheckInput lists them,
+    and names what a run that read nothing failed at. They are written out of the index by
+    checkout-index into a scratch directory, so the working tree is neither read nor touched. It may
+    be run from anywhere in the repository.
 
     THE RULE is comment-line-lib.ps1's. A .ps1 file is read by Get-LongCommentLine, from the
     parser's comment tokens, a help block's .EXAMPLE section exempt; any other file by
     Get-LongHashLine. A line of one word after its marker is exempt in both, as an address is.
 
-    WHAT FAILS WITH NOTHING READ. -All that lists no file, as from a pathspec that matches none
-    or in a clone whose checkout failed: exit 1. With no -All, nothing staged passes and says so,
-    since that commit has nothing to check.
+    WHAT FAILS WITH NOTHING READ. -All that lists no file, as from a pathspec that matches none or
+    in a clone whose checkout failed: exit 1. With no -All, nothing staged passes and says so, since
+    that commit has nothing to check.
 
     WHAT A REFUSAL NAMES. Each refused file with its lines, and the markdown-rewrap.ps1 -Comment
-    command that rewraps it at the limit, by its path from the repository root, each path in
-    single quotes so the command runs as printed in PowerShell from the root (#378). The rewrap
-    reads the working tree, not what this read, so the refusal warns that staging the file again
-    stages any edit to it that was not staged.
+    command that rewraps it at the limit, by its path from the repository root, each path in single
+    quotes so the command runs as printed in PowerShell from the root (#378). The rewrap reads the
+    working tree, not what this read, so the refusal warns that staging the file again stages any
+    edit to it that was not staged.
 
     WHAT IT REPORTS AND DOES NOT FAIL (grado-factorio-tools#442). In a script's help, each line of a
     paragraph, not its last, that the next line's first word would fit on within the limit, by
     comment-line-lib.ps1's Get-ShortHelpLine, a short help line, with the markdown-rewrap.ps1
     -Comment -Fill command that fills that script, on the line after. With no -All, as the
-    pre-commit hook runs it, a file's line gives the count of its short help lines; with -All,
-    each one's number, for a session that fills or reviews them (#457). The command stays on a
-    line of its own: with the rewrap's path and the file's, it runs past the limit on any path. The
-    run exits as it would without them, as Truls ruled at triage: on PR #438 such lines were found
-    by a reviewer alone. A # line is not read for it, being wrapped by
-    sense more often than by width, nor a file that is not PowerShell. On 2026-11-13, `-All` over
-    scripts/*.ps1 named 1120 lines in 49 scripts, and 1064 in 49 once the report read words as the
-    fill does, after PR #452's review.
+    pre-commit hook runs it, a file's line gives the count of its short help lines; with -All, each
+    one's number, for a session that fills or reviews them (#457). The command stays on a line of
+    its own: with the rewrap's path and the file's, it runs past the limit on any path. The run
+    exits as it would without them, as Truls ruled at triage: on PR #438 such lines were found by a
+    reviewer alone. A # line is not read for it, being wrapped by sense more often than by width,
+    nor a file that is not PowerShell. On 2026-11-13, `-All` over scripts/*.ps1 named 1120 lines in
+    49 scripts, and 1064 in 49 once the report read words as the fill does, after PR #452's review.
 
-    WHAT IT CANNOT SEE. An edit not staged. In a file that is not PowerShell, whether a # line is
-    a comment, and a block comment of another language. What the PowerShell rule cannot see is in
-    check.ps1's header, under A COMMENT OR HEADER LINE. -SelfTest runs the reading and the rule
-    on a scratch repository, and the script once through pwsh with a comma list, from a folder
-    whose name is not ASCII.
+    WHAT IT CANNOT SEE. An edit not staged. In a file that is not PowerShell, whether a # line is a
+    comment, and a block comment of another language. What the PowerShell rule cannot see is in
+    check.ps1's header, under A COMMENT OR HEADER LINE. -SelfTest runs the reading and the rule on a
+    scratch repository, and the script once through pwsh with a comma list, from a folder whose name
+    is not ASCII.
 
 .PARAMETER Path
     The git pathspecs to read, as globs from the repository root. scripts/*.ps1 unless given.

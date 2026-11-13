@@ -1,8 +1,8 @@
 <#
 .SYNOPSIS
-    Creates a map of a set of mods at a seed, runs it 700 ticks with the grado-count mod, and
-    copies out the resource counts it wrote. Exit 0 means the map was created, both runs of the
-    game exited 0, the counts were copied, and no mod directory changed while it ran.
+    Creates a map of a set of mods at a seed, runs it 700 ticks with the grado-count mod, and copies
+    out the resource counts it wrote. Exit 0 means the map was created, both runs of the game exited
+    0, the counts were copied, and no mod directory changed while it ran.
 
 .DESCRIPTION
     WHAT IT DOES. Builds a harness (load-harness-lib.ps1) of -Mods and a copy of scripts/grado-count
@@ -19,20 +19,20 @@
     compare-resource-counts.ps1 reads the first. From the throwaway driver of
     trulsjo/grado-factorio-modpack#307 (grado-factorio-tools#161).
 
-    WHY THE FINGERPRINT. The harness junctions a mod directory in, so the game runs on the
-    directory itself, and grado-factorio-modpack#307's runs were on that repository's fetched
-    cache. A directory that changed between before and after fails the run, and the counts are
-    still copied; so does a --benchmark that exits non-zero after grado-count wrote them.
+    WHY THE FINGERPRINT. The harness junctions a mod directory in, so the game runs on the directory
+    itself, and grado-factorio-modpack#307's runs were on that repository's fetched cache. A
+    directory that changed between before and after fails the run, and the counts are still copied;
+    so does a --benchmark that exits non-zero after grado-count wrote them.
 
     WHAT IT CANNOT SEE. A change to a mod directory that keeps its file count and its bytes, or a
     change to a zip. A mod path with a comma in it: -Mods is split on commas. Which mods a set
     should hold: the caller passes the list. What the counts mean: that is
-    compare-resource-counts.ps1's, and what grado-count cannot see is in its control.lua. It has
-    no -SelfTest; it needs the game, and a run of it is its check.
+    compare-resource-counts.ps1's, and what grado-count cannot see is in its control.lua. It has no
+    -SelfTest; it needs the game, and a run of it is its check.
 
 .PARAMETER Mods
-    Mod directories, mod zips, or directories of them, as load-harness.ps1 takes,
-    comma-separated. None counts the game alone.
+    Mod directories, mod zips, or directories of them, as load-harness.ps1 takes, comma-separated.
+    None counts the game alone.
 
 .PARAMETER Seed
     The map seed, for --map-gen-seed.
@@ -47,8 +47,8 @@
     The chunks counted around each surface's origin chunk: a square of 2 * Radius + 1 a side.
 
 .PARAMETER NoPlanets
-    Count the surfaces the map has at start, and create no planet's surface. With Space Age that
-    is Nauvis alone.
+    Count the surfaces the map has at start, and create no planet's surface. With Space Age that is
+    Nauvis alone.
 
 .PARAMETER With
     Bundled mods to enable, comma-separated, as load-harness.ps1 takes: space-age, or

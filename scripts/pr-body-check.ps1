@@ -1,114 +1,113 @@
 <#
 .SYNOPSIS
-    Checks a pull request body for four things: a commit it cites that is not on the main
-    branch, a closing keyword that is not a `Closes #N` line, the pr template's three headings,
-    and its four markers. Exit 0 means each word in the body that names a commit of this
-    repository names one that is an ancestor of origin/main, no line holds a closing keyword
-    before an issue reference unless the line is `Closes #N` alone, `## Summary`, `## Evidence`
-    and `## Merge Danger` each stand once, in that order, and **Before:** and **After:** stand
-    under `## Evidence` and **Door:** and **Blast Radius:** under `## Merge Danger`; exit 1 names
-    each commit, each line, each heading and each marker that fails that. With -CiteSiblings, a
-    fifth: each statement about a sibling repository carries a commit and an ISO date, and exit
-    1 names each sentence that does not. With -RequireSummaryVisual, a sixth: `## Summary`
-    holds a fenced or an indented code block, and exit 1 says so where it holds none. With
-    -CheckRuns and -Head, a seventh: each run of the check workflow the body cites ran on the head
-    and passed its check.ps1 step on every job, and exit 1 names each run that did not.
+    Checks a pull request body for four things: a commit it cites that is not on the main branch, a
+    closing keyword that is not a `Closes #N` line, the pr template's three headings, and its four
+    markers. Exit 0 means each word in the body that names a commit of this repository names one
+    that is an ancestor of origin/main, no line holds a closing keyword before an issue reference
+    unless the line is `Closes #N` alone, `## Summary`, `## Evidence` and `## Merge Danger` each
+    stand once, in that order, and **Before:** and **After:** stand under `## Evidence` and
+    **Door:** and **Blast Radius:** under `## Merge Danger`; exit 1 names each commit, each line,
+    each heading and each marker that fails that. With -CiteSiblings, a fifth: each statement about
+    a sibling repository carries a commit and an ISO date, and exit 1 names each sentence that does
+    not. With -RequireSummaryVisual, a sixth: `## Summary` holds a fenced or an indented code block,
+    and exit 1 says so where it holds none. With -CheckRuns and -Head, a seventh: each run of the
+    check workflow the body cites ran on the head and passed its check.ps1 step on every job, and
+    exit 1 names each run that did not.
 
 .DESCRIPTION
-    WHY (grado-factorio-tools#96). Pull requests here are rebase-merged, which rewrites every
-    SHA on the branch, so a body that cites a branch commit cites something the merge deletes.
-    docs/pr-body-convention.md says a branch commit is never cited by its hash, and a SHA
-    only once it is on main. On PR #94 (2026-10-09) the body cited a commit of its own branch
-    and a reviewer found it; a fixed pattern is a check's work.
+    WHY (grado-factorio-tools#96). Pull requests here are rebase-merged, which rewrites every SHA on
+    the branch, so a body that cites a branch commit cites something the merge deletes.
+    docs/pr-body-convention.md says a branch commit is never cited by its hash, and a SHA only once
+    it is on main. On PR #94 (2026-10-09) the body cited a commit of its own branch and a reviewer
+    found it; a fixed pattern is a check's work.
 
     WHAT IT READS. Every word of 7 to 40 hexadecimal characters, in either case, with no letter,
     digit or underscore against it, wherever it stands: prose, a code span, a fenced block, an
     address. Each is asked of git as a commit. One that names a commit is on main when
-    `git merge-base --is-ancestor` says so. A word of digits alone is read like any other, since
-    an abbreviated SHA can be all digits; a count or a run id is passed over unless it happens
-    to abbreviate a commit here. A run id is read as a run with -CheckRuns, below.
+    `git merge-base --is-ancestor` says so. A word of digits alone is read like any other, since an
+    abbreviated SHA can be all digits; a count or a run id is passed over unless it happens to
+    abbreviate a commit here. A run id is read as a run with -CheckRuns, below.
 
     A CLOSING KEYWORD THE AUTHOR DID NOT MEAN (grado-factorio-tools#112). GitHub closes an issue
-    when a pull request merges with a closing keyword before a reference to it anywhere in the
-    body. PR #105 (2026-10-11) said "No ticket is closed: #103" and GitHub listed #103 as an
-    issue the merge would close. docs/pr-body-convention.md asks for one `Closes #N` line per
-    ticket closed, so a keyword before a reference anywhere else is a mistake or a second way of
-    saying that line. Reported, with its line: a closing keyword in any case, then a colon or a
-    space or both, then `#N`, `OWNER/REPOSITORY#N` or the address of an issue on github.com. A
-    line that is `Closes #N` and nothing else is passed over. The keywords, the colon and the
-    first two forms are those of
+    when a pull request merges with a closing keyword before a reference to it anywhere in the body.
+    PR #105 (2026-10-11) said "No ticket is closed: #103" and GitHub listed #103 as an issue the
+    merge would close. docs/pr-body-convention.md asks for one `Closes #N` line per ticket closed,
+    so a keyword before a reference anywhere else is a mistake or a second way of saying that line.
+    Reported, with its line: a closing keyword in any case, then a colon or a space or both, then
+    `#N`, `OWNER/REPOSITORY#N` or the address of an issue on github.com. A line that is `Closes #N`
+    and nothing else is passed over. The keywords, the colon and the first two forms are those of
     https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue
-    as read on 2026-10-12. This reads wider than that page shows: a space before the colon, and
-    none after it. The address is not on the page and GitHub closes on it: the merged
+    as read on 2026-10-12. This reads wider than that page shows: a space before the colon, and none
+    after it. The address is not on the page and GitHub closes on it: the merged
     zen-browser/desktop#15894 has four such lines and lists those four issues as closed by it
-    (`closingIssuesReferences`, read 2026-10-12). This half is a second job in one script,
-    because CI and a session already hand this script every body; it reads the text alone and
-    asks git nothing.
+    (`closingIssuesReferences`, read 2026-10-12). This half is a second job in one script, because
+    CI and a session already hand this script every body; it reads the text alone and asks git
+    nothing.
 
     THE PR TEMPLATE'S THREE HEADINGS (grado-factorio-tools#171). Truls ruled on 2026-10-19, in
     grado-factorio-modpack#320, that a pull request body carries the `mattpocock-skills:pr`
     template's `## Summary`, `## Evidence` and `## Merge Danger`, and that the ruling reaches
-    realistic-fusion-refreshed too; on 2026-10-20, triaging #171, that it holds here as well.
-    The rule is the modpack's, ported from its Get-DraftProblem (scripts/pr-body.ps1 at
-    0a58b02, read 2026-10-20) so that the repositories read one definition. A heading is its
-    line exactly, case and all, from the first column, with trailing whitespace allowed: spaces,
-    tabs, and the carriage return of a CRLF line. A line inside a fenced block is not one. Each
-    of the three stands once, and then in that order. Each missing one and each repeated one is
-    reported by name, a repeat with its count; with none missing or repeated, a wrong order is
-    reported as found. Other sections may stand before, between and after them. An empty body
-    lacks all three and fails. This third job reads the text alone and asks git nothing.
+    realistic-fusion-refreshed too; on 2026-10-20, triaging #171, that it holds here as well. The
+    rule is the modpack's, ported from its Get-DraftProblem (scripts/pr-body.ps1 at 0a58b02, read
+    2026-10-20) so that the repositories read one definition. A heading is its line exactly, case
+    and all, from the first column, with trailing whitespace allowed: spaces, tabs, and the carriage
+    return of a CRLF line. A line inside a fenced block is not one. Each of the three stands once,
+    and then in that order. Each missing one and each repeated one is reported by name, a repeat
+    with its count; with none missing or repeated, a wrong order is reported as found. Other
+    sections may stand before, between and after them. An empty body lacks all three and fails. This
+    third job reads the text alone and asks git nothing.
 
     THE PR TEMPLATE'S FOUR MARKERS (grado-factorio-tools#185). A body written by hand to the three
     headings alone passed the third job: realistic-fusion-refreshed#743 and
     realistic-fusion-refreshed#747 held none of the template's markers (read 2026-10-21). Truls
     ruled on 2026-10-21, on #185, that the check reaches them, and that a change with nothing to
     show says none after **Before:** and **After:**. A marker is its text exactly, `**Before:**`,
-    `**After:**`, `**Door:**` or `**Blast Radius:**`, case, asterisks and colon and all, anywhere
-    in a line under its own heading: from that heading's line to the next line that begins `## `.
-    A line in a fenced block, by the fence rule above, is not read. Each marker missing is
-    reported with its heading; a heading that is missing has its markers reported missing too.
-    A body written before #185 may fail it: merged #184's Evidence writes `**After, on the
-    branch:**`, which is not the marker. A merged body is not checked again unless it is edited:
-    check.yml runs on `edited` and does not ask whether the pull request is merged. This fourth
-    job reads the text alone and asks git nothing.
+    `**After:**`, `**Door:**` or `**Blast Radius:**`, case, asterisks and colon and all, anywhere in
+    a line under its own heading: from that heading's line to the next line that begins `## `. A
+    line in a fenced block, by the fence rule above, is not read. Each marker missing is reported
+    with its heading; a heading that is missing has its markers reported missing too. A body written
+    before #185 may fail it: merged #184's Evidence writes `**After, on the branch:**`, which is not
+    the marker. A merged body is not checked again unless it is edited: check.yml runs on `edited`
+    and does not ask whether the pull request is merged. This fourth job reads the text alone and
+    asks git nothing.
 
     A STATEMENT ABOUT A SIBLING CARRIES ITS COMMIT AND ITS DATE, WITH -CiteSiblings
     (grado-factorio-tools#177). docs/agents/code-review-prose.md held a body to this, and only a
     review's prose lane read it, after the pull request was open: PR #174's body said "No sibling
-    calls it until its pin moves", which that lane found. Truls ruled on 2026-10-20, on #177,
-    what is read. A sentence is a statement when it names grado-factorio-modpack or
-    realistic-fusion-refreshed, or holds the word "sibling" or "siblings" as a word of its own,
-    in any case. So does one holding "modpack" as a word of its own, in any case, or "RFR" as
-    one, in capitals (Truls, 2026-10-25, #229): PR #228's first body said "The modpack's staged
-    sets all declare `2.0`" with no commit and no date. A letter, digit, - or _ on either side
-    makes either part of another word, as in resolve-modpack. So "a modpack", about modpacks in
-    general, is held too: it needs a commit and a date, or a rewording. Neither short spelling
-    is read in a code span, a run of backticks to the next run of the same length (Truls,
-    2026-10-26, #234): PR #231's body, about this check, could not name the two spellings
-    without a commit it had no source for. The full names and "sibling" are read in a code
-    span too, so a sibling named only there is still seen. A bare reference to a
-    sibling's ticket or pull request, `grado-factorio-modpack#337` with or without `trulsjo/`
-    before it, is taken out first, so a sentence holding only that is none. A statement carries
-    a commit and an ISO date: a word of 7 to 40 hexadecimal characters with a digit among them,
-    and a YYYY-MM-DD. The rule is this repository's, so it is asked for: both siblings run this
-    script on their pull request bodies, from their pin (grado-factorio-modpack's check.yml at
-    dcb10df and realistic-fusion-refreshed's gates.yml at 9f3504f, read 2026-10-20), and a run
-    there that does not ask checks what it did before (Truls, 2026-10-20). This repository's CI
-    asks, and so does the command before `gh pr create` in docs/agents/issue-tracker.md.
+    calls it until its pin moves", which that lane found. Truls ruled on 2026-10-20, on #177, what
+    is read. A sentence is a statement when it names grado-factorio-modpack or
+    realistic-fusion-refreshed, or holds the word "sibling" or "siblings" as a word of its own, in
+    any case. So does one holding "modpack" as a word of its own, in any case, or "RFR" as one, in
+    capitals (Truls, 2026-10-25, #229): PR #228's first body said "The modpack's staged sets all
+    declare `2.0`" with no commit and no date. A letter, digit, - or _ on either side makes either
+    part of another word, as in resolve-modpack. So "a modpack", about modpacks in general, is held
+    too: it needs a commit and a date, or a rewording. Neither short spelling is read in a code
+    span, a run of backticks to the next run of the same length (Truls, 2026-10-26, #234): PR #231's
+    body, about this check, could not name the two spellings without a commit it had no source for.
+    The full names and "sibling" are read in a code span too, so a sibling named only there is still
+    seen. A bare reference to a sibling's ticket or pull request, `grado-factorio-modpack#337` with
+    or without `trulsjo/` before it, is taken out first, so a sentence holding only that is none. A
+    statement carries a commit and an ISO date: a word of 7 to 40 hexadecimal characters with a
+    digit among them, and a YYYY-MM-DD. The rule is this repository's, so it is asked for: both
+    siblings run this script on their pull request bodies, from their pin (grado-factorio-modpack's
+    check.yml at dcb10df and realistic-fusion-refreshed's gates.yml at 9f3504f, read 2026-10-20),
+    and a run there that does not ask checks what it did before (Truls, 2026-10-20). This
+    repository's CI asks, and so does the command before `gh pr create` in
+    docs/agents/issue-tracker.md.
 
     `## Summary` HOLDS A VISUAL, WITH -RequireSummaryVisual (grado-factorio-tools#264). The
-    `mattpocock-skills:pr` template's Summary is a diagram, a diff sketch or a tree, and each of
-    the skill's examples is a code block. The Summaries of PRs #249 to #252 and #257 held none,
-    251 to 438 words of prose each (2026-10-26). A visual is a fence that opens under the
-    heading, by the fence rule below, or an indented code block there, by the rule the sibling
-    statements are read by: a code span in a sentence is none, unless the line opens with one,
-    which the fence rule takes for a fence; nor is a line indented under a list item, nor a
-    block under another heading. A missing `## Summary` is the headings' job and is not
-    reported again here. The rule is asked for, at Truls's word (2026-10-26, #264): on by
-    default it would fail a consuming repository's body whose Summary holds no code block, a
-    breaking change to that repository's interface. This repository's CI asks, and so does the
-    command before `gh pr create` in docs/agents/issue-tracker.md. Whether the visual is the
-    smallest one that makes the point is a reader's call.
+    `mattpocock-skills:pr` template's Summary is a diagram, a diff sketch or a tree, and each of the
+    skill's examples is a code block. The Summaries of PRs #249 to #252 and #257 held none, 251 to
+    438 words of prose each (2026-10-26). A visual is a fence that opens under the heading, by the
+    fence rule below, or an indented code block there, by the rule the sibling statements are read
+    by: a code span in a sentence is none, unless the line opens with one, which the fence rule
+    takes for a fence; nor is a line indented under a list item, nor a block under another heading.
+    A missing `## Summary` is the headings' job and is not reported again here. The rule is asked
+    for, at Truls's word (2026-10-26, #264): on by default it would fail a consuming repository's
+    body whose Summary holds no code block, a breaking change to that repository's interface. This
+    repository's CI asks, and so does the command before `gh pr create` in
+    docs/agents/issue-tracker.md. Whether the visual is the smallest one that makes the point is a
+    reader's call.
 
     A CITED RUN OF THE CHECK WORKFLOW IS ON THE HEAD, WITH -CheckRuns AND -Head
     (grado-factorio-tools#455). docs/agents/issue-tracker.md asks a body to cite check.ps1 by CI's
@@ -118,76 +117,70 @@
     with what origin names on github.com, in any case; or the word `run`, or `run id`, then nine
     digits or more, as "run 43513588892" or "CI's run 43513588892". Passed over: an address of
     another repository's run, a number alone, one of fewer than nine digits, and `run` inside a
-    longer word, as "rerun". Each cited run is read with `gh run view <id> --json
-    headSha,workflowName,jobs` and fails the body, named, where gh cannot read it, where it is not
-    of the check workflow, where it ran on a commit other than -Head, or where the step that runs
-    scripts/check.ps1 did not conclude success on every job. The workflow's name and that step's are
-    read from .github/workflows/check.yml at the repository's top, so a rename is followed. The
-    run's other steps are not read, its body step among them, and nor is its conclusion (Truls,
-    triage of #455): that step runs last in the same run, so after a push it fails on the body
-    citing the run before, and the run's conclusion would hold the body to its own verdict. Every
-    cited run is held to the head, so a body that cites an earlier commit's run beside the head's
-    fails (the same ruling). With no -Head, as on `gh pr create` before CI has run, no run is read,
-    the run passes and says so. It is asked for: a consumer that does not ask checks what it did
-    before (the same ruling). This repository's CI asks, with the event's head, and so does the
-    refuse-pr-body.ps1 hook on `gh pr edit`, with the head gh names.
+    longer word, as "rerun". Each cited run is read with
+    `gh run view <id> --json headSha,workflowName,jobs` and fails the body, named, where gh cannot
+    read it, where it is not of the check workflow, where it ran on a commit other than -Head, or
+    where the step that runs scripts/check.ps1 did not conclude success on every job. The workflow's
+    name and that step's are read from .github/workflows/check.yml at the repository's top, so a
+    rename is followed. The run's other steps are not read, its body step among them, and nor is its
+    conclusion (Truls, triage of #455): that step runs last in the same run, so after a push it
+    fails on the body citing the run before, and the run's conclusion would hold the body to its own
+    verdict. Every cited run is held to the head, so a body that cites an earlier commit's run
+    beside the head's fails (the same ruling). With no -Head, as on `gh pr create` before CI has
+    run, no run is read, the run passes and says so. It is asked for: a consumer that does not ask
+    checks what it did before (the same ruling). This repository's CI asks, with the event's head,
+    and so does the refuse-pr-body.ps1 hook on `gh pr edit`, with the head gh names.
 
     A SHALLOW CLONE IS REFUSED, and nothing is checked: there an ancestor cannot be told from a
-    commit whose history was cut off. CI therefore fetches the whole history for this. Whatever
-    else git cannot answer fails the run too; nothing passes for not having been asked.
+    commit whose history was cut off. CI therefore fetches the whole history for this. Whatever else
+    git cannot answer fails the run too; nothing passes for not having been asked.
 
-    WHAT IT CANNOT SEE. A word that names no commit in this clone is counted, said to be
-    unchecked, and passes: a commit of a sibling repository, or one from before a rebase that a
-    fresh clone no longer holds. Run locally, origin/main is as this clone last fetched it, so
-    a commit that reached main since is reported. A commit cited by fewer than 7 characters is
-    not read. Whether a commit on main is the one the prose means. Anything else a body says.
-    Of closing keywords: one GitHub adds after that date. One in a commit message, which that
-    page says GitHub reads too. A keyword with its reference on the next line, or with markup
-    or a link's bracket between the two; whether GitHub closes on those was not measured.
-    Whether a `Closes #N` line names the ticket the pull request is for. And a keyword in a code
-    span or a fenced block is reported like any other: the page does not say GitHub passes over
-    one there.
-    And a word is asked of git as a name, so a branch or a tag whose name is 7 to 40 hexadecimal
-    characters answers for the commit it points at.
-    Of the headings: what stands under each, and any section a repository names itself, such as
+    WHAT IT CANNOT SEE. A word that names no commit in this clone is counted, said to be unchecked,
+    and passes: a commit of a sibling repository, or one from before a rebase that a fresh clone no
+    longer holds. Run locally, origin/main is as this clone last fetched it, so a commit that
+    reached main since is reported. A commit cited by fewer than 7 characters is not read. Whether a
+    commit on main is the one the prose means. Anything else a body says. Of closing keywords: one
+    GitHub adds after that date. One in a commit message, which that page says GitHub reads too. A
+    keyword with its reference on the next line, or with markup or a link's bracket between the two;
+    whether GitHub closes on those was not measured. Whether a `Closes #N` line names the ticket the
+    pull request is for. And a keyword in a code span or a fenced block is reported like any other:
+    the page does not say GitHub passes over one there. And a word is asked of git as a name, so a
+    branch or a tag whose name is 7 to 40 hexadecimal characters answers for the commit it points
+    at. Of the headings: what stands under each, and any section a repository names itself, such as
     where its review stands. An indented heading, one closed with `##`, or an underlined one is
-    taken as missing, though GitHub renders each as a heading. One in an HTML comment is taken
-    as a heading, though GitHub shows none. A fence is any line of optional spaces then three
-    backticks or three tildes, at any indent, and the next such line closes it, whichever of the
-    two it uses and however long. CommonMark reads an indent of four or more as code, closes a
-    fence only with its own character at least as long, and reads a backtick line with a
-    backtick after its opening run, such as a code span, as no fence. So the check can be wrong
-    both ways. A fence line in an indented code block, or a line opening with a code span, hides
-    every heading after it until the next fence line. A fence of one character inside one of
-    the other, or a shorter fence inside a longer one, ends the outer fence early, and a
-    heading inside it is counted.
-    Of the markers: what follows each, so whether a marker says none or something true, and
-    whether the line means it: one in a code span, or quoted in a sentence, counts. A section
-    ends only at a level-2 heading, so a `# ` heading after `## Evidence` does not end it. A
-    marker under a heading that stands twice counts under either.
-    Of statements about a sibling: whether the commit and the date are the sibling's, or true. A
-    sentence is cut where a . ! or ? is followed by a space and anything but a lower-case letter,
-    so "e.g. A" ends one, and a commit cited in the next part is not counted, though not inside a
-    code span; a paragraph's lines
-    are joined, and a list item, a heading or a table row stands alone. A line in a fenced block
-    is not read, by the fence rule above. Nor is an indented code block (#233): a line of four
-    spaces or a tab and then text, after a blank line or at the start, with the indented and
-    blank lines after it, a fence line among them. After a list item, an indented line is the
-    item's and read, until a paragraph, heading, table row or fence starts at the margin.
-    CommonMark asks instead whether the line is indented four past the item's content, so a code
-    block in an item, six spaces in under `- `, is read here though GitHub shows it as code. So
-    is an indented block in a block quote, one straight after a heading or a fence line with no
-    blank line between, which CommonMark also reads as code, and one indented by a tab after
-    fewer than four spaces. A sibling named by an address that holds its name is read as a
-    statement. One named by its title is seen only
-    through "modpack" in it, so "Realistic Fusion Refreshed" is not, nor is one named by any
-    spelling but its name, the word, "modpack" and "RFR". A run id of 7 or more digits counts as
-    a commit.
-    Of cited runs: a run cited in any other form, as "runs 1 and 2" or a number alone, which is
-    passed over; a sibling's run cited as `run` and its id, which is read as this repository's
-    and fails as one gh cannot find, so cite it by its address; whether the run is the one the
-    prose means, or what the prose says of it. A step that runs check.ps1 written over more than
-    one line, or under no `name:`, is not found, and the run fails for it.
+    taken as missing, though GitHub renders each as a heading. One in an HTML comment is taken as a
+    heading, though GitHub shows none. A fence is any line of optional spaces then three backticks
+    or three tildes, at any indent, and the next such line closes it, whichever of the two it uses
+    and however long. CommonMark reads an indent of four or more as code, closes a fence only with
+    its own character at least as long, and reads a backtick line with a backtick after its opening
+    run, such as a code span, as no fence. So the check can be wrong both ways. A fence line in an
+    indented code block, or a line opening with a code span, hides every heading after it until the
+    next fence line. A fence of one character inside one of the other, or a shorter fence inside a
+    longer one, ends the outer fence early, and a heading inside it is counted. Of the markers: what
+    follows each, so whether a marker says none or something true, and whether the line means it:
+    one in a code span, or quoted in a sentence, counts. A section ends only at a level-2 heading,
+    so a `# ` heading after `## Evidence` does not end it. A marker under a heading that stands
+    twice counts under either. Of statements about a sibling: whether the commit and the date are
+    the sibling's, or true. A sentence is cut where a . ! or ? is followed by a space and anything
+    but a lower-case letter, so "e.g. A" ends one, and a commit cited in the next part is not
+    counted, though not inside a code span; a paragraph's lines are joined, and a list item, a
+    heading or a table row stands alone. A line in a fenced block is not read, by the fence rule
+    above. Nor is an indented code block (#233): a line of four spaces or a tab and then text, after
+    a blank line or at the start, with the indented and blank lines after it, a fence line among
+    them. After a list item, an indented line is the item's and read, until a paragraph, heading,
+    table row or fence starts at the margin. CommonMark asks instead whether the line is indented
+    four past the item's content, so a code block in an item, six spaces in under `- `, is read here
+    though GitHub shows it as code. So is an indented block in a block quote, one straight after a
+    heading or a fence line with no blank line between, which CommonMark also reads as code, and one
+    indented by a tab after fewer than four spaces. A sibling named by an address that holds its
+    name is read as a statement. One named by its title is seen only through "modpack" in it, so
+    "Realistic Fusion Refreshed" is not, nor is one named by any spelling but its name, the word,
+    "modpack" and "RFR". A run id of 7 or more digits counts as a commit. Of cited runs: a run cited
+    in any other form, as "runs 1 and 2" or a number alone, which is passed over; a sibling's run
+    cited as `run` and its id, which is read as this repository's and fails as one gh cannot find,
+    so cite it by its address; whether the run is the one the prose means, or what the prose says of
+    it. A step that runs check.ps1 written over more than one line, or under no `name:`, is not
+    found, and the run fails for it.
 
 .PARAMETER Path
     The file holding the body, as handed to `gh pr create --body-file`.
@@ -214,9 +207,9 @@
     The pull request's head commit, in full, for -CheckRuns. With none, no run is read.
 
 .PARAMETER SelfTest
-    Run the cases that hold the check to what this header says, naming each as it runs. Needs
-    git, for fixture repositories in a temp directory. Their commits carry a fixed date, so the
-    same script makes the same hashes and prints the same output on every run.
+    Run the cases that hold the check to what this header says, naming each as it runs. Needs git,
+    for fixture repositories in a temp directory. Their commits carry a fixed date, so the same
+    script makes the same hashes and prints the same output on every run.
 
 .EXAMPLE
     pwsh -File scripts/pr-body-check.ps1 ../scratch/body.md
@@ -243,9 +236,9 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 
 function Test-Body {
-    <#  What the words of $Text that could be a SHA name in the repository at $Top, as
-        @{ Off; On; Unknown }: the words naming a commit that is not on $Main, how many name one
-        that is, and how many name no commit there.  #>
+    <#  What the words of $Text that could be a SHA name in the repository at $Top, as @{ Off; On;
+        Unknown }: the words naming a commit that is not on $Main, how many name one that is, and
+        how many name no commit there.  #>
     param(
         [Parameter(Mandatory)] [AllowEmptyString()] [string] $Text,
         [Parameter(Mandatory)] [string] $Top,
@@ -271,8 +264,8 @@ function Test-Body {
 }
 
 function Get-ClosingKeyword {
-    <#  Each place in $Text where a closing keyword stands before an issue reference, but on a
-        line that is `Closes #N` alone, as @{ Line; Found }: the line's number and the words.  #>
+    <#  Each place in $Text where a closing keyword stands before an issue reference, but on a line
+        that is `Closes #N` alone, as @{ Line; Found }: the line's number and the words.  #>
     param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text)
     $n = 0
     foreach ($line in $Text -split '\r?\n') {
@@ -288,9 +281,8 @@ $TemplateHeadings = 'Summary', 'Evidence', 'Merge Danger'
 
 function Get-HeadingProblem {
     <#  What is wrong with the pr template's three headings in $Text, one line each: each one
-        missing, each one standing more than once, or the order they stand in. Empty if nothing
-        is. Ported from grado-factorio-modpack's Get-DraftProblem (scripts/pr-body.ps1 at
-        0a58b02).  #>
+        missing, each one standing more than once, or the order they stand in. Empty if nothing is.
+        Ported from grado-factorio-modpack's Get-DraftProblem (scripts/pr-body.ps1 at 0a58b02).  #>
     param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text)
     $found = [System.Collections.Generic.List[string]]::new()
     $fenced = $false
@@ -356,9 +348,9 @@ function Get-VisualProblem {
 }
 
 function Get-SiblingProblem {
-    <#  Each sentence of $Text that is a statement about a sibling repository and lacks a commit
-        or an ISO date, as @{ Line; Missing; Sentence }: the line its block starts on, what it
-        lacks, and the sentence.  #>
+    <#  Each sentence of $Text that is a statement about a sibling repository and lacks a commit or
+        an ISO date, as @{ Line; Missing; Sentence }: the line its block starts on, what it lacks,
+        and the sentence.  #>
     param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text)
     # Blocks: a paragraph's lines joined, a list item, a heading or a table row; nothing fenced,
     # and no indented code block: a line indented four spaces or a tab after a blank line or the
@@ -432,10 +424,10 @@ function Get-CheckWorkflow {
 }
 
 function Get-RunCheck {
-    <#  The runs $Text cites, and each problem with them, as @{ Ids; Problems }: with $Head, each
-        is read by $ReadRun, which gives gh's view of a run by its id, or a string of what went
-        wrong, and held to the check workflow at $Top, to $Head, and to its check.ps1 step's
-        success on every job. With no $Head, none is read.  #>
+    <#  The runs $Text cites, and each problem with them, as @{ Ids; Problems }: with $Head, each is
+        read by $ReadRun, which gives gh's view of a run by its id, or a string of what went wrong,
+        and held to the check workflow at $Top, to $Head, and to its check.ps1 step's success on
+        every job. With no $Head, none is read.  #>
     param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text, [string] $Head, [Parameter(Mandatory)] [string] $Top,
         [string] $Repo, [Parameter(Mandatory)] [scriptblock] $ReadRun)
     $ids = @(Get-CitedRun -Text $Text -Repo $Repo)

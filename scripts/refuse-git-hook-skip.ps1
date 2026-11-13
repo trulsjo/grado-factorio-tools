@@ -1,71 +1,69 @@
 <#
 .SYNOPSIS
-    A hook for agent sessions: refuses a shell command that runs `git commit` or `git push` with
-    the repository's hooks skipped. Exit 2 refuses the command before it runs and says to run it
-    without the switch; exit 0 lets it run, and means only that this saw no such switch.
+    A hook for agent sessions: refuses a shell command that runs `git commit` or `git push` with the
+    repository's hooks skipped. Exit 2 refuses the command before it runs and says to run it without
+    the switch; exit 0 lets it run, and means only that this saw no such switch.
 
 .DESCRIPTION
     WHY (grado-factorio-tools#118). On 2026-10-12 a session here pushed a branch with
     `git push --no-verify`, unasked, and so past .githooks/pre-push, which runs scripts/check.ps1.
-    Nothing stopped it. The hooks are slow on a loaded machine, which is what tempts a session,
-    and is a reason for a longer timeout and not for skipping them.
+    Nothing stopped it. The hooks are slow on a loaded machine, which is what tempts a session, and
+    is a reason for a longer timeout and not for skipping them.
 
     HOW IT IS WIRED. In .claude/settings.json, a PreToolUse hook on the two shell tools, matcher
-    `Bash|PowerShell`. A consumer's command is the first example below (ADR 0004), which names
-    the script under vendor/grado-factorio-tools/ and, where it is not there, lets the command
-    run and tells the agent which path is missing. This repository's own tracked settings wire it
-    from scripts/, where it is always there. The
-    session hands the hook the tool call as JSON on stdin: this reads `tool_input.command`. The
-    `case` keeps PowerShell from starting before every shell command: whatever is refused names
-    one of the two subcommands.
+    `Bash|PowerShell`. A consumer's command is the first example below (ADR 0004), which names the
+    script under vendor/grado-factorio-tools/ and, where it is not there, lets the command run and
+    tells the agent which path is missing. This repository's own tracked settings wire it from
+    scripts/, where it is always there. The session hands the hook the tool call as JSON on stdin:
+    this reads `tool_input.command`. The `case` keeps PowerShell from starting before every shell
+    command: whatever is refused names one of the two subcommands.
 
-    WHAT IT REFUSES. A command in which the word `git`, alone or at the end of a path, is
-    followed by `commit` or `push` as its subcommand, and by --no-verify, or an abbreviation
-    of it that git takes; `git commit` with -n, alone or among other short switches, as -an; and
-    either subcommand after a -c or --config-env that names core.hooksPath. A command inside
-    $( ) or backticks is read as one, where it does not stand inside a quoted string.
+    WHAT IT REFUSES. A command in which the word `git`, alone or at the end of a path, is followed
+    by `commit` or `push` as its subcommand, and by --no-verify, or an abbreviation of it that git
+    takes; `git commit` with -n, alone or among other short switches, as -an; and either subcommand
+    after a -c or --config-env that names core.hooksPath. A command inside $( ) or backticks is read
+    as one, where it does not stand inside a quoted string.
 
     WHAT IT LETS THROUGH. Everything else, and so `git push -n`, which is a dry run and skips
     nothing, and a switch that is only named inside a quoted message.
 
     WHAT IT CANNOT SEE. A script, an alias or a program that passes the switch itself. A command
     written inside a quoted string for something else to run: sh -c, pwsh -Command, eval,
-    Start-Process, or a substitution inside double quotes. A switch written with a backslash in
-    it, and a hooks path that comes from a file named with -c include.path. A hook
-    manager turned off through the environment, as HUSKY=0 is, and a hooks path set there, with
-    GIT_CONFIG_COUNT and its kind. A hooks path set by an earlier `git config`, and a hook file
-    that was edited or removed. A clone that never set core.hooksPath, where git runs no hook of
-    this repository's and there is nothing to skip. A command whose switch or subcommand comes
-    from a variable or a substitution. Any other subcommand that takes --no-verify, as merge, am
-    and rebase do. A person's own terminal: this is a session's hook. And whether the settings
-    still reach it, unless -SelfTest is run. That reads the wired command and the matcher of
-    its entry, and nothing else of the settings: not a handler's `if`, which narrows further,
-    and not whether a session reads a matcher as hook-matcher.ps1 does. A wiring with an entry
-    for each shell tool fails it, since one entry is read.
-    It reads the command as text and does not parse the shell, so it errs towards refusing: a
-    `git commit --no-verify` that is only echoed, or stands on a line of a here-document that
-    is not inside quotes, is refused too. So is a `git commit` whose message is cut short
-    where this reads it: by an apostrophe written as '\'', or by an abbreviation of --message,
-    with -n as the next word; and one with -n in a comment after it. Write such a text to a
-    file with another tool, and give a message with -F.
+    Start-Process, or a substitution inside double quotes. A switch written with a backslash in it,
+    and a hooks path that comes from a file named with -c include.path. A hook manager turned off
+    through the environment, as HUSKY=0 is, and a hooks path set there, with GIT_CONFIG_COUNT and
+    its kind. A hooks path set by an earlier `git config`, and a hook file that was edited or
+    removed. A clone that never set core.hooksPath, where git runs no hook of this repository's and
+    there is nothing to skip. A command whose switch or subcommand comes from a variable or a
+    substitution. Any other subcommand that takes --no-verify, as merge, am and rebase do. A
+    person's own terminal: this is a session's hook. And whether the settings still reach it, unless
+    -SelfTest is run. That reads the wired command and the matcher of its entry, and nothing else of
+    the settings: not a handler's `if`, which narrows further, and not whether a session reads a
+    matcher as hook-matcher.ps1 does. A wiring with an entry for each shell tool fails it, since one
+    entry is read. It reads the command as text and does not parse the shell, so it errs towards
+    refusing: a `git commit --no-verify` that is only echoed, or stands on a line of a here-document
+    that is not inside quotes, is refused too. So is a `git commit` whose message is cut short where
+    this reads it: by an apostrophe written as '\'', or by an abbreviation of --message, with -n as
+    the next word; and one with -n in a comment after it. Write such a text to a file with another
+    tool, and give a message with -F.
 
     TO CHECK IT, run the second example below.
 
 .PARAMETER SelfTest
-    Prove it refuses what it should and lets the rest through, that the wired command
-    reaches it, that the matcher beside that command starts the hook for the Bash tool and
-    for the PowerShell tool, and that the first example's form refuses where the script is and,
-    where it is not, exits 0 and prints JSON naming the missing path. The cases that run a
-    command need sh: the one on the path, or the one Git for Windows ships.
+    Prove it refuses what it should and lets the rest through, that the wired command reaches it,
+    that the matcher beside that command starts the hook for the Bash tool and for the PowerShell
+    tool, and that the first example's form refuses where the script is and, where it is not, exits
+    0 and prints JSON naming the missing path. The cases that run a command need sh: the one on the
+    path, or the one Git for Windows ships.
 
 .PARAMETER Settings
-    With -SelfTest: the .claude/settings.json whose wiring the last two cases read, with that
-    file's repository as the project. Defaults to this repository's own. They take the first
-    command, of any PreToolUse entry, that names this script: one runs it, and the other reads
-    that entry's matcher (grado-factorio-tools#120) and fails, naming the tool and the file,
-    unless a session would start the hook for Bash and for PowerShell. An entry with no matcher
-    passes: it is started for every tool. How a matcher is read is in hook-matcher.ps1. A
-    consumer gives its own file to know its wiring still reaches the hook, from both tools.
+    With -SelfTest: the .claude/settings.json whose wiring the last two cases read, with that file's
+    repository as the project. Defaults to this repository's own. They take the first command, of
+    any PreToolUse entry, that names this script: one runs it, and the other reads that entry's
+    matcher (grado-factorio-tools#120) and fails, naming the tool and the file, unless a session
+    would start the hook for Bash and for PowerShell. An entry with no matcher passes: it is started
+    for every tool. How a matcher is read is in hook-matcher.ps1. A consumer gives its own file to
+    know its wiring still reaches the hook, from both tools.
 
 .EXAMPLE
     The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json, as HOW

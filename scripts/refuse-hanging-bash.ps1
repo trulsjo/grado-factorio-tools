@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-    A hook for agent sessions: refuses a Bash tool command that would hang on its input, that
-    holds a heredoc of over 60 lines, or, on Windows, that holds two backslashes in a row. Exit 2
-    refuses the command before it runs and says why; exit 0 lets it run, and means only that this
-    saw none of the three. Exit 1 says on stderr that the tool call could not be read and was not
-    checked; the command still runs.
+    A hook for agent sessions: refuses a Bash tool command that would hang on its input, that holds
+    a heredoc of over 60 lines, or, on Windows, that holds two backslashes in a row. Exit 2 refuses
+    the command before it runs and says why; exit 0 lets it run, and means only that this saw none
+    of the three. Exit 1 says on stderr that the tool call could not be read and was not checked;
+    the command still runs.
 
 .DESCRIPTION
     WHERE IT CAME FROM (grado-factorio-tools#352, #322 rulings 2 to 5). realistic-fusion-refreshed's
@@ -29,16 +29,16 @@
     WHAT IS REFUSED, each simple command of the line judged by itself. `cat` with no file operand,
     when nothing feeds it: no pipe into it, no `<`, no heredoc and no here-string. Python given `-`
     for its script, or given no script and no `-c` or `-m`, when nothing feeds it or when the LAST
-    thing redirected into it is /dev/null; an option that prints and exits (`--version`, `-V`,
-    `-h`, any option of two hyphens and a name, the launcher's `-0`) counts as a script. A pipe
-    feeds the command after it, on the same line or on the next. A pipe into a group, `| {` or
-    `| (`, is taken to feed every command after it, to the end of the whole command, the group's
-    end not being tracked.
+    thing redirected into it is /dev/null; an option that prints and exits (`--version`, `-V`, `-h`,
+    any option of two hyphens and a name, the launcher's `-0`) counts as a script. A pipe feeds the
+    command after it, on the same line or on the next. A pipe into a group, `| {` or `| (`, is taken
+    to feed every command after it, to the end of the whole command, the group's end not being
+    tracked.
 
     WHAT IS LET THROUGH ON PURPOSE. `<<` inside a quoted argument: quoted text is blanked before
     anything is looked for, so `echo "a << b"` holds no heredoc and no command of its own. A
-    here-string, `<<<`, which feeds a line and ends. A heredoc of $HEREDOC_LINES lines or fewer
-    that feeds the command; on Windows it is refused all the same when the command holds a pair of
+    here-string, `<<<`, which feeds a line and ends. A heredoc of $HEREDOC_LINES lines or fewer that
+    feeds the command; on Windows it is refused all the same when the command holds a pair of
     backslashes.
 
     A LONG HEREDOC IS REFUSED TOO (realistic-fusion-refreshed#666), though it does not hang: one
@@ -66,40 +66,39 @@
 
     So a pair becomes one and a lone backslash is kept, inside single quotes and a quoted heredoc
     alike, neither of which bash itself touches. A file written with the Write tool is not changed.
-    Where it happens, read on 2026-10-12: between the Windows command line and bash's arguments.
-    The command line of the bash process held both backslashes of `: 'MARK\\MARK'`, and its
+    Where it happens, read on 2026-10-12: between the Windows command line and bash's arguments. The
+    command line of the bash process held both backslashes of `: 'MARK\\MARK'`, and its
     /proc/$$/cmdline held one. anthropics/claude-code#85856 gives the cause: the command line is
     quoted by the Microsoft C runtime's rules and Git Bash decodes it by its own, so n backslashes
     arrive as ceil(n/2). The test is made on the command as sent and has no exemptions, so three
     shapes are refused though they would run as written: a pair directly before a double quote,
     which is not halved (`echo 'p\\"q'` printed `p\\"q`); a pair inside double quotes, which bash
-    halves itself, so the result is what any shell gives; and a pair in a `#` comment. Of 4 315
-    Bash tool commands in rf's transcripts on 2026-10-12, 58 held a pair, and one of the 58 had
-    its pairs only in the first shape. The PowerShell tool keeps a pair: `Write-Output 'Z\\Z'`
-    printed `Z\\Z`, so this passes every call whose `tool_name` is not `Bash`.
+    halves itself, so the result is what any shell gives; and a pair in a `#` comment. Of 4 315 Bash
+    tool commands in rf's transcripts on 2026-10-12, 58 held a pair, and one of the 58 had its pairs
+    only in the first shape. The PowerShell tool keeps a pair: `Write-Output 'Z\\Z'` printed `Z\\Z`,
+    so this passes every call whose `tool_name` is not `Bash`.
 
     IT IS OFF ON ANY OTHER PLATFORM. The pair is a reason only where $IsWindows is true; under WSL
     or on Linux nothing is halved. -SelfTest judges the cases with it on wherever it runs, so CI's
     Linux runner proves it too. NOTHING RETIRES THIS RULE BUT A PERSON. If Claude Code or Git Bash
-    stops halving, every refusal of a pair is a false one. Read anthropics/claude-code#85856
-    first. Then take this hook out of the settings for one command and run `echo 'Z\\Z'` as a Bash
-    tool command: `Z\Z` means the halving holds.
+    stops halving, every refusal of a pair is a false one. Read anthropics/claude-code#85856 first.
+    Then take this hook out of the settings for one command and run `echo 'Z\\Z'` as a Bash tool
+    command: `Z\Z` means the halving holds.
 
     HOW A CONSUMER WIRES IT. In its tracked .claude/settings.json, a PreToolUse hook on the two
     shell tools, matcher `Bash|PowerShell`, whose command is the first example below: a `case` on
     `cat`, `py`, `<<` and a backslash, since whatever is refused holds one of them. The tool call
     reaches sh as JSON, which writes a backslash of the command as `\\` but a quote as `\"` and a
-    line break as `\n`, so the arm is eight backslashes in quotes: halved, as the shell halves it
-    on Windows, four, a pair of the command's; not halved, eight, which a pair is not, and off
-    Windows a pair is no reason. The `case` reads only what follows `"tool_input"`: before it
-    stand the session's `cwd` and `transcript_path`, which on Windows are paths of `\\`. A
-    PowerShell tool call, which the script passes unread, exits before it. Each start of pwsh
-    took 1.7 to 4.9 s in five runs on 2026-11-11, and a wider arm, or one that read the paths,
-    started it on every call (PR #420's review follow-up). Where the
-    script is not there, the wired command lets the shell command run and prints JSON that tells
-    the agent it was not checked. It also git-ignores `.claude/refused-bash.log`, below; its
-    -SelfTest -Settings fails where git does not ignore that file. This repository wires it from
-    scripts/.
+    line break as `\n`, so the arm is eight backslashes in quotes: halved, as the shell halves it on
+    Windows, four, a pair of the command's; not halved, eight, which a pair is not, and off Windows
+    a pair is no reason. The `case` reads only what follows `"tool_input"`: before it stand the
+    session's `cwd` and `transcript_path`, which on Windows are paths of `\\`. A PowerShell tool
+    call, which the script passes unread, exits before it. Each start of pwsh took 1.7 to 4.9 s in
+    five runs on 2026-11-11, and a wider arm, or one that read the paths, started it on every call
+    (PR #420's review follow-up). Where the script is not there, the wired command lets the shell
+    command run and prints JSON that tells the agent it was not checked. It also git-ignores
+    `.claude/refused-bash.log`, below; its -SelfTest -Settings fails where git does not ignore that
+    file. This repository wires it from scripts/.
 
     WHAT IS KEPT (realistic-fusion-refreshed#660). Each refusal appends one line of JSON to
     `.claude/refused-bash.log` under $CLAUDE_PROJECT_DIR, the consumer's root (under this repository
@@ -109,19 +108,19 @@
     command let through writes nothing, so a false pass is not in it. A log that cannot be written
     is passed over, and the call is refused just the same.
 
-    WHAT IT CANNOT SEE. Any other reader: only `cat` and Python are known, the two that hung. A
-    bare `grep pattern`, `sort` or `jq .` waits the same way; add a reader here when one hangs,
-    with what counts as its file operand. A command inside double quotes, `"$(cat)"`, or handed to
+    WHAT IT CANNOT SEE. Any other reader: only `cat` and Python are known, the two that hung. A bare
+    `grep pattern`, `sort` or `jq .` waits the same way; add a reader here when one hangs, with what
+    counts as its file operand. A command inside double quotes, `"$(cat)"`, or handed to
     `bash -c '...'`: quoted text is blanked, and a heredoc there is not counted either, however
     long. Where a double-quoted span ends when it holds a `$(...)` with quotes of its own: it is
     taken to end at the first inner `"`, so the rest of such a line is read as commands, and a
-    heredoc body inside it with a line opening with `cat` or `python -` is a false refusal. A
-    shift inside arithmetic, `$(( 1 << 3 ))`, taken for a heredoc. A reader that is the first
-    command of a loop's body, straight after `do`, which is not judged; a later one is, and a
-    `cat` there is refused although the loop feeds it. A reader anywhere after a group that a pipe
-    fed. A reader behind a wrapper other than the few it skips, or behind a shell function;
-    `timeout` is skipped with its `-s` and `-k` values only. A command that hangs for any reason
-    other than its stdin. A person's own terminal: this is a session's hook.
+    heredoc body inside it with a line opening with `cat` or `python -` is a false refusal. A shift
+    inside arithmetic, `$(( 1 << 3 ))`, taken for a heredoc. A reader that is the first command of a
+    loop's body, straight after `do`, which is not judged; a later one is, and a `cat` there is
+    refused although the loop feeds it. A reader anywhere after a group that a pipe fed. A reader
+    behind a wrapper other than the few it skips, or behind a shell function; `timeout` is skipped
+    with its `-s` and `-k` values only. A command that hangs for any reason other than its stdin. A
+    person's own terminal: this is a session's hook.
 
     TO CHECK IT, run the second example below.
 
@@ -143,10 +142,10 @@
     one Git for Windows ships.
 
 .PARAMETER Settings
-    With -SelfTest: the .claude/settings.json whose PreToolUse command naming this script the
-    wired cases run, with that file's repository as the project. Defaults to this repository's
-    own. A consumer runs it on its own file to know its wiring still reaches the hook and its log
-    is ignored.
+    With -SelfTest: the .claude/settings.json whose PreToolUse command naming this script the wired
+    cases run, with that file's repository as the project. Defaults to this repository's own. A
+    consumer runs it on its own file to know its wiring still reaches the hook and its log is
+    ignored.
 
 .EXAMPLE
     The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json, as HOW A
@@ -185,9 +184,9 @@ $HEREDOC_LINES = 60
 $HEREDOC = [regex] '\G<<(-?)\s*(?:\\|([''"]))?([\w.-]+)(?(2)\2)'
 
 function ConvertTo-Blanked {
-    <#  $Command with each quoted span turned into the word Q, each heredoc into `<<H` with its
-        body dropped, and comments gone: what is left can be split on shell operators. Each
-        heredoc body's count of lines is added to $Bodies.  #>
+    <#  $Command with each quoted span turned into the word Q, each heredoc into `<<H` with its body
+        dropped, and comments gone: what is left can be split on shell operators. Each heredoc
+        body's count of lines is added to $Bodies.  #>
     param(
         [Parameter(Mandatory)] [AllowEmptyString()] [string] $Command,
         [Parameter(Mandatory)] [AllowEmptyCollection()] [System.Collections.Generic.List[int]] $Bodies
@@ -324,9 +323,9 @@ function Get-HangReason {
 }
 
 function Get-Refusal {
-    <#  Why the tool call $Call is refused, or nothing; a refusal is appended to $Log on the way.
-        A call whose tool_name is not Bash is let through, and one with none is read as Bash's.
-        A pair of backslashes is a reason only with -Windows, where one is halved.  #>
+    <#  Why the tool call $Call is refused, or nothing; a refusal is appended to $Log on the way. A
+        call whose tool_name is not Bash is let through, and one with none is read as Bash's. A pair
+        of backslashes is a reason only with -Windows, where one is halved.  #>
     param(
         [Parameter(Mandatory)] [object] $Call,
         [Parameter(Mandatory)] [string] $Log,

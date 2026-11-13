@@ -4,16 +4,16 @@
     comparing two prototypes, and printing a Markdown table. Dot-sourced; it runs nothing.
 
 .DESCRIPTION
-    A DUMP IS NOT CONVERTED WHOLE (grado-factorio-modpack#139). ConvertFrom-Json took 40 seconds
-    on the 164.4 MB dump of an overhaul pack (one run, 2026-10-12, Grado_ABCS on 2.0.77, pwsh
-    7.6.6; its output was not kept). Open-Dump parses the file with System.Text.Json, and
-    Get-DumpTable converts one prototype type to hashtables when a script asks for it.
+    A DUMP IS NOT CONVERTED WHOLE (grado-factorio-modpack#139). ConvertFrom-Json took 40 seconds on
+    the 164.4 MB dump of an overhaul pack (one run, 2026-10-12, Grado_ABCS on 2.0.77, pwsh 7.6.6;
+    its output was not kept). Open-Dump parses the file with System.Text.Json, and Get-DumpTable
+    converts one prototype type to hashtables when a script asks for it.
 
-    WHAT IT CANNOT SEE. Anything the dump does not hold: which mod made a prototype, and
-    anything a mod does at run time. A dump is data.raw after the last data stage.
+    WHAT IT CANNOT SEE. Anything the dump does not hold: which mod made a prototype, and anything a
+    mod does at run time. A dump is data.raw after the last data stage.
 
-    CHECKED ON 2.1.23 (#219, 2026-10-25) against the `Modding:` changes of 2.1.7: it reads no
-    field by name, so none of them reaches it. What its callers read is checked in each.
+    CHECKED ON 2.1.23 (#219, 2026-10-25) against the `Modding:` changes of 2.1.7: it reads no field
+    by name, so none of them reaches it. What its callers read is checked in each.
 #>
 
 Set-StrictMode -Version Latest
@@ -29,9 +29,9 @@ function Open-Dump {
 }
 
 function Get-DumpTable {
-    <#  Every prototype of the named types as one hashtable, name to prototype. A type the dump
-        does not have gives nothing. Two types sharing a name keep the first: ask for one type at
-        a time where that matters.  #>
+    <#  Every prototype of the named types as one hashtable, name to prototype. A type the dump does
+        not have gives nothing. Two types sharing a name keep the first: ask for one type at a time
+        where that matters.  #>
     param([Parameter(Mandatory)] [System.Text.Json.JsonDocument] $Dump, [Parameter(Mandatory)] [string[]] $Type)
     # Ordinal, as the game tells Ab from ab and a plain hashtable does not.
     $table = [hashtable]::new([StringComparer]::Ordinal)
@@ -57,8 +57,8 @@ function Get-DumpTypes {
 }
 
 function Get-DumpIndex {
-    <#  Every prototype's JSON text, as type, then name. Text and not tables, so that two dumps
-        are compared without converting what is the same in both.  #>
+    <#  Every prototype's JSON text, as type, then name. Text and not tables, so that two dumps are
+        compared without converting what is the same in both.  #>
     param([Parameter(Mandatory)] [System.Text.Json.JsonDocument] $Dump)
     $index = @{}
     foreach ($type in $Dump.RootElement.EnumerateObject()) {
@@ -76,8 +76,8 @@ function ConvertFrom-DumpElement {
 }
 
 function Get-List {
-    <#  A list read from a dump, one element at a time. An empty Lua table is dumped as {}, so
-        an empty list arrives as an empty dictionary, and gives nothing here.  #>
+    <#  A list read from a dump, one element at a time. An empty Lua table is dumped as {}, so an
+        empty list arrives as an empty dictionary, and gives nothing here.  #>
     param($Value)
     if ($null -ne $Value -and -not ($Value -is [Collections.IDictionary] -and -not $Value.Count)) { $Value }
 }
@@ -109,8 +109,8 @@ function ConvertTo-CanonicalText {
 }
 
 function Compare-Prototype {
-    <#  The top-level fields in which two prototypes differ, sorted. Nothing when they are the
-        same field for field.  #>
+    <#  The top-level fields in which two prototypes differ, sorted. Nothing when they are the same
+        field for field.  #>
     param([Parameter(Mandatory)] [Collections.IDictionary] $Left, [Parameter(Mandatory)] [Collections.IDictionary] $Right)
     $fields = [string[]] @(@($Left.Keys) + @($Right.Keys) | Select-Object -Unique)
     [Array]::Sort($fields, [StringComparer]::Ordinal)
@@ -153,8 +153,8 @@ function Format-Names {
 }
 
 function Get-DumpLabel {
-    <#  What a table calls a dump: its file's name as get-dump.ps1 gives it, less the checksum
-        and the id, in a code span.  #>
+    <#  What a table calls a dump: its file's name as get-dump.ps1 gives it, less the checksum and
+        the id, in a code span.  #>
     param([Parameter(Mandatory)] [string] $Path)
     '`' + ((Split-Path $Path -LeafBase) -replace '-\d+-[0-9a-f]{12}$') + '`'
 }

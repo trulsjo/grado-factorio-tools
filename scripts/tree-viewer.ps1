@@ -6,16 +6,16 @@
 
 .DESCRIPTION
     A PROBE, NOT A CHECK. It asserts nothing about the tree it draws. Exit 0 means the set loaded,
-    three Factorio runs finished and a page was written: never that the tree looked right or that
-    an overlap was welcome. It does not belong in a check sweep. Its purpose is to let a person
-    see how the trees of several mods interleave, and judge overlaps of meaning that no pass or
-    fail can see.
+    three Factorio runs finished and a page was written: never that the tree looked right or that an
+    overlap was welcome. It does not belong in a check sweep. Its purpose is to let a person see how
+    the trees of several mods interleave, and judge overlaps of meaning that no pass or fail can
+    see.
 
     WHERE IT CAME FROM. realistic-fusion-refreshed's scripts/tree-viewer.ps1, with
-    tree-viewer.template.html and tree-layout-probe.js, at c48fadf (grado-factorio-tools#101).
-    There it loaded that repository's own mods unless told not to, and took them as the focus.
-    Here the mods are arguments and there is no focus unless one is named. The tickets and
-    research notes its comments cite are that repository's, and are named as such.
+    tree-viewer.template.html and tree-layout-probe.js, at c48fadf (grado-factorio-tools#101). There
+    it loaded that repository's own mods unless told not to, and took them as the focus. Here the
+    mods are arguments and there is no focus unless one is named. The tickets and research notes its
+    comments cite are that repository's, and are named as such.
 
     THE MODS ARE WHAT load-harness.ps1 TAKES: mod directories, mod zips, or directories of them,
     such as a cache fetch-mods.ps1 filled. They are loaded in an isolated mod directory through
@@ -31,48 +31,48 @@
                                  prototypes.get_history() for every technology, recipe, item,
                                  fluid and entity and writes the histories to script-output
 
-    Attribution is the engine's own PrototypeHistory: a node is coloured by `created`, the
-    `changed` chain rides in its detail panel, and a tick marks prototypes changed by a mod other
-    than their creator. Measured semantics (realistic-fusion-refreshed#165, in its
+    Attribution is the engine's own PrototypeHistory: a node is coloured by `created`, the `changed`
+    chain rides in its detail panel, and a tick marks prototypes changed by a mod other than their
+    creator. Measured semantics (realistic-fusion-refreshed#165, in its
     docs/research/get-history-semantics.md): the original mod stays `created` under wholesale
     redefinition, and `changed` records value changes only. If the set cannot reach the runtime
-    stage the run FAILS LOUDLY and emits nothing -- a set that cannot create a map is a finding,
-    and the crash log is it.
+    stage the run FAILS LOUDLY and emits nothing -- a set that cannot create a map is a finding, and
+    the crash log is it.
 
     Overlap candidates follow a three-tier heuristic (realistic-fusion-refreshed#160) --
     localized-name equality, then token overlap after stopwords, then prototype-name stems after
     prefix stripping -- computed for things (items, fluids, entities) between the focus mods and
-    everything else. False positives are expected and fine: the viewer surfaces candidates, a
-    human judges. Base-game pairs are computed, shipped flagged, and hidden behind a viewer toggle.
+    everything else. False positives are expected and fine: the viewer surfaces candidates, a human
+    judges. Base-game pairs are computed, shipped flagged, and hidden behind a viewer toggle.
 
-    Read "localized-name" there with one caveat. Some dumped names are not names: an engine
-    "Unknown key" or "Unknown control sequence" left inside the resolved text, or a placeholder
-    another mod ships deliberately -- Angels gives [item-name] angels-void the literal value
-    "Something went wrong" and points 334 of its recipes at it. Get-LocaleFailure in
-    load-harness-lib.ps1 holds the list and the measurements behind it. A thing in that state is
-    labelled by its PROTOTYPE name instead, so the first two tiers then compare that name rather
-    than a localized one. The run reports how many the set failed to localize; the number is the
-    mods' own localisation, not this tool's, and nothing here tries to fix it. What is fixed is
-    that no label is ever one of those strings.
+    Read "localized-name" there with one caveat. Some dumped names are not names: an engine "Unknown
+    key" or "Unknown control sequence" left inside the resolved text, or a placeholder another mod
+    ships deliberately -- Angels gives [item-name] angels-void the literal value "Something went
+    wrong" and points 334 of its recipes at it. Get-LocaleFailure in load-harness-lib.ps1 holds the
+    list and the measurements behind it. A thing in that state is labelled by its PROTOTYPE name
+    instead, so the first two tiers then compare that name rather than a localized one. The run
+    reports how many the set failed to localize; the number is the mods' own localisation, not this
+    tool's, and nothing here tries to fix it. What is fixed is that no label is ever one of those
+    strings.
 
     Researchability rides along the same way: each technology carries its `enabled`, `hidden` and
-    `visible_when_disabled` state, and the ones no player can research are kept off the canvas
-    until a toggle reveals them, dashed and dimmed. They are flagged, never dropped -- a dead base
-    tech another mod left standing is a finding about how the set interleaves. An unlock or bonus
-    whose effect is `hidden` rides along the same way, behind the same toggle (#218).
+    `visible_when_disabled` state, and the ones no player can research are kept off the canvas until
+    a toggle reveals them, dashed and dimmed. They are flagged, never dropped -- a dead base tech
+    another mod left standing is a finding about how the set interleaves. An unlock or bonus whose
+    effect is `hidden` rides along the same way, behind the same toggle (#218).
 
     The viewer itself is tree-viewer.template.html: dagre layered cards, top-down, d3 pan/zoom,
     detail on the card near and counter-scaled badges far, click for a side panel with
     prerequisite/dependent links highlighted. The libraries load from a CDN -- the accepted
     trade-off; the output needs network to render. Two CDNs: d3 from cdnjs, dagre from jsdelivr,
-    because cdnjs's dagre stops at 0.8.5 and the maintained package is not on cdnjs at any
-    version. The template's own comment carries the rest.
+    because cdnjs's dagre stops at 0.8.5 and the maintained package is not on cdnjs at any version.
+    The template's own comment carries the rest.
 
-    WHAT IT CANNOT SEE. Whether the page renders: that takes a browser and the network, and
-    nothing here opens one. Whether a label is right, beyond its not being one of the strings
-    above. A mod handed over as a zip is named in the legend by its internal name, because only a
-    directory's info.json is read for a title. And -SelfTest reads the dataset in the page it
-    wrote; it draws nothing.
+    WHAT IT CANNOT SEE. Whether the page renders: that takes a browser and the network, and nothing
+    here opens one. Whether a label is right, beyond its not being one of the strings above. A mod
+    handed over as a zip is named in the legend by its internal name, because only a directory's
+    info.json is read for a title. And -SelfTest reads the dataset in the page it wrote; it draws
+    nothing.
 
     CHECKED ON 2.1.23 (#219, 2026-10-25): what it reads, against the `Modding:` changes of 2.1.7,
     and a run on a dump of Space Age with Quality. An effect's `hidden` is #218's.
@@ -81,25 +81,25 @@
     The mods to load: mod directories, mod zips, or directories of them.
 
 .PARAMETER FactorioExe
-    Path to Factorio.exe. Defaults to $env:FACTORIO_EXE, then the Steam install on the machine
-    the harness was written on.
+    Path to Factorio.exe. Defaults to $env:FACTORIO_EXE, then the Steam install on the machine the
+    harness was written on.
 
 .PARAMETER With
     Bundled mods to enable, e.g. -With space-age. Several are separated by commas.
 
 .PARAMETER FocusMod
-    The mod(s), by internal name, whose things form the LEFT side of every overlap pair. A list,
-    not one name, because engine attribution splits a project into its real creators: a core mod
-    defines the fluids a main mod's technologies unlock. A name that is no mod of the set is
-    dropped with a warning. With none named, or none left, overlap analysis is off and the viewer
-    says so. Several are separated by commas.
+    The mod(s), by internal name, whose things form the LEFT side of every overlap pair. A list, not
+    one name, because engine attribution splits a project into its real creators: a core mod defines
+    the fluids a main mod's technologies unlock. A name that is no mod of the set is dropped with a
+    warning. With none named, or none left, overlap analysis is off and the viewer says so. Several
+    are separated by commas.
 
 .PARAMETER OutName
     Basename of the emitted HTML, and the title the viewer shows. Default: tech-tree.
 
 .PARAMETER OutDirectory
-    Where the page is written. Default: tree-viewer-out in the current directory, which a
-    repository that runs this will want git to ignore.
+    Where the page is written. Default: tree-viewer-out in the current directory, which a repository
+    that runs this will want git to ignore.
 
 .PARAMETER KeepTemp
     Keep the dumps, the exporter mod and the captured output for inspection.

@@ -1,25 +1,25 @@
 #Requires -Version 7
 <#
     The one rule for the breaking commits in a pin move's range (grado-factorio-tools#255):
-    pin-measure.ps1 loads it to write breaking.txt, and grado-factorio-modpack's mentions.ps1 is
-    to load it from its submodule. Dot-source it; it has no -SelfTest of its own: pin-measure.ps1's
+    pin-measure.ps1 loads it to write breaking.txt, and grado-factorio-modpack's mentions.ps1 is to
+    load it from its submodule. Dot-source it; it has no -SelfTest of its own: pin-measure.ps1's
     holds both functions.
 
     THE RULE. A commit is a breaking commit when its subject has a `!` before its first colon, or
-    its body has a line starting `BREAKING CHANGE:` or `BREAKING-CHANGE:`, in upper case. Its
-    footer runs from that line to the next blank line or the next trailer line, a line starting
-    `<Token>: ` as `Co-Authored-By: ` does, which is not part of it. A body with two such lines
-    has both footers, in order.
+    its body has a line starting `BREAKING CHANGE:` or `BREAKING-CHANGE:`, in upper case. Its footer
+    runs from that line to the next blank line or the next trailer line, a line starting `<Token>: `
+    as `Co-Authored-By: ` does, which is not part of it. A body with two such lines has both
+    footers, in order.
 
-    Get-BreakingCommit -Repo <path> -Old <commit> -New <commit> returns, for each breaking commit
-    in Old..New and then each in New..Old, one object with four keys:
+    Get-BreakingCommit -Repo <path> -Old <commit> -New <commit> returns, for each breaking commit in
+    Old..New and then each in New..Old, one object with four keys:
     - Hash: the short hash, as git log's %h prints it;
     - Subject: the subject line;
     - Footer: the footer's lines joined with a newline, or '' where there is none;
     - Dropped: $false for a commit in Old..New, $true for one in New..Old, which a pin moved back
       undoes.
-    Each half is in git log's order, newest first. A pin moved forward has no dropped commit; a
-    pin moved back has nothing in Old..New. It throws when git cannot read the range.
+    Each half is in git log's order, newest first. A pin moved forward has no dropped commit; a pin
+    moved back has nothing in Old..New. It throws when git cannot read the range.
 
     Format-BreakingCommit turns that list into lines of text, for breaking.txt:
 
@@ -36,8 +36,8 @@
     asks for the `!` and a footer together (#282), so a commit it passed has both or neither, but
     for those it does not ask: a subject it skips, as `Revert "..."` of a `!` commit, which this
     lists with no footer, or `Merge ...`, and a commit it never read, as one made with its hook
-    skipped. Either may carry one alone. And a footer written in lower case, which the rule does
-    not read.
+    skipped. Either may carry one alone. And a footer written in lower case, which the rule does not
+    read.
 #>
 
 # Each breaking commit of $Repo in $Range, as Get-BreakingCommit returns it, with $Dropped.

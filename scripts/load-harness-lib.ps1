@@ -13,28 +13,27 @@
 
     load-harness.ps1 is the same thing as a command, for a caller with no checks of its own.
 
-    WHERE IT CAME FROM. realistic-fusion-refreshed's load-check.ps1 and factorio-lib.ps1, at
-    19e2d92 (grado-factorio-tools#16). The harness moved and the invariants did not: everything
-    here is what that script did around its checks -- build an isolated mod directory, junction or
-    copy the mods in, write the mod list, create a throwaway map, report which way it went. The
-    functions taken from factorio-lib.ps1 keep their names and code, with some doc comments
-    trimmed to what is true outside that repository; New-ModJunctions takes
-    source paths rather than a repository root, and the harness functions are new.
+    WHERE IT CAME FROM. realistic-fusion-refreshed's load-check.ps1 and factorio-lib.ps1, at 19e2d92
+    (grado-factorio-tools#16). The harness moved and the invariants did not: everything here is what
+    that script did around its checks -- build an isolated mod directory, junction or copy the mods
+    in, write the mod list, create a throwaway map, report which way it went. The functions taken
+    from factorio-lib.ps1 keep their names and code, with some doc comments trimmed to what is true
+    outside that repository; New-ModJunctions takes source paths rather than a repository root, and
+    the harness functions are new.
 
     FIVE MORE CAME LATER, from that repository's factorio-lib.ps1 at c48fadf
     (grado-factorio-tools#100), for the scripts that take a dump and read it: Get-ModLinks,
     Invoke-FactorioStep and Get-LocaleFailure are here with their names and code, and
-    Invoke-SelfTestHalves and its canary, Test-SelfTestRunner, are in self-test-halves.ps1,
-    which this file dot-sources. A caller with
-    paths to mods wants New-LoadHarness, which needs no Get-ModLinks; that one is for a caller
-    that builds its own mod directory with New-ModJunctions.
+    Invoke-SelfTestHalves and its canary, Test-SelfTestRunner, are in self-test-halves.ps1, which
+    this file dot-sources. A caller with paths to mods wants New-LoadHarness, which needs no
+    Get-ModLinks; that one is for a caller that builds its own mod directory with New-ModJunctions.
 
-    TWO MORE CAME FROM THAT FILE AT 20422ea (grado-factorio-tools#349 and #351, #321 rulings 1
-    and 4), read 2026-11-06: Find-MissingAssets, with its name and code, and Stop-LaunchedGame,
-    which kept its name and its two-minute wait and took from true-nukes-refreshed's
+    TWO MORE CAME FROM THAT FILE AT 20422ea (grado-factorio-tools#349 and #351, #321 rulings 1 and
+    4), read 2026-11-06: Find-MissingAssets, with its name and code, and Stop-LaunchedGame, which
+    kept its name and its two-minute wait and took from true-nukes-refreshed's
     scripts/port-probe.ps1 at b0842be the rest of its cleanup: a game that exits just before the
-    kill is no error, and the harness is removed after the wait and only warns, so it never
-    replaces the caller's own error (Truls's ruling on #351).
+    kill is no error, and the harness is removed after the wait and only warns, so it never replaces
+    the caller's own error (Truls's ruling on #351).
 
     IT NEVER TOUCHES THE PLAYER'S GAME. Mods go into a mod directory under a temp directory, and
     every run gets a write-data directory of its own there (Invoke-Factorio), so the player's mods,
@@ -46,8 +45,8 @@
     sprites or sounds and runs no ticks. Invoke-HarnessLoad reports Loaded and the game's error
     text; what a pass should also require is the caller's to check.
 
-    PowerShell 7 is required: 5.1's Remove-Item -Recurse follows junctions instead of skipping
-    them, which would delete a mod's source through the link. Junctions make this Windows-only.
+    PowerShell 7 is required: 5.1's Remove-Item -Recurse follows junctions instead of skipping them,
+    which would delete a mod's source through the link. Junctions make this Windows-only.
 #>
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -80,12 +79,12 @@ function ConvertTo-NativeArgument {
     <#  Quote one argument for a native Windows command line.
 
         Start-Process -ArgumentList joins an array with spaces and quotes nothing, so a path
-        containing a space arrives as several arguments. "C:\Users\Jo Smith\mods" reaches the exe
-        as "C:\Users\Jo" plus a stray "Smith\mods" -- which means Factorio running against a mod
+        containing a space arrives as several arguments. "C:\Users\Jo Smith\mods" reaches the exe as
+        "C:\Users\Jo" plus a stray "Smith\mods" -- which means Factorio running against a mod
         directory that has none of the junctions in it.
 
-        Windows parses backslashes literally except where they precede a quote, so a run of them
-        at the end of the value has to be doubled before the closing quote or it escapes it.  #>
+        Windows parses backslashes literally except where they precede a quote, so a run of them at
+        the end of the value has to be doubled before the closing quote or it escapes it.  #>
     param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Value)
 
     $escaped = $Value -replace '(\\+)$', '$1$1'
@@ -96,9 +95,9 @@ function ConvertTo-NativeArgument {
 function Invoke-Factorio {
     <#  Run Factorio headless against a mod directory, capturing both streams to files.
 
-        Returns the exit code and the two capture paths; it deliberately decides nothing about
-        what a failure means, because callers disagree -- a load check treats a non-zero exit as
-        the answer it went looking for, a bench treats it as the run being over.
+        Returns the exit code and the two capture paths; it deliberately decides nothing about what
+        a failure means, because callers disagree -- a load check treats a non-zero exit as the
+        answer it went looking for, a bench treats it as the run being over.
 
         Runs in its own write-data directory, so it works while the game is open -- see below.
 
@@ -170,8 +169,8 @@ function Invoke-FactorioStep {
     <#  One Factorio run the caller cannot continue without: a non-zero exit is fatal rather than a
         result, and the end of both captured streams is printed before it throws.
 
-        Invoke-Factorio deliberately decides nothing about what a failure means. A caller that
-        takes a dump or runs an exporter wants exactly this.
+        Invoke-Factorio deliberately decides nothing about what a failure means. A caller that takes
+        a dump or runs an exporter wants exactly this.
 
         Returns the path to the captured stdout.  #>
     param(
@@ -194,9 +193,9 @@ function Invoke-FactorioStep {
 function Remove-TempDirectory {
     <#  Delete a temporary directory, retrying briefly.
 
-        Factorio can hold a save open for a moment after exiting, so a single Remove-Item loses
-        the race often enough to leak the directory silently. Always call Remove-ModJunctions
-        first: under PowerShell 5.1 this would follow junctions rather than skip them.  #>
+        Factorio can hold a save open for a moment after exiting, so a single Remove-Item loses the
+        race often enough to leak the directory silently. Always call Remove-ModJunctions first:
+        under PowerShell 5.1 this would follow junctions rather than skip them.  #>
     param(
         [Parameter(Mandatory)] [string] $Path,
         [string] $Label = 'cleanup'
@@ -214,8 +213,8 @@ function Remove-TempDirectory {
 function Get-BundledMods {
     <#  Mods shipped inside the game's data/ directory -- space-age, elevated-rails, quality,
         recycler and anything a future version adds. They are present whatever --mod-directory
-        points at, so they load unless explicitly disabled. Discovered rather than hardcoded, so
-        the list cannot go stale. base and core are not optional and are excluded.
+        points at, so they load unless explicitly disabled. Discovered rather than hardcoded, so the
+        list cannot go stale. base and core are not optional and are excluded.
 
         Returns a hashtable of mod name -> parsed info.json.  #>
     param([Parameter(Mandatory)] [string] $FactorioExe)
@@ -230,24 +229,23 @@ function Get-BundledMods {
 }
 
 function Resolve-BundledSelection {
-    <#  Canonicalise the requested names and close over the dependencies the game enables with
-        them: required, `~` and `+`.
+    <#  Canonicalise the requested names and close over the dependencies the game enables with them:
+        required, `~` and `+`.
 
         Both halves matter. space-age hard-depends on elevated-rails and recycler (2.1.23), so
-        enabling it alone writes a mod-list whose dependencies are explicitly disabled --
-        Factorio then fails on the missing dependency and it reads as the mods under test being
-        broken. And an unknown
-        name must be rejected rather than ignored, or a typo produces a base-only run that gets
-        reported as an expansion pass.
+        enabling it alone writes a mod-list whose dependencies are explicitly disabled -- Factorio
+        then fails on the missing dependency and it reads as the mods under test being broken. And
+        an unknown name must be rejected rather than ignored, or a typo produces a base-only run
+        that gets reported as an expansion pass.
 
         THE PREFIXES are those of the 2.1.23 page of the mod structure
-        (https://lua-api.factorio.com/2.1.23/auxiliary/mod-structure.html). `?`, `(?)` and `!`
-        are not followed. `~` and `+` are. A `+` mod is "optional but recommended" and "gets
-        enabled by default but can be turned off" (the 2.1.23 changelog, data/changelog.txt line
-        759, under 2.1.7), so `-With space-age` enables quality, which space-age declares
-        `+ quality >= 2.1.0` (Truls, 2026-10-26, #208). A run for a player who turned it off
-        disables it: see Write-HarnessModList. A prefix Factorio does not define is read as part
-        of the name, which then names no bundled mod and is not followed.
+        (https://lua-api.factorio.com/2.1.23/auxiliary/mod-structure.html). `?`, `(?)` and `!` are
+        not followed. `~` and `+` are. A `+` mod is "optional but recommended" and "gets enabled by
+        default but can be turned off" (the 2.1.23 changelog, data/changelog.txt line 759, under
+        2.1.7), so `-With space-age` enables quality, which space-age declares `+ quality >= 2.1.0`
+        (Truls, 2026-10-26, #208). A run for a player who turned it off disables it: see
+        Write-HarnessModList. A prefix Factorio does not define is read as part of the name, which
+        then names no bundled mod and is not followed.
 
         CASE MATTERS HERE and is why this is one implementation. PowerShell's -in, -notin and its
         hashtables are case-insensitive, while HashSet[string] is ordinal, so an uncanonicalised
@@ -295,10 +293,10 @@ function Write-ModList {
     <#  Write mod-list.json enabling base, the given mods, and exactly the bundled mods in
         $EnabledBundled -- every other bundled mod is written explicitly disabled.
 
-        OMITTING A MOD DOES NOT KEEP IT OUT, and that is the whole reason $Disabled exists.
-        Factorio AUTO-ENABLES a mod present in the mod directory but absent from mod-list.json, so
-        a list naming only some of what is on disk loads all of it. Name what must stay out; do not
-        merely leave it unnamed.  #>
+        OMITTING A MOD DOES NOT KEEP IT OUT, and that is the whole reason $Disabled exists. Factorio
+        AUTO-ENABLES a mod present in the mod directory but absent from mod-list.json, so a list
+        naming only some of what is on disk loads all of it. Name what must stay out; do not merely
+        leave it unnamed.  #>
     param(
         [Parameter(Mandatory)] [string]    $ModDirectory,
         [Parameter(Mandatory)] [hashtable] $Bundled,
@@ -327,12 +325,12 @@ function Write-ModList {
 
 function Write-HarnessModList {
     <#  mod-list.json for a run of $Harness: every harness mod enabled but those $Disabled names,
-        and the bundled mods New-LoadHarness enabled, less any $Disabled names in exact case
-        (#208). So `-With space-age` with quality disabled stands for a player who turned
-        Quality off, and Write-ModList writes quality once, disabled. A harness mod's name is
-        matched in any case, as before. A name that is neither is passed over here; get-dump.ps1
-        refuses it. What the game does when a mod it needs is disabled is the game's: a disabled
-        `~` or bare dependency of an enabled bundled mod is not refused here.  #>
+        and the bundled mods New-LoadHarness enabled, less any $Disabled names in exact case (#208).
+        So `-With space-age` with quality disabled stands for a player who turned Quality off, and
+        Write-ModList writes quality once, disabled. A harness mod's name is matched in any case, as
+        before. A name that is neither is passed over here; get-dump.ps1 refuses it. What the game
+        does when a mod it needs is disabled is the game's: a disabled `~` or bare dependency of an
+        enabled bundled mod is not refused here.  #>
     param([Parameter(Mandatory)] [object] $Harness, [string[]] $Disabled = @())
 
     Write-ModList -ModDirectory $Harness.ModDirectory -Bundled $Harness.Bundled `
@@ -387,8 +385,8 @@ function New-ModJunctions {
 
 function Remove-ModJunctions {
     <#  Delete the junction entries themselves. Always call this before removing a directory that
-        contains them: PowerShell 5.1's Remove-Item -Recurse follows junctions rather than
-        skipping them, and would delete the source through the link.  #>
+        contains them: PowerShell 5.1's Remove-Item -Recurse follows junctions rather than skipping
+        them, and would delete the source through the link.  #>
     param([Parameter(Mandatory)] [string] $ModDirectory)
 
     Get-ChildItem -Path $ModDirectory -Directory -ErrorAction SilentlyContinue |
@@ -463,8 +461,8 @@ function Get-HarnessMods {
         An empty directory is an error, not an empty set: a load of nothing would otherwise be
         reported as a pass for mods that were never loaded. So is one name found twice.
 
-        An info.json that Read-ModInfo in mod-info.ps1 refuses is refused here, naming its path
-        -- see WHAT IT REFUSES BEFORE THE GAME RUNS in load-harness.ps1.  #>
+        An info.json that Read-ModInfo in mod-info.ps1 refuses is refused here, naming its path --
+        see WHAT IT REFUSES BEFORE THE GAME RUNS in load-harness.ps1.  #>
     param([Parameter(Mandatory)] [string[]] $Path)
 
     $readInfo = {
@@ -550,9 +548,9 @@ function New-LoadHarness {
 }
 
 function Get-FactorioErrorText {
-    <#  The game's own account of why a run failed, out of its captured stdout: from the first
-        line Factorio logs as an Error to the end, which is where it prints the mod, the
-        prototype and the reason. Empty when it logged no error.  #>
+    <#  The game's own account of why a run failed, out of its captured stdout: from the first line
+        Factorio logs as an Error to the end, which is where it prints the mod, the prototype and
+        the reason. Empty when it logged no error.  #>
     param([Parameter(Mandatory)] [object] $Result)
 
     if (-not (Test-Path -LiteralPath $Result.OutFile)) { return @() }
@@ -564,9 +562,9 @@ function Get-FactorioErrorText {
 }
 
 function Invoke-HarnessLoad {
-    <#  Enable every harness mod and the bundled mods (less -Disabled), create a throwaway map,
-        and say whether it loaded. Creating a map runs every mod's on_init, so a mod that refuses
-        itself at start-up fails here as well as one whose prototypes do not validate.
+    <#  Enable every harness mod and the bundled mods (less -Disabled), create a throwaway map, and
+        say whether it loaded. Creating a map runs every mod's on_init, so a mod that refuses itself
+        at start-up fails here as well as one whose prototypes do not validate.
 
         Loaded means Factorio exited 0 AND wrote the save: "exit 0 but no save" is a failure.
         ErrorText is Get-FactorioErrorText's, for a failed load.  #>
@@ -596,8 +594,8 @@ function Invoke-HarnessLoad {
 
 function Invoke-HarnessDump {
     <#  Run --dump-data with every harness mod and the bundled mods enabled (less -Disabled) and
-        return the path of the dump, kept aside under -Tag.
-        Throws if Factorio fails or writes no dump.
+        return the path of the dump, kept aside under -Tag. Throws if Factorio fails or writes no
+        dump.
 
         THE DUMP PATH IS DELETED FIRST, NOT MERELY OVERWRITTEN. Every dump in a run writes the one
         path, so a run that exits 0 without writing would leave the PREVIOUS dump there to be read
@@ -625,9 +623,9 @@ function Invoke-HarnessDump {
 }
 
 function Remove-LoadHarness {
-    <#  Junctions first, always -- even with -Keep: leaving links to a mod's source in %TEMP%
-        hands a delete-through-the-link hazard to whatever cleans it up later. Then the temp
-        directory, unless -Keep.  #>
+    <#  Junctions first, always -- even with -Keep: leaving links to a mod's source in %TEMP% hands
+        a delete-through-the-link hazard to whatever cleans it up later. Then the temp directory,
+        unless -Keep.  #>
     param([Parameter(Mandatory)] [object] $Harness, [switch] $Keep)
 
     Remove-ModJunctions -ModDirectory $Harness.ModDirectory
@@ -636,28 +634,28 @@ function Remove-LoadHarness {
 }
 
 function Stop-LaunchedGame {
-    <#  Kill a game a caller launched with Start-Process, wait until it has really gone, then
-        remove -Harness, junctions first: the order is kill, wait, junctions, the directory. For
-        the finally block of every run that opens a game. Without -Harness it stops the game
-        alone, for a caller that cleans up its own directories after it.
+    <#  Kill a game a caller launched with Start-Process, wait until it has really gone, then remove
+        -Harness, junctions first: the order is kill, wait, junctions, the directory. For the
+        finally block of every run that opens a game. Without -Harness it stops the game alone, for
+        a caller that cleans up its own directories after it.
 
-        A KILLED GAME IS NOT GONE WHEN Kill() RETURNS (realistic-fusion-refreshed#467), and until
-        it has gone it holds write-data/.lock, the log and the run's stdout, so the directory's
-        removal loses and it stays in %TEMP%. Measured on 2.0.77 on 2026-09-28: one run on a
-        ten-second wait left its launch, run-stdout.txt and write-data behind; in the seven that
-        were timed the game took between 0.3 and 13.0 s to exit after the kill. So it waits two
-        minutes, and past them warns and goes on: the junctions go, and the directory the game
-        still holds stays, named in Remove-TempDirectory's warning.
+        A KILLED GAME IS NOT GONE WHEN Kill() RETURNS (realistic-fusion-refreshed#467), and until it
+        has gone it holds write-data/.lock, the log and the run's stdout, so the directory's removal
+        loses and it stays in %TEMP%. Measured on 2.0.77 on 2026-09-28: one run on a ten-second wait
+        left its launch, run-stdout.txt and write-data behind; in the seven that were timed the game
+        took between 0.3 and 13.0 s to exit after the kill. So it waits two minutes, and past them
+        warns and goes on: the junctions go, and the directory the game still holds stays, named in
+        Remove-TempDirectory's warning.
 
         A game that exits between the check and the kill is not an error; a kill that fails on a
-        game still running is thrown, after the harness is removed. The removal only warns when
-        it fails, -WarningAction Continue, so a caller's $WarningPreference = 'Stop' cannot turn
-        it into an error that replaces the caller's own (true-nukes-refreshed#61). -Keep keeps
-        the directory, never the junctions.
+        game still running is thrown, after the harness is removed. The removal only warns when it
+        fails, -WarningAction Continue, so a caller's $WarningPreference = 'Stop' cannot turn it
+        into an error that replaces the caller's own (true-nukes-refreshed#61). -Keep keeps the
+        directory, never the junctions.
 
-        -Process is a Process, or anything with its HasExited, Id, Kill() and WaitForExit(int):
-        the self-test passes stand-ins whose kill fails or whose exit never comes, which no real
-        process does on demand.  #>
+        -Process is a Process, or anything with its HasExited, Id, Kill() and WaitForExit(int): the
+        self-test passes stand-ins whose kill fails or whose exit never comes, which no real process
+        does on demand.  #>
     param(
         [object] $Process,
         [Parameter(Mandatory)] [string] $Label,
@@ -686,25 +684,25 @@ function Stop-LaunchedGame {
 }
 
 function Find-MissingAssets {
-    <#  Every __mod__/... .png or .ogg the loaded prototypes name that is not on disk, as
-        @{ Reference; Mod }, sorted by Reference.
+    <#  Every __mod__/... .png or .ogg the loaded prototypes name that is not on disk, as @{
+        Reference; Mod }, sorted by Reference.
 
         Factorio will not say. A headless run loads no sprites, so --create validates a prototype
-        that names an icon without ever opening the file, and exits 0; the player's game opens
-        it, fails, and refuses to start: "Failed to load mods: File
+        that names an icon without ever opening the file, and exits 0; the player's game opens it,
+        fails, and refuses to start: "Failed to load mods: File
         __base__/graphics/icons/heat-exchanger.png not found", which is how
         realistic-fusion-refreshed found it, by hand, after every automated check had passed.
 
         It reads a --dump-data JSON, Invoke-HarnessDump's, not the Lua source. Its first version
-        scanned source text for literal "__base__/..." strings, which worked only while every
-        path was a literal: prototypes build icon paths by joining strings
-        (ENTITY .. name .. ".png"), and a scan of source sees none of them. The dump holds the
-        paths as the game resolved them, so joins, loops and helper functions are all covered.
+        scanned source text for literal "__base__/..." strings, which worked only while every path
+        was a literal: prototypes build icon paths by joining strings (ENTITY .. name .. ".png"),
+        and a scan of source sees none of them. The dump holds the paths as the game resolved them,
+        so joins, loops and helper functions are all covered.
 
         Walked as an object graph rather than scanned as text, for one reason: a sprite that
-        declares `stripes` keeps a `filename` beside them that the engine never opens. Vanilla
-        has one: big-artillery-explosion names hr-bigass-explosion-36f.png, which does not exist,
-        while its two stripes name the files that do.
+        declares `stripes` keeps a `filename` beside them that the engine never opens. Vanilla has
+        one: big-artillery-explosion names hr-bigass-explosion-36f.png, which does not exist, while
+        its two stripes name the files that do.
 
         -DataDir is the game's data directory, Get-FactorioDataDirectory's, where base and core
         live. -ModDirectories maps a mod name to where its files are on disk. A path of any other

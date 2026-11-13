@@ -1,39 +1,39 @@
 <#
 .SYNOPSIS
     Reads each script under the paths it is given and fails on a comment-based help block that
-    PowerShell does not read, on a #Requires line it reads as help text, and on a script that
-    does not parse. Exit 0 means every help block in every *.ps1 there is help PowerShell reads.
+    PowerShell does not read, on a #Requires line it reads as help text, and on a script that does
+    not parse. Exit 0 means every help block in every *.ps1 there is help PowerShell reads.
 
 .DESCRIPTION
-    WHY (grado-factorio-tools#342, #316 rulings 1 and 5). When PowerShell cannot read a help
-    block it drops it without a word, and Get-Help shows only the syntax line; the block reads
-    the same in the file either way. true-nukes-refreshed met it three times on 2026-11-05, a
-    line inside the block that starts with a dot and is no help keyword, and
-    realistic-fusion-refreshed in twenty-seven scripts, a #Requires line above the block, and in
-    a twenty-eighth, one straight after it (its #151). This merges the two checks:
-    true-nukes-refreshed's scripts/tests/script-help.ps1 at 78486d2, whose method it keeps, and
+    WHY (grado-factorio-tools#342, #316 rulings 1 and 5). When PowerShell cannot read a help block
+    it drops it without a word, and Get-Help shows only the syntax line; the block reads the same in
+    the file either way. true-nukes-refreshed met it three times on 2026-11-05, a line inside the
+    block that starts with a dot and is no help keyword, and realistic-fusion-refreshed in
+    twenty-seven scripts, a #Requires line above the block, and in a twenty-eighth, one straight
+    after it (its #151). This merges the two checks: true-nukes-refreshed's
+    scripts/tests/script-help.ps1 at 78486d2, whose method it keeps, and
     realistic-fusion-refreshed's scripts/ship-check.ps1 section 5 at 4de346d, whose #Requires
     diagnosis it names as a cause.
 
     THE METHOD. In each *.ps1 under -Path, a directory read with its subdirectories, the block
-    comments with a .SYNOPSIS line are found from the parser's comment tokens, so text in a
-    string does not count. Rather than repeat PowerShell's rules for which block is whose help,
-    it asks the parser: each block is blanked out, its line breaks kept, the script reparsed, and
-    the help the parser gives the script and every function compared. A block whose removal
-    changes nothing is not read, and fails.
+    comments with a .SYNOPSIS line are found from the parser's comment tokens, so text in a string
+    does not count. Rather than repeat PowerShell's rules for which block is whose help, it asks the
+    parser: each block is blanked out, its line breaks kept, the script reparsed, and the help the
+    parser gives the script and every function compared. A block whose removal changes nothing is
+    not read, and fails.
 
-    WHAT A FAILURE NAMES. The script and the block's first line, and each cause it can see: a
-    line in the block that starts with a dot and is no help keyword, and a #Requires line above
-    the script's own block, which detaches it; above a function's, it is no cause. Apart from
-    those, a #Requires line on the line straight after a read block's closing line, which
-    PowerShell reads into the block's last section and shows as help text, fails too; a blank
-    line between them is the fix. A script that does not parse fails, naming the parser's first
-    error, and so does each -Path given that is no *.ps1 and holds none, beside others that do.
+    WHAT A FAILURE NAMES. The script and the block's first line, and each cause it can see: a line
+    in the block that starts with a dot and is no help keyword, and a #Requires line above the
+    script's own block, which detaches it; above a function's, it is no cause. Apart from those, a
+    #Requires line on the line straight after a read block's closing line, which PowerShell reads
+    into the block's last section and shows as help text, fails too; a blank line between them is
+    the fix. A script that does not parse fails, naming the parser's first error, and so does each
+    -Path given that is no *.ps1 and holds none, beside others that do.
 
-    WHAT IT CANNOT SEE. Help written as # line comments. A script whose help block has no
-    .SYNOPSIS, which is not read as one, so a script that should have help and has none passes.
-    Whether the help says anything true. -SelfTest runs the rule on strings and a scratch folder;
-    the script's own call of it, and its exit, are not run.
+    WHAT IT CANNOT SEE. Help written as # line comments. A script whose help block has no .SYNOPSIS,
+    which is not read as one, so a script that should have help and has none passes. Whether the
+    help says anything true. -SelfTest runs the rule on strings and a scratch folder; the script's
+    own call of it, and its exit, are not run.
 
 .PARAMETER Path
     The scripts, or directories of scripts, to read.

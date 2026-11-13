@@ -1,30 +1,30 @@
 <#
 .SYNOPSIS
-    Prints, as Markdown, the custom inputs of a --dump-data dump against the engine's own
-    controls: which default keys an input shares with an engine control, and which inputs are
-    linked to one. Exit 0 means the tables were printed. A shared default is not a clash.
+    Prints, as Markdown, the custom inputs of a --dump-data dump against the engine's own controls:
+    which default keys an input shares with an engine control, and which inputs are linked to one.
+    Exit 0 means the tables were printed. A shared default is not a clash.
 
 .DESCRIPTION
-    WHAT IT READS. One dump from get-dump.ps1, and the [controls] section of a config.ini the
-    game wrote, where each control stands with its default, commented out until it is rebound
-    (grado-factorio-modpack#96 and #135). With -Below, a second dump whose inputs are left out,
-    so a pack is reported without the pack under it. With -Mods, the Lua of each mod directory
-    there, to name the member whose source holds an input's name in quotes. It writes nothing.
+    WHAT IT READS. One dump from get-dump.ps1, and the [controls] section of a config.ini the game
+    wrote, where each control stands with its default, commented out until it is rebound
+    (grado-factorio-modpack#96 and #135). With -Below, a second dump whose inputs are left out, so a
+    pack is reported without the pack under it. With -Mods, the Lua of each mod directory there, to
+    name the member whose source holds an input's name in quotes. It writes nothing.
 
-    THE ENGINE'S CONTROLS are the controls in the section that are not a custom input of the
-    dump. Each has a primary and an alternative slot; the controller slots are not read. A
-    control that is rebound is listed, because its default is then not in the file.
+    THE ENGINE'S CONTROLS are the controls in the section that are not a custom input of the dump.
+    Each has a primary and an alternative slot; the controller slots are not read. A control that is
+    rebound is listed, because its default is then not in the file.
 
-    HOW KEYS ARE MATCHED. Exactly, in either slot of either side, after putting the modifiers in
-    one order, reading COMMAND as CONTROL and ignoring case. One spelling is bridged: a prototype
-    writes the numpad as `PAD +` and the file writes `KP_PLUS`. That bridge is an assumption for
-    every key but plus and minus, which a linked input showed to agree (#135).
+    HOW KEYS ARE MATCHED. Exactly, in either slot of either side, after putting the modifiers in one
+    order, reading COMMAND as CONTROL and ignoring case. One spelling is bridged: a prototype writes
+    the numpad as `PAD +` and the file writes `KP_PLUS`. That bridge is an assumption for every key
+    but plus and minus, which a linked input showed to agree (#135).
 
-    WHAT IT CANNOT SEE. Which input acts when a shared key is pressed: nothing is pressed. A
-    control of a mod that is in the file and not in the dump is counted as the engine's, so read
-    the file of a game that ran no other mods, or hand it the dump of everything that game ran.
-    Gamepad bindings. With -Mods, an input a mod names by building the string, and a mod that is
-    a zip; a name two mods quote is given both.
+    WHAT IT CANNOT SEE. Which input acts when a shared key is pressed: nothing is pressed. A control
+    of a mod that is in the file and not in the dump is counted as the engine's, so read the file of
+    a game that ran no other mods, or hand it the dump of everything that game ran. Gamepad
+    bindings. With -Mods, an input a mod names by building the string, and a mod that is a zip; a
+    name two mods quote is given both.
 
     CHECKED ON 2.1.23 (#219, 2026-10-25): what it reads, against the `Modding:` changes of 2.1.7,
     and a run on a dump of Space Age with Quality.
@@ -80,8 +80,8 @@ function ConvertTo-KeyForm {
 }
 
 function Read-Controls {
-    <#  The [controls] section: name to its primary and alternative value and whether either
-        was rebound. The controller slots are left out.  #>
+    <#  The [controls] section: name to its primary and alternative value and whether either was
+        rebound. The controller slots are left out.  #>
     param([Parameter(Mandatory)] [string] $Path)
     $controls = [ordered]@{}
     $inside = $false

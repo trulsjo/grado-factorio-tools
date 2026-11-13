@@ -1,21 +1,21 @@
 <#
 .SYNOPSIS
-    Prints, as Markdown, what differs between two --dump-data dumps: the prototypes one has and
-    the other has not, by type, and those both have that differ, by the fields that differ. Exit 0
-    means the comparison was printed, whatever it found.
+    Prints, as Markdown, what differs between two --dump-data dumps: the prototypes one has and the
+    other has not, by type, and those both have that differ, by the fields that differ. Exit 0 means
+    the comparison was printed, whatever it found.
 
 .DESCRIPTION
     WHAT IT READS. Two dumps, e.g. a staged pack and the same pack with one member disabled, both
-    from get-dump.ps1. The first is "with" and the second "without": a prototype in the first
-    alone is "added". It writes nothing.
+    from get-dump.ps1. The first is "with" and the second "without": a prototype in the first alone
+    is "added". It writes nothing.
 
-    HOW TWO PROTOTYPES ARE COMPARED. Field for field, at the top level of the prototype: a field
-    is named when its value differs anywhere inside it, or when one side lacks it. Key order
-    inside a table does not count.
+    HOW TWO PROTOTYPES ARE COMPARED. Field for field, at the top level of the prototype: a field is
+    named when its value differs anywhere inside it, or when one side lacks it. Key order inside a
+    table does not count.
 
-    WHAT IT CANNOT SEE. Which mod made a difference: with one member disabled it is that member
-    or anything that reacts to it. What a mod does at run time. And time: the data stage's
-    seconds are in the dump's log, which get-dump.ps1 keeps beside it.
+    WHAT IT CANNOT SEE. Which mod made a difference: with one member disabled it is that member or
+    anything that reacts to it. What a mod does at run time. And time: the data stage's seconds are
+    in the dump's log, which get-dump.ps1 keeps beside it.
 
     CHECKED ON 2.1.23 (#219, 2026-10-25): what it reads, against the `Modding:` changes of 2.1.7,
     and a run on a dump of Space Age with Quality.

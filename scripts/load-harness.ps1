@@ -1,49 +1,48 @@
 <#
 .SYNOPSIS
-    Loads a set of mods in an isolated mod directory against a Factorio install, creates a
-    throwaway map, and reports whether it loaded -- with the game's own error text when it did
-    not. Exit 0 means the map was created and, if -Check was given, the check passed.
+    Loads a set of mods in an isolated mod directory against a Factorio install, creates a throwaway
+    map, and reports whether it loaded -- with the game's own error text when it did not. Exit 0
+    means the map was created and, if -Check was given, the check passed.
 
 .DESCRIPTION
-    THE HARNESS, NOT A CHECK OF ANY ONE MOD. Moved from realistic-fusion-refreshed's
-    load-check.ps1 at 19e2d92 (grado-factorio-tools#16): the machinery that script ran its
-    invariants inside. The invariants stayed there. This carries none, and a caller that has some
-    brings them with -Check, or dot-sources load-harness-lib.ps1 and drives the load itself.
+    THE HARNESS, NOT A CHECK OF ANY ONE MOD. Moved from realistic-fusion-refreshed's load-check.ps1
+    at 19e2d92 (grado-factorio-tools#16): the machinery that script ran its invariants inside. The
+    invariants stayed there. This carries none, and a caller that has some brings them with -Check,
+    or dot-sources load-harness-lib.ps1 and drives the load itself.
 
     WHAT A PASS MEANS. Every mod's prototypes validated, every dependency resolved, and a map was
     created -- which runs every mod's on_init, so a mod that refuses itself at start-up fails here
     too. Factorio exiting 0 without writing the save is a failure, not a pass.
 
-    WHAT IT CANNOT SEE. A headless run loads no sprites or sounds, so a prototype naming a file
-    that does not exist validates and the player's game still refuses to start. Two mods defining
-    one prototype name load without a word -- the second replaces the first. And it runs no ticks:
+    WHAT IT CANNOT SEE. A headless run loads no sprites or sounds, so a prototype naming a file that
+    does not exist validates and the player's game still refuses to start. Two mods defining one
+    prototype name load without a word -- the second replaces the first. And it runs no ticks:
     whatever breaks only once the game runs is out of reach. Those are a caller's checks to bring.
 
     WHAT IT REFUSES BEFORE THE GAME RUNS. A mod directory or zip whose info.json the shared reader
     refuses -- mod-info.ps1, whose header gives each refusal and its reason -- is refused with a
     message naming the info.json's path, or for a zip the entry and the zip, the same through this
-    script and through Get-HarnessMods in the library. The harness uses the name before the game
-    can run: a directory is junctioned in under it, and a zip is copied in as
-    <name>_<version>.zip, which uses the version too. A directory's version it does not use; it
-    is refused the same way because the game requires the key, and so that no mod Get-HarnessMods
-    returns has a blank version, which this script prints beside the name. Without the refusal, a
-    missing key stopped this script with a PowerShell error naming no mod. Through the library,
-    from a caller without strict mode, a directory with no `name` also stopped with one, and a
-    directory with no `version`, or a zip missing either key, went on with a blank name or
-    version. To see the game's own refusal of a lone `"Name"` or `"Version"` and not this one,
-    build the harness from a valid info.json and rewrite it before Invoke-HarnessLoad, as
-    docs/measurements.md describes. A version's format is not checked, nor that the name matches
-    the directory or zip it came from. pack-mods.ps1 checks both, because it names a zip for the
-    portal; this loads mods from a cache it did not build, and what the game accepts there has
-    not been measured.
+    script and through Get-HarnessMods in the library. The harness uses the name before the game can
+    run: a directory is junctioned in under it, and a zip is copied in as <name>_<version>.zip,
+    which uses the version too. A directory's version it does not use; it is refused the same way
+    because the game requires the key, and so that no mod Get-HarnessMods returns has a blank
+    version, which this script prints beside the name. Without the refusal, a missing key stopped
+    this script with a PowerShell error naming no mod. Through the library, from a caller without
+    strict mode, a directory with no `name` also stopped with one, and a directory with no
+    `version`, or a zip missing either key, went on with a blank name or version. To see the game's
+    own refusal of a lone `"Name"` or `"Version"` and not this one, build the harness from a valid
+    info.json and rewrite it before Invoke-HarnessLoad, as docs/measurements.md describes. A
+    version's format is not checked, nor that the name matches the directory or zip it came from.
+    pack-mods.ps1 checks both, because it names a zip for the portal; this loads mods from a cache
+    it did not build, and what the game accepts there has not been measured.
 
-    THE PLAYER'S GAME IS NEVER TOUCHED. The mods go into a mod directory under a temp directory,
-    and Factorio runs with a write-data directory of its own there, so the player's mods,
-    mod-list.json, saves and player-data.json are neither read nor written. -SelfTest asserts it.
+    THE PLAYER'S GAME IS NEVER TOUCHED. The mods go into a mod directory under a temp directory, and
+    Factorio runs with a write-data directory of its own there, so the player's mods, mod-list.json,
+    saves and player-data.json are neither read nor written. -SelfTest asserts it.
 
-    Bundled mods (space-age, elevated-rails, quality, recycler) live in the game's data/
-    directory, so they load unless explicitly disabled. They are disabled unless -With names them,
-    for a base-only load.
+    Bundled mods (space-age, elevated-rails, quality, recycler) live in the game's data/ directory,
+    so they load unless explicitly disabled. They are disabled unless -With names them, for a
+    base-only load.
 
 .PARAMETER Mods
     What to load: mod directories, mod zips, or directories of those -- a fetch-mods.ps1 cache is
@@ -62,12 +61,12 @@
 .PARAMETER Check
     A script to run on the loaded game, called as `& <Check> -Harness $h -Load $load` after a
     successful load: $h is New-LoadHarness's object and $load is Invoke-HarnessLoad's. It can
-    dot-source load-harness-lib.ps1 to dump the data stage or load again under another mod list.
-    A non-zero exit or a throw fails the run.
+    dot-source load-harness-lib.ps1 to dump the data stage or load again under another mod list. A
+    non-zero exit or a throw fails the run.
 
 .PARAMETER KeepTemp
-    Keep the temp directory -- the save, the captured output -- for debugging. Junctions are
-    always removed.
+    Keep the temp directory -- the save, the captured output -- for debugging. Junctions are always
+    removed.
 
 .PARAMETER SelfTest
     Prove the harness can fail and that it passes what it should, by running the game: each case

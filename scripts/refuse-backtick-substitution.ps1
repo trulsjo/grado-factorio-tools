@@ -1,68 +1,67 @@
 <#
 .SYNOPSIS
-    A hook for agent sessions: refuses a Bash tool command in which bash would run a backtick
-    span as a command substitution. Exit 2 refuses the command before it runs and says to write
-    $(...) for a substitution meant to run, or to write text meant to stay literal to a file with
-    the Write tool; exit 0 lets it run, and means only that this saw no such backtick. Exit 1
-    says on stderr that the tool call could not be read and was not checked; the command still
-    runs.
+    A hook for agent sessions: refuses a Bash tool command in which bash would run a backtick span
+    as a command substitution. Exit 2 refuses the command before it runs and says to write $(...)
+    for a substitution meant to run, or to write text meant to stay literal to a file with the Write
+    tool; exit 0 lets it run, and means only that this saw no such backtick. Exit 1 says on stderr
+    that the tool call could not be read and was not checked; the command still runs.
 
 .DESCRIPTION
-    WHY (grado-factorio-tools#272). On 2026-10-27, after PRs #270 and #271 were opened, a
-    session updated a page with one Bash tool call, `python -I -c "..."`, whose text held
-    Markdown code spans in backticks, among them `gh pr create`. Inside double quotes bash runs a
-    backtick span, so the call ran `gh pr create` with no arguments, and the page was written
-    with the spans' output in place of their text. refuse-pr-body.ps1 was wired and let it
-    through; why, in that long command, is not measured.
+    WHY (grado-factorio-tools#272). On 2026-10-27, after PRs #270 and #271 were opened, a session
+    updated a page with one Bash tool call, `python -I -c "..."`, whose text held Markdown code
+    spans in backticks, among them `gh pr create`. Inside double quotes bash runs a backtick span,
+    so the call ran `gh pr create` with no arguments, and the page was written with the spans'
+    output in place of their text. refuse-pr-body.ps1 was wired and let it through; why, in that
+    long command, is not measured.
 
     HOW IT IS WIRED. In .claude/settings.json, a PreToolUse hook on the two shell tools, matcher
     `Bash|PowerShell`, as refuse-git-hook-skip.ps1 is. A consumer's command is the first example
-    below (ADR 0004), which names the script under vendor/grado-factorio-tools/ and, where it is
-    not there, lets the command run and tells the agent which path is missing. This repository's
-    own tracked settings wire it from scripts/. The session hands the hook the tool call as JSON
-    on stdin: this reads `tool_name` and `tool_input.command`. The `case` keeps PowerShell from
+    below (ADR 0004), which names the script under vendor/grado-factorio-tools/ and, where it is not
+    there, lets the command run and tells the agent which path is missing. This repository's own
+    tracked settings wire it from scripts/. The session hands the hook the tool call as JSON on
+    stdin: this reads `tool_name` and `tool_input.command`. The `case` keeps PowerShell from
     starting before every shell command: whatever is refused holds a backtick.
 
     WHAT IT REFUSES. Under the Bash tool, a backtick not escaped by a backslash, inside double
-    quotes or outside any quotes, and one in the body of a heredoc whose delimiter is unquoted,
-    as `<<EOF` or `<<-EOF`, inside `$(...)`, arithmetic `$((...))` and a subshell too. The
-    command is read in order, a character at a time, with each `$(...)`, subshell and pair of
-    double quotes nested as bash nests them, so an apostrophe inside double quotes opens no
-    single-quoted string and one inside `"$(...)"` does. A lone backtick is refused as a span
-    is: bash reads it as an unclosed one.
+    quotes or outside any quotes, and one in the body of a heredoc whose delimiter is unquoted, as
+    `<<EOF` or `<<-EOF`, inside `$(...)`, arithmetic `$((...))` and a subshell too. The command is
+    read in order, a character at a time, with each `$(...)`, subshell and pair of double quotes
+    nested as bash nests them, so an apostrophe inside double quotes opens no single-quoted string
+    and one inside `"$(...)"` does. A lone backtick is refused as a span is: bash reads it as an
+    unclosed one.
 
     WHAT IT LETS THROUGH. Every call whose `tool_name` is not `Bash`, in exact case, as the
-    PowerShell tool's, where a backtick is the escape character. A backtick inside single
-    quotes or `$'...'`; in a `#` comment, from a `#` that starts a word to the line's end; one
-    escaped as \` inside double quotes, outside quotes or in an unquoted heredoc's body; one in
-    the body of a heredoc whose delimiter is quoted in any part, as <<'EOF', <<"EOF" or <<\EOF,
-    also inside `"$(...)"`, as `git commit -m "$(cat <<'EOF' ... EOF )"` writes a message;
-    `$(...)`; and every command with no backtick.
+    PowerShell tool's, where a backtick is the escape character. A backtick inside single quotes or
+    `$'...'`; in a `#` comment, from a `#` that starts a word to the line's end; one escaped as \`
+    inside double quotes, outside quotes or in an unquoted heredoc's body; one in the body of a
+    heredoc whose delimiter is quoted in any part, as <<'EOF', <<"EOF" or <<\EOF, also inside
+    `"$(...)"`, as `git commit -m "$(cat <<'EOF' ... EOF )"` writes a message; `$(...)`; and every
+    command with no backtick.
 
     WHAT IT CANNOT SEE. A substitution in a script the command runs, an alias or a function. A
     command run by `sh -c` or `bash -c` with quoting of its own, which is read as the outer
-    command's text. A person's own terminal: this is a session's hook. A call with no
-    `tool_name` is read as unreadable, exit 1. And whether the settings still reach it, unless
-    -SelfTest is run. It does not parse the shell, and where it misreads, it errs either way: a
-    `case` pattern's `)` inside `$(...)` ends the `$(...)` early, and `<<` in an arithmetic
-    command, as `(( x << 2 ))`, is read as a heredoc. What follows such a misreading may be
-    refused where bash runs nothing, or let through where bash runs a span.
+    command's text. A person's own terminal: this is a session's hook. A call with no `tool_name` is
+    read as unreadable, exit 1. And whether the settings still reach it, unless -SelfTest is run. It
+    does not parse the shell, and where it misreads, it errs either way: a `case` pattern's `)`
+    inside `$(...)` ends the `$(...)` early, and `<<` in an arithmetic command, as `(( x << 2 ))`,
+    is read as a heredoc. What follows such a misreading may be refused where bash runs nothing, or
+    let through where bash runs a span.
 
     TO CHECK IT, run the second example below.
 
 .PARAMETER SelfTest
-    Prove it refuses what it should and lets the rest through, that the wired command reaches
-    it for the Bash tool and passes the PowerShell tool's call, that the matcher beside that
-    command starts the hook for the Bash tool and for the PowerShell tool, and that the first
-    example's form refuses where the script is and, where it is not, exits 0 and prints JSON
-    naming the missing path. The cases that run a command need sh: the one on the path, or the
-    one Git for Windows ships.
+    Prove it refuses what it should and lets the rest through, that the wired command reaches it for
+    the Bash tool and passes the PowerShell tool's call, that the matcher beside that command starts
+    the hook for the Bash tool and for the PowerShell tool, and that the first example's form
+    refuses where the script is and, where it is not, exits 0 and prints JSON naming the missing
+    path. The cases that run a command need sh: the one on the path, or the one Git for Windows
+    ships.
 
 .PARAMETER Settings
-    With -SelfTest: the .claude/settings.json read by the cases that run the wired command and
-    the one that reads its matcher, with that file's repository as the project. Defaults to
-    this repository's own. They take the first command, of any PreToolUse entry, that names this
-    script, as refuse-git-hook-skip.ps1's do.
+    With -SelfTest: the .claude/settings.json read by the cases that run the wired command and the
+    one that reads its matcher, with that file's repository as the project. Defaults to this
+    repository's own. They take the first command, of any PreToolUse entry, that names this script,
+    as refuse-git-hook-skip.ps1's do.
 
 .EXAMPLE
     The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json, as HOW

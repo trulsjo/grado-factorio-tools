@@ -6,11 +6,11 @@
     they found, which the report does.
 
 .DESCRIPTION
-    WHY (grado-factorio-tools#284). A review's bug scan, and the session answering it, revert
-    each claim of a script on a copy and run its -SelfTest, as docs/agents/review-brief.md's
-    *The reverts* asks. Each wrote its own driver, and in one session (2026-10-27/28) three
-    misread their runs: a sed revert that deleted the case along with the check, a self-test that
-    threw before its summary line read as passing, and a slow self-test run by hand per revert.
+    WHY (grado-factorio-tools#284). A review's bug scan, and the session answering it, revert each
+    claim of a script on a copy and run its -SelfTest, as docs/agents/review-brief.md's *The
+    reverts* asks. Each wrote its own driver, and in one session (2026-10-27/28) three misread their
+    runs: a sed revert that deleted the case along with the check, a self-test that threw before its
+    summary line read as passing, and a slow self-test run by hand per revert.
 
     THE COPY is a git working tree the caller made, a clone at the commit under review. It is
     refused, exit 1 and nothing run, when it has uncommitted changes or untracked files, which are
@@ -24,125 +24,120 @@
         ) }
 
     THE DEFAULT REVERTS (grado-factorio-tools#382). In PR #374 a self-test passed four times
-    whatever a parameter's default was, because its runner carried a default of its own, and
-    each was found only by a reviewer who thought to revert that default by hand. With -Defaults,
-    for each script it names, a path from the copy's root, the run writes the reverts itself,
-    after the list's, from the script's param() block as the parser reads it. A default revert
-    is, for a list default, one per element, that element dropped from it: `$Path = @('a', 'b')`
-    gives `$Path = @('b')` and `$Path = @('a')`, and a lone element dropped gives `@()`. A
-    default is a list where it is written as one, `@()` of constants comma-separated or one to a
-    line, or a parenthesised comma list of them, or where the parameter's type is a list, an
-    array as [string[]] or [array] (#394), and its default one constant, in parentheses or not.
-    Parentheses round a list, a hashtable or $null are read through, so (@('a')) and
-    (('a', 'b')) are lists and ($null) is $null. A constant is a number or a string with nothing
-    expanded in it. For a scalar default it is one revert, another value put in its place: a
-    string gets -reverted after it, a number 1 added, $true or $false the other. Each is named
-    `default -<Name> ...`, edits the text from the parameter's variable to the end of its default,
-    its Find running from the script's param( so that a self-test's runner that repeats the default
-    does not make it occur twice (as two did in the first run for #382's pull request), and runs the
-    script's own -SelfTest with no Args, as a list's revert is run and in the same table. The run
-    prints how many it wrote for each script, and a line for each default it wrote none for: one
-    computed at run time, as `(Get-Date)`, `"$x"` or a list holding either, on any parameter; $null,
-    on any parameter; an empty list; and a shape it does not read, with its text: a hashtable, in
-    parentheses or not, or one written-out value in parentheses, a constant, $true or $false, on a
-    parameter whose type is not a list (#391, #394). A script it writes no
-    revert for, or that does not parse, fails the run, exit 1 and nothing run, as a step that read
-    nothing.
+    whatever a parameter's default was, because its runner carried a default of its own, and each
+    was found only by a reviewer who thought to revert that default by hand. With -Defaults, for
+    each script it names, a path from the copy's root, the run writes the reverts itself, after the
+    list's, from the script's param() block as the parser reads it. A default revert is, for a list
+    default, one per element, that element dropped from it: `$Path = @('a', 'b')` gives
+    `$Path = @('b')` and `$Path = @('a')`, and a lone element dropped gives `@()`. A default is a
+    list where it is written as one, `@()` of constants comma-separated or one to a line, or a
+    parenthesised comma list of them, or where the parameter's type is a list, an array as
+    [string[]] or [array] (#394), and its default one constant, in parentheses or not. Parentheses
+    round a list, a hashtable or $null are read through, so (@('a')) and (('a', 'b')) are lists and
+    ($null) is $null. A constant is a number or a string with nothing expanded in it. For a scalar
+    default it is one revert, another value put in its place: a string gets -reverted after it, a
+    number 1 added, $true or $false the other. Each is named `default -<Name> ...`, edits the text
+    from the parameter's variable to the end of its default, its Find running from the script's
+    param( so that a self-test's runner that repeats the default does not make it occur twice (as
+    two did in the first run for #382's pull request), and runs the script's own -SelfTest with no
+    Args, as a list's revert is run and in the same table. The run prints how many it wrote for each
+    script, and a line for each default it wrote none for: one computed at run time, as
+    `(Get-Date)`, `"$x"` or a list holding either, on any parameter; $null, on any parameter; an
+    empty list; and a shape it does not read, with its text: a hashtable, in parentheses or not, or
+    one written-out value in parentheses, a constant, $true or $false, on a parameter whose type is
+    not a list (#391, #394). A script it writes no revert for, or that does not parse, fails the
+    run, exit 1 and nothing run, as a step that read nothing.
 
     THE CONDITION REVERTS (grado-factorio-tools#400). On PR #395 the panel found 14 guards whose
-    reverts passed the self-test after two hand-written lists of 40 and 101; 12 were of three
-    shapes a parser can find. With -Conditions, for each script it names, a path from the copy's
-    root, the run writes, after the default reverts, one revert per operand of an -and or -or
-    chain, that operand dropped with the operator beside it, and one per element of a comma list
-    on the right of -in or -notin, or of a comma list of type literals elsewhere, that element
-    dropped with its comma. A chain is read whole: in
-    `$a -and $b -and $c` each of the three is dropped once, and a chain inside an operand, in
-    parentheses or of the other operator, is a chain of its own. Each Find is the whole lines the
-    chain or list spans, and Lines is their count; each is named
-    `condition <file>:<line> <operator> drops <text>`, or `type list` for the operator, with
-    (1 of 2), (2 of 2) after it where two would share a name, in their order there, and runs
-    the script's own -SelfTest with no Args. A shape whose Find occurs other than once, or a list
-    of one element, is named with its line, and no revert written for it. A self-test's verdict
-    gets none either (#407): dropping an operand of a conjunction that holds leaves it holding,
-    so no self-test can fail that revert. Inside the clause of an if whose condition is $SelfTest,
-    or a function named Invoke-SelfTest, an -and chain is a verdict where it is the last statement
-    of a script block that is a hashtable's value under a string key, as `Test = { }` or
+    reverts passed the self-test after two hand-written lists of 40 and 101; 12 were of three shapes
+    a parser can find. With -Conditions, for each script it names, a path from the copy's root, the
+    run writes, after the default reverts, one revert per operand of an -and or -or chain, that
+    operand dropped with the operator beside it, and one per element of a comma list on the right of
+    -in or -notin, or of a comma list of type literals elsewhere, that element dropped with its
+    comma. A chain is read whole: in `$a -and $b -and $c` each of the three is dropped once, and a
+    chain inside an operand, in parentheses or of the other operator, is a chain of its own. Each
+    Find is the whole lines the chain or list spans, and Lines is their count; each is named
+    `condition <file>:<line> <operator> drops <text>`, or `type list` for the operator, with (1 of
+    2), (2 of 2) after it where two would share a name, in their order there, and runs the script's
+    own -SelfTest with no Args. A shape whose Find occurs other than once, or a list of one element,
+    is named with its line, and no revert written for it. A self-test's verdict gets none either
+    (#407): dropping an operand of a conjunction that holds leaves it holding, so no self-test can
+    fail that revert. Inside the clause of an if whose condition is $SelfTest, or a function named
+    Invoke-SelfTest, an -and chain is a verdict where it is the last statement of a script block
+    that is a hashtable's value under a string key, as `Test = { }` or
     `'<what the case holds>' = { }` (#411); the whole of a parenthesised argument to a command
     invoked with & on a variable, as `& $check '<name>' (<chain>) $said` (#411); or the value
     assigned to a variable its script block reads only as an if's condition or the operand of -not
-    or !. Each is named, `revert-run: <file>, skipped as a verdict: line <n>, <k> operand(s)`.
-    An -or verdict, a chain inside a verdict's operand, one not its block's last statement, one
-    under a key that is not a string, as `$key`, one passed to a command named otherwise, as
-    `& 'name'` or `Check`, or invoked other than with &, as `. $check`, and any other chain keep
-    their reverts. With -Base <ref>, only an
-    operand or element on a line `git -C <copy> diff -U0 <ref>` adds or changes is dropped. As with
-    -Defaults, a script it writes no revert for, -Base or not, or that does not parse, fails the
-    run, exit 1 and nothing run.
+    or !. Each is named, `revert-run: <file>, skipped as a verdict: line <n>, <k> operand(s)`. An
+    -or verdict, a chain inside a verdict's operand, one not its block's last statement, one under a
+    key that is not a string, as `$key`, one passed to a command named otherwise, as `& 'name'` or
+    `Check`, or invoked other than with &, as `. $check`, and any other chain keep their reverts.
+    With -Base <ref>, only an operand or element on a line `git -C <copy> diff -U0 <ref>` adds or
+    changes is dropped. As with -Defaults, a script it writes no revert for, -Base or not, or that
+    does not parse, fails the run, exit 1 and nothing run.
 
     File and SelfTest are paths from the copy's root. Args is optional, handed to the self-test
     after -SelfTest. Lines is optional, 1 unless given. Find and Replace are exact text, matched
     with case; a line break in either, LF or CRLF, is read as the file's own.
 
-    EACH REVERT, IN ORDER. Refused, and not run, where Find is empty; where File is not a file
-    git tracks in the copy under that very name, of those `git -C <copy> ls-files` gives once for
-    the run, as one outside the copy, an untracked one, or one named in another case, which git's
-    status could not check restored; where Find occurs in File other than exactly once, naming
-    the count; where git reads File as binary; or where the edit changes no line or more than
-    Lines, removed or added, by `git -C <copy> diff --numstat --stat -- <File>`. A refused revert
-    leaves the file as it was.
-    Otherwise that call's stat, of File alone, is printed and the self-test is run, as
+    EACH REVERT, IN ORDER. Refused, and not run, where Find is empty; where File is not a file git
+    tracks in the copy under that very name, of those `git -C <copy> ls-files` gives once for the
+    run, as one outside the copy, an untracked one, or one named in another case, which git's status
+    could not check restored; where Find occurs in File other than exactly once, naming the count;
+    where git reads File as binary; or where the edit changes no line or more than Lines, removed or
+    added, by `git -C <copy> diff --numstat --stat -- <File>`. A refused revert leaves the file as
+    it was. Otherwise that call's stat, of File alone, is printed and the self-test is run, as
     `pwsh -NoProfile -File <SelfTest> -SelfTest <Args>`, from the copy's root, for at most
-    -TimeoutSeconds, 600 unless given (grado-factorio-tools#424). Its result is:
-    *fails*, it exited other than 0 and its last summary line is `FAILED - self-test...`;
-    *passes*, it exited 0 and that line is `OK - self-test...`, which code-review.md makes a
-    finding; *crashed*, anything else, as no summary line, whatever the exit code, a summary
-    line its exit code contradicts, or output still held open 5 s after it exited, by a process
-    it left running, whose output is then not waited for; *timed out*, still running at the limit,
-    when it is killed with its child processes and the seconds it ran are its summary, with no exit
-    code. A self-test that loops under the revert and one merely slower than the limit look the
-    same, so a timeout is a lead to check, as a crash is, not a verdict. The file is then restored
-    by writing back the bytes read before the edit, as it stood, where git might write it with other
-    line ends (grado-factorio-tools#422), and the copy checked clean again: one left dirty stops the
-    run, exit 1, naming what is left and reporting the reverts run so far.
+    -TimeoutSeconds, 600 unless given (grado-factorio-tools#424). Its result is: *fails*, it exited
+    other than 0 and its last summary line is `FAILED - self-test...`; *passes*, it exited 0 and
+    that line is `OK - self-test...`, which code-review.md makes a finding; *crashed*, anything
+    else, as no summary line, whatever the exit code, a summary line its exit code contradicts, or
+    output still held open 5 s after it exited, by a process it left running, whose output is then
+    not waited for; *timed out*, still running at the limit, when it is killed with its child
+    processes and the seconds it ran are its summary, with no exit code. A self-test that loops
+    under the revert and one merely slower than the limit look the same, so a timeout is a lead to
+    check, as a crash is, not a verdict. The file is then restored by writing back the bytes read
+    before the edit, as it stood, where git might write it with other line ends
+    (grado-factorio-tools#422), and the copy checked clean again: one left dirty stops the run, exit
+    1, naming what is left and reporting the reverts run so far.
 
-    THE REPORT is a line giving the time limit before the first revert runs, a line per revert as
-    it runs, and at the end a Markdown table of name, result, exit code and summary line, for a
-    review comment.
+    THE REPORT is a line giving the time limit before the first revert runs, a line per revert as it
+    runs, and at the end a Markdown table of name, result, exit code and summary line, for a review
+    comment.
 
-    WHAT IT CANNOT SEE. Whether a revert is the right one: a Find that matches once but in the
-    wrong place is run. Whether a self-test that timed out loops under the revert or is only
-    slower than -TimeoutSeconds, which it reports alike. A process a self-test left running, which
-    is not ended: one that holds the output open makes the revert crashed, and one that does not
-    is not seen. A self-test whose summary line is worded
-    other than this repository's `OK - self-test` and `FAILED - self-test`, which reads as crashed;
-    check.ps1 fails such a self-test among those it runs (grado-factorio-tools#297), not one that
-    needs the game, nor one in a sibling. A revert across two files, or by a pattern. A self-test
-    that changes a tracked file and puts it back. Of -Defaults: a default computed at run time,
-    which it names and writes no revert for; a hashtable, in parentheses or not, and one constant,
-    $true or $false in parentheses on a parameter whose type is not a list, shapes it does not read,
-    which it names with their text and writes no revert for; a list type other than an array and
-    [array], as a generic list, whose default, if one constant not in parentheses, is read as a
-    scalar's; a parameter with no param() default, as one the script's body sets when it is not
-    given, which it does not name; a function's parameters; which of a scalar's other values matter,
-    as it tries one; and a default revert whose self-test needs Args, as -NoGame. Of -Conditions: a
-    regex alternation, as `a|b`; how many times a loop runs; a condition built in more than one
-    statement, as `$x = $a; if ($x -and $b)`, whose $a it does not drop; a list on the right of -in
-    in parentheses or @(), or held in a variable; -cin and -cnotin, which match with case, though a
-    list of type literals on their right is read as a type list; -contains, -xor, -not and the
-    comparison operators; a type list that holds anything but type literals; a condition revert
-    whose self-test needs Args; a verdict of another shape, as an -and chain a function a case calls
-    returns, one under a key built at run time, as `"$name"`, one passed in $( ) or piped inside its
-    parentheses, or a variable read once as a value, which keeps its reverts and passes; a skipped
-    chain that is not a verdict, as one in a block under a string key that a case runs for its
-    effect, or one passed to & $<variable> that the command reads other than as its verdict, whose
-    reverts might have failed; a self-test that is neither an if ($SelfTest) clause nor
-    Invoke-SelfTest, in which nothing is skipped; a verdict variable read outside the script block
-    it is assigned in, as by a function through dynamic scope or after the pipeline whose
-    ForEach-Object block assigned it, a read it does not see, so the chain may be skipped though
-    such a read takes its value; a variable read only as a truth value but meant to be false, as
-    `if ($stale) { $failures++ }`, whose skipped reverts would have failed (PR #408's review panel);
-    and with -Base, a condition the diff deletes, which leaves nothing to drop, or one it changes by
-    a line outside the operand, as the `if (` above it.
+    WHAT IT CANNOT SEE. Whether a revert is the right one: a Find that matches once but in the wrong
+    place is run. Whether a self-test that timed out loops under the revert or is only slower than
+    -TimeoutSeconds, which it reports alike. A process a self-test left running, which is not ended:
+    one that holds the output open makes the revert crashed, and one that does not is not seen. A
+    self-test whose summary line is worded other than this repository's `OK - self-test` and
+    `FAILED - self-test`, which reads as crashed; check.ps1 fails such a self-test among those it
+    runs (grado-factorio-tools#297), not one that needs the game, nor one in a sibling. A revert
+    across two files, or by a pattern. A self-test that changes a tracked file and puts it back. Of
+    -Defaults: a default computed at run time, which it names and writes no revert for; a hashtable,
+    in parentheses or not, and one constant, $true or $false in parentheses on a parameter whose
+    type is not a list, shapes it does not read, which it names with their text and writes no revert
+    for; a list type other than an array and [array], as a generic list, whose default, if one
+    constant not in parentheses, is read as a scalar's; a parameter with no param() default, as one
+    the script's body sets when it is not given, which it does not name; a function's parameters;
+    which of a scalar's other values matter, as it tries one; and a default revert whose self-test
+    needs Args, as -NoGame. Of -Conditions: a regex alternation, as `a|b`; how many times a loop
+    runs; a condition built in more than one statement, as `$x = $a; if ($x -and $b)`, whose $a it
+    does not drop; a list on the right of -in in parentheses or @(), or held in a variable; -cin and
+    -cnotin, which match with case, though a list of type literals on their right is read as a type
+    list; -contains, -xor, -not and the comparison operators; a type list that holds anything but
+    type literals; a condition revert whose self-test needs Args; a verdict of another shape, as an
+    -and chain a function a case calls returns, one under a key built at run time, as `"$name"`, one
+    passed in $( ) or piped inside its parentheses, or a variable read once as a value, which keeps
+    its reverts and passes; a skipped chain that is not a verdict, as one in a block under a string
+    key that a case runs for its effect, or one passed to & $<variable> that the command reads other
+    than as its verdict, whose reverts might have failed; a self-test that is neither an if
+    ($SelfTest) clause nor Invoke-SelfTest, in which nothing is skipped; a verdict variable read
+    outside the script block it is assigned in, as by a function through dynamic scope or after the
+    pipeline whose ForEach-Object block assigned it, a read it does not see, so the chain may be
+    skipped though such a read takes its value; a variable read only as a truth value but meant to
+    be false, as `if ($stale) { $failures++ }`, whose skipped reverts would have failed (PR #408's
+    review panel); and with -Base, a condition the diff deletes, which leaves nothing to drop, or
+    one it changes by a line outside the operand, as the `if (` above it.
 
 .PARAMETER Copy
     The git working tree to revert in.
@@ -152,20 +147,20 @@
     must be.
 
 .PARAMETER Defaults
-    The scripts, as paths from the copy's root, whose default reverts are written and run after
-    the list's. None unless given.
+    The scripts, as paths from the copy's root, whose default reverts are written and run after the
+    list's. None unless given.
 
 .PARAMETER Conditions
     The scripts, as paths from the copy's root, whose condition reverts are written and run after
     the default reverts. None unless given.
 
 .PARAMETER Base
-    A ref of the copy: -Conditions then writes reverts only on the lines `git diff <ref>`
-    changes. Only with -Conditions.
+    A ref of the copy: -Conditions then writes reverts only on the lines `git diff <ref>` changes.
+    Only with -Conditions.
 
 .PARAMETER TimeoutSeconds
-    How long each revert's self-test may run before it is killed and reported timed out, in
-    seconds, from 1 to 2147483. 600 unless given.
+    How long each revert's self-test may run before it is killed and reported timed out, in seconds,
+    from 1 to 2147483. 600 unless given.
 
 .PARAMETER SelfTest
     Run the cases that hold the runner to what this header says, on a scratch repository, naming

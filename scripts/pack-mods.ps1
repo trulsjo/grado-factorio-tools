@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
-    Build one distributable zip per mod directory given, named the way the mod portal requires.
-    Exit 0 means every mod given was packed; nothing is written for any of them if one is refused.
+    Build one distributable zip per mod directory given, named the way the mod portal requires. Exit
+    0 means every mod given was packed; nothing is written for any of them if one is refused.
 
 .DESCRIPTION
     Turns each mod directory given into a zip a player could install, and reports what each one
@@ -9,10 +9,10 @@
     own info.json and never written.
 
     WHY THE ZIP IS WORTH BUILDING. A check that junctions a mod directory into the game lets
-    Factorio read the working tree in place, so "it loads" means "it loads when the game can see
-    the working tree". A file that resolves through a junction but never makes it into a zip fails
-    for a player and for nobody else. Loading the zips this script writes is how a consumer
-    exercises the path the player is actually on.
+    Factorio read the working tree in place, so "it loads" means "it loads when the game can see the
+    working tree". A file that resolves through a junction but never makes it into a zip fails for a
+    player and for nobody else. Loading the zips this script writes is how a consumer exercises the
+    path the player is actually on.
 
     WHAT GOES IN, AND WHY IT IS NOT A DENYLIST. The file list comes from `git ls-files` -- every
     tracked path under the mod directory -- rather than from walking the filesystem and skipping
@@ -29,32 +29,31 @@
     THE ZIP NAME IS THE STRICT PART, NOT THE FOLDER. Verified against the 2.0.77 mod-structure
     documentation, and again against 2.1.23's on 2026-10-25 (#200), which says the same: the zip
     must be named `{mod-name}_{version-number}` -- the example given is `better-armor_0.3.6` --
-    while "the folder inside the zip file does not have any naming restrictions". info.json must
-    sit in that top-level folder. The name is computed from
-    info.json rather than passed in, and the mod directory's own name must equal info.json's
-    `name`: the zip and its folder are named from info.json while the files come from the
-    directory, and a zip named after one mod and filled from another is one the portal would
-    accept, since it only reads the name.
+    while "the folder inside the zip file does not have any naming restrictions". info.json must sit
+    in that top-level folder. The name is computed from info.json rather than passed in, and the mod
+    directory's own name must equal info.json's `name`: the zip and its folder are named from
+    info.json while the files come from the directory, and a zip named after one mod and filled from
+    another is one the portal would accept, since it only reads the name.
 
-    NAMES ARE CASE-SENSITIVE. The 2.0.77 mod-structure documentation says nothing about case, so
-    it was measured on 2026-09-26 against Factorio 2.0.77 (build 84539): a zip, a directory or a
+    NAMES ARE CASE-SENSITIVE. The 2.0.77 mod-structure documentation says nothing about case, so it
+    was measured on 2026-09-26 against Factorio 2.0.77 (build 84539): a zip, a directory or a
     dependency whose name differs from the mod's only in case is refused. Factorio 2.1.23 (build
-    87750) refuses each the same way, measured 2026-10-25 (#200), and its documentation says
-    nothing about case either. The mod portal agrees, answering for a name in one case only. So
-    `Alpha` and `alpha` are two mods. The name check refuses a case-only mismatch, and the
-    one-copy rule leaves the other case's zips alone -- whatever the check accepts, the rule
-    cleans up after. Two places cannot follow that, because at one version the two mods' zips are
-    one file on a case-insensitive file system: packing `alpha` 1.0.0 replaces an
-    `Alpha_1.0.0.zip` already there, and giving both in one run is refused as the same mod twice.
+    87750) refuses each the same way, measured 2026-10-25 (#200), and its documentation says nothing
+    about case either. The mod portal agrees, answering for a name in one case only. So `Alpha` and
+    `alpha` are two mods. The name check refuses a case-only mismatch, and the one-copy rule leaves
+    the other case's zips alone -- whatever the check accepts, the rule cleans up after. Two places
+    cannot follow that, because at one version the two mods' zips are one file on a case-insensitive
+    file system: packing `alpha` 1.0.0 replaces an `Alpha_1.0.0.zip` already there, and giving both
+    in one run is refused as the same mod twice.
 
     THE VERSION BOUNDS are the portal's: major.minor.sub, each 0-65535, and 0.0.0 invalid. A regex
     of three digit-runs accepts 0.0.0 and 1.0.99999, which the portal rejects at upload, so the
     bounds are enforced rather than described.
 
-    ONE COPY PER MOD. Once a mod's new zip is in place, every other `<name>_<x.y.z>.zip` of that
-    mod in -OutputDirectory is deleted, whatever its version. A mod whose name only contains this
-    one is left alone, and so is anything that is not a zip -- an unpacked `<name>` directory there
-    is not this script's to remove. A mod that fails leaves any earlier zip of it untouched.
+    ONE COPY PER MOD. Once a mod's new zip is in place, every other `<name>_<x.y.z>.zip` of that mod
+    in -OutputDirectory is deleted, whatever its version. A mod whose name only contains this one is
+    left alone, and so is anything that is not a zip -- an unpacked `<name>` directory there is not
+    this script's to remove. A mod that fails leaves any earlier zip of it untouched.
 
     A WRONG-CASE NAME OR VERSION KEY IS REFUSED, AND THAT IS THE GAME'S RULE. An info.json whose
     only name key is spelled `"Name"`, or whose only version key is `"Version"`, is refused as
@@ -66,11 +65,11 @@
     A `"Name"` BESIDE `name`, OR A `"Version"` BESIDE `version`, IS PACKED, AND THE GAME READS IT
     THE SAME WAY. The mod is read from the lower-case key and the other is ignored, in either key
     order. Measured against Factorio 2.0.77 (build 84539) (grado-factorio-tools#53, for
-    grado-factorio-tools#51), and against 2.1.23 (build 87750), which reads the lower-case key
-    too (#202). Only those two pairs were measured.
+    grado-factorio-tools#51), and against 2.1.23 (build 87750), which reads the lower-case key too
+    (#202). Only those two pairs were measured.
 
-    WHAT THE GAME LOGGED in each of those runs, and how to repeat one, is in
-    docs/measurements.md, beside this script's directory.
+    WHAT THE GAME LOGGED in each of those runs, and how to repeat one, is in docs/measurements.md,
+    beside this script's directory.
 
     INFO.JSON IS READ THROUGH mod-info.ps1, which the load harness and the resolver share
     (grado-factorio-tools#59). What that reader refuses is refused here under the mod's name, and
@@ -81,8 +80,8 @@
     game. It does not read info.json beyond `name` and `version`, so a bad `factorio_version` or
     dependency line reaches the portal as it stands. A tracked path git reports under a mod
     directory but that is not a file -- a nested submodule -- is refused as missing. "Nothing is
-    written" covers every refusal the script makes itself; a read or write failure while zipping
-    the second mod leaves the first mod's zip written and its other versions deleted.
+    written" covers every refusal the script makes itself; a read or write failure while zipping the
+    second mod leaves the first mod's zip written and its other versions deleted.
 
 .PARAMETER ModDirectory
     One or more mod directories, each holding info.json and each inside a git work tree. The

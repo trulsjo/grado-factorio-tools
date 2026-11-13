@@ -7,63 +7,61 @@
 .DESCRIPTION
     WHY (grado-factorio-modpack#150, where this was written). An agent session's tooling writes
     state files into whatever directory its shell stands in. On 2026-10-05 a command that changed
-    directory into a mod in the cache left two state directories there, one of them inside the
-    mod, and a file inside a mod is part of what the game loads. Reading the cache by path from
-    the repository root leaves nothing behind.
+    directory into a mod in the cache left two state directories there, one of them inside the mod,
+    and a file inside a mod is part of what the game loads. Reading the cache by path from the
+    repository root leaves nothing behind.
 
-    HOW A CONSUMER WIRES IT. This repository cannot, and keeps no mod cache to guard (#323
-    ruling 7): a session reads its hooks from the consumer's own tracked settings. In
+    HOW A CONSUMER WIRES IT. This repository cannot, and keeps no mod cache to guard (#323 ruling
+    7): a session reads its hooks from the consumer's own tracked settings. In
     .claude/settings.json, a PreToolUse hook on the two shell tools, matcher `Bash|PowerShell`,
-    whose command is the first example below, the wired command (ADR 0004). A consumer that
-    names other caches gives them after -CacheName on its own line, and in the `case`.
+    whose command is the first example below, the wired command (ADR 0004). A consumer that names
+    other caches gives them after -CacheName on its own line, and in the `case`.
 
-    The session hands the hook the tool call as JSON on stdin: this reads `tool_input.command`
-    and `cwd`. The `case` starts this script only when that JSON holds the cache's name, because
+    The session hands the hook the tool call as JSON on stdin: this reads `tool_input.command` and
+    `cwd`. The `case` starts this script only when that JSON holds the cache's name, because
     starting PowerShell took a second on the machine it was written on (2026-10-06) and the hook
     runs before every shell command.
 
     WHERE THE SCRIPT IS NOT THERE (grado-factorio-tools#115), as in a clone whose submodule was
-    never fetched, the wired command lets the shell command run and prints JSON that tells the
-    agent it was not checked. Without that branch pwsh exits 64 for the missing file
-    (measured 2026-10-08, PowerShell 7.6.6). What reaches the agent from that exit was not
-    measured. By the account of grado-factorio-modpack#228, read 2026-10-12, a wiring of that
-    repository's that said so on stderr and exited 1 was measured on 2026-10-11 with Claude
-    Code 2.1.296, and what the tool call returned to the agent held nothing of it. -SelfTest
-    holds a wiring to telling the agent, the consumer's too when it is given -Settings: a
-    case runs the wired command for a project that holds no hook script, and fails unless
-    that exits 0 and prints, on stdout, JSON whose hookSpecificOutput names the PreToolUse
-    event and carries an additionalContext that is not empty. So a quote that breaks the JSON
-    fails here; a percent sign that only mangles the message does not. The case has no
-    switch to leave it out. A consumer whose wiring refuses the command in that branch, or
-    says nothing, fails it, and is to tell the agent and let the command run, as the wired
-    command does.
+    never fetched, the wired command lets the shell command run and prints JSON that tells the agent
+    it was not checked. Without that branch pwsh exits 64 for the missing file (measured 2026-10-08,
+    PowerShell 7.6.6). What reaches the agent from that exit was not measured. By the account of
+    grado-factorio-modpack#228, read 2026-10-12, a wiring of that repository's that said so on
+    stderr and exited 1 was measured on 2026-10-11 with Claude Code 2.1.296, and what the tool call
+    returned to the agent held nothing of it. -SelfTest holds a wiring to telling the agent, the
+    consumer's too when it is given -Settings: a case runs the wired command for a project that
+    holds no hook script, and fails unless that exits 0 and prints, on stdout, JSON whose
+    hookSpecificOutput names the PreToolUse event and carries an additionalContext that is not
+    empty. So a quote that breaks the JSON fails here; a percent sign that only mangles the message
+    does not. The case has no switch to leave it out. A consumer whose wiring refuses the command in
+    that branch, or says nothing, fails it, and is to tell the agent and let the command run, as the
+    wired command does.
 
-    WHAT IT REFUSES. A cd, chdir, pushd, sl, Set-Location or Push-Location, standing where a
-    command can stand, whose target resolves to the cache or anything under it: relative or
-    absolute, and on Windows with either slash, as /c/... or C:\.... A relative target is resolved
-    from where the earlier ones in the command left the shell, and from where it started, since
-    one in a subshell does not last. A target it cannot resolve - one holding a variable, a
-    substitution or a wildcard - is refused if it holds the cache's name. And any command at all
-    while the shell already stands in the cache, unless it begins by changing directory out.
+    WHAT IT REFUSES. A cd, chdir, pushd, sl, Set-Location or Push-Location, standing where a command
+    can stand, whose target resolves to the cache or anything under it: relative or absolute, and on
+    Windows with either slash, as /c/... or C:\.... A relative target is resolved from where the
+    earlier ones in the command left the shell, and from where it started, since one in a subshell
+    does not last. A target it cannot resolve - one holding a variable, a substitution or a wildcard
+    - is refused if it holds the cache's name. And any command at all while the shell already stands
+    in the cache, unless it begins by changing directory out.
 
-    WHAT IT LETS THROUGH. Everything else, and so a command that reads, lists or searches the
-    cache by path, and a script that is given a path and never stands there, as fetch-mods.ps1,
+    WHAT IT LETS THROUGH. Everything else, and so a command that reads, lists or searches the cache
+    by path, and a script that is given a path and never stands there, as fetch-mods.ps1,
     get-dump.ps1 and the load harness are.
 
-    WHAT IT CANNOT SEE. A script or program that changes directory itself. A target that reaches
-    the cache through a variable, a wildcard, a link or a junction whose text does not say so.
-    `git -C`, and a tool's own working-directory option. The cache spelt in another case than the
-    wiring's `case` names it, which Windows opens and the wiring does not start this script for.
-    Off Windows, a target written with a backslash, which pwsh takes as a separator there and
-    this does not (ruled for grado-factorio-tools#113); and /c/... or /mnt/c/... is read there as
-    the path it says, not as a drive. Anything under WSL, where it has not been run.
-    It reads the command as text and does not parse the shell, so
-    `cd .mod-cache` where a command could stand is refused inside a quoted string too: after a
-    `;`, `&`, `|`, `(` or `{`, or at the start of a line. And whether a consumer's settings still
-    reach it, unless -SelfTest is given them. That reads the wired command and the matcher of
-    its entry, and nothing else of the settings: not a handler's `if`, which narrows further,
-    and not whether a session reads a matcher as hook-matcher.ps1 does. A wiring with an entry
-    for each shell tool fails it, since one entry is read.
+    WHAT IT CANNOT SEE. A script or program that changes directory itself. A target that reaches the
+    cache through a variable, a wildcard, a link or a junction whose text does not say so. `git -C`,
+    and a tool's own working-directory option. The cache spelt in another case than the wiring's
+    `case` names it, which Windows opens and the wiring does not start this script for. Off Windows,
+    a target written with a backslash, which pwsh takes as a separator there and this does not
+    (ruled for grado-factorio-tools#113); and /c/... or /mnt/c/... is read there as the path it
+    says, not as a drive. Anything under WSL, where it has not been run. It reads the command as
+    text and does not parse the shell, so `cd .mod-cache` where a command could stand is refused
+    inside a quoted string too: after a `;`, `&`, `|`, `(` or `{`, or at the start of a line. And
+    whether a consumer's settings still reach it, unless -SelfTest is given them. That reads the
+    wired command and the matcher of its entry, and nothing else of the settings: not a handler's
+    `if`, which narrows further, and not whether a session reads a matcher as hook-matcher.ps1 does.
+    A wiring with an entry for each shell tool fails it, since one entry is read.
 
     TO CHECK IT, run the second example below.
 
@@ -72,31 +70,31 @@
     nothing is checked, which is said on stderr with exit 1, not 2.
 
 .PARAMETER CacheName
-    The cache directories' names under the root, comma-separated, each guarded alike (#323
-    ruling 7). Defaults to .mod-cache, which is where fetch-mods.ps1 puts one. A consumer with
-    other names gives them here and in the wiring's `case`. The refusal names the cache the
-    command would stand in.
+    The cache directories' names under the root, comma-separated, each guarded alike (#323 ruling
+    7). Defaults to .mod-cache, which is where fetch-mods.ps1 puts one. A consumer with other names
+    gives them here and in the wiring's `case`. The refusal names the cache the command would stand
+    in.
 
 .PARAMETER SelfTest
-    Prove it refuses what it should and lets the rest through, that a wired command reaches
-    it, and that the wiring tells the agent where the script is not there. With -Settings, also
-    that the matcher beside that command starts the hook for both shell tools. The cases that run
-    the wiring need sh: the one on the path, or the one Git for Windows ships. Off
-    Windows the cases that are a Windows way of writing a path are not run, and each says so on
-    its line: a backslash as separator, Git Bash's /c/... and WSL's /mnt/c/.... What each
-    platform printed, and when, is in docs/measurements.md.
+    Prove it refuses what it should and lets the rest through, that a wired command reaches it, and
+    that the wiring tells the agent where the script is not there. With -Settings, also that the
+    matcher beside that command starts the hook for both shell tools. The cases that run the wiring
+    need sh: the one on the path, or the one Git for Windows ships. Off Windows the cases that are a
+    Windows way of writing a path are not run, and each says so on its line: a backslash as
+    separator, Git Bash's /c/... and WSL's /mnt/c/.... What each platform printed, and when, is in
+    docs/measurements.md.
 
 .PARAMETER Settings
-    With -SelfTest: a consumer's .claude/settings.json. The cases that run the wiring then run
-    the command wired there, the first command of any PreToolUse entry that names this script,
-    found by its name and not by its place (#315 ruling 3), with that file's repository as the
-    project, where they would otherwise run the first example's command against this script. A
-    consumer runs this to know its wiring still reaches the hook, and still tells the agent when
-    it cannot. A last case, run only with -Settings, reads the matcher of that entry
-    (grado-factorio-tools#120) and fails, naming the tool and the file, unless a session would
-    start the hook for the Bash tool and for the PowerShell tool. An entry with no matcher
-    passes: it is started for every tool. How a matcher is read is in hook-matcher.ps1. The
-    example's command comes from no file and has no matcher, so without -Settings none is read.
+    With -SelfTest: a consumer's .claude/settings.json. The cases that run the wiring then run the
+    command wired there, the first command of any PreToolUse entry that names this script, found by
+    its name and not by its place (#315 ruling 3), with that file's repository as the project, where
+    they would otherwise run the first example's command against this script. A consumer runs this
+    to know its wiring still reaches the hook, and still tells the agent when it cannot. A last
+    case, run only with -Settings, reads the matcher of that entry (grado-factorio-tools#120) and
+    fails, naming the tool and the file, unless a session would start the hook for the Bash tool and
+    for the PowerShell tool. An entry with no matcher passes: it is started for every tool. How a
+    matcher is read is in hook-matcher.ps1. The example's command comes from no file and has no
+    matcher, so without -Settings none is read.
 
 .EXAMPLE
     The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json, as

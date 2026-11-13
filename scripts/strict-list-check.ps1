@@ -1,39 +1,38 @@
 <#
 .SYNOPSIS
-    Reads each strict-mode script under the paths it is given and fails on a property read
-    strict mode can throw on: .Count off a command result that can be $null or one object, or .Id
-    or .Name off any command result. Exit 0 means each path given held a script outside the
-    fixture folder, at least one script read sets strict mode, and no such read was found in
-    them (#375).
+    Reads each strict-mode script under the paths it is given and fails on a property read strict
+    mode can throw on: .Count off a command result that can be $null or one object, or .Id or .Name
+    off any command result. Exit 0 means each path given held a script outside the fixture folder,
+    at least one script read sets strict mode, and no such read was found in them (#375).
 
 .DESCRIPTION
     WHERE IT CAME FROM (grado-factorio-tools#343, #316 rulings 2 and 5). true-nukes-refreshed's
-    scripts/tests/strict-lists.ps1 and its fixtures in scripts/tests/strict-lists/, at 78486d2,
-    read 2026-11-06. The rule, the method and what it cannot see are its own, kept as they were;
-    what changed is how it is run: the fixtures are its -SelfTest, here in strict-list-check/
-    beside it, and a run reads the paths it is given. The marker keeps its name.
+    scripts/tests/strict-lists.ps1 and its fixtures in scripts/tests/strict-lists/, at 78486d2, read
+    2026-11-06. The rule, the method and what it cannot see are its own, kept as they were; what
+    changed is how it is run: the fixtures are its -SelfTest, here in strict-list-check/ beside it,
+    and a run reads the paths it is given. The marker keeps its name.
 
     WHY. Under Set-StrictMode -Version Latest a command that outputs nothing gives $null, and one
     that outputs one object gives that object. Reading .Count off $null throws, and so does reading
     it off one object of most types; which have one is said below. So does reading the .Id or .Name
-    of $null or of an empty array. All of it shows only on the run that
-    finds nothing or one, often minutes into a real check; it happened six times on 2026-11-05.
+    of $null or of an empty array. All of it shows only on the run that finds nothing or one, often
+    minutes into a real check; it happened six times on 2026-11-05.
 
     The fixes differ by property. For .Count, wrap the command in @(...), which always gives an
     array. Off a dictionary, read .PSBase.Count, which no key can take over. And @() round a call
-    that returns its list as one object, , $list, nests that list, so its count is always 1:
-    wrap the variable the call was assigned to instead, as Split-TableRow's callers do. For .Id
-    and .Name, take them with ForEach-Object Id or ForEach-Object Name, which gives nothing for
-    nothing; @(...) does not help there, since an empty array has no .Name.
-    A statement that always outputs exactly one object, such as one calling Start-Process
-    -PassThru, is right for .Id and .Name: put the comment # strict-lists: one straight after it,
-    on the line where it ends (a ; or another comment between is fine). The marker never makes
-    a read of .Count safe, because what one object's .Count gives depends on its type. On PowerShell
-    7.6.9 under Set-StrictMode -Version Latest (2026-11-08), a hashtable has one, counting its keys
-    unless a key named Count takes it over, and a PSCustomObject has one that is 1 unless a property
-    named Count takes it over; a string, a number, a file, a folder, a Process and $null throw. In
-    $a, $b = ... only the first variable gets the one object. A marker after a line with several
-    unsafe reads covers none of them; nor does a marker after a string cover a statement inside it.
+    that returns its list as one object, , $list, nests that list, so its count is always 1: wrap
+    the variable the call was assigned to instead, as Split-TableRow's callers do. For .Id and
+    .Name, take them with ForEach-Object Id or ForEach-Object Name, which gives nothing for nothing;
+    @(...) does not help there, since an empty array has no .Name. A statement that always outputs
+    exactly one object, such as one calling Start-Process -PassThru, is right for .Id and .Name: put
+    the comment # strict-lists: one straight after it, on the line where it ends (a ; or another
+    comment between is fine). The marker never makes a read of .Count safe, because what one
+    object's .Count gives depends on its type. On PowerShell 7.6.9 under Set-StrictMode -Version
+    Latest (2026-11-08), a hashtable has one, counting its keys unless a key named Count takes it
+    over, and a PSCustomObject has one that is 1 unless a property named Count takes it over; a
+    string, a number, a file, a folder, a Process and $null throw. In $a, $b = ... only the first
+    variable gets the one object. A marker after a line with several unsafe reads covers none of
+    them; nor does a marker after a string cover a statement inside it.
 
     It parses each .ps1 that calls Set-StrictMode and gives each value a state:
       bare      a command result as PowerShell hands it over: Get-Thing, (Get-Thing),
@@ -45,21 +44,21 @@
     Reading .Count is unsafe off bare and one; reading .Id or .Name, off bare and wrapped. A type
     constraint does not wrap: [string[]] $x = Get-Thing gives $null for nothing.
 
-    A variable's state at a read is that of every assignment that can reach it, in the same
-    function (or the script, outside any). It errs towards flagging. Going back from the read,
-    each assignment counts until one that surely runs before it: one directly in a block holding
-    the read, not in a branch, a switch clause, a try, catch or finally block, a loop, a script
-    block or a for loop's iterator. An assignment in another branch of an if does not reach the
-    read on the same pass. Loops include switch, which runs its clauses once per item and runs
-    every clause that matches. Inside a loop, the assignments after the read also count, back to
-    the last one directly in the loop body, and so do those in other branches of an if in the
-    loop; this is skipped when an assignment before the read in the same loop surely ran, other
-    than a for loop's initializer. A compound assignment (+=) keeps the state the variable had,
-    and a variable copied from another ($q = $p) takes that one's state.
+    A variable's state at a read is that of every assignment that can reach it, in the same function
+    (or the script, outside any). It errs towards flagging. Going back from the read, each
+    assignment counts until one that surely runs before it: one directly in a block holding the
+    read, not in a branch, a switch clause, a try, catch or finally block, a loop, a script block or
+    a for loop's iterator. An assignment in another branch of an if does not reach the read on the
+    same pass. Loops include switch, which runs its clauses once per item and runs every clause that
+    matches. Inside a loop, the assignments after the read also count, back to the last one directly
+    in the loop body, and so do those in other branches of an if in the loop; this is skipped when
+    an assignment before the read in the same loop surely ran, other than a for loop's initializer.
+    A compound assignment (+=) keeps the state the variable had, and a variable copied from another
+    ($q = $p) takes that one's state.
 
-    THE SELF-TEST runs the check on the fixtures in strict-list-check/, where each line it must
-    flag carries the comment # expect: flag, or # expect: flag 2 for two reads, and fails unless
-    it flags each line exactly that often, or where no line says # expect: flag. Then it runs each
+    THE SELF-TEST runs the check on the fixtures in strict-list-check/, where each line it must flag
+    carries the comment # expect: flag, or # expect: flag 2 for two reads, and fails unless it flags
+    each line exactly that often, or where no line says # expect: flag. Then it runs each
     strict-mode fixture and requires, read by read, that every read runs and that exactly the
     flagged ones throw, so a fixture cannot pin a wrong belief about strict mode; a line marked
     "known false hit" or "known miss" excuses the one disagreement it names, and only of that kind.
@@ -74,15 +73,15 @@
 
     What it cannot see: a command result passed in as a parameter, a variable assigned in one
     function and read in another, a copy made inside a loop of a variable assigned later in that
-    loop, an assignment inside the read itself (($j = Get-Thing).Count), $_ in a pipeline, a
-    script block a command runs repeatedly, such as ForEach-Object { }, which it does not treat
-    as a loop, other properties (.Length, .Exit) and results of method calls.
+    loop, an assignment inside the read itself (($j = Get-Thing).Count), $_ in a pipeline, a script
+    block a command runs repeatedly, such as ForEach-Object { }, which it does not treat as a loop,
+    other properties (.Length, .Exit) and results of method calls.
 
     What it flags wrongly: a foreach, if, switch or try used as a value when no branch can give
-    $null or one object, such as one whose branches each give a hashtable or an array as one
-    object (, @(...)); and a bare value reassigned in every branch of an if and its else. For .Id
-    and .Name, mark such a statement; for .Count, the marker does not help, so assign a wrapped
-    value instead. It runs no game.
+    $null or one object, such as one whose branches each give a hashtable or an array as one object
+    (, @(...)); and a bare value reassigned in every branch of an if and its else. For .Id and
+    .Name, mark such a statement; for .Count, the marker does not help, so assign a wrapped value
+    instead. It runs no game.
 
     WHERE IT RUNS HERE. check.ps1 runs its -SelfTest, and a run over this repository's scripts/
     (#373), whose 35 reads of 2026-11-07 were each fixed or marked.

@@ -18,39 +18,37 @@
     THE ONE COMMAND BEFORE A PUSH (grado-factorio-tools#60). The only gate here was commit-msg,
     which reads a message and no script. Each -SelfTest was run by hand, session by session, and
     review lanes reported more than once that no lane had run them. .githooks/pre-push runs this,
-    and so does the workflow in .github/workflows/ on every pull request and on main, on Windows
-    and on Linux (grado-factorio-tools#117). Nothing here is left out on either: a self-test
-    that cannot pass on one of them fails this check there. What a self-test itself skips off
-    Windows, it names. A local run covers the platform it runs on, as the pre-push hook's covers
-    the development machine's Windows; CI's two jobs are where it runs on the other
-    (grado-factorio-tools#286).
+    and so does the workflow in .github/workflows/ on every pull request and on main, on Windows and
+    on Linux (grado-factorio-tools#117). Nothing here is left out on either: a self-test that cannot
+    pass on one of them fails this check there. What a self-test itself skips off Windows, it names.
+    A local run covers the platform it runs on, as the pre-push hook's covers the development
+    machine's Windows; CI's two jobs are where it runs on the other (grado-factorio-tools#286).
 
     WHAT IT RUNS. A parse of each script beside it, which finds a syntax error on a line no
     self-test reaches, and in the libraries that have no self-test. Then param-check.ps1 over the
     same scripts, for a list parameter that `pwsh -File` would hand over as one string
-    (grado-factorio-tools#163), and variable-case-check.ps1, for one scope spelling a variable
-    two ways that differ only in case (grado-factorio-tools#285), and help-check.ps1, for a help
-    block PowerShell does not read (grado-factorio-tools#342), and strict-list-check.ps1, for a
-    read of .Count, .Id or .Name that strict mode can throw on (grado-factorio-tools#373), and
-    line-cite-check.ps1 over the tracked files with CI's floors, -MinCitations 50
-    -MinContinuations 4, for prose that cites our own code by line number: #319 ruling 8 had it
-    in CI alone, and on PR #403 the pre-push run passed what CI then refused, so Truls amended the
-    ruling for it (grado-factorio-tools#404). Each of these is a step of $TOOL_STEPS. Then
-    -SelfTest of each script in $SELF_TESTS, each in a pwsh of its own, so one script's `exit`
-    does not end the run, and -SelfTest -NoGame of each in $NO_GAME_CASES: the cases of a script
-    that needs the game which read no game's output but a log written for them
-    (grado-factorio-tools#175). They run four at
-    a time, or as many as the machine has processors where that is fewer, and at least two
+    (grado-factorio-tools#163), and variable-case-check.ps1, for one scope spelling a variable two
+    ways that differ only in case (grado-factorio-tools#285), and help-check.ps1, for a help block
+    PowerShell does not read (grado-factorio-tools#342), and strict-list-check.ps1, for a read of
+    .Count, .Id or .Name that strict mode can throw on (grado-factorio-tools#373), and
+    line-cite-check.ps1 over the tracked files with CI's floors, -MinCitations 50 -MinContinuations
+    4, for prose that cites our own code by line number: #319 ruling 8 had it in CI alone, and on PR
+    #403 the pre-push run passed what CI then refused, so Truls amended the ruling for it
+    (grado-factorio-tools#404). Each of these is a step of $TOOL_STEPS. Then -SelfTest of each
+    script in $SELF_TESTS, each in a pwsh of its own, so one script's `exit` does not end the run,
+    and -SelfTest -NoGame of each in $NO_GAME_CASES: the cases of a script that needs the game which
+    read no game's output but a log written for them (grado-factorio-tools#175). They run four at a
+    time, or as many as the machine has processors where that is fewer, and at least two
     (grado-factorio-tools#296): twelve at a time ended no sooner and took the self-tests twice as
-    long in all. They are printed in list order once all have finished, each with its own time.
-    Two self-tests that collide when run together, over a shared path or setting, fail only on a
-    run that happens to overlap them: fifteen full runs on Windows passed when this was made. A
+    long in all. They are printed in list order once all have finished, each with its own time. Two
+    self-tests that collide when run together, over a shared path or setting, fail only on a run
+    that happens to overlap them: fifteen full runs on Windows passed when this was made. A
     self-test that passes prints one line here; one that fails prints everything it said. One that
     exits 0 fails where its last summary line, a line opening `OK - self-test` or
     `FAILED - self-test`, which revert-run.ps1 reads too, is missing or is FAILED
-    (grado-factorio-tools#297); or where it says it passed with 0 cases, all of them or 0 of
-    some, as a -NoGame broken to run nothing would (grado-factorio-tools#181). It reads the output,
-    so a self-test that counts a case it did not run is not seen.
+    (grado-factorio-tools#297); or where it says it passed with 0 cases, all of them or 0 of some,
+    as a -NoGame broken to run nothing would (grado-factorio-tools#181). It reads the output, so a
+    self-test that counts a case it did not run is not seen.
 
     A COMMENT OR HEADER LINE OF A SCRIPT HERE IS HELD TO $COMMENT_LINE_LIMIT, the Markdown's limit
     (grado-factorio-tools#181): this header had a line of 147 characters, from
@@ -62,18 +60,17 @@
     grado-factorio-tools#181). Not read: a code line, and a # comment after code on one, however
     long; a block comment opened after code is read from its first line, code and all; and
     characters are counted as UTF-16 units, so a character outside the Basic Multilingual Plane
-    counts as two. The rule is in comment-line-lib.ps1, which comment-line-check.ps1 loads too,
-    and the pre-commit hook runs that on the staged scripts before a commit
-    (grado-factorio-tools#225, #344).
+    counts as two. The rule is in comment-line-lib.ps1, which comment-line-check.ps1 loads too, and
+    the pre-commit hook runs that on the staged scripts before a commit (grado-factorio-tools#225,
+    #344).
 
     README.MD NAMES EVERY SCRIPT PARAMETER (grado-factorio-tools#194). CLAUDE.md says README says
     what each script does, and PR #192 added markdown-check.ps1 -Path with no line there. Each
     parameter of a script's own param block, read with the parser, has to appear in README.md as
-    -<Name>, in case and up to a word boundary; one that does not fails, named as
-    <script> -<Name>, and so does a README.md that is not there. Not seen: where README names it,
-    so a parameter named only under another script's section, or one -Name shared by several
-    scripts, passes; what README says of it; a function's parameters; and a script outside
-    scripts/.
+    -<Name>, in case and up to a word boundary; one that does not fails, named as <script> -<Name>,
+    and so does a README.md that is not there. Not seen: where README names it, so a parameter named
+    only under another script's section, or one -Name shared by several scripts, passes; what README
+    says of it; a function's parameters; and a script outside scripts/.
 
     THE PAGES AN AGENT ALWAYS LOADS HAVE A SIZE LIMIT (grado-factorio-tools#69). CLAUDE.md loads on
     every turn and the code-review rules before every review; grado-factorio-tools#65 cut both, and
@@ -85,33 +82,33 @@
     (grado-factorio-tools#451).
 
     THE TRACKED MARKDOWN IS READ BY markdown-check.ps1 -All (grado-factorio-tools#74). A page that
-    moves leaves its links behind, and nothing else reads them. This script had a link check of
-    its own until that one moved here; it asked the disk, in any case, and read no `[x]: path`
-    line. What is checked now, and what is not, is in that script's header. It is handed
+    moves leaves its links behind, and nothing else reads them. This script had a link check of its
+    own until that one moved here; it asked the disk, in any case, and read no `[x]: path` line.
+    What is checked now, and what is not, is in that script's header. It is handed
     $MARKDOWN_LINE_LIMIT, so a prose line left unwrapped fails here (grado-factorio-tools#93); that
     check is silent on length for a repository that hands it none.
 
     WHAT IT DOES NOT RUN. The self-tests in $NEEDS_GAME, because each starts Factorio, and a CI
     runner has no game: of one in $NO_GAME_CASES too, the cases that start it. Every script named
-    there loads its mods through the harness, and the harness reads through mod-info.ps1. So
-    after a change to either of those run all of them by hand, and after a change to one of the
-    others, its own:
+    there loads its mods through the harness, and the harness reads through mod-info.ps1. So after a
+    change to either of those run all of them by hand, and after a change to one of the others, its
+    own:
 
         pwsh -File scripts/load-harness.ps1 -SelfTest
 
     A script that declares a -SelfTest the way these do and is named in neither list below fails
-    this check, so a new one is not left out in silence. So does one whose own param block
-    declares $NoGame and that is not in $NO_GAME_CASES, whose no-game cases would otherwise not
-    run (grado-factorio-tools#181). A -SelfTest declared some other way is missed, and so is a
-    -NoGame read from $args.
+    this check, so a new one is not left out in silence. So does one whose own param block declares
+    $NoGame and that is not in $NO_GAME_CASES, whose no-game cases would otherwise not run
+    (grado-factorio-tools#181). A -SelfTest declared some other way is missed, and so is a -NoGame
+    read from $args.
 
     WHAT IT CANNOT SEE. A parse proves syntax and nothing else: a misspelled cmdlet or variable
-    parses. No linter runs. It reads the working tree, so through the pre-push hook it checks
-    what is on disk, which is not the commits being pushed when the tree has uncommitted edits.
-    The Markdown is the exception: it is read as staged, so an edit not yet staged is not seen,
-    and a link to a file not yet added is reported. A file with such an edit is named, as
-    markdown-check.ps1 names it, and the check still passes.
-    And fetch-mods.ps1's self-test listens on a loopback port, so it fails where that is refused.
+    parses. No linter runs. It reads the working tree, so through the pre-push hook it checks what
+    is on disk, which is not the commits being pushed when the tree has uncommitted edits. The
+    Markdown is the exception: it is read as staged, so an edit not yet staged is not seen, and a
+    link to a file not yet added is reported. A file with such an edit is named, as
+    markdown-check.ps1 names it, and the check still passes. And fetch-mods.ps1's self-test listens
+    on a loopback port, so it fails where that is refused.
 
     THE GLOSSARY STEP READS COMMITS, NOT THE TREE (grado-factorio-tools#443). It runs
     glossary-check.ps1 over origin/main...HEAD with glossary-left.txt, as CI does, since PR #437 and
@@ -119,10 +116,10 @@
     branch's commits add, so an edit not committed is not seen, and origin/main as last fetched:
     this makes no fetch, so a stale origin/main widens the range past CI's. On main itself the range
     is empty, and the step passes saying it read nothing; where origin/main is not there, as in a
-    clone with no remote, it fails, naming it. A record for -SkipIfPassed is of the working tree
-    and the index, never of HEAD, so committing what was staged changes neither: the step is marked
-    Commits, and runs on every run, a skipped one and one of only what reads the index too. The
-    main block's run of it on a skip is held by a read only, as the main block is.
+    clone with no remote, it fails, naming it. A record for -SkipIfPassed is of the working tree and
+    the index, never of HEAD, so committing what was staged changes neither: the step is marked
+    Commits, and runs on every run, a skipped one and one of only what reads the index too. The main
+    block's run of it on a skip is held by a read only, as the main block is.
 
     A PASS IS RECORDED, AND -SkipIfPassed READS IT (grado-factorio-tools#176). The pre-push hook ran
     this again on a tree it had just passed, minutes each time. A pass records the tree it read in
@@ -142,22 +139,22 @@
     outside the tree: an ignored file, the pwsh or git in use, the loopback port fetch-mods.ps1
     needs, or a self-test that passes only sometimes. CI runs without the switch.
 
-    A SKIP OF THE SELF-TESTS ON A CHANGE OF WHITESPACE BETWEEN TOKENS (grado-factorio-tools#405).
-    On PR #403 one space put back in one line ran the whole check, follow-pin.ps1's self-test
-    alone for 313 s. With -SkipIfPassed, where the record's trees and this tree's differ only
-    in .ps1 files changed in place, and each such file's tokens, read by the parser with comments
-    and line breaks, are the same in both by kind and text and parse to the same node types, in
-    order, the run names those files and the passed tree, and runs no self-test, none of $TOOL_STEPS
-    marked Parsed, and not README's reading of the parameters. It still runs the parse and the width
-    check, which a space can fail (an indent counts), line-cite-check.ps1, the page limits and the
-    Markdown check, and a pass is recorded for this tree. Any other changed file, a .ps1 added,
-    deleted or changing mode, a blob git cannot read, a change to a token's text, a comment's
-    included, or a space that changes what the parser makes of the tokens runs the whole check. No
-    self-test was found that reads a tracked script by column or width, searched with grep for each
-    read of a file from $PSScriptRoot or $PSCommandPath and for each column, offset and
-    Get-LongCommentLine in scripts/: strict-list-check.ps1's reads its fixtures by line and by
-    offset order, which such a change keeps. It cannot see a self-test that reads a script by
-    column, as a parse error's message names one, or one written after that search.
+    A SKIP OF THE SELF-TESTS ON A CHANGE OF WHITESPACE BETWEEN TOKENS (grado-factorio-tools#405). On
+    PR #403 one space put back in one line ran the whole check, follow-pin.ps1's self-test alone for
+    313 s. With -SkipIfPassed, where the record's trees and this tree's differ only in .ps1 files
+    changed in place, and each such file's tokens, read by the parser with comments and line breaks,
+    are the same in both by kind and text and parse to the same node types, in order, the run names
+    those files and the passed tree, and runs no self-test, none of $TOOL_STEPS marked Parsed, and
+    not README's reading of the parameters. It still runs the parse and the width check, which a
+    space can fail (an indent counts), line-cite-check.ps1, the page limits and the Markdown check,
+    and a pass is recorded for this tree. Any other changed file, a .ps1 added, deleted or changing
+    mode, a blob git cannot read, a change to a token's text, a comment's included, or a space that
+    changes what the parser makes of the tokens runs the whole check. No self-test was found that
+    reads a tracked script by column or width, searched with grep for each read of a file from
+    $PSScriptRoot or $PSCommandPath and for each column, offset and Get-LongCommentLine in scripts/:
+    strict-list-check.ps1's reads its fixtures by line and by offset order, which such a change
+    keeps. It cannot see a self-test that reads a script by column, as a parse error's message names
+    one, or one written after that search.
 
     A RUN OF WHAT READS THE INDEX, WHERE ONLY THE INDEX CHANGED (grado-factorio-tools#426). On PR
     #425 a pass was recorded with README.md edited and not staged; staging it changed the index
@@ -177,45 +174,43 @@
     passed on another index.
 
     A RUN OF ONLY SOME SELF-TESTS, WHERE ONLY SCRIPTS AND MARKDOWN CHANGED
-    (grado-factorio-tools#427; Truls ruled for it in triage, 2026-11-12, with CI running all).
-    PR #425's push changed one
-    script and three pages, and ran every self-test for ten minutes, the three longest of scripts
-    it did not touch. With -SkipIfPassed, where every path that differs between the record's trees
-    and this tree, in either pair, is a .ps1 directly in scripts/ or a Markdown file, and none is
-    scripts/check.ps1, the run runs the self-tests only of each changed script and of each script
-    whose code, its comments left out, names a changed file by its file name, then of each whose
-    code names one of those, and so on; it names each changed path, the self-tests it runs and
-    those it does not, and runs every other part of the check as a whole run does. A pass is
-    recorded for this tree, so the next push is compared with it. Naming a file in code, as a
-    dot-source, a run or a string the script reads, is how a self-test says it depends on that
-    file: one that depends on a file it does not name names it there, as a string. No self-test
+    (grado-factorio-tools#427; Truls ruled for it in triage, 2026-11-12, with CI running all). PR
+    #425's push changed one script and three pages, and ran every self-test for ten minutes, the
+    three longest of scripts it did not touch. With -SkipIfPassed, where every path that differs
+    between the record's trees and this tree, in either pair, is a .ps1 directly in scripts/ or a
+    Markdown file, and none is scripts/check.ps1, the run runs the self-tests only of each changed
+    script and of each script whose code, its comments left out, names a changed file by its file
+    name, then of each whose code names one of those, and so on; it names each changed path, the
+    self-tests it runs and those it does not, and runs every other part of the check as a whole run
+    does. A pass is recorded for this tree, so the next push is compared with it. Naming a file in
+    code, as a dot-source, a run or a string the script reads, is how a self-test says it depends on
+    that file: one that depends on a file it does not name names it there, as a string. No self-test
     was found that depends on a script or a page it does not name in its code, searched on
     2026-11-12 for a script name or path built at run time (`$x.ps1`, `-File $x`, Join-Path or a
     string on $PSScriptRoot with a variable) and for Get-ChildItem over $PSScriptRoot; the files
-    self-tests read that are neither, as .claude/settings.json, commit-scopes.txt and the
-    fixtures beside the scripts, make a run whole. Because this script's lists name every script
-    with a -SelfTest, its own self-test runs on every change of one; a library with none, as
-    markdown-lib.ps1, reaches it only through a listed script whose code names the library, in
-    turn. It cannot see a dependency in no file's text, as a name built at run time, or a
-    self-test that depends on a script by a name it holds in a comment only, which Truls ruled
-    is no load (#427); such a self-test passing at the last full run then stands for this tree
-    too.
+    self-tests read that are neither, as .claude/settings.json, commit-scopes.txt and the fixtures
+    beside the scripts, make a run whole. Because this script's lists name every script with a
+    -SelfTest, its own self-test runs on every change of one; a library with none, as
+    markdown-lib.ps1, reaches it only through a listed script whose code names the library, in turn.
+    It cannot see a dependency in no file's text, as a name built at run time, or a self-test that
+    depends on a script by a name it holds in a comment only, which Truls ruled is no load (#427);
+    such a self-test passing at the last full run then stands for this tree too.
 
     -SelfTest holds the record and its reading, Get-TokenOnlyChange, Get-RunPlan, Get-ChangedPath,
     Get-SelfTestSubset, and Get-RunStart and Invoke-RunPlan, which decide the skip and follow the
-    plan, against a scratch repository, and this check runs
-    it like the others (grado-factorio-tools#176's review); a file made unreadable off Windows
-    needs a user other than root.
+    plan, against a scratch repository, and this check runs it like the others
+    (grado-factorio-tools#176's review); a file made unreadable off Windows needs a user other than
+    root.
 
     HOW LONG IT TAKES ON THE DEVELOPMENT MACHINE DEPENDS ON WHAT ELSE IS RUNNING THERE
     (grado-factorio-tools#70). On a quiet machine it is under twice CI's time; it was reported as
     ten times slower while review lanes and the game were running beside it. No step here carries
     that. Each line prints its seconds so two runs can be compared; the measurement is in
     docs/measurements.md. Run at once, a self-test takes longer than alone, as the others share the
-    processors: the slowest, follow-pin.ps1's, about 73 s alone and 124 s here four at a time,
-    so the run ends no sooner than it does (grado-factorio-tools#296). On 2026-11-09 it took
-    152 to 181 s alone, three runs, and 93 to 94 s once its setup stopped running
-    `git submodule update` (grado-factorio-tools#406).
+    processors: the slowest, follow-pin.ps1's, about 73 s alone and 124 s here four at a time, so
+    the run ends no sooner than it does (grado-factorio-tools#296). On 2026-11-09 it took 152 to 181
+    s alone, three runs, and 93 to 94 s once its setup stopped running `git submodule update`
+    (grado-factorio-tools#406).
 
 .PARAMETER SkipIfPassed
     Run only the steps marked Commits, the glossary step, when the record says this tree passed;

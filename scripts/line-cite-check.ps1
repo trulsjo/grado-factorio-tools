@@ -1,16 +1,16 @@
 <#
 .SYNOPSIS
-    Reads the tracked files -Path names and fails on each citation of one of this repository's
-    own files by line number. Exit 0 means none was found, and that each floor given was met.
+    Reads the tracked files -Path names and fails on each citation of one of this repository's own
+    files by line number. Exit 0 means none was found, and that each floor given was met.
 
 .DESCRIPTION
-    WHY (grado-factorio-tools#347, #319 rulings 5 and 8). A line number is a claim about a file
-    that nothing reads, and it goes wrong silently when anyone adds a line above what it points
-    at. realistic-fusion-refreshed found the same rot in twelve documents, ten stale by more than
-    a hundred lines (its #69, ADR 0032). The repair is to name the function, field or constant,
-    which grep can check. This is the matcher of that repository's ship-check.ps1 section 7, at
-    4de346d; what counts as its own code there, its archives, vanilla and the game's output, is a
-    parameter here, so an ancestor's, vanilla's or a third party's citation by line can pass.
+    WHY (grado-factorio-tools#347, #319 rulings 5 and 8). A line number is a claim about a file that
+    nothing reads, and it goes wrong silently when anyone adds a line above what it points at.
+    realistic-fusion-refreshed found the same rot in twelve documents, ten stale by more than a
+    hundred lines (its #69, ADR 0032). The repair is to name the function, field or constant, which
+    grep can check. This is the matcher of that repository's ship-check.ps1 section 7, at 4de346d;
+    what counts as its own code there, its archives, vanilla and the game's output, is a parameter
+    here, so an ancestor's, vanilla's or a third party's citation by line can pass.
 
     WHAT IS MATCHED. Two shapes, on one line at a time.
       1. A path and a line, as example/run.ps1:12 or example/a.md:3-9: a path token ending in .lua,
@@ -19,27 +19,27 @@
          before it on the same line. The backticks are required: bare, a colon and a number cannot
          be told from a page range, a ratio or a time.
     A citation is of our own code only when its path resolves to exactly one of the files -Own
-    names: the path itself, or one ending in / and the path, in any case, as Windows finds a
-    file. A bare name that several files share is left, as which is meant cannot be decided here.
-    A run whose -Path names no tracked file, or none on disk, fails, having read nothing, as
-    check-input-lib.ps1's Get-CheckInput, which lists the files, names it. So does a run whose
-    -Own names no tracked file, naming its pathspecs: no citation could be ours (#379).
+    names: the path itself, or one ending in / and the path, in any case, as Windows finds a file. A
+    bare name that several files share is left, as which is meant cannot be decided here. A run
+    whose -Path names no tracked file, or none on disk, fails, having read nothing, as
+    check-input-lib.ps1's Get-CheckInput, which lists the files, names it. So does a run whose -Own
+    names no tracked file, naming its pathspecs: no citation could be ours (#379).
 
-    WHAT IS LEFT ALONE. A line -Foreign matches, whole, which is how a repository passes the
-    lines that quote an ancestor, vanilla or the game's own output, and with it any continuation
-    on it. A file -Own does not name. A line number in running prose, "lines 196-197", with no
-    path and no colon: no pattern can trust it, so reading is what finds those.
+    WHAT IS LEFT ALONE. A line -Foreign matches, whole, which is how a repository passes the lines
+    that quote an ancestor, vanilla or the game's own output, and with it any continuation on it. A
+    file -Own does not name. A line number in running prose, "lines 196-197", with no path and no
+    colon: no pattern can trust it, so reading is what finds those.
 
-    THE FLOORS. Both shapes pass by finding nothing, so a pattern that stopped matching would
-    pass while checking nothing. -MinCitations and -MinContinuations, when given, fail a run that
-    found fewer of each shape, ours or not; a repository sets them below what its tree holds.
+    THE FLOORS. Both shapes pass by finding nothing, so a pattern that stopped matching would pass
+    while checking nothing. -MinCitations and -MinContinuations, when given, fail a run that found
+    fewer of each shape, ours or not; a repository sets them below what its tree holds.
 
     WHAT IT CANNOT SEE. A continuation whose path is on an earlier line; and per line it can also
-    take a third party's continuation for ours, where a path of ours stands before it on the
-    line. A citation in a file -Path does not name, or not tracked. Whether a cited line is still
-    the one meant: it fails every own citation, stale or not. -SelfTest runs the matcher on a
-    scratch repository, and the script once through pwsh from a folder whose name is not ASCII;
-    its exit code is not held.
+    take a third party's continuation for ours, where a path of ours stands before it on the line. A
+    citation in a file -Path does not name, or not tracked. Whether a cited line is still the one
+    meant: it fails every own citation, stale or not. -SelfTest runs the matcher on a scratch
+    repository, and the script once through pwsh from a folder whose name is not ASCII; its exit
+    code is not held.
 
     WHERE IT RUNS. In CI, a whole-tree check (#319 ruling 8).
 
@@ -48,9 +48,9 @@
     .lua, .ps1, .py and .js files unless given.
 
 .PARAMETER Own
-    The git pathspecs of the files that are our own code, which a citation must resolve to one of
-    to fail. Every tracked file unless given. Pathspecs that together name no tracked file fail
-    the run.
+    The git pathspecs of the files that are our own code, which a citation must resolve to one of to
+    fail. Every tracked file unless given. Pathspecs that together name no tracked file fail the
+    run.
 
 .PARAMETER Foreign
     A regular expression; a line it matches is left alone. None unless given.

@@ -1,47 +1,46 @@
 <#
 .SYNOPSIS
-    Reads the tracked files -Path names and fails on each word shaped like a commit hash that
-    names a commit of this clone which origin/main does not reach. Exit 0 means every such word
-    outside -Exempt's pages names a commit origin/main reaches, or no commit here at all.
+    Reads the tracked files -Path names and fails on each word shaped like a commit hash that names
+    a commit of this clone which origin/main does not reach. Exit 0 means every such word outside
+    -Exempt's pages names a commit origin/main reaches, or no commit here at all.
 
 .DESCRIPTION
-    WHY (grado-factorio-tools#346, #319 rulings 4 and 8). A rebase merge puts a reworded or
-    rebased copy of each commit on main, and the branch's own commits are then reachable from no
-    ref: git gc can lose them, and a reader who follows a cited one finds nothing. On
+    WHY (grado-factorio-tools#346, #319 rulings 4 and 8). A rebase merge puts a reworded or rebased
+    copy of each commit on main, and the branch's own commits are then reachable from no ref: git gc
+    can lose them, and a reader who follows a cited one finds nothing. On
     realistic-fusion-refreshed's #815 a skill cited the pre-reword copy of
     realistic-fusion-refreshed#811's first commit, and only a reviewer running git branch -a
-    --contains caught it (its #817). This is that
-    repository's ship-check.ps1 section 17, at 4de346d, over the whole tree; pr-body-check.ps1
-    asks the same of a pull request's body.
+    --contains caught it (its #817). This is that repository's ship-check.ps1 section 17, at
+    4de346d, over the whole tree; pr-body-check.ps1 asks the same of a pull request's body.
 
-    WHAT IT READS. Each file git tracks that a pathspec in -Path names, a glob from the
-    repository root, less those -Exempt names: a page that records a commit on purpose, as a log
-    of what a branch held (Truls, 2026-10-27, on realistic-fusion-refreshed's #817). Unless given,
-    -Path is that repository's five extensions, the .md, .lua, .ps1, .py and .js files (Truls, on
-    grado-factorio-tools#346). Each is read from the working tree, and a file git tracks that is
-    not there is not counted as read. In a .md file, a line inside a ``` or ~~~ fence, closed by
-    the same kind, is not read; in any other file, every line is. A word of 7 to 40 hexadecimal
-    characters, with no letter, digit or _ either side, is asked of git: cat-file names its
-    commit, or says there is none, and rev-list lists every commit -Main reaches. Two processes
-    for the whole tree, not two per word.
+    WHAT IT READS. Each file git tracks that a pathspec in -Path names, a glob from the repository
+    root, less those -Exempt names: a page that records a commit on purpose, as a log of what a
+    branch held (Truls, 2026-10-27, on realistic-fusion-refreshed's #817). Unless given, -Path is
+    that repository's five extensions, the .md, .lua, .ps1, .py and .js files (Truls, on
+    grado-factorio-tools#346). Each is read from the working tree, and a file git tracks that is not
+    there is not counted as read. In a .md file, a line inside a ``` or ~~~ fence, closed by the
+    same kind, is not read; in any other file, every line is. A word of 7 to 40 hexadecimal
+    characters, with no letter, digit or _ either side, is asked of git: cat-file names its commit,
+    or says there is none, and rev-list lists every commit -Main reaches. Two processes for the
+    whole tree, not two per word.
 
     WHAT FAILS WITH NOTHING ASKED. A shallow clone, or one where -Main does not resolve: there a
-    commit on main cannot be told from one whose history was cut off, so the run fails rather
-    than passing. So does a -Path that names no tracked file, every one exempt, or none on disk,
-    each named as check-input-lib.ps1's Get-CheckInput, which lists the files, names it. CI
-    checks out with fetch-depth 0.
+    commit on main cannot be told from one whose history was cut off, so the run fails rather than
+    passing. So does a -Path that names no tracked file, every one exempt, or none on disk, each
+    named as check-input-lib.ps1's Get-CheckInput, which lists the files, names it. CI checks out
+    with fetch-depth 0.
 
-    WHERE IT RUNS. In CI only (#319 ruling 8): a commit is never on origin/main before it is
-    pushed, so a run before then would report the branch's own commits.
+    WHERE IT RUNS. In CI only (#319 ruling 8): a commit is never on origin/main before it is pushed,
+    so a run before then would report the branch's own commits.
 
-    WHAT IT CANNOT SEE. A word that names no commit in this clone, which passes: a fresh clone
-    never fetched the pre-reword copy of a commit, so CI is blind to the case #815 had, and a
-    clone that made the commit is not. A prefix two objects share. A hash of 6 characters or
-    fewer. -Main as this clone last fetched it. Whether a commit on main is the one the prose
-    means. A hash in a fence, in an exempt page, or in a file -Path does not name. A fence opened
-    after a > or a list marker on its line is not seen as one, so the lines in it are read.
-    -SelfTest runs the reading on a scratch repository, and the script once through pwsh from a
-    folder whose name is not ASCII; its exit code is not held.
+    WHAT IT CANNOT SEE. A word that names no commit in this clone, which passes: a fresh clone never
+    fetched the pre-reword copy of a commit, so CI is blind to the case #815 had, and a clone that
+    made the commit is not. A prefix two objects share. A hash of 6 characters or fewer. -Main as
+    this clone last fetched it. Whether a commit on main is the one the prose means. A hash in a
+    fence, in an exempt page, or in a file -Path does not name. A fence opened after a > or a list
+    marker on its line is not seen as one, so the lines in it are read. -SelfTest runs the reading
+    on a scratch repository, and the script once through pwsh from a folder whose name is not ASCII;
+    its exit code is not held.
 
 .PARAMETER Path
     The git pathspecs of the files to read, as globs from the repository root. The tracked .md,

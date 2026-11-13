@@ -1,38 +1,38 @@
 <#
 .SYNOPSIS
-    A hook for agent sessions: refuses `gh pr create` or `gh pr edit` whose body
-    pr-body-check.ps1 fails, or whose body this cannot read from a file, and `gh pr comment`,
-    `gh issue create` or `gh issue comment` whose body file markdown-check.ps1 -Body fails, or
-    that this cannot read. Exit 2 refuses the command before it runs, with the check's report or
-    what to write instead on stderr; exit 0 lets it run, and means only that each body file this
-    checked passed: a call with `--help` or `-h` is not checked. Exit 1 says on stderr that the
-    command could not be checked, as where the tool call cannot be read; the command still runs.
+    A hook for agent sessions: refuses `gh pr create` or `gh pr edit` whose body pr-body-check.ps1
+    fails, or whose body this cannot read from a file, and `gh pr comment`, `gh issue create` or
+    `gh issue comment` whose body file markdown-check.ps1 -Body fails, or that this cannot read.
+    Exit 2 refuses the command before it runs, with the check's report or what to write instead on
+    stderr; exit 0 lets it run, and means only that each body file this checked passed: a call with
+    `--help` or `-h` is not checked. Exit 1 says on stderr that the command could not be checked, as
+    where the tool call cannot be read; the command still runs.
 
 .DESCRIPTION
-    WHY (grado-factorio-tools#259). PR #252 was opened with a body the check failed. The
-    session ran `pr-body-check.ps1 ... 2>&1 | tail -4 && gh pr create ...`: the pipe's exit code
-    was tail's, 0, so `&&` went on. docs/agents/issue-tracker.md asks for that chain without a
-    pipe, and the session's memory held that a pipe hides an exit code; neither stopped it. CI
-    checks the body only once the pull request exists. Of a comment or an issue (#386): in PR
-    #374's session a review comment was posted after its check refused the file, and six tickets
-    were filed with no check run.
+    WHY (grado-factorio-tools#259). PR #252 was opened with a body the check failed. The session ran
+    `pr-body-check.ps1 ... 2>&1 | tail -4 && gh pr create ...`: the pipe's exit code was tail's, 0,
+    so `&&` went on. docs/agents/issue-tracker.md asks for that chain without a pipe, and the
+    session's memory held that a pipe hides an exit code; neither stopped it. CI checks the body
+    only once the pull request exists. Of a comment or an issue (#386): in PR #374's session a
+    review comment was posted after its check refused the file, and six tickets were filed with no
+    check run.
 
     HOW IT IS WIRED. In .claude/settings.json, a PreToolUse hook on the two shell tools, matcher
     `Bash|PowerShell`, as refuse-git-hook-skip.ps1 is. A consumer's command is the first example
-    below (ADR 0004), which names the script under vendor/grado-factorio-tools/ and, where it is
-    not there, lets the command run and tells the agent which path is missing. This repository's
-    own tracked settings wire it from scripts/. The session hands the hook the tool call as JSON
-    on stdin: this reads `tool_input.command` and `cwd`. Every argument the wiring passes goes to
-    pr-body-check.ps1 unchanged, after the body file; the example passes none, the check's
-    defaults, and a consumer adds on its own line the ones its gate uses (ADR 0004 decision 5).
-    This repository passes -CiteSiblings -RequireSummaryVisual, as CI and the create command do,
-    and -CheckRuns, as CI does. With -CheckRuns among them, a `gh pr edit` also hands the check
-    -Head and the head `gh pr view` names for the pull request the edit names, or for the current
-    branch's where it names none (#455); where gh names none, the check reads no run and says so.
-    A `gh pr create` hands no head: the pull request does not exist yet. The check runs in `cwd`,
+    below (ADR 0004), which names the script under vendor/grado-factorio-tools/ and, where it is not
+    there, lets the command run and tells the agent which path is missing. This repository's own
+    tracked settings wire it from scripts/. The session hands the hook the tool call as JSON on
+    stdin: this reads `tool_input.command` and `cwd`. Every argument the wiring passes goes to
+    pr-body-check.ps1 unchanged, after the body file; the example passes none, the check's defaults,
+    and a consumer adds on its own line the ones its gate uses (ADR 0004 decision 5). This
+    repository passes -CiteSiblings -RequireSummaryVisual, as CI and the create command do, and
+    -CheckRuns, as CI does. With -CheckRuns among them, a `gh pr edit` also hands the check -Head
+    and the head `gh pr view` names for the pull request the edit names, or for the current branch's
+    where it names none (#455); where gh names none, the check reads no run and says so. A
+    `gh pr create` hands no head: the pull request does not exist yet. The check runs in `cwd`,
     since it asks git about the commits a body cites, and gh which pull request a branch has. The
-    `case` keeps PowerShell from starting before every shell command: whatever is refused holds
-    `gh` and `pr`, or `gh` and `issue`.
+    `case` keeps PowerShell from starting before every shell command: whatever is refused holds `gh`
+    and `pr`, or `gh` and `issue`.
 
     WHAT IT REFUSES, for each `gh pr create` and `gh pr edit` in the command (Truls's rulings on
     #259, 2026-10-26):
@@ -45,55 +45,54 @@
     - a path, taken against `cwd` where it is relative, that names no file;
     - a body file pr-body-check.ps1 fails, with that check's report.
 
-    For each `gh pr comment`, `gh issue create` and `gh issue comment` (#386): a body file given
-    no path, `-`, a path through the shell, or one that names no file, as for a pull request's
-    body; and a body file markdown-check.ps1 -Body fails, with that check's report. The wiring's
-    arguments are pr-body-check.ps1's and do not reach it. An inline body, and a command with no
-    body file, as one that opens an editor, are let through (Truls's ruling 3 on #386).
+    For each `gh pr comment`, `gh issue create` and `gh issue comment` (#386): a body file given no
+    path, `-`, a path through the shell, or one that names no file, as for a pull request's body;
+    and a body file markdown-check.ps1 -Body fails, with that check's report. The wiring's arguments
+    are pr-body-check.ps1's and do not reach it. An inline body, and a command with no body file, as
+    one that opens an editor, are let through (Truls's ruling 3 on #386).
 
     WHAT IT LETS THROUGH. A `gh pr create` or `gh pr edit` each of whose body files passes the
     check; a `gh pr edit` that touches no body, as `--title` or `--add-label` alone; a
     `gh pr comment`, `gh issue create` or `gh issue comment` each of whose body files passes
     markdown-check.ps1 -Body, or that has an inline body or no body file; any of the five with
-    `--help` or `-h`; every other gh command. A Git Bash path, `/c/...`, is read as `C:/...`
-    on Windows. The title is not checked (ruling 4).
+    `--help` or `-h`; every other gh command. A Git Bash path, `/c/...`, is read as `C:/...` on
+    Windows. The title is not checked (ruling 4).
 
-    WHAT IT CANNOT SEE. A command inside a quoted string, as `sh -c` or `pwsh -Command`, a
-    script, an alias, or a variable; a body written by `gh api`, `gh issue edit`, a
-    `--comment` on `gh issue close` or any other way than these five subcommands; a comment's or
-    an issue's inline body; a body file in a cluster of short options, as
-    `-dF body.md`, which on `gh pr create` is refused as no body file and on `gh pr edit` goes
-    unchecked; a person's own terminal: this is a session's hook. A file the command itself writes
-    before gh runs, as `... > body.md && gh pr create -F body.md`, is checked as it stands when the
-    hook runs. And whether the settings still reach it, unless -SelfTest is run, which reads the
-    wired command and the matcher of its entry, and nothing else of the settings.
+    WHAT IT CANNOT SEE. A command inside a quoted string, as `sh -c` or `pwsh -Command`, a script,
+    an alias, or a variable; a body written by `gh api`, `gh issue edit`, a `--comment` on
+    `gh issue close` or any other way than these five subcommands; a comment's or an issue's inline
+    body; a body file in a cluster of short options, as `-dF body.md`, which on `gh pr create` is
+    refused as no body file and on `gh pr edit` goes unchecked; a person's own terminal: this is a
+    session's hook. A file the command itself writes before gh runs, as
+    `... > body.md && gh pr create -F body.md`, is checked as it stands when the hook runs. And
+    whether the settings still reach it, unless -SelfTest is run, which reads the wired command and
+    the matcher of its entry, and nothing else of the settings.
 
-    WHAT IT REFUSES WRONGLY. It reads the command as text and does not parse the shell, so text
-    that names one of the five subcommands outside quotes is read as a command: in a heredoc,
-    in an `echo`, in a comment, between backticks, or after a lone apostrophe in a here-string.
-    A value of another option that begins `-b`, as `--title '-bump deps'`, reads as an inline
-    body. Write such text to a file and pass the file.
+    WHAT IT REFUSES WRONGLY. It reads the command as text and does not parse the shell, so text that
+    names one of the five subcommands outside quotes is read as a command: in a heredoc, in an
+    `echo`, in a comment, between backticks, or after a lone apostrophe in a here-string. A value of
+    another option that begins `-b`, as `--title '-bump deps'`, reads as an inline body. Write such
+    text to a file and pass the file.
 
     TO CHECK IT, run the second example below.
 
 .PARAMETER SelfTest
-    Prove it refuses what it should and lets the rest through, that the arguments after it
-    reach the check, that the wired command reaches it, that the matcher beside that
-    command starts the hook for the Bash tool and for the PowerShell tool, and that the first
-    example's form refuses where the script is and, where it is not, exits 0 and prints JSON
-    naming the missing path. The cases that run a command need sh: the one on the path, or the
-    one Git for Windows ships.
+    Prove it refuses what it should and lets the rest through, that the arguments after it reach the
+    check, that the wired command reaches it, that the matcher beside that command starts the hook
+    for the Bash tool and for the PowerShell tool, and that the first example's form refuses where
+    the script is and, where it is not, exits 0 and prints JSON naming the missing path. The cases
+    that run a command need sh: the one on the path, or the one Git for Windows ships.
 
 .PARAMETER Settings
-    With -SelfTest: the .claude/settings.json read by the case that runs the wired command and
-    the one that reads its matcher, with that file's repository as the project. Defaults to
-    this repository's own.
+    With -SelfTest: the .claude/settings.json read by the case that runs the wired command and the
+    one that reads its matcher, with that file's repository as the project. Defaults to this
+    repository's own.
 
 .PARAMETER CheckArgs
-    The arguments that follow the body file on pr-body-check.ps1's command line: every argument
-    this is given that it does not take itself. None by default. pr-body-check.ps1's header
-    names its options; a consumer's gate may pass -CiteSiblings and -RequireSummaryVisual, as
-    this repository's does, which also passes -CheckRuns. With -CheckRuns, -Head is added on
+    The arguments that follow the body file on pr-body-check.ps1's command line: every argument this
+    is given that it does not take itself. None by default. pr-body-check.ps1's header names its
+    options; a consumer's gate may pass -CiteSiblings and -RequireSummaryVisual, as this
+    repository's does, which also passes -CheckRuns. With -CheckRuns, -Head is added on
     `gh pr edit`, as HOW IT IS WIRED says.
 
 .EXAMPLE
@@ -134,8 +133,8 @@ function Get-CheckArgument {
     <#  The arguments for pr-body-check.ps1 after the body file, for `gh $Sub` with $Rest the words
         after the subcommand: $CheckArgs, and on `gh pr edit` with -CheckRuns among them, -Head and
         the head $HeadOf gives for the pull request named by the first of $Rest that is not an
-        option, or for none (#455). Where $HeadOf gives none, no -Head: the check then reads no
-        run, and says so.  #>
+        option, or for none (#455). Where $HeadOf gives none, no -Head: the check then reads no run,
+        and says so.  #>
     param([Parameter(Mandatory)] [string] $Sub, [string[]] $Rest = @(), [string[]] $CheckArgs = @(),
         [Parameter(Mandatory)] [scriptblock] $HeadOf)
     $CheckArgs

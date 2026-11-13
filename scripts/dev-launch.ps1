@@ -1,9 +1,8 @@
 <#
 .SYNOPSIS
-    Launches the Factorio client, the full game with its window, with the mods it is given, in a
-    mod directory of their own. Exit 0 means the game was started; with -Wait, the game's own exit
-    code is returned. With -Clean it removes that mod directory, junctions first, and starts
-    nothing.
+    Launches the Factorio client, the full game with its window, with the mods it is given, in a mod
+    directory of their own. Exit 0 means the game was started; with -Wait, the game's own exit code
+    is returned. With -Clean it removes that mod directory, junctions first, and starts nothing.
 
 .DESCRIPTION
     WHERE IT CAME FROM (grado-factorio-tools#350, #321 ruling 3). realistic-fusion-refreshed's
@@ -20,8 +19,7 @@
     restart of the game is the whole edit-test loop: nothing is copied and nothing needs
     reinstalling. Data-stage changes need a full restart; Factorio has no hot reload for them. The
     junctions and the copied zips are rebuilt every run, so a mod renamed or removed cannot linger.
-    It writes mod-list.json, and a README-BEFORE-DELETING.txt that says how to remove the
-    directory.
+    It writes mod-list.json, and a README-BEFORE-DELETING.txt that says how to remove the directory.
 
     NO FOLDER THIS DID NOT MAKE IS USED UNLESS IT IS EMPTY (#423, #434). A run deletes the junctions
     and zips in -ModDirectory and overwrites its mod-list.json; -Clean deletes it whole. So a run
@@ -33,9 +31,9 @@
     (#454). Those are the Steam build's %APPDATA%\Factorio\mods and the mods folder at the root of
     the install whose Factorio.exe this starts, <root>\bin\x64\Factorio.exe, where a zip install
     keeps its mods (docs/factorio-facts.md, *Read*). Each path is compared in full, in any case and
-    without a trailing separator, so another spelling of it is refused too. The marker alone did
-    not cover them, as #423 took it to: a start of the game with its window, on the Steam build
-    2.1.24 and the zip install of that build, closed by its pid at the main menu, left an empty mod
+    without a trailing separator, so another spelling of it is refused too. The marker alone did not
+    cover them, as #423 took it to: a start of the game with its window, on the Steam build 2.1.24
+    and the zip install of that build, closed by its pid at the main menu, left an empty mod
     directory empty (docs/factorio-facts.md, *Measured*, #439), which was then taken. It cannot see
     any other folder the player's game loads mods from, a --mod-directory the player chose or one a
     config-path.cfg or a config.ini moves; nor a folder that holds a file of the marker's name it
@@ -45,16 +43,15 @@
 
     ON A STEAM BUILD, running Factorio.exe directly makes the Steam API relaunch the game through
     Steam and exit ("Steam requires game restart, restarting..."), and Steam starts it WITHOUT
-    --mod-directory, so the player's mods load silently in place of these. A steam_appid.txt in
-    the working directory tells the Steam API not to restart. This launches the game from a
-    scratch directory under %TEMP% that holds one, so the Steam installation is never changed.
-    Passing arguments through steam:// URLs does not work: Steam clients ignore them. On a zip
-    install the file is not read. Both were launched on 2026-11-11; docs/measurements.md has the
-    runs.
+    --mod-directory, so the player's mods load silently in place of these. A steam_appid.txt in the
+    working directory tells the Steam API not to restart. This launches the game from a scratch
+    directory under %TEMP% that holds one, so the Steam installation is never changed. Passing
+    arguments through steam:// URLs does not work: Steam clients ignore them. On a zip install the
+    file is not read. Both were launched on 2026-11-11; docs/measurements.md has the runs.
 
-    THE GAME VERSION. -FactorioExe, else $env:FACTORIO_EXE, else the Steam path
-    Resolve-FactorioExe names. Steam updates on its own, so a run without either changes version
-    silently (#321 ruling 7).
+    THE GAME VERSION. -FactorioExe, else $env:FACTORIO_EXE, else the Steam path Resolve-FactorioExe
+    names. Steam updates on its own, so a run without either changes version silently (#321 ruling
+    7).
 
     WHAT IT CANNOT SEE. Whether the game loaded the mods: it starts the game and returns, and the
     game's own window says what failed. A mod a given mod depends on and was not given, which the
@@ -77,8 +74,8 @@
     names.
 
 .PARAMETER Wait
-    Block until the game exits, and exit with its code. Without it the script returns as soon as
-    the game has started.
+    Block until the game exits, and exit with its code. Without it the script returns as soon as the
+    game has started.
 
 .PARAMETER Clean
     Remove the junctions and the mod directory, then exit without launching. Use this rather than

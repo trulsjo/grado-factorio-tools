@@ -1,15 +1,15 @@
 #Requires -Version 7
 <#
-    Whether a session hook's `matcher` starts the hook for a tool, for a session hook's
-    -SelfTest (grado-factorio-tools#120). Dot-source it:
+    Whether a session hook's `matcher` starts the hook for a tool, for a session hook's -SelfTest
+    (grado-factorio-tools#120). Dot-source it:
 
         . "$PSScriptRoot/hook-matcher.ps1"
         Get-UnstartedShellTool -Entry $settings.hooks.PreToolUse[0]
 
-    WHY. Each session hook's self-test here, on 2026-10-12, ran the command a
-    .claude/settings.json wires and read nothing else of the entry. With the matcher narrowed
-    from `Bash|PowerShell` to `Bash` each passed (2026-10-12), while a session would no longer
-    start the hook for the PowerShell tool.
+    WHY. Each session hook's self-test here, on 2026-10-12, ran the command a .claude/settings.json
+    wires and read nothing else of the entry. With the matcher narrowed from `Bash|PowerShell` to
+    `Bash` each passed (2026-10-12), while a session would no longer start the hook for the
+    PowerShell tool.
 
     THE RULE IS THE CLIENT'S, READ 2026-10-12 from *Matcher patterns* in Claude Code's hooks
     reference, https://code.claude.com/docs/en/hooks, and Test-HookMatcher follows it:
@@ -26,24 +26,24 @@
     BOTH SHELL TOOLS ARE DEMANDED, Bash and PowerShell, ruled by Truls 2026-10-12: a session on
     Windows has both, and a hook wired for one is gone round with the other.
 
-    WHAT -SelfTest MEANS HERE. Run as a script with -SelfTest, it holds Test-HookMatcher to a
-    table of matchers and Get-UnstartedShellTool to six entries. Exit 0 means both read those
-    as the reference's words above say and, where it says nothing, as chosen here: names are
-    compared in exact case, a matcher of spaces alone starts nothing, and neither does one that
-    is no string or a pattern .NET cannot compile.
+    WHAT -SelfTest MEANS HERE. Run as a script with -SelfTest, it holds Test-HookMatcher to a table
+    of matchers and Get-UnstartedShellTool to six entries. Exit 0 means both read those as the
+    reference's words above say and, where it says nothing, as chosen here: names are compared in
+    exact case, a matcher of spaces alone starts nothing, and neither does one that is no string or
+    a pattern .NET cannot compile.
 
-    WHAT IT CANNOT SEE. Whether the client does what its reference says: no session was run with
-    a narrowed matcher. Where JavaScript's regular expressions and .NET's differ: the pattern is
-    given to .NET with its ECMAScript option, and one that .NET compiles and JavaScript refuses,
-    as `(?i)bash|powershell` is (grado-factorio-tools#120's review, 2026-10-12), is read here as
-    .NET reads it. Any other key of the entry, and so a handler's `if`, which narrows further. A
-    hook wired by one entry for each tool: only the entry it is handed is read. Settings in
-    another file than the one the entry came from, and a session whose hooks are turned off.
+    WHAT IT CANNOT SEE. Whether the client does what its reference says: no session was run with a
+    narrowed matcher. Where JavaScript's regular expressions and .NET's differ: the pattern is given
+    to .NET with its ECMAScript option, and one that .NET compiles and JavaScript refuses, as
+    `(?i)bash|powershell` is (grado-factorio-tools#120's review, 2026-10-12), is read here as .NET
+    reads it. Any other key of the entry, and so a handler's `if`, which narrows further. A hook
+    wired by one entry for each tool: only the entry it is handed is read. Settings in another file
+    than the one the entry came from, and a session whose hooks are turned off.
 #>
 
 function Test-HookMatcher {
-    <#  Whether a hook entry with $Matcher is started for the tool named $Tool. $null is an
-        entry with no matcher.  #>
+    <#  Whether a hook entry with $Matcher is started for the tool named $Tool. $null is an entry
+        with no matcher.  #>
     param([AllowNull()] $Matcher, [Parameter(Mandatory)] [string] $Tool)
 
     if ($null -eq $Matcher) { return $true }

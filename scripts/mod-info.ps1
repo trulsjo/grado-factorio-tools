@@ -1,15 +1,15 @@
 #Requires -Version 7
 <#
     How a mod's info.json is read by the scripts here that refuse a bad one. Dot-sourced by
-    pack-mods.ps1, load-harness-lib.ps1 and resolve-modpack.ps1, so a refusal has one wording and
-    a defect in the reading is fixed once (grado-factorio-tools#59). Before it, each script parsed
-    the file on its own and the same defect was ticketed once per script.
+    pack-mods.ps1, load-harness-lib.ps1 and resolve-modpack.ps1, so a refusal has one wording and a
+    defect in the reading is fixed once (grado-factorio-tools#59). Before it, each script parsed the
+    file on its own and the same defect was ticketed once per script.
 
         . "$PSScriptRoot/mod-info.ps1"
         $info = Read-ModInfo -Text (Get-Content -LiteralPath $path -Raw) -Where $path
 
-    It takes the text and not a path, because the harness reads an info.json out of a zip. -Where
-    is what a refusal calls the file.
+    It takes the text and not a path, because the harness reads an info.json out of a zip. -Where is
+    what a refusal calls the file.
 
     WHAT IT REFUSES, AND WHY EACH.
 
@@ -29,23 +29,23 @@
                         a file after nothing the mod declared.
 
     WHAT IT READS, WHERE ConvertFrom-Json ALONE WOULD NOT. An empty key, which is legal JSON:
-    fluid-connection-indicators 0.2.9's `package` table holds `"": ""`
-    (grado-factorio-tools#38, and #40 for the packer). And a `"Name"` beside `name`, or a
-    `"Version"` beside `version`: the lower-case key is read and the other ignored, which is how
-    the game reads them -- the run is in docs/measurements.md.
+    fluid-connection-indicators 0.2.9's `package` table holds `"": ""` (grado-factorio-tools#38, and
+    #40 for the packer). And a `"Name"` beside `name`, or a `"Version"` beside `version`: the
+    lower-case key is read and the other ignored, which is how the game reads them -- the run is in
+    docs/measurements.md.
 
     WHAT IT CANNOT SEE. It reads `name` and `version` and checks nothing else about them: not a
     version's format, not that the name matches the directory or zip the file came from, and a
-    string of only spaces passes. A caller that needs more checks it itself, as pack-mods.ps1
-    does. One string is refused that should not be: a value shaped like a date and time, such as
+    string of only spaces passes. A caller that needs more checks it itself, as pack-mods.ps1 does.
+    One string is refused that should not be: a value shaped like a date and time, such as
     "2020-01-01T00:00:00", which ConvertFrom-Json reads as a date and not a string.
 
-    TWO READS DO NOT COME THROUGH HERE. fetch-mods.ps1's Get-ModVersion, whose header says why,
-    and Get-BundledMods in load-harness-lib.ps1, which reads the game's own mods from its data
-    directory and refuses nothing.
+    TWO READS DO NOT COME THROUGH HERE. fetch-mods.ps1's Get-ModVersion, whose header says why, and
+    Get-BundledMods in load-harness-lib.ps1, which reads the game's own mods from its data directory
+    and refuses nothing.
 
-    `pwsh -File scripts/mod-info.ps1 -SelfTest` proves each refusal can happen, with no game and
-    no network. Exit 0 means every case held. Dot-sourced, the self-test is not reachable.
+    `pwsh -File scripts/mod-info.ps1 -SelfTest` proves each refusal can happen, with no game and no
+    network. Exit 0 means every case held. Dot-sourced, the self-test is not reachable.
 #>
 
 function Read-ModInfo {

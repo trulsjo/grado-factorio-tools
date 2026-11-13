@@ -5,30 +5,30 @@
     whatever it found; exit 1 means it refused, and printed only why, or could not read its input.
 
 .DESCRIPTION
-    WHAT IT READS. The JSONs count-resources.ps1 copies out of grado-count, at tick 600: -With
-    the runs with the mod -Under names, -Without the runs without it. A side may be more than
-    one JSON, because the square counted may differ by surface, as Nauvis from a radius-48 run
-    and the other planets from a radius-24 run. For each surface it takes the JSON that generated
-    the most chunks there. It writes nothing.
+    WHAT IT READS. The JSONs count-resources.ps1 copies out of grado-count, at tick 600: -With the
+    runs with the mod -Under names, -Without the runs without it. A side may be more than one JSON,
+    because the square counted may differ by surface, as Nauvis from a radius-48 run and the other
+    planets from a radius-24 run. For each surface it takes the JSON that generated the most chunks
+    there. It writes nothing.
 
-    WHAT IT PRINTS. Each resource placed, an entity of it counted, on some surface on one side
-    and on no surface on the other, either way. Then per surface what each side places there and
-    the other does not. A resource neither side places is no difference and is not listed. This
-    is the rule trulsjo/grado-factorio-modpack ruled for rso-mod's membership, in its
-    docs/decisions.md (grado-factorio-tools#161): an ore counts when it is placed without the mod
-    and unplaced with it, on the same seed and set, and unplaced means no planet has an entity of
-    it in the area counted. The area is not decided here: each square is read from the JSONs.
+    WHAT IT PRINTS. Each resource placed, an entity of it counted, on some surface on one side and
+    on no surface on the other, either way. Then per surface what each side places there and the
+    other does not. A resource neither side places is no difference and is not listed. This is the
+    rule trulsjo/grado-factorio-modpack ruled for rso-mod's membership, in its docs/decisions.md
+    (grado-factorio-tools#161): an ore counts when it is placed without the mod and unplaced with
+    it, on the same seed and set, and unplaced means no planet has an entity of it in the area
+    counted. The area is not decided here: each square is read from the JSONs.
 
-    WHEN IT REFUSES, it prints why and nothing else. It refuses a JSON written before
-    grado-count 0.1.0, which lacks the squares, and a pair that is not one comparison: the seeds,
-    a surface's square, the surfaces counted or the mods differ, less the mod -Under names and
-    those -AlsoDiffers names, as the "same set" of the rule asks. Compare-ResourceCount holds
-    each refusal, and the self-test one case for each.
+    WHEN IT REFUSES, it prints why and nothing else. It refuses a JSON written before grado-count
+    0.1.0, which lacks the squares, and a pair that is not one comparison: the seeds, a surface's
+    square, the surfaces counted or the mods differ, less the mod -Under names and those
+    -AlsoDiffers names, as the "same set" of the rule asks. Compare-ResourceCount holds each
+    refusal, and the self-test one case for each.
 
-    WHAT IT CANNOT SEE. Anything grado-count cannot, which its control.lua lists: an ore placed
-    only outside the square reads as unplaced. Whether the mods on disk were the ones named:
-    active_mods holds names and versions, so a changed copy of a mod at the same version, as a
-    guarded rso-mod, is the same set to it. How many entities differ: placed is one or more.
+    WHAT IT CANNOT SEE. Anything grado-count cannot, which its control.lua lists: an ore placed only
+    outside the square reads as unplaced. Whether the mods on disk were the ones named: active_mods
+    holds names and versions, so a changed copy of a mod at the same version, as a guarded rso-mod,
+    is the same set to it. How many entities differ: placed is one or more.
 
 .PARAMETER With
     The JSONs of the runs with the mod.
@@ -40,12 +40,12 @@
     The mod the comparison is about.
 
 .PARAMETER AlsoDiffers
-    Mods that may also differ between the sides, as the pack mods that require -Under's mod and
-    so leave with it.
+    Mods that may also differ between the sides, as the pack mods that require -Under's mod and so
+    leave with it.
 
 .PARAMETER SelfTest
-    Compare fixture JSONs in a temp directory: a case of each refusal, and one of a resource
-    neither side places, which is not reported. No game.
+    Compare fixture JSONs in a temp directory: a case of each refusal, and one of a resource neither
+    side places, which is not reported. No game.
 
 .EXAMPLE
     pwsh -File scripts/compare-resource-counts.ps1 -Under rso-mod `

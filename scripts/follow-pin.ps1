@@ -1,8 +1,8 @@
 <#
 .SYNOPSIS
-    Brings a sibling's vendor/grado-factorio-tools submodule to the pin the new HEAD records,
-    run by the sibling's post-checkout and post-merge hooks, and post-rewrite after a rebase.
-    It always exits 0: a hook's exit status becomes the checkout's, and the checkout is done.
+    Brings a sibling's vendor/grado-factorio-tools submodule to the pin the new HEAD records, run by
+    the sibling's post-checkout and post-merge hooks, and post-rewrite after a rebase. It always
+    exits 0: a hook's exit status becomes the checkout's, and the checkout is done.
 
 .DESCRIPTION
     WHY (grado-factorio-tools#253, from grado-factorio-modpack#391). A branch switch or a merge
@@ -11,10 +11,10 @@
     status showed ` M vendor/grado-factorio-tools`, which a `git add -A` then stages as a pin move
     nobody meant.
 
-    WHERE IT RUNS. From the sibling's root, which is where git runs a hook, called by the
-    sibling's .githooks/<hook> wrapper with the hook's name and git's arguments; the second
-    example below is one. It runs from the copy in vendor/ that is checked out when the hook
-    fires, the old pin's, and reads nothing of the new pin's copy.
+    WHERE IT RUNS. From the sibling's root, which is where git runs a hook, called by the sibling's
+    .githooks/<hook> wrapper with the hook's name and git's arguments; the second example below is
+    one. It runs from the copy in vendor/ that is checked out when the hook fires, the old pin's,
+    and reads nothing of the new pin's copy.
 
     WHAT IT COMPARES. The gitlink of -Path, the commit the tree records for the submodule, in the
     old HEAD and the new one:
@@ -33,8 +33,8 @@
     has no old HEAD, it prints nothing.
 
     WHEN IT UPDATES. Only a submodule that is initialised, clean, and at the pin the old HEAD
-    recorded: it runs `git submodule update -- <path>`, which fetches a pin the clone does not
-    hold, and prints `<hook>: <path> <old7> -> <new7>`.
+    recorded: it runs `git submodule update -- <path>`, which fetches a pin the clone does not hold,
+    and prints `<hook>: <path> <old7> -> <new7>`.
 
     WHEN IT LEAVES IT, printing one line that says why and the command to run:
     - the submodule is not initialised;
@@ -42,16 +42,16 @@
     - its HEAD is not the old HEAD's pin, as when a newer tools commit was checked out there to
       try it;
     - git cannot read the submodule's HEAD;
-    - `git submodule update` failed, as when the pin could not be fetched.
-    A hook it does not serve, or anything else that fails, prints one line saying the submodule
-    was not checked, with the command to bring it to the pin HEAD records. It runs with git's
-    GIT_DIR, GIT_WORK_TREE and GIT_INDEX_FILE taken out of its environment, which git sets for a
-    hook when it is run with --git-dir, so its git calls into the submodule read the submodule.
+    - `git submodule update` failed, as when the pin could not be fetched. A hook it does not serve,
+    or anything else that fails, prints one line saying the submodule was not checked, with the
+    command to bring it to the pin HEAD records. It runs with git's GIT_DIR, GIT_WORK_TREE and
+    GIT_INDEX_FILE taken out of its environment, which git sets for a hook when it is run with
+    --git-dir, so its git calls into the submodule read the submodule.
 
-    WHAT IT CANNOT SEE. A HEAD moved by a command that runs none of these hooks: `git reset
-    --hard` leaves the submodule as it was, and so do `git rebase --abort` and `--quit`, after
-    the rebase's own checkout moved it. A `git merge --squash`, whose post-merge sees ORIG_HEAD
-    and HEAD the same while the index records the new pin, so it prints nothing. After each,
+    WHAT IT CANNOT SEE. A HEAD moved by a command that runs none of these hooks: `git reset --hard`
+    leaves the submodule as it was, and so do `git rebase --abort` and `--quit`, after the rebase's
+    own checkout moved it. A `git merge --squash`, whose post-merge sees ORIG_HEAD and HEAD the same
+    while the index records the new pin, so it prints nothing. After each,
     `git submodule update -- vendor/grado-factorio-tools` brings it there. A checkout made while
     vendor/ holds a pin older than this script, whose copy has none to run, and a clone with no
     pwsh: the wrapper below runs nothing in either, and prints two lines saying the submodule was
@@ -70,8 +70,8 @@
 
 .PARAMETER SelfTest
     Build, in a temp directory, a tools repository of four commits and a sibling holding it as a
-    submodule, with this script wired into its post-checkout, post-merge and post-rewrite hooks,
-    and hold each case above by running git. Needs git, and no game and no network.
+    submodule, with this script wired into its post-checkout, post-merge and post-rewrite hooks, and
+    hold each case above by running git. Needs git, and no game and no network.
 
 .EXAMPLE
     Run by hand from a sibling's root, as post-checkout would be after a switch from the
