@@ -320,7 +320,15 @@ function Get-RewrapHint {
         the current directory, beside this script, so a consumer is told its own (#444).  #>
     param([int] $Long, [int] $Max, [string] $Reading)
     $rewrap = [IO.Path]::GetRelativePath($PWD.ProviderPath, (Join-Path $PSScriptRoot 'markdown-rewrap.ps1')) -replace '\\', '/'
-    " $Long line(s) over $Max are rewrapped by markdown-rewrap.ps1: pwsh -File '$($rewrap -replace "'", "''")'$Reading -MaxLineLength $Max"
+    " $Long line(s) over $Max are rewrapped by markdown-rewrap.ps1: pwsh -File $(ConvertTo-QuotedArgument $rewrap)$Reading -MaxLineLength $Max"
+}
+
+function ConvertTo-QuotedArgument {
+    <#  $Text in single quotes for PowerShell, each kind of single quote it reads doubled, the curly
+        ones too, as comment-line-check.ps1 quotes its paths (#378), so the printed command runs as
+        printed (PR #452's review).  #>
+    param([string] $Text)
+    "'$([System.Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent($Text))'"
 }
 
 function Invoke-SelfTest {
@@ -884,12 +892,20 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             $short = & $go @('-Path', 'open.md', '-MaxLineLength', '20')
             $body = & $go @('-Body', 'long.md', '-MaxLineLength', '20')
             $text = & $go @('-Body', 'long.txt', '-MaxLineLength', '20')
-            $runs = $staged, $all, $range, $path, $short, $body, $text
+            # A curly apostrophe, which PowerShell reads as a single quote too (PR #452's review).
+            $curly = "it$([char] 0x2019)s.md"
+            Set-Content -LiteralPath (Join-Path $own $curly) -Value ('word ' * 6).Trim()
+            $quoted = & $go @('-Body', $curly, '-MaxLineLength', '20')
+            $command = ((& { param($r) @($r.Text.TrimEnd() -split '\r?\n')[-1] } $quoted) -split 'rewrapped by markdown-rewrap\.ps1: ', 2)[1]
+            $errors = $null
+            $ast = [Management.Automation.Language.Parser]::ParseInput("$command", [ref] $null, [ref] $errors)
+            $pathArg = @($ast.FindAll({ param($n) $n -is [Management.Automation.Language.StringConstantExpressionAst] -and $n.StringConstantType -eq 'SingleQuoted' }, $true))[-1].Value
+            $runs = $staged, $all, $range, $path, $short, $body, $text, $quoted
             $runs | ForEach-Object { Write-Host ($_.Text.TrimEnd() -replace '(?m)^', '    ') }
             $closing = { param($r) @($r.Text.TrimEnd() -split '\r?\n')[-1] }
             $named = { param($r, [string] $reading) $r.Code -eq 1 -and (& $closing $r).EndsWith(" 1 line(s) over 20 are rewrapped by markdown-rewrap.ps1: $at$reading -MaxLineLength 20") }
             (& $named $staged '') -and (& $named $all ' -All') -and (& $named $range ' -Range HEAD~1...HEAD') -and (& $named $path " -Path 'long.md,open.md'") -and
-                (& $named $body " -Path 'long.md'") -and
+                (& $named $body " -Path 'long.md'") -and $command -and @($errors).Count -eq 0 -and $pathArg -ceq $curly -and
                 $short.Code -eq 1 -and (& $closing $short) -notmatch 'markdown-rewrap' -and $text.Code -eq 1 -and (& $closing $text) -notmatch 'markdown-rewrap' } }
     )
 
@@ -939,7 +955,7 @@ if ($PSBoundParameters.ContainsKey('Body')) {
     if ($found) {
         # The rewrap takes a body by -Path where it ends in .md, and refuses another file
         # without -Comment, which would read it as a script.
-        $hint = if ($long -and $Body -match '\.md$') { Get-RewrapHint -Long $long -Max $MaxLineLength -Reading " -Path '$($Body -replace "'", "''")'" }
+        $hint = if ($long -and $Body -match '\.md$') { Get-RewrapHint -Long $long -Max $MaxLineLength -Reading " -Path $(ConvertTo-QuotedArgument $Body)" }
         Write-Host ''
         Write-Host "FAILED - markdown-check: $found finding(s) in $Body, read as a body. What it reads as what: the header of markdown-check.ps1, under WITH -Body.$hint"
         exit 1
@@ -1026,7 +1042,7 @@ if (-not $Range -and -not $named) {
 }
 if ($found) {
     # The rewrap reads by the check's own switches; with none, the staged files, read from disk.
-    $reading = if ($named) { " -Path '$(($Path -join ',') -replace "'", "''")'" } elseif ($Range) { " -Range $Range" } elseif ($All) { ' -All' } else { '' }
+    $reading = if ($named) { " -Path $(ConvertTo-QuotedArgument ($Path -join ','))" } elseif ($Range) { " -Range $Range" } elseif ($All) { ' -All' } else { '' }
     $hint = if ($checked.Long) { Get-RewrapHint -Long $checked.Long -Max $MaxLineLength -Reading $reading }
     Write-Host ''
     Write-Host "FAILED - markdown-check: $found finding(s) in $($files.Count) Markdown file(s). What it reads as what: the header of markdown-check.ps1.$hint"
