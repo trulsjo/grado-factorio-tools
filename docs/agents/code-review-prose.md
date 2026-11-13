@@ -26,6 +26,6 @@ and a pull request body is prose. This repository's own:
 - **Flag a header or comment that lists what the code lists**: self-test cases, fixtures, a count
   of them, a list of refusals.
 - **Where a change writes in a ruling it cites, name what carries each rule it adds**: a cited
-  ruling, or the page it moved from unchanged; neither is a finding. Reasoning, an incident or a
-  quotation is no rule. PR #437 added two: a confirmer that "runs no check and no revert", and
-  one set of lines for a fix's turn and a later commit's (#447).
+  ruling, or the page it moved from unchanged; a rule with neither is a finding. Reasoning, an
+  incident or a quotation is no rule. PR #437 added two: a confirmer that "runs no check and no
+  revert", and one set of lines for a fix's turn and a later commit's (#447).
