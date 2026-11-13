@@ -484,6 +484,25 @@ wired command too; `-SelfTest -Settings .claude/settings.json` runs a consumer's
 script's name. What it cannot see is in its header: a download a script it lets through makes
 is one.
 
+## Warning a session of a skipped install step
+
+A clone that never ran `git config core.hooksPath .githooks` runs none of its repository's git
+hooks, and says nothing; one that never ran `git submodule update --init` has an empty
+`vendor/` (#317 ruling 6). `scripts/warn-skipped-install.ps1` is a `SessionStart` hook that
+warns of either when a session starts: it prints JSON whose `systemMessage` and
+`additionalContext` name each skipped step and the command that takes it, and nothing where none
+was skipped. It always exits 0. It warns of the hooks path only where the repository holds a
+`.githooks` directory.
+
+A consumer's line in its `.claude/settings.json` is the first `.EXAMPLE` in
+[the script's header](scripts/warn-skipped-install.ps1), on a `SessionStart` entry. Where the
+script is not there, the submodule is the step that was skipped, and the line's own branch says
+so, naming the missing path. Whether this repository wires it in its own settings is not ruled
+(#357). `-SelfTest` builds scratch repositories, a clone of one with a submodule among them, and
+proves each warning, the silence of a clone that needs none, and both branches of the example's
+command; `-SelfTest -Settings .claude/settings.json` runs a consumer's, found by the script's
+name. What it cannot see is in its header: a submodule at a commit other than its pin is one.
+
 ## Packing mods
 
 `scripts/pack-mods.ps1` builds one zip per mod directory, named `<name>_<version>.zip` from the
