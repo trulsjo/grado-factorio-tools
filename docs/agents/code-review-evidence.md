@@ -275,7 +275,7 @@ Two of this repository's steps changed with it, by
   Both left the page, and [review-brief.md](review-brief.md) gained the confirmation turn.
 - **A lane's report is a file outside the repository.** It had been the lane's reply.
 
-Truls ruled four more things in the session that built it, on 2026-11-13
+Truls ruled six more things in the session that built it, on 2026-11-13
 ([his rulings](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6852591475)):
 
 - **A confirmation of a fix reads the fix diff and runs no check and no revert**, whether the
@@ -289,12 +289,19 @@ Truls ruled four more things in the session that built it, on 2026-11-13
   [a third ruling](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6852734986)
   of the same day: with "review only the commits since" gone, a commit that fixes no finding
   had no rule, where the shared page has every commit reviewed before the merge.
-- **Such a commit that changes a line of code in a script gets the bug scan's reverts from that
-  lane**, by
+- **A commit added after the review that fixes no finding and changes a line of code in a
+  script gets the bug scan's reverts**, by
   [a fourth](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6852998339):
   the first ruling covered a fix, and new script code would have been read and not tested.
+- **A turn after the review's comment posts a follow-up comment, and the comment is posted once
+  each fix is confirmed or recorded as left**, by
+  [a fifth](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6854219710),
+  from the panel's review of PR #437, which had itself posted a second comment for its turn 5.
+- **A later commit goes to each lane that reviewed the change, and the reverts are the bug
+  scan's**, by a sixth, in the same comment: the third said "the lane", and a change that
+  touches a script has two.
 
-The stub is 3,767 bytes of its 3,779, from `wc -c docs/agents/code-review.md`, where the page
+The stub is 3,775 bytes of its 3,779, from `wc -c docs/agents/code-review.md`, where the page
 stood at 3,751. The room for the values came from these, each quoted as it stood:
 
 - "On top of the `/code-review` plugin", which the page no longer says: it names the plugin
@@ -303,8 +310,9 @@ stood at 3,751. The room for the values came from these, each quoted as it stood
   review, and each fix a confirmation turn.
 - "open the pull request first", which "on the pull request" says.
 - shortened, with the meaning kept: "anything else gets an agent per lane" to "otherwise an
-  agent per lane"; "such as a commit" to "as a commit"; "says so there" to "says so"; "the panel of
-  [review-panel.md](review-panel.md)" to "the [panel](review-panel.md)".
+  agent per lane"; "such as a commit" to "as a commit"; "says so there" to "says so";
+  "scores each finding itself" to "scores each finding"; "is outside this" to "is outside it";
+  "that only has nothing to check" to "that has nothing to check".
 - of a run not yet finished, "It waits on a run not yet finished with
   `gh run watch <id> --exit-status`, and names a run that passed instead of running the check":
   the brief's *The check* holds the command and the three cases.

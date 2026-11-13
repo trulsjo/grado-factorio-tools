@@ -152,19 +152,24 @@ check, with why: the session answers each one.
 **The confirmation turn** is sent to the lane that raised a finding, continued, once its fix is
 committed. It holds the lines below and no account of how a finding was fixed; the session
 fills their blanks, on a first turn and on each later one. Where the lane cannot be continued,
-a fresh agent is sent the brief's *Reads first* and
-*Read-only* paragraphs as they were filled, and the lines below. A confirmation reads the diff and
-runs nothing, whoever makes it (Truls, 2026-11-13, #355): the session's reverts and CI's run on the
-fix commit cover a fix to a script. The review's comment is posted after this turn, and a
-`not fixed` gets another fix and another turn, or is recorded as left. **A commit added after
-the review that fixes no finding is sent the same way**
-([Truls, 2026-11-13](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6852734986)):
-the lines name it among the commits, with a sentence on what it does, and the lane reads the
-diff since the commit it last read. **Where such a commit changes a line of code in a script,
-the lane runs the bug scan's reverts on it**
+a fresh agent is sent the brief's *Reads first* paragraph, its diff refilled as the turn's range
+in place of the change's, the *Read-only* paragraph, and the lines below. A confirmation reads
+the diff and runs nothing, whoever makes it (Truls, 2026-11-13, #355): the session's reverts and
+CI's run on the fix commit cover a fix to a script. A `not fixed` gets another fix and another
+turn, or is recorded as left. The review's comment is posted once each fix is confirmed or
+recorded as left, and **a turn after that comment posts a follow-up comment**
+([Truls, 2026-11-13](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6854219710)).
+
+**A commit added after the review that fixes no finding is sent the same way, to each lane that
+reviewed the change**
+([Truls, 2026-11-13](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6852734986),
+and for each lane the comment linked above): the lines name it among the commits, with a
+sentence on what it does, and the lane reads the diff since the commit it last read. **Where
+such a commit changes a line of code in a script, the bug scan runs its reverts on it**
 ([Truls, the same day](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6852998339)):
-the session fills the lines' blank for that with the brief's *The reverts* paragraph, filled for
-that commit.
+the session fills the bug scan's blank for that with the brief's *The reverts* paragraph, filled
+for that commit, and sends no other paragraph of the brief with it. The prose lane's blank says
+to run nothing.
 
 This is turn `<2 for the first turn after the review, and so on>` of the review of pull request
 `#<number>`, in `<the repository's path>`, whose report is `<the report file's full path>`. The
