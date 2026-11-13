@@ -7,9 +7,9 @@ values and its own steps. The evidence is in [code-review-evidence.md](code-revi
 ## How a review is run
 
 - **When: on the pull request.** Skip the review step inside `/implement` or any skill. Before
-  pushing any commit, the session walks the absolute-words list and runs whatever its diff or
-  message says a script or a command does, prints, refuses or exits with.
-- **Second pass: `on request`**, the panel of [review-panel.md](review-panel.md), when Truls asks.
+  the first push the session walks the absolute-words list, and before each it runs whatever
+  its diff or message says a script or a command does, prints, refuses or exits with.
+- **Second pass: `on request`**, the [panel](review-panel.md), when Truls asks.
 - **Trigger page:** this page. **Brief template:** [review-brief.md](review-brief.md).
   **Reviewer's copy:** a clone. **Raw output:** none. **Merge workflow:** `check.yml`.
 - **Two lanes.** A bug scan; and a prose lane applying the **further reading**,
