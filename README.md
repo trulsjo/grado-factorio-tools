@@ -539,6 +539,23 @@ realistic-fusion-refreshed's does not at `4f2dc44`. `-Title` checks a pull reque
 needs a scope. `-ScopeFile` names the repository's scopes, one to a line; without it any scope
 passes. `-SelfTest` proves it can fail. What it lets through is in its header.
 
+## Rewording a commit below the tip
+
+A finding in a commit message is fixed by rewording that commit, and `git commit --amend` reaches
+the tip only. `scripts/reword-commit.ps1`, lifted from grado-factorio-modpack (#356), rewords any
+commit of an unpushed branch from a message file, replays the commits above it with their trees,
+authors and author dates, and prints each old and new hash, so a reviewer can see that no tree
+changed. The commit check beside it reads the new messages, with the repository's
+`commit-scopes.txt` where there is one, before the branch moves; a rejected message leaves the
+branch where it was.
+
+    pwsh -File vendor/grado-factorio-tools/scripts/reword-commit.ps1 -Commit <rev> -MessageFile <file>
+
+It refuses, changing nothing, a commit off `origin/main..HEAD` (`-Base` for another), one already
+on the branch's `origin` remote, staged changes, a detached `HEAD` and a merge commit to replay.
+`-SelfTest` proves each, in a scratch repository. What it cannot see is in its header: a check
+the consumer's own `commit-msg` hook chains is not run.
+
 ## Checking Markdown
 
 `scripts/markdown-check.ps1` reads Markdown for four things a machine can decide: emphasis or a
