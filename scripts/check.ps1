@@ -219,16 +219,19 @@
     those that hold $TOOL_STEPS's line-cite-check.ps1 step and Invoke-ToolStep over fixture scripts,
     and Get-TokenOnlyChange, Get-RunPlan, Get-ChangedPath, Get-RunStart and, through it,
     Get-SelfTestSubset in the scratch repository, Get-RunStart also called with the lists the run
-    leaves to its defaults, and Invoke-RunPlan with blocks of its own; and those that hold this
+    leaves to its defaults, and Invoke-RunPlan with blocks of its own; the run's own SelfTests
+    block in $runBlocks, through Invoke-RunPlan with Invoke-SelfTestRun stood in, for a plan
+    naming a subset, which it must hand on with this folder (#432); and those that hold this
     runner's own verdict on a case, $judgeCase, and the loop's line, by a case giving two values
-    that the loop must fail (#419); and nothing else. The run's own blocks, its call of
-    each loop and of Get-ReadmeProblem, with this folder, this README and this script's lists,
-    are not run, nor its run of param-check.ps1, variable-case-check.ps1, help-check.ps1 and
-    strict-list-check.ps1 over this folder: a run that stopped making a call, or passed it a list
-    less, would still pass. Nor is its reading of the record for -SkipIfPassed, its exit where
-    Get-RunStart says skip, its call of Complete-Run, or its exit with the code that returns: the
-    cases hold the record, the skip and the code, not that the run reads the one or exits with
-    the others. Needs git, and no game.
+    that the loop must fail (#419); and nothing else. The run's other blocks, Scripts, Step,
+    Readme, Pages and Markdown, with their call of each loop and of Get-ReadmeProblem with this
+    folder, this README and this script's lists, are not run, nor its run of param-check.ps1,
+    variable-case-check.ps1, help-check.ps1 and strict-list-check.ps1 over this folder: a run
+    that stopped making a call, or passed it a list less, would still pass. Nor is the main
+    block's handing of $runBlocks to Invoke-RunPlan, its reading of the record for -SkipIfPassed,
+    its exit where Get-RunStart says skip, its call of Complete-Run, or its exit with the code
+    that returns: the cases hold the record, the skip and the code, not that the run reads the
+    one or exits with the others. Needs git, and no game.
 
 .EXAMPLE
     pwsh -File scripts/check.ps1
@@ -658,6 +661,62 @@ function Invoke-SelfTestRun {
             $run.Said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
             $problem
         }
+    }
+}
+
+# The run's blocks for Invoke-RunPlan, defined here and not in the main block, so that a case runs
+# them as the run does (#432).
+$runBlocks = @{
+    Scripts = {
+        $clock.Restart()
+        Test-ScriptFolder -Folder $PSScriptRoot -Limit $COMMENT_LINE_LIMIT -SelfTests $SELF_TESTS -NeedsGame $NEEDS_GAME -NoGameCases $NO_GAME_CASES
+        Write-Host "check: every script parsed $(& $took)"
+    }
+    # From the root, so each script is named by its path from there.
+    Step = { param($step) $clock.Restart(); Invoke-ToolStep -Root $root -Folder $PSScriptRoot -Step $step -Took $took }
+    Readme = {
+        $clock.Restart()
+        $unnamed = @(Get-ReadmeProblem -Folder $PSScriptRoot -Readme (Join-Path $root 'README.md'))
+        Write-Host "check: README.md names every script parameter -- $($unnamed ? 'FAILED' : 'ok') $(& $took)"
+        foreach ($f in $unnamed) { Write-Host "    $f" }
+        $unnamed
+    }
+    SelfTests = { param($names, $noGame) Invoke-SelfTestRun -Folder $PSScriptRoot -SelfTests $names -NoGameCases $noGame }
+    Pages = {
+        $clock.Restart()
+        foreach ($page in $PAGE_LIMITS.Keys) {
+            $path = Join-Path $root $page
+            # A page that is not there fails too: renamed, its limit would otherwise lapse in
+            # silence.
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+                Write-Host "check: $page is not there to measure -- FAILED"
+                "$page, which has a size limit, was not found"
+                continue
+            }
+            # Decoded from the bytes, not with ReadAllText, which drops a byte-order mark the
+            # file stores.
+            $text = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($path))
+            $bytes = [Text.Encoding]::UTF8.GetByteCount(($text -replace "`r`n", "`n"))
+            $over = $bytes -ge $PAGE_LIMITS[$page]
+            Write-Host "check: $page is $bytes bytes, limit $($PAGE_LIMITS[$page]) -- $($over ? 'FAILED' : 'ok')"
+            if ($over) { "$page is $bytes bytes and must be under $($PAGE_LIMITS[$page])" }
+        }
+    }
+    # In the repository root, because the Markdown check reads the repository it stands in. No
+    # file read is a failure too: a run outside a repository must not pass for having had nothing
+    # to read.
+    Markdown = {
+        $clock.Restart()
+        Push-Location $root
+        try { $said = & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'markdown-check.ps1') -All -MaxLineLength $MARKDOWN_LINE_LIMIT 2>&1 | Out-String } finally { Pop-Location }
+        $bad = $LASTEXITCODE -or $said -notmatch 'markdown-check: [1-9]\d* Markdown file'
+        Write-Host "check: markdown-check.ps1 -All -MaxLineLength $MARKDOWN_LINE_LIMIT -- $($bad ? 'FAILED' : 'ok') $(& $took)"
+        if ($bad) {
+            $said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
+            "markdown-check.ps1 -All -MaxLineLength $MARKDOWN_LINE_LIMIT found something, or read no file"
+        }
+        # Shown on a pass too: a pass says nothing of an edit that was not read.
+        elseif ($said -match '(?ms)^markdown-check: \d+ file\(s\) have unstaged edits.*?(?=^OK - )') { $Matches[0].TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" } }
     }
 }
 
@@ -1102,6 +1161,13 @@ if ($SelfTest) {
                     , @($failed)
                 }
                 ($ran[0] -join '|') -ceq 'self-tests [] no-game [n.ps1]' -and @($ran[1]).Count -eq 0 }
+            'the run''s own SelfTests block hands Invoke-SelfTestRun this folder and the plan''s lists, not the whole lists (#432)' = {
+                # A stand-in, found before the real one by the block run below this case.
+                function Invoke-SelfTestRun { param([string] $Folder, [string[]] $SelfTests, [string[]] $NoGameCases) "$Folder [$($SelfTests -join ',')] [$($NoGameCases -join ',')]" }
+                $failed = [System.Collections.Generic.List[string]]::new()
+                $plan = @{ Scripts = $false; Steps = @(); Readme = $false; SelfTests = @('check.ps1'); NoGameCases = @('n.ps1'); Pages = $false; Markdown = $false }
+                Invoke-RunPlan -Plan $plan -Do @{ SelfTests = $runBlocks.SelfTests } -Failed $failed
+                ($failed -join '|') -ceq "$PSScriptRoot [check.ps1] [n.ps1]" }
         }
         $failures = 0; $n = 0
         foreach ($name in $cases.Keys) {
@@ -1126,59 +1192,7 @@ $start = Get-RunStart -Root $root -Passed $passed -Tree $tree -Steps $TOOL_STEPS
 if ($start.Skip) { Write-Host $start.Skip; exit 0 }
 if ($start.Notice) { Write-Host $start.Notice }
 
-Invoke-RunPlan -Plan $start.Plan -Failed $failed -Do @{
-    Scripts = {
-        $clock.Restart()
-        Test-ScriptFolder -Folder $PSScriptRoot -Limit $COMMENT_LINE_LIMIT -SelfTests $SELF_TESTS -NeedsGame $NEEDS_GAME -NoGameCases $NO_GAME_CASES
-        Write-Host "check: every script parsed $(& $took)"
-    }
-    # From the root, so each script is named by its path from there.
-    Step = { param($step) $clock.Restart(); Invoke-ToolStep -Root $root -Folder $PSScriptRoot -Step $step -Took $took }
-    Readme = {
-        $clock.Restart()
-        $unnamed = @(Get-ReadmeProblem -Folder $PSScriptRoot -Readme (Join-Path $root 'README.md'))
-        Write-Host "check: README.md names every script parameter -- $($unnamed ? 'FAILED' : 'ok') $(& $took)"
-        foreach ($f in $unnamed) { Write-Host "    $f" }
-        $unnamed
-    }
-    SelfTests = { param($names, $noGame) Invoke-SelfTestRun -Folder $PSScriptRoot -SelfTests $names -NoGameCases $noGame }
-    Pages = {
-        $clock.Restart()
-        foreach ($page in $PAGE_LIMITS.Keys) {
-            $path = Join-Path $root $page
-            # A page that is not there fails too: renamed, its limit would otherwise lapse in
-            # silence.
-            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-                Write-Host "check: $page is not there to measure -- FAILED"
-                "$page, which has a size limit, was not found"
-                continue
-            }
-            # Decoded from the bytes, not with ReadAllText, which drops a byte-order mark the
-            # file stores.
-            $text = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($path))
-            $bytes = [Text.Encoding]::UTF8.GetByteCount(($text -replace "`r`n", "`n"))
-            $over = $bytes -ge $PAGE_LIMITS[$page]
-            Write-Host "check: $page is $bytes bytes, limit $($PAGE_LIMITS[$page]) -- $($over ? 'FAILED' : 'ok')"
-            if ($over) { "$page is $bytes bytes and must be under $($PAGE_LIMITS[$page])" }
-        }
-    }
-    # In the repository root, because the Markdown check reads the repository it stands in. No
-    # file read is a failure too: a run outside a repository must not pass for having had nothing
-    # to read.
-    Markdown = {
-        $clock.Restart()
-        Push-Location $root
-        try { $said = & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'markdown-check.ps1') -All -MaxLineLength $MARKDOWN_LINE_LIMIT 2>&1 | Out-String } finally { Pop-Location }
-        $bad = $LASTEXITCODE -or $said -notmatch 'markdown-check: [1-9]\d* Markdown file'
-        Write-Host "check: markdown-check.ps1 -All -MaxLineLength $MARKDOWN_LINE_LIMIT -- $($bad ? 'FAILED' : 'ok') $(& $took)"
-        if ($bad) {
-            $said.TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" }
-            "markdown-check.ps1 -All -MaxLineLength $MARKDOWN_LINE_LIMIT found something, or read no file"
-        }
-        # Shown on a pass too: a pass says nothing of an edit that was not read.
-        elseif ($said -match '(?ms)^markdown-check: \d+ file\(s\) have unstaged edits.*?(?=^OK - )') { $Matches[0].TrimEnd() -split "`n" | ForEach-Object { Write-Host "    $_" } }
-    }
-}
+Invoke-RunPlan -Plan $start.Plan -Failed $failed -Do $runBlocks
 
 Write-Host ''
 # A tree that did not stand still while it was read fails the run, with or without a record:
