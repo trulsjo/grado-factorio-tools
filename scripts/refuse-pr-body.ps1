@@ -25,10 +25,14 @@
     on stdin: this reads `tool_input.command` and `cwd`. Every argument the wiring passes goes to
     pr-body-check.ps1 unchanged, after the body file; the example passes none, the check's
     defaults, and a consumer adds on its own line the ones its gate uses (ADR 0004 decision 5).
-    This repository passes -CiteSiblings -RequireSummaryVisual, as CI and the create command do.
-    The check runs in `cwd`, since it
-    asks git about the commits a body cites. The `case` keeps PowerShell from starting before
-    every shell command: whatever is refused holds `gh` and `pr`, or `gh` and `issue`.
+    This repository passes -CiteSiblings -RequireSummaryVisual, as CI and the create command do,
+    and -CheckRuns, as CI does. With -CheckRuns among them, a `gh pr edit` also hands the check
+    -Head and the head `gh pr view` names for the pull request the edit names, or for the current
+    branch's where it names none (#455); where gh names none, the check reads no run and says so.
+    A `gh pr create` hands no head: the pull request does not exist yet. The check runs in `cwd`,
+    since it asks git about the commits a body cites, and gh which pull request a branch has. The
+    `case` keeps PowerShell from starting before every shell command: whatever is refused holds
+    `gh` and `pr`, or `gh` and `issue`.
 
     WHAT IT REFUSES, for each `gh pr create` and `gh pr edit` in the command (Truls's rulings on
     #259, 2026-10-26):
@@ -89,7 +93,8 @@
     The arguments that follow the body file on pr-body-check.ps1's command line: every argument
     this is given that it does not take itself. None by default. pr-body-check.ps1's header
     names its options; a consumer's gate may pass -CiteSiblings and -RequireSummaryVisual, as
-    this repository's does.
+    this repository's does, which also passes -CheckRuns. With -CheckRuns, -Head is added on
+    `gh pr edit`, as HOW IT IS WIRED says.
 
 .EXAMPLE
     The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json, as HOW
@@ -116,12 +121,38 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# The head of the pull request $Selector names, a number, an address or a branch, or with none
+# the current branch's, as gh names it from the current location; nothing where gh cannot.
+$GhHead = {
+    param([string] $Selector)
+    $named = @(if ($Selector) { $Selector })
+    $h = gh pr view @named --json headRefOid --jq .headRefOid 2>$null
+    if ($LASTEXITCODE -eq 0 -and "$h".Trim()) { "$h".Trim() }
+}
+
+function Get-CheckArgument {
+    <#  The arguments for pr-body-check.ps1 after the body file, for `gh $Sub` with $Rest the words
+        after the subcommand: $CheckArgs, and on `gh pr edit` with -CheckRuns among them, -Head and
+        the head $HeadOf gives for the pull request named by the first of $Rest that is not an
+        option, or for none (#455). Where $HeadOf gives none, no -Head: the check then reads no
+        run, and says so.  #>
+    param([Parameter(Mandatory)] [string] $Sub, [string[]] $Rest = @(), [string[]] $CheckArgs = @(),
+        [Parameter(Mandatory)] [scriptblock] $HeadOf)
+    $CheckArgs
+    if ($Sub -ne 'pr edit' -or $CheckArgs -notcontains '-CheckRuns') { return }
+    $selector = if ($Rest.Count -and $Rest[0] -notmatch '^-') { $Rest[0] } else { '' }
+    $head = & $HeadOf $selector
+    if ($head) { '-Head'; $head }
+}
+
 function Get-PrBodyRefusal {
-    <#  Why $Command is refused, run in $Cwd, or nothing where it is not.  #>
+    <#  Why $Command is refused, run in $Cwd, or nothing where it is not. $HeadOf names a pull
+        request's head for Get-CheckArgument.  #>
     param(
         [Parameter(Mandatory)] [AllowEmptyString()] [string] $Command,
         [Parameter(Mandatory)] [string] $Cwd,
-        [string[]] $CheckArgs = @()
+        [string[]] $CheckArgs = @(),
+        [scriptblock] $HeadOf = $GhHead
     )
 
     # Words and the marks that end a command, as refuse-git-hook-skip.ps1's Test-SkipsHooks reads
@@ -158,6 +189,8 @@ function Get-PrBodyRefusal {
             # An inline body, or none, of a comment or an issue is let through (#386's ruling 3).
             if ($inline -and -not $prose) { return "gh $sub gives its body inline, which the check cannot read. Write the body to a file and pass --body-file <path>." }
             if ($sub -eq 'pr create' -and -not $files.Count) { return 'gh pr create is given no --body-file, so its body cannot be checked. Write the body to a file and pass --body-file <path>.' }
+            # Asked of gh once, and only where a body file is checked, from $Cwd.
+            $bodyArgs = $null
             foreach ($f in $files) {
                 if (-not $f) { return "gh $sub is given --body-file with no path. Pass the body file's path." }
                 if ($f -eq '-') { return "gh $sub reads its body from standard input, which the check cannot read. Pass --body-file <path>." }
@@ -165,11 +198,14 @@ function Get-PrBodyRefusal {
                 $path = if ($IsWindows -and $f -match '^/([a-zA-Z])(/.*)?$') { "$($Matches[1]):$($Matches[2] ?? '/')" } else { $f }
                 if (-not [IO.Path]::IsPathRooted($path)) { $path = Join-Path $Cwd $path }
                 if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return "gh $sub's body file, $f, is not there ($path). Write it first, then run gh." }
-                $check = if ($prose) { 'markdown-check.ps1 -Body' } else { "pr-body-check.ps1 $($CheckArgs -join ' ')".TrimEnd() }
                 Push-Location -LiteralPath $Cwd
                 try {
+                    if (-not $prose -and $null -eq $bodyArgs) {
+                        $bodyArgs = @(Get-CheckArgument -Sub $sub -Rest @($words | Select-Object -Skip ($i + 3)) -CheckArgs $CheckArgs -HeadOf $HeadOf)
+                    }
+                    $check = if ($prose) { 'markdown-check.ps1 -Body' } else { "pr-body-check.ps1 $($bodyArgs -join ' ')".TrimEnd() }
                     $report = if ($prose) { pwsh -NoProfile -File (Join-Path $PSScriptRoot 'markdown-check.ps1') -Body $path 2>&1 | Out-String }
-                    else { pwsh -NoProfile -File (Join-Path $PSScriptRoot 'pr-body-check.ps1') $path @CheckArgs 2>&1 | Out-String }
+                    else { pwsh -NoProfile -File (Join-Path $PSScriptRoot 'pr-body-check.ps1') $path @bodyArgs 2>&1 | Out-String }
                 }
                 finally { Pop-Location }
                 if ($LASTEXITCODE -ne 0) { return "gh $sub's body, $f, fails $check. Fix the body and run gh again.`n$($report.TrimEnd())" }
@@ -259,7 +295,7 @@ if ($SelfTest) {
     )
     $failures = 0
     $n = 0
-    $total = $cases.Count + 4
+    $total = $cases.Count + 5
     # Run from elsewhere than -Cwd, so a relative path read against this process's location fails.
     Push-Location -LiteralPath $tmp
     foreach ($c in $cases) {
@@ -270,6 +306,24 @@ if ($SelfTest) {
         Write-Host ("self-test {0}/{1}: {2}: `{3}` {4} -- {5}" -f $n, $total, $(if ($c[2]) { 'refused' } else { 'allowed' }), $c[0], ($c[1] -join ' '), $(if ($ok) { 'ok' } else { 'FAILED' }))
         if (-not $ok) { $failures++ }
     }
+    # The head of the pull request a gh pr edit names reaches the check with -CheckRuns, and only
+    # then (#455), asked of gh stood in, once, with the edit's selector or none.
+    $n++
+    $asked = [System.Collections.Generic.List[string]]::new()
+    $stub = { param([string] $Selector) $asked.Add("<$Selector>"); 'abc1234def' }
+    $runs = '-CiteSiblings', '-CheckRuns'
+    $edit = @(Get-CheckArgument -Sub 'pr edit' -Rest @('5', '-F', 'b.md') -CheckArgs $runs -HeadOf $stub)
+    $branch = @(Get-CheckArgument -Sub 'pr edit' -Rest @('-F', 'b.md') -CheckArgs $runs -HeadOf $stub)
+    $create = @(Get-CheckArgument -Sub 'pr create' -Rest @('-F', 'b.md') -CheckArgs $runs -HeadOf $stub)
+    $off = @(Get-CheckArgument -Sub 'pr edit' -Rest @('5') -CheckArgs @('-CiteSiblings') -HeadOf $stub)
+    $none = @(Get-CheckArgument -Sub 'pr edit' -Rest @('5') -CheckArgs $runs -HeadOf { })
+    $through = Get-PrBodyRefusal -Command "gh pr edit 7 -F `"$good`" -F `"$good`"" -Cwd $root -CheckArgs ($visual + '-CheckRuns') -HeadOf $stub
+    $ok = ($edit -join ' ') -ceq '-CiteSiblings -CheckRuns -Head abc1234def' -and ($branch -join ' ') -ceq '-CiteSiblings -CheckRuns -Head abc1234def' -and
+        ($create -join ' ') -ceq '-CiteSiblings -CheckRuns' -and ($off -join ' ') -ceq '-CiteSiblings' -and ($none -join ' ') -ceq '-CiteSiblings -CheckRuns' -and
+        -not $through -and ($asked -join ' ') -ceq '<5> <> <7>'
+    if (-not $ok) { Write-Host "    $($edit -join ' ') | $($branch -join ' ') | $($create -join ' ') | $($off -join ' ') | $($none -join ' ') | $through | $($asked -join ' ')" }
+    Write-Host ("self-test {0}/{1}: gh pr edit with -CheckRuns hands the check -Head and the head gh names for the pull request it names, asked once; gh pr create, a wiring without -CheckRuns and a head gh cannot name hand none -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
+    if (-not $ok) { $failures++ }
     Pop-Location
     # The wiring as the session runs it: the command the settings file wires for this script,
     # through sh, with the tool call on stdin. Exit 2 and the reason for an inline body and for an
