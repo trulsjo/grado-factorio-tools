@@ -181,11 +181,13 @@
     2026-11-12 for a script name or path built at run time (`$x.ps1`, `-File $x`, Join-Path or a
     string on $PSScriptRoot with a variable) and for Get-ChildItem over $PSScriptRoot; the files
     self-tests read that are neither, as .claude/settings.json, commit-scopes.txt and the
-    fixtures beside the scripts, make a run whole. Because this script's lists name every script,
-    its own self-test runs on every change of a script. It cannot see a dependency in no file's
-    text, as a name built at run time, or a self-test that depends on a script by a name it
-    holds in a comment only; such a self-test passing at the last full run then stands for this
-    tree too.
+    fixtures beside the scripts, make a run whole. Because this script's lists name every script
+    with a -SelfTest, its own self-test runs on every change of one; a library with none, as
+    markdown-lib.ps1, reaches it only through a listed script whose code names the library, in
+    turn. It cannot see a dependency in no file's text, as a name built at run time, or a
+    self-test that depends on a script by a name it holds in a comment only, which Truls ruled
+    is no load (#427); such a self-test passing at the last full run then stands for this tree
+    too.
 
     -SelfTest holds the record and its reading, Get-TokenOnlyChange, Get-RunPlan, Get-ChangedPath,
     Get-SelfTestSubset, and Get-RunStart and Invoke-RunPlan, which decide the skip and follow the
