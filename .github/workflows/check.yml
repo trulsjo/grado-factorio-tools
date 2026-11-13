@@ -65,17 +65,12 @@ jobs:
 
       # The words GLOSSARY.md avoids, in the Markdown lines a pull request adds
       # (grado-factorio-tools#348). Three dots: two would judge a branch behind main on what main
-      # changed since. -Left is ruled on #348: these six are ordinary words here, and avoided
-      # only as a word for one term; on 2026-11-11, -All with none left counted 104 uses of copy,
-      # 76 of branch, 20 of share and 3 of port.
+      # changed since. The words left, ruled on #348, are in glossary-left.txt, which check.ps1
+      # reads too (#443), so the pre-push hook refuses what this step would. This step stays, so
+      # CI's log shows the check on its own line.
       - name: Check the added Markdown lines against the glossary
         if: github.event_name == 'pull_request'
-        shell: pwsh
-        run: |
-          $plain = 'an ordinary word here; avoided only as a word for one term'
-          ./scripts/glossary-check.ps1 -Range origin/main...HEAD -Left ([ordered] @{
-              '^copy$' = $plain; '^port$' = $plain; '^share$' = $plain
-              '^branch$' = $plain; '^upgrade$' = $plain; '^patch$' = $plain })
+        run: pwsh -NoProfile -File scripts/glossary-check.ps1 -Range origin/main...HEAD -LeftFile glossary-left.txt
 
       # Through the environment, never pasted into the command: a title is text somebody typed.
       - name: Check the pull request title
