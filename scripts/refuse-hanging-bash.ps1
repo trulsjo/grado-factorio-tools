@@ -152,7 +152,7 @@
     The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json, as HOW A
     CONSUMER WIRES IT says. Its .gitignore gains the line `/.claude/refused-bash.log`.
 
-        i=$(cat); case ${i%%'"tool_input"'*} in *'"tool_name"'*'"PowerShell"'*) exit 0;; esac; c=${i#*'"tool_input"'}; case $c in *cat*|*py*|*'<<'*|*'\\\\\\\\'*) h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-hanging-bash.ps1"; if [ -f "$h" ]; then printf '%s' "$i" | pwsh -NoProfile -File "$h"; else printf '%s' '{"systemMessage":"refuse-hanging-bash: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"refuse-hanging-bash: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it."}}'; fi;; esac
+        i=$(cat); case ${i%%'"tool_input"'*} in *'"tool_name"'*'"PowerShell"'*) exit 0;; esac; c=${i#*'"tool_input"'}; case $c in *cat*|*py*|*'<<'*|*'\\\\\\\\'*) h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-hanging-bash.ps1"; if [ -f "$h" ]; then printf '%s' "$i" | pwsh -NoProfile -File "$h"; else m='refuse-hanging-bash: vendor/grado-factorio-tools/scripts/refuse-hanging-bash.ps1 was not found, so this command was NOT checked by the hanging-bash hook. git submodule update --init fetches the script.'; printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"%s"}}' "$m" "$m"; fi;; esac
 
 .EXAMPLE
     To check it. The first is refused with exit 2, the second passes with exit 0:
@@ -638,8 +638,12 @@ if ($SelfTest) {
         $env:CLAUDE_PROJECT_DIR = $empty
         $absentText = (@{ tool_name = 'Bash'; tool_input = @{ command = 'cat' } } | ConvertTo-Json -Compress) | & $sh -c $form 2>$null | Out-String
         $absentCode = $LASTEXITCODE
-        $told = try { ($absentText | ConvertFrom-Json).hookSpecificOutput } catch { $null }
-        & $report "the first example's form, where the project holds no hook script, exits 0 and prints JSON telling the agent" ([bool] ($form -and $absentCode -eq 0 -and $told -and $told.hookEventName -ceq 'PreToolUse' -and ([string] $told.additionalContext) -match 'NOT checked')) "$absentCode $absentText"
+        # The missing path is named in both fields (ADR 0004).
+        $parsed = try { $absentText | ConvertFrom-Json } catch { $null }
+        $told = if ($parsed -and $parsed.PSObject.Properties['hookSpecificOutput']) { $parsed.hookSpecificOutput }
+        $named = $told -and ([string] $told.additionalContext) -match 'vendor/grado-factorio-tools/scripts/refuse-hanging-bash\.ps1 was not found, so this command was NOT checked' -and
+            $parsed.PSObject.Properties['systemMessage'] -and $parsed.systemMessage -ceq $told.additionalContext
+        & $report "the first example's form, where the project holds no hook script, exits 0 and prints JSON naming the missing path to the agent" ([bool] ($form -and $absentCode -eq 0 -and $told -and $told.hookEventName -ceq 'PreToolUse' -and $named)) "$absentCode $absentText"
         # Which tools the session starts that command for: the matcher of the entry it was read
         # from.
         . "$PSScriptRoot/hook-matcher.ps1"
