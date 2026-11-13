@@ -18,12 +18,15 @@
     were filed with no check run.
 
     HOW IT IS WIRED. In .claude/settings.json, a PreToolUse hook on the two shell tools, matcher
-    `Bash|PowerShell`, as refuse-git-hook-skip.ps1 is. This repository's own tracked settings
-    wire it as the first example below shows, and a consumer names the script under
-    vendor/grado-factorio-tools/ in its own. The session hands the hook the tool call as JSON on
-    stdin: this reads `tool_input.command` and `cwd`. Every argument the wiring passes goes to
-    pr-body-check.ps1 unchanged, after the body file; this repository passes -CiteSiblings
-    -RequireSummaryVisual, as CI and the create command do. The check runs in `cwd`, since it
+    `Bash|PowerShell`, as refuse-git-hook-skip.ps1 is. A consumer's command is the first example
+    below (ADR 0004), which names the script under vendor/grado-factorio-tools/ and, where it is
+    not there, lets the command run and tells the agent which path is missing. This repository's
+    own tracked settings wire it from scripts/. The session hands the hook the tool call as JSON
+    on stdin: this reads `tool_input.command` and `cwd`. Every argument the wiring passes goes to
+    pr-body-check.ps1 unchanged, after the body file; the example passes none, the check's
+    defaults, and a consumer adds on its own line the ones its gate uses (ADR 0004 decision 5).
+    This repository passes -CiteSiblings -RequireSummaryVisual, as CI and the create command do.
+    The check runs in `cwd`, since it
     asks git about the commits a body cites. The `case` keeps PowerShell from starting before
     every shell command: whatever is refused holds `gh` and `pr`, or `gh` and `issue`.
 
@@ -71,9 +74,11 @@
 
 .PARAMETER SelfTest
     Prove it refuses what it should and lets the rest through, that the arguments after it
-    reach the check, that the wired command reaches it, and that the matcher beside that
-    command starts the hook for the Bash tool and for the PowerShell tool. The case that runs
-    the command needs sh: the one on the path, or the one Git for Windows ships.
+    reach the check, that the wired command reaches it, that the matcher beside that
+    command starts the hook for the Bash tool and for the PowerShell tool, and that the first
+    example's form refuses where the script is and, where it is not, exits 0 and prints JSON
+    naming the missing path. The cases that run a command need sh: the one on the path, or the
+    one Git for Windows ships.
 
 .PARAMETER Settings
     With -SelfTest: the .claude/settings.json read by the case that runs the wired command and
@@ -81,15 +86,17 @@
     this repository's own.
 
 .PARAMETER CheckArgs
-    The arguments that follow the body file on pr-body-check.ps1's command line, as
-    -CiteSiblings -RequireSummaryVisual: every argument this is given that it does not take
-    itself.
+    The arguments that follow the body file on pr-body-check.ps1's command line: every argument
+    this is given that it does not take itself. None by default. pr-body-check.ps1's header
+    names its options; a consumer's gate may pass -CiteSiblings and -RequireSummaryVisual, as
+    this repository's does.
 
 .EXAMPLE
-    The wired command: the PreToolUse hook in this repository's .claude/settings.json, as HOW IT
-    IS WIRED says.
+    The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json, as HOW
+    IT IS WIRED says. It passes the check no argument, its defaults; a consumer adds after the
+    script's path the ones its gate uses, as -CiteSiblings -RequireSummaryVisual.
 
-        i=$(cat); case $i in *gh*pr*|*gh*issue*) printf '%s' "$i" | pwsh -NoProfile -File "$CLAUDE_PROJECT_DIR/scripts/refuse-pr-body.ps1" -CiteSiblings -RequireSummaryVisual;; esac
+        i=$(cat); case $i in *gh*pr*|*gh*issue*) h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-pr-body.ps1"; if [ -f "$h" ]; then printf '%s' "$i" | pwsh -NoProfile -File "$h"; else m='refuse-pr-body: vendor/grado-factorio-tools/scripts/refuse-pr-body.ps1 was not found, so this command was NOT checked by the pull request body hook. git submodule update --init fetches the script.'; printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"%s"}}' "$m" "$m"; fi;; esac
 
 .EXAMPLE
     To check it. The first is refused with exit 2, the second passes with exit 0:
@@ -252,7 +259,7 @@ if ($SelfTest) {
     )
     $failures = 0
     $n = 0
-    $total = $cases.Count + 3
+    $total = $cases.Count + 4
     # Run from elsewhere than -Cwd, so a relative path read against this process's location fails.
     Push-Location -LiteralPath $tmp
     foreach ($c in $cases) {
@@ -315,6 +322,33 @@ if ($SelfTest) {
     foreach ($tool in $unstarted) { Write-Host "    $Settings`: the matcher ``$($entry.matcher)`` does not start the hook for the $tool tool" }
     $ok = $entry -and -not $unstarted
     Write-Host ("self-test {0}/{1}: the matcher of the entry that wires the hook starts it for the Bash tool and for the PowerShell tool -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
+    if (-not $ok) { $failures++ }
+    # The first example's form (#358, ADR 0004), read from the header so the command shown is the
+    # command run: for a project with no hook script it exits 0 and names the missing path in both
+    # fields; for this repository, read from scripts/, it refuses.
+    $n++
+    $form = [regex]::Match((Get-Content -LiteralPath $PSCommandPath -Raw), 'i=\$\(cat\).*?esac').Value
+    $empty = Join-Path ([IO.Path]::GetTempPath()) "hook-form-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+    New-Item -ItemType Directory -Path $empty | Out-Null
+    $call = @{ tool_name = 'Bash'; cwd = $empty; tool_input = @{ command = 'gh pr create --body text' } } | ConvertTo-Json -Compress
+    $kept = $env:CLAUDE_PROJECT_DIR
+    try {
+        $env:CLAUDE_PROJECT_DIR = $empty
+        $absentText = $call | & $sh -c $form 2>$null | Out-String
+        $absentCode = $LASTEXITCODE
+        $env:CLAUDE_PROJECT_DIR = Split-Path $PSScriptRoot -Parent
+        $hereText = $call | & $sh -c $form.Replace('/vendor/grado-factorio-tools/scripts/', '/scripts/') 2>&1 | Out-String
+        $hereCode = $LASTEXITCODE
+    }
+    finally { Remove-Item -LiteralPath $empty -Recurse -Force; $env:CLAUDE_PROJECT_DIR = $kept }
+    $ok = try {
+        $told = $absentText | ConvertFrom-Json
+        $form -and $absentCode -eq 0 -and $told.hookSpecificOutput.hookEventName -ceq 'PreToolUse' -and
+            $told.hookSpecificOutput.additionalContext -match "vendor/grado-factorio-tools/scripts/$names was not found" -and
+            $told.systemMessage -ceq $told.hookSpecificOutput.additionalContext -and $hereCode -eq 2
+    } catch { $false }
+    if (-not $ok) { Write-Host "    absent: $absentCode $absentText"; Write-Host "    here: $hereCode $hereText" }
+    Write-Host ("self-test {0}/{1}: the first example's form refuses where the script is, and where it is not exits 0 and prints JSON naming the missing path to the agent -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++ }
     Write-Host ''
     if ($failures) { Write-Host "FAILED - self-test: $failures of $total case(s) did not hold."; exit 1 }
