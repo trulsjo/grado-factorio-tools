@@ -19,3 +19,28 @@ facts to check, not remember* at `e70669f`.
   against the build being targeted, not from memory.
 - **A recorded fact pins an explicit build**, as `/2.1.23/`: `/stable/` and `/latest/` both move,
   and `latest` is the experimental build.
+
+## Measured
+
+### The game writes `mod-list.json` into an empty mod directory when it starts
+
+Measured on 2026-11-13 for trulsjo/grado-factorio-tools#434, on the development machine, on the
+build `Factorio.exe --version` printed as `Version: 2.1.24 (build 87808, win64, steam)`. The
+command, run through `load-harness-lib.ps1`'s `Invoke-Factorio`, from a scratch directory holding
+`steam_appid.txt`, so that the Steam API does not relaunch the game:
+
+```text
+Factorio.exe --config <scratch>/factorio-config.ini --mod-directory <scratch>/mods --dump-data
+```
+
+`<scratch>` was a new folder under `%TEMP%`; `mods` in it was new and empty, and the config gave
+the run a write-data of its own, `<scratch>/write-data`, as the load harness gives every run. The
+game exited 0. `mods` then held one file, `mod-list.json`, 355 bytes, enabling `base` and the
+four bundled mods: `elevated-rails`, `quality`, `recycler` and `space-age`. The run's log names
+the `--mod-directory` given and that write-data. A listing of the player's `%APPDATA%\Factorio`,
+each file's path, time and size, its `saves` and `temp` folders left out, was the same before
+and after: the run touched neither the player's mods nor the rest of their write-data.
+
+What it cannot see: a start of the client with its window, which `--dump-data` is not; that the
+client writes the file too is read from both loading the mods the same way, not measured. A zip
+install was not run.
