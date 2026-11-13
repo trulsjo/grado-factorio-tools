@@ -35,9 +35,13 @@
 
     WHAT IT REPORTS AND DOES NOT FAIL (grado-factorio-tools#442). In a script's help, each line of a
     paragraph, not its last, that the next line's first word would fit on within the limit, by
-    comment-line-lib.ps1's Get-ShortHelpLine, with the markdown-rewrap.ps1 -Comment -Fill command
-    that fills that script. The run exits as it would without them, as Truls ruled at triage: on PR
-    #438 such lines were found by a reviewer alone. A # line is not read for it, being wrapped by
+    comment-line-lib.ps1's Get-ShortHelpLine, a short help line, with the markdown-rewrap.ps1
+    -Comment -Fill command that fills that script, on the line after. With no -All, as the
+    pre-commit hook runs it, a file's line gives the count of its short help lines; with -All,
+    each one's number, for a session that fills or reviews them (#457). The command stays on a
+    line of its own: with the rewrap's path and the file's, it runs past the limit on any path. The
+    run exits as it would without them, as Truls ruled at triage: on PR #438 such lines were found
+    by a reviewer alone. A # line is not read for it, being wrapped by
     sense more often than by width, nor a file that is not PowerShell. On 2026-11-13, `-All` over
     scripts/*.ps1 named 1120 lines in 49 scripts, and 1064 in 49 once the report read words as the
     fill does, after PR #452's review.
@@ -115,8 +119,12 @@ function Invoke-CommentLineCheck {
     # Each path quoted for PowerShell, each kind of single quote it reads doubled, the curly
     # ones too, so the command runs as printed for any path git lists (#378).
     $quote = { param([string] $s) "'$([System.Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent($s))'" }
+    # Staged, a count, so a commit's hook prints one short line per file (#457); with -All, every
+    # line by number, for a session that fills or reviews them.
     $report = @(foreach ($s in $short) {
-            "$($s.File): help lines the next line's first word would fit on, line $($s.Lines -join ', '); not a failure. Fill them:"
+            $n = @($s.Lines).Count
+            if ($All) { "$($s.File): help lines the next line's first word would fit on, line $($s.Lines -join ', '); not a failure. Fill them:" }
+            else { "$($s.File): $n short help line$(if ($n -ne 1) { 's' }), not a failure. Fill $(if ($n -ne 1) { 'them' } else { 'it' }):" }
             "    pwsh -NoProfile -File $(& $quote $rewrap) -Comment -Fill -MaxLineLength $Limit -Path $(& $quote $s.File)"
         })
     if (-not $refused) {
@@ -185,16 +193,32 @@ if ($SelfTest) {
                 $fixedUnstaged.Code -eq 1 -and $fixedUnstaged.Lines[0] -eq 'scripts/b.ps1: comment lines over 100 characters, line 2.' -and
                     $fixedUnstaged.Lines[-1] -eq 'FAILED - comment-line check, as staged: 1 of 1 file(s) read have a comment line over 100.' -and
                     $longUnstaged.Code -eq 0 -and $longUnstaged.Lines[-1] -eq 'OK - comment-line check, as staged: 1 file(s) read, no comment line over 100.' }
-            'a help line the next line''s first word would fit on is reported with the fill command and does not fail; a full one, a paragraph''s last and a # comment are not reported (#442)' = {
+            'a help line the next line''s first word would fit on is reported, staged, as a count with the fill command, and does not change the exit code; a full one, a paragraph''s last and a # comment are not reported (#442, #457)' = {
                 & $file 'scripts/h.ps1' '<#', '.SYNOPSIS', '    One two', '    three four five six seven eight ten', '    nine', '#>', '# a code comment', '# short', '$x = 1'
                 & $git add scripts/h.ps1
                 $got = & $run -Limit 40
-                & $git rm --cached --quiet -f scripts/h.ps1; Remove-Item -LiteralPath (Join-Path $repo 'scripts/h.ps1')
+                # A comment line over the limit beside it: the run fails for that alone.
+                & $file 'scripts/l.ps1' "# $long"; & $git add scripts/l.ps1
+                $failed = & $run -Limit 40
+                & $git rm --cached --quiet -f scripts/h.ps1 scripts/l.ps1
+                Remove-Item -LiteralPath (Join-Path $repo 'scripts/h.ps1'), (Join-Path $repo 'scripts/l.ps1')
                 $got.Lines | ForEach-Object { Write-Host "    $_" }
                 $got.Code -eq 0 -and @($got.Lines).Count -eq 3 -and
-                    $got.Lines[0] -ceq "scripts/h.ps1: help lines the next line's first word would fit on, line 3; not a failure. Fill them:" -and
+                    $got.Lines[0] -ceq 'scripts/h.ps1: 1 short help line, not a failure. Fill it:' -and
                     $got.Lines[1] -ceq "    pwsh -NoProfile -File '$rewrap' -Comment -Fill -MaxLineLength 40 -Path 'scripts/h.ps1'" -and
-                    $got.Lines[2] -ceq 'OK - comment-line check, as staged: 1 file(s) read, no comment line over 40.' }
+                    $got.Lines[2] -ceq 'OK - comment-line check, as staged: 1 file(s) read, no comment line over 40.' -and
+                    $failed.Code -eq 1 -and $failed.Lines -ccontains 'scripts/h.ps1: 1 short help line, not a failure. Fill it:' }
+            '-All lists each short help line by number, and counts them in the plural (#457)' = {
+                & $file 'scripts/h.ps1' '<#', '.SYNOPSIS', '    One two', '    three four five six seven eight ten', '    nine',
+                    '', '.DESCRIPTION', '    Ten', '    eleven twelve thirteen fourteen', '    sixteen', '#>'
+                & $git add scripts/h.ps1
+                $all = & $run -Limit 40 -All; $staged = & $run -Limit 40
+                & $git rm --cached --quiet -f scripts/h.ps1; Remove-Item -LiteralPath (Join-Path $repo 'scripts/h.ps1')
+                $all.Lines | ForEach-Object { Write-Host "    $_" }
+                $all.Code -eq 0 -and
+                    $all.Lines[0] -ceq "scripts/h.ps1: help lines the next line's first word would fit on, line 3, 8; not a failure. Fill them:" -and
+                    $all.Lines[1] -ceq "    pwsh -NoProfile -File '$rewrap' -Comment -Fill -MaxLineLength 40 -Path 'scripts/h.ps1'" -and
+                    $staged.Code -eq 0 -and $staged.Lines[0] -ceq 'scripts/h.ps1: 2 short help lines, not a failure. Fill them:' }
             '-All reads a tracked file that is not staged, which the run with no switch does not' = {
                 & $file 'scripts/old.ps1' '<#', "    $long", '#>'; & $git add scripts/old.ps1; & $git commit --quiet -m old
                 $all = & $run -All; $staged = & $run
