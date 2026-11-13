@@ -40,8 +40,10 @@ values and its own steps. The evidence is in [code-review-evidence.md](code-revi
 - **Where recorded: one comment on the pull request**, posted once each fix is confirmed or
   recorded as left, with each finding's score and whether it was verified. A review with no
   finding says so. Its bug scan section says which check it stands on: CI's run, by its id, or
-  a local run. The comment is not edited once posted, and the plugin's own comment format is
-  not used.
+  a local run. The comment is not edited once posted; a turn after it posts a follow-up
+  comment. The plugin's own comment format is not used.
+- **A lane's statement about a sibling repository:** the session opens the place itself before
+  the statement goes into the comment; unopened, it is left out and told to Truls in the report.
 - **The threshold is a score of 80 or more**: such a finding is fixed; the rest are recorded.
 - **A change that does other than an acceptance criterion, the *Asked*, or a ruling of Truls's,
   on a ticket it closes asks is a finding scored 80**, in either lane, shown by a read of the

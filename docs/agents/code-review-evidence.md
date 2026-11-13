@@ -237,8 +237,9 @@ item lists:
   "any skill"; "open the pull request, then review it" to "open the pull request first".
 
 **The prose rules moved to a page of their own on 2026-10-12**, asked for by Truls and settling
-[#116](https://github.com/trulsjo/grado-factorio-tools/issues/116). The rules page is held under
-3,000 bytes, and room had been made on it three times: for #86, where "The room came from three
+[#116](https://github.com/trulsjo/grado-factorio-tools/issues/116). The rules page ~~is held
+under 3,000 bytes~~ was held under 3,000 bytes then (the limit's series is below), and room had
+been made on it three times: for #86, where "The room came from three
 sentences"; for #97, where "The room came from one sentence"; and for the three rules of #108,
 #109 and #111, in the paragraph above this one. Each time a rule was ready and the page could
 not take it until something else left. The section that moved is "Review the prose, not only
@@ -251,9 +252,17 @@ scan does not. Two rules were reworded. A superseded figure was looked for in "t
 pages", which meant the rules page and this one, and the rule now names those two and the new
 page. And the rule on the two lanes had the prose lane "applying the rules below"; it now
 links the new page and says which lane loads it. `scripts/check.ps1` holds each page to a
-limit of its own, 3,000 bytes for the rules page as before and 2,000 for the prose page. As
-the split left them the rules page was 2,021 bytes and the prose page 1,366, each
-from `tr -d '\r' < <page> | wc -c`.
+limit of its own, ~~3,000 bytes for the rules page as before~~ for the rules page 3,000 bytes
+then, as before, and 2,000 for the prose page. As the split left them the rules page was 2,021
+bytes and the prose page 1,366, each from `tr -d '\r' < <page> | wc -c`.
+
+**The rules page's limit since, in `scripts/check.ps1`'s `$PAGE_LIMITS`** (#451): 3,000 from
+`90d1777` (2026-10-06), 3,300 from `ee6bf00` (2026-10-23), 3,400 from `9fcfcaf` and 3,683 from
+`e0044ea` (both 2026-10-26), 3,779 from `5f671d9` (2026-10-27) and 4,200 from `bfbadfd`
+(2026-11-13, PR #450). The commits are those
+`git log --format='%h %ad' --date=short -G"code-review.md' = [0-9]+" -- scripts/check.ps1`
+lists where the figure in `git show <commit>:scripts/check.ps1` changed; the other three it lists
+changed another entry on that line.
 
 **The rules page became a stub page on 2026-11-13**, for
 [#355](https://github.com/trulsjo/grado-factorio-tools/issues/355): the steps the repositories
@@ -330,6 +339,23 @@ quoted as it stood:
 ([#449](https://github.com/trulsjo/grado-factorio-tools/issues/449), the figure Truls's, which
 is `CLAUDE.md`'s too). Five of PR #437's eight commits changed the stub, each leaving it within
 18 bytes of 3,779, and the review's finding 21 was left for want of room; #449 has the sizes.
+
+**What the stub and the prose page gained after, 2026-11-13.** For
+[#448](https://github.com/trulsjo/grado-factorio-tools/issues/448), the stub's *Where recorded*
+says a turn after the review's comment posts a follow-up comment, the first half of finding 21,
+which the brief alone had said; the brief's opening, the second half, no longer counts or lists
+its rules. For [#447](https://github.com/trulsjo/grado-factorio-tools/issues/447), the prose
+page gained the check of a rule no cited ruling carries, at 1,919 bytes of its 2,000. The room
+came from its opening, "How a review is run and what it reports are in
+[code-review.md](code-review.md)", now that the lane loads it after that page; from
+"`pr-body-check.ps1 -CiteSiblings` holds a pull request body to this, not a commit or a page", which
+says what a script checks and binds no lane, as that script's header does; and from "The session
+opens the place itself before the statement goes into the comment; unopened, it is left out and told
+to Truls in the report", a step of the session's, not the lane's, moved unchanged to the stub's
+*What is reported*. The prose page's incident, PR #437's two rules no ruling carried, is in #447's
+body: "runs no check and no revert" for a confirmer, which ruling 1 above later carried, and one set
+of lines for a fix's turn and a later commit's, which the fourth did. The stub is then 4,006 bytes
+and the prose page 1,978, each from `tr -d '\r' < <page> | wc -c`.
 
 The brief has the prose lane read whole one kind of file the shared page's step 4 does not
 list, a page under `docs/` that a stub page links: this repository's own addition, since its
