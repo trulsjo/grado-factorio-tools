@@ -88,7 +88,7 @@
     The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json, as HOW A
     CONSUMER WIRES IT says.
 
-        i=$(cat); case $i in *npm*|*npx*|*pip*|*gem*|*cargo*|*winget*|*choco*|*scoop*|*release*download*|*.exe*|*.msi*|*.zip*|*.tar.gz*|*.tgz*) h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/ask-before-download.ps1"; if [ -f "$h" ]; then printf '%s' "$i" | pwsh -NoProfile -File "$h"; else printf '%s' '{"systemMessage":"ask-before-download: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it.","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"ask-before-download: the hook script was not found, so this command was NOT checked. git submodule update --init fetches it."}}'; fi;; esac
+        i=$(cat); case $i in *npm*|*npx*|*pip*|*gem*|*cargo*|*winget*|*choco*|*scoop*|*release*download*|*.exe*|*.msi*|*.zip*|*.tar.gz*|*.tgz*) h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/ask-before-download.ps1"; if [ -f "$h" ]; then printf '%s' "$i" | pwsh -NoProfile -File "$h"; else m='ask-before-download: vendor/grado-factorio-tools/scripts/ask-before-download.ps1 was not found, so this command was NOT checked by the download hook. git submodule update --init fetches the script.'; printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"%s"}}' "$m" "$m"; fi;; esac
 
 .EXAMPLE
     To check it. The first is refused with exit 2, the second passes with exit 0:
@@ -263,9 +263,13 @@ if ($SelfTest) {
         $here = & $through 'npx x' ($form.Replace('/vendor/grado-factorio-tools/scripts/', '/scripts/')) $env:CLAUDE_PROJECT_DIR
     }
     finally { Remove-Item -LiteralPath $empty -Recurse -Force; $env:CLAUDE_PROJECT_DIR = $project }
-    $told = try { ($absentText | ConvertFrom-Json).hookSpecificOutput } catch { $null }
+    # The missing path is named in both fields (ADR 0004).
+    $parsed = try { $absentText | ConvertFrom-Json } catch { $null }
+    $told = if ($parsed -and $parsed.PSObject.Properties['hookSpecificOutput']) { $parsed.hookSpecificOutput }
     $ok = $form -and $absentCode -eq 0 -and $told -and $told.hookEventName -ceq 'PreToolUse' -and
-        ([string] $told.additionalContext) -match 'NOT checked' -and $here.Code -eq 2 -and $here.Text -match 'Ask Truls'
+        ([string] $told.additionalContext) -match "vendor/grado-factorio-tools/scripts/$names was not found, so this command was NOT checked" -and
+        $parsed.PSObject.Properties['systemMessage'] -and $parsed.systemMessage -ceq $told.additionalContext -and
+        $here.Code -eq 2 -and $here.Text -match 'Ask Truls'
     if (-not $ok) { Write-Host "    absent: $absentCode $absentText"; Write-Host "    here: $($here.Code) $($here.Text)" }
     Write-Host ("self-test {0}/{1}: the first example's form refuses where the script is, and where it is not exits 0 and prints JSON telling the agent -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++ }
