@@ -28,19 +28,20 @@ values and its own steps. The evidence is in [code-review-evidence.md](code-revi
   `.githooks/` or `.github/workflows`; help text and message strings alone do not.
 - **The working tree stays on the branch the lanes read until every lane has reported**: a
   check run across a switch reads two branches' files.
-- **The reviewing session scores each finding itself**, on the plugin's rubric. Where a rule on a
+- **The reviewing session scores each finding**, on the plugin's rubric. Where a rule on a
   review page sets a finding's score, the session gives it, which is not re-grading.
 - **A check fails when the rules it reads, or the set it must cover, come back empty, and its
-  self-test covers that run.** A run that only has nothing to check this time, as a commit
+  self-test covers that run.** A run that has nothing to check this time, as a commit
   that stages no Markdown, may pass, and says it read nothing. A lister that does not fail is
-  outside this.
+  outside it.
 
 ## What is reported
 
-- **Where recorded: one comment on the pull request**, posted once each fix is confirmed, with
-  each finding's score and whether it was verified. A review with no finding says so.
-  Its bug scan section says which check it stands on: CI's run, by its id, or a local run.
-  The comment is not edited once posted, and the plugin's own comment format is not used.
+- **Where recorded: one comment on the pull request**, posted once each fix is confirmed or
+  recorded as left, with each finding's score and whether it was verified. A review with no
+  finding says so. Its bug scan section says which check it stands on: CI's run, by its id, or
+  a local run. The comment is not edited once posted, and the plugin's own comment format is
+  not used.
 - **The threshold is a score of 80 or more**: such a finding is fixed; the rest are recorded.
 - **A change that does other than an acceptance criterion, the *Asked*, or a ruling of Truls's,
   on a ticket it closes asks is a finding scored 80**, in either lane, shown by a read of the
