@@ -26,13 +26,16 @@
     pr-body-check.ps1 unchanged, after the body file; the example passes none, the check's defaults,
     and a consumer adds on its own line the ones its gate uses (ADR 0004 decision 5). This
     repository passes -CiteSiblings -RequireSummaryVisual, as CI and the create command do, and
-    -CheckRuns, as CI does. With -CheckRuns among them, a `gh pr edit` also hands the check -Head
-    and the head `gh pr view` names for the pull request the edit names in the word after `edit`, or
-    for the current branch's where that word is an option, as in `gh pr edit -F b.md 459` (#455);
-    where gh names none, the check reads no run and says so. A `gh pr create` hands no head: the
-    pull request does not exist yet. The check runs in `cwd`, since it asks git about the commits a
-    body cites, and gh which pull request a branch has. The `case` keeps PowerShell from starting
-    before every shell command: whatever is refused holds `gh` and `pr`, or `gh` and `issue`.
+    -CheckRuns and -CheckClosing, as CI does. With -CheckRuns among them, a `gh pr edit` also hands
+    the check -Head and the head `gh pr view` names for the pull request the edit names in the word
+    after `edit`, or for the current branch's where that word is an option, as in
+    `gh pr edit -F b.md 459` (#455); where gh names none, the check reads no run and says so. With
+    -CheckClosing, it hands -PullRequest and the number `gh pr view` names for the same pull
+    request, so the check leaves that one out (#463); where gh names none, it hands none. A
+    `gh pr create` hands neither: the pull request does not exist yet. The check runs in `cwd`,
+    since it asks git about the commits a body cites, and gh which pull request a branch has. The
+    `case` keeps PowerShell from starting before every shell command: whatever is refused holds `gh`
+    and `pr`, or `gh` and `issue`.
 
     WHAT IT REFUSES, for each `gh pr create` and `gh pr edit` in the command (Truls's rulings on
     #259, 2026-10-26):
@@ -92,8 +95,8 @@
     The arguments that follow the body file on pr-body-check.ps1's command line: every argument this
     is given that it does not take itself. None by default. pr-body-check.ps1's header names its
     options; a consumer's gate may pass -CiteSiblings and -RequireSummaryVisual, as this
-    repository's does, which also passes -CheckRuns. With -CheckRuns, -Head is added on
-    `gh pr edit`, as HOW IT IS WIRED says.
+    repository's does, which also passes -CheckRuns and -CheckClosing. With -CheckRuns, -Head is
+    added on `gh pr edit`, and with -CheckClosing, -PullRequest, as HOW IT IS WIRED says.
 
 .EXAMPLE
     The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json, as HOW
@@ -129,30 +132,49 @@ $GhHead = {
     if ($LASTEXITCODE -eq 0 -and "$h".Trim()) { "$h".Trim() }
 }
 
+# The number of the pull request $Selector names, as $GhHead reads its head; nothing where gh
+# cannot name one.
+$GhNumber = {
+    param([string] $Selector)
+    $named = @(if ($Selector) { $Selector })
+    $number = gh pr view @named --json number --jq .number 2>$null
+    if ($LASTEXITCODE -eq 0 -and "$number".Trim() -match '^\d+$') { "$number".Trim() }
+}
+
 function Get-CheckArgument {
     <#  The arguments for pr-body-check.ps1 after the body file, for `gh $Sub` with $Rest the words
         after the subcommand: $CheckArgs, and on `gh pr edit` with -CheckRuns among them, -Head and
         the head $HeadOf gives for the pull request $Rest's first word names, where that word is not
         an option, or for none, the current branch's, where it is (#455): `gh pr edit -F b.md 459`
         gets the current branch's head, not 459's. Where $HeadOf gives none, no -Head: the check
-        then reads no run, and says so.  #>
+        then reads no run, and says so. With -CheckClosing among them, -PullRequest and the number
+        $NumberOf gives for that same pull request (#463); where it gives none, no -PullRequest,
+        and the check compares every open pull request, so the edited one, closing what its own
+        body closes, fails it: gh that cannot name the pull request is unlikely to list them.  #>
     param([Parameter(Mandatory)] [string] $Sub, [string[]] $Rest = @(), [string[]] $CheckArgs = @(),
-        [Parameter(Mandatory)] [scriptblock] $HeadOf)
+        [Parameter(Mandatory)] [scriptblock] $HeadOf, [scriptblock] $NumberOf = $GhNumber)
     $CheckArgs
-    if ($Sub -ne 'pr edit' -or $CheckArgs -notcontains '-CheckRuns') { return }
+    if ($Sub -ne 'pr edit') { return }
     $selector = if ($Rest.Count -and $Rest[0] -notmatch '^-') { $Rest[0] } else { '' }
-    $head = & $HeadOf $selector
-    if ($head) { '-Head'; $head }
+    if ($CheckArgs -contains '-CheckRuns') {
+        $head = & $HeadOf $selector
+        if ($head) { '-Head'; $head }
+    }
+    if ($CheckArgs -contains '-CheckClosing') {
+        $number = & $NumberOf $selector
+        if ($number) { '-PullRequest'; $number }
+    }
 }
 
 function Get-PrBodyRefusal {
-    <#  Why $Command is refused, run in $Cwd, or nothing where it is not. $HeadOf names a pull
-        request's head for Get-CheckArgument.  #>
+    <#  Why $Command is refused, run in $Cwd, or nothing where it is not. $HeadOf and $NumberOf
+        name a pull request's head and number for Get-CheckArgument.  #>
     param(
         [Parameter(Mandatory)] [AllowEmptyString()] [string] $Command,
         [Parameter(Mandatory)] [string] $Cwd,
         [string[]] $CheckArgs = @(),
-        [scriptblock] $HeadOf = $GhHead
+        [scriptblock] $HeadOf = $GhHead,
+        [scriptblock] $NumberOf = $GhNumber
     )
 
     # Words and the marks that end a command, as refuse-git-hook-skip.ps1's Test-SkipsHooks reads
@@ -201,7 +223,7 @@ function Get-PrBodyRefusal {
                 Push-Location -LiteralPath $Cwd
                 try {
                     if (-not $prose -and $null -eq $bodyArgs) {
-                        $bodyArgs = @(Get-CheckArgument -Sub $sub -Rest @($words | Select-Object -Skip ($i + 3)) -CheckArgs $CheckArgs -HeadOf $HeadOf)
+                        $bodyArgs = @(Get-CheckArgument -Sub $sub -Rest @($words | Select-Object -Skip ($i + 3)) -CheckArgs $CheckArgs -HeadOf $HeadOf -NumberOf $NumberOf)
                     }
                     $check = if ($prose) { 'markdown-check.ps1 -Body' } else { "pr-body-check.ps1 $($bodyArgs -join ' ')".TrimEnd() }
                     $report = if ($prose) { pwsh -NoProfile -File (Join-Path $PSScriptRoot 'markdown-check.ps1') -Body $path 2>&1 | Out-String }
@@ -295,7 +317,7 @@ if ($SelfTest) {
     )
     $failures = 0
     $n = 0
-    $total = $cases.Count + 5
+    $total = $cases.Count + 6
     # Run from elsewhere than -Cwd, so a relative path read against this process's location fails.
     Push-Location -LiteralPath $tmp
     foreach ($c in $cases) {
@@ -329,6 +351,30 @@ if ($SelfTest) {
         $headed -match 'problem\(s\) with the cited runs' -and $headed -notmatch 'No head was given' -and $headless -match 'No head was given'
     if (-not $ok) { Write-Host "    $($edit -join ' ') | $($branch -join ' ') | $($create -join ' ') | $($off -join ' ') | $($none -join ' ') | $through | $($asked -join ' ') | $headed | $headless" }
     Write-Host ("self-test {0}/{1}: gh pr edit with -CheckRuns hands the check -Head and the head gh names for the pull request it names, asked once, and the check is run with it; gh pr create, a wiring without -CheckRuns and a head gh cannot name hand none -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
+    if (-not $ok) { $failures++ }
+    # The number of the pull request a gh pr edit names reaches the check with -CheckClosing, and
+    # only then (#463), asked of gh stood in, with the edit's selector or none.
+    $n++
+    $askedNumber = [System.Collections.Generic.List[string]]::new()
+    $numberStub = { param([string] $Selector) $askedNumber.Add("<$Selector>"); '461' }
+    $closingArgs = '-CiteSiblings', '-CheckClosing'
+    $numbered = @(Get-CheckArgument -Sub 'pr edit' -Rest @('5', '-F', 'b.md') -CheckArgs $closingArgs -HeadOf $stub -NumberOf $numberStub)
+    $current = @(Get-CheckArgument -Sub 'pr edit' -Rest @('-F', 'b.md') -CheckArgs $closingArgs -HeadOf $stub -NumberOf $numberStub)
+    $both = @(Get-CheckArgument -Sub 'pr edit' -Rest @('5') -CheckArgs @('-CheckRuns', '-CheckClosing') -HeadOf { 'abc1234def' } -NumberOf $numberStub)
+    $created = @(Get-CheckArgument -Sub 'pr create' -Rest @('-F', 'b.md') -CheckArgs $closingArgs -HeadOf $stub -NumberOf $numberStub)
+    $without = @(Get-CheckArgument -Sub 'pr edit' -Rest @('5') -CheckArgs @('-CiteSiblings') -HeadOf $stub -NumberOf $numberStub)
+    $unnamed = @(Get-CheckArgument -Sub 'pr edit' -Rest @('5') -CheckArgs $closingArgs -HeadOf $stub -NumberOf { })
+    $askedBefore = $askedNumber.Count
+    # Through the refusal, the number reaches the check: run with -CheckClosing on a body that
+    # closes nothing, the check says it compared none, so gh is not asked to list.
+    $closingThrough = [string] (Get-PrBodyRefusal -Command "gh pr edit 7 -F `"$bad`"" -Cwd $root -CheckArgs @('-CheckClosing') -HeadOf $stub -NumberOf $numberStub)
+    $ok = ($numbered -join ' ') -ceq '-CiteSiblings -CheckClosing -PullRequest 461' -and ($current -join ' ') -ceq '-CiteSiblings -CheckClosing -PullRequest 461' -and
+        ($both -join ' ') -ceq '-CheckRuns -CheckClosing -Head abc1234def -PullRequest 461' -and
+        ($created -join ' ') -ceq '-CiteSiblings -CheckClosing' -and ($without -join ' ') -ceq '-CiteSiblings' -and ($unnamed -join ' ') -ceq '-CiteSiblings -CheckClosing' -and
+        ($askedNumber[0..($askedBefore - 1)] -join ' ') -ceq '<5> <> <5>' -and $askedNumber[-1] -ceq '<7>' -and
+        $closingThrough -match 'fails pr-body-check\.ps1 -CheckClosing -PullRequest 461\.' -and $closingThrough -match 'It closes no issue, so no open pull request was compared\.'
+    if (-not $ok) { Write-Host "    $($numbered -join ' ') | $($current -join ' ') | $($both -join ' ') | $($created -join ' ') | $($without -join ' ') | $($unnamed -join ' ') | $($askedNumber -join ' ') | $closingThrough" }
+    Write-Host ("self-test {0}/{1}: gh pr edit with -CheckClosing hands the check -PullRequest and the number gh names for the pull request it names, and the check is run with it; gh pr create, a wiring without -CheckClosing and a number gh cannot name hand none -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++ }
     Pop-Location
     # The wiring as the session runs it: the command the settings file wires for this script,

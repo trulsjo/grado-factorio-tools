@@ -2,9 +2,9 @@
 # does not run: the commits the tracked files cite, which reach origin/main only once pushed;
 # a citation of our own code by line number, read over the whole tree; the pull request's title;
 # the Markdown lines it adds, against GLOSSARY.md; and its body, for the commits it cites, for a
-# closing keyword outside a `Closes #N` line, for the pr template's three headings, and for the
-# runs of this workflow it cites, each on the head. `edited` is listed so a retitle or an edited
-# body is checked again.
+# closing keyword outside a `Closes #N` line, for the pr template's three headings, for the
+# runs of this workflow it cites, each on the head, and for an issue it closes that another open
+# pull request closes too. `edited` is listed so a retitle or an edited body is checked again.
 #
 # On windows-latest and on ubuntu-latest, a job each (grado-factorio-tools#117): the scripts
 # were written on Windows, grado-factorio-modpack's check runs on ubuntu-latest (its
@@ -30,6 +30,9 @@ permissions:
   contents: read
   # For the body step's gh run view.
   actions: read
+  # For the body step's gh pr list, which -CheckClosing reads the open pull requests with
+  # (grado-factorio-tools#463).
+  pull-requests: read
 
 jobs:
   check:
@@ -87,12 +90,15 @@ jobs:
 
       # `edited` runs this again too. -CheckRuns holds each run of this workflow the body cites to
       # the pull request's head, read with gh through the token, which `actions: read` above lets
-      # read runs (grado-factorio-tools#455).
+      # read runs (grado-factorio-tools#455). -CheckClosing fails the body for an issue another
+      # open pull request closes too, listed with gh, which `pull-requests: read` lets list; the
+      # event's number leaves this one out (#463).
       - name: Check the pull request body
         if: github.event_name == 'pull_request'
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
-        run: ./scripts/pr-body-check.ps1 -Body "$env:PR_BODY" -CiteSiblings -RequireSummaryVisual -CheckRuns -Head $env:PR_HEAD
+        run: ./scripts/pr-body-check.ps1 -Body "$env:PR_BODY" -CiteSiblings -RequireSummaryVisual -CheckRuns -Head $env:PR_HEAD -CheckClosing -PullRequest $env:PR_NUMBER

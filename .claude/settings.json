@@ -22,7 +22,7 @@
           },
           {
             "type": "command",
-            "command": "i=$(cat); case $i in *gh*pr*|*gh*issue*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/scripts/refuse-pr-body.ps1\" -CiteSiblings -RequireSummaryVisual -CheckRuns;; esac"
+            "command": "i=$(cat); case $i in *gh*pr*|*gh*issue*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/scripts/refuse-pr-body.ps1\" -CiteSiblings -RequireSummaryVisual -CheckRuns -CheckClosing;; esac"
           },
           {
             "type": "command",

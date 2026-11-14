@@ -12,7 +12,9 @@
     not. With -RequireSummaryVisual, a sixth: `## Summary` holds a fenced or an indented code block,
     and exit 1 says so where it holds none. With -CheckRuns and -Head, a seventh: each run of the
     check workflow the body cites ran on the head and passed its check.ps1 step on every job, and
-    exit 1 names each run that did not.
+    exit 1 names each run that did not. With -CheckClosing, an eighth: no other open pull request of
+    the repository closes an issue the body closes by a `Closes #N` line, and exit 1 names each that
+    does, or says the open pull requests could not be listed.
 
 .DESCRIPTION
     WHY (grado-factorio-tools#96). Pull requests here are rebase-merged, which rewrites every SHA on
@@ -134,6 +136,27 @@
     checks what it did before (the same ruling). This repository's CI asks, with the event's head,
     and so does the refuse-pr-body.ps1 hook on `gh pr edit`, with the head gh names.
 
+    NO OTHER OPEN PULL REQUEST CLOSES AN ISSUE THIS ONE CLOSES, WITH -CheckClosing
+    (grado-factorio-tools#463). PR #460 was opened on 2026-11-14 with `Closes #362` while PR #459,
+    open, closed #362 too and carried the same commit; neither body named the other, and its review
+    found it. Two open pull requests that close one ticket carry its change twice, and whichever
+    merges second conflicts with the first or closes the ticket again. The body's issues are its
+    `Closes #N` lines: a closing keyword anywhere else already fails it, above. Each other open pull
+    request's are read as GitHub reads them, its `Closes #N` lines and every closing keyword before
+    a reference by Get-ClosingKeyword's rule, of which a reference to an issue here counts: `#N`, or
+    `OWNER/NAME#N` and an issue's address where OWNER/NAME is what origin names on github.com. The
+    open pull requests are listed with `gh pr list --state open --limit 1000 --json number,body`,
+    which is taken to list drafts too: gh 2.104.0's `gh pr list --help` (read 2026-11-14) gives
+    `-d, --draft` as "Filter by draft state", and no default that leaves drafts out. Not measured:
+    no draft was open to list.
+    Each issue the body closes that another closes fails it, naming both; so does a list gh cannot
+    give, with gh's message, as a run gh cannot read does under -CheckRuns (Truls, 2026-11-14, on
+    #463). A body that closes nothing lists nothing. -PullRequest names the pull request the body
+    belongs to, which is left out; with none, as on `gh pr create`, every open one is compared. It
+    is asked for, as -CheckRuns is: a consumer that does not ask checks what it did before. This
+    repository's CI asks, with the event's number, and so does the refuse-pr-body.ps1 hook, with
+    the number gh names on `gh pr edit`.
+
     A SHALLOW CLONE IS REFUSED, and nothing is checked: there an ancestor cannot be told from a
     commit whose history was cut off. CI therefore fetches the whole history for this. Whatever else
     git cannot answer fails the run too; nothing passes for not having been asked.
@@ -183,7 +206,11 @@
     cited as `run` and its id, which is read as this repository's and fails as one gh cannot find,
     so cite it by its address; whether the run is the one the prose means, or what the prose says of
     it. A step that runs check.ps1 written over more than one line, or under no `name:`, is not
-    found, and the run fails for it.
+    found, and the run fails for it. Of issues another pull request closes: an issue closed by a
+    commit message, which GitHub reads too; a reference to another repository, which is left out;
+    two pull requests that share a commit but close no issue in common; a closing keyword GitHub
+    reads that Get-ClosingKeyword does not, by the limits above; a pull request past the first 1000
+    gh lists; and one opened after the check ran.
 
 .PARAMETER Path
     The file holding the body, as handed to `gh pr create --body-file`.
@@ -209,6 +236,14 @@
 .PARAMETER Head
     The pull request's head commit, in full, for -CheckRuns. With none, no run is read.
 
+.PARAMETER CheckClosing
+    Fail the body for each issue it closes that another open pull request of this repository closes
+    too, as above. Needs gh, signed in to read the repository's pull requests. Off unless asked.
+
+.PARAMETER PullRequest
+    The number of the pull request the body belongs to, for -CheckClosing, which leaves that one
+    out. With none, as on `gh pr create`, every open pull request is compared.
+
 .PARAMETER SelfTest
     Run the cases that hold the check to what this header says, naming each as it runs. Needs git,
     for fixture repositories in a temp directory. Their commits carry a fixed date, so the same
@@ -231,7 +266,9 @@ param(
     [switch] $CiteSiblings,
     [switch] $RequireSummaryVisual,
     [switch] $CheckRuns,
-    [string] $Head
+    [string] $Head,
+    [switch] $CheckClosing,
+    [int] $PullRequest
 )
 
 Set-StrictMode -Version Latest
@@ -266,6 +303,9 @@ function Test-Body {
     $result
 }
 
+# A line that is `Closes #N` alone, the one form docs/pr-body-convention.md asks for.
+$ClosesLine = '^Closes #(\d+)\s*$'
+
 function Get-ClosingKeyword {
     <#  Each place in $Text where a closing keyword stands before an issue reference, but on a line
         that is `Closes #N` alone, as @{ Line; Found }: the line's number and the words.  #>
@@ -273,11 +313,51 @@ function Get-ClosingKeyword {
     $n = 0
     foreach ($line in $Text -split '\r?\n') {
         $n++
-        if ($line -cmatch '^Closes #\d+\s*$') { continue }
+        if ($line -cmatch $ClosesLine) { continue }
         foreach ($m in [regex]::Matches($line, '(?<![0-9A-Za-z-])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)(?:\s*:\s*|\s+)(?:(?:[\w.-]+/[\w.-]+)?#\d+|https://github\.com/[\w.-]+/[\w.-]+/issues/\d+)', 'IgnoreCase')) {
             @{ Line = $n; Found = $m.Value }
         }
     }
+}
+
+function Get-ClosedIssue {
+    <#  The numbers of the issues of this repository $Text closes, once each, in ascending order:
+        each `Closes #N` line's, and with -AnyKeyword each closing keyword's before a reference, as
+        Get-ClosingKeyword finds one, that names an issue here: `#N`, or `OWNER/NAME#N` or an
+        issue's address on github.com whose OWNER/NAME is $Repo, in any case. Another repository's
+        references are left out, and with no $Repo every qualified one is.  #>
+    param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text, [string] $Repo, [switch] $AnyKeyword)
+    $numbers = @(foreach ($line in $Text -split '\r?\n') { if ($line -cmatch $ClosesLine) { [int] $Matches[1] } })
+    if ($AnyKeyword) {
+        $numbers += @(foreach ($c in Get-ClosingKeyword -Text $Text) {
+                if ($c.Found -match '[\s:]#(\d+)$') { [int] $Matches[1] }
+                elseif ($c.Found -match '(?:[\s:]|github\.com/)([\w.-]+/[\w.-]+)(?:#|/issues/)(\d+)$' -and $Repo -and $Matches[1] -ieq $Repo) { [int] $Matches[2] }
+            })
+    }
+    @($numbers | Sort-Object -Unique)
+}
+
+function Get-ClosingOverlap {
+    <#  What -CheckClosing finds, as @{ Closes; Listed; Problems }: the issues $Text closes by its
+        `Closes #N` lines, how many other open pull requests were compared, and a sentence for each
+        such issue another of them closes too, as Get-ClosedIssue -AnyKeyword reads its body, or
+        one saying the list could not be read. $ListOpen gives the open pull requests, each with a
+        number and a body, or a string of what went wrong; it is not asked where $Text closes
+        nothing. $Own, the pull request the body belongs to, is left out; 0 is none.  #>
+    param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text, [int] $Own, [string] $Repo,
+        [Parameter(Mandatory)] [scriptblock] $ListOpen)
+    $mine = @(Get-ClosedIssue -Text $Text -Repo $Repo)
+    if (-not $mine) { return @{ Closes = $mine; Listed = 0; Problems = @() } }
+    $open = @(& $ListOpen)
+    if ($open.Count -eq 1 -and $open[0] -is [string]) {
+        return @{ Closes = $mine; Listed = 0; Problems = @("the open pull requests could not be listed, so whether another closes an issue this body closes was NOT checked: $($open[0])") }
+    }
+    $others = @($open | Where-Object { [int] $_.number -ne $Own })
+    $problems = @(foreach ($pr in $others) {
+            $theirs = @(Get-ClosedIssue -Text "$($pr.body)" -Repo $Repo -AnyKeyword)
+            foreach ($issue in $mine | Where-Object { $_ -in $theirs }) { "this body closes #$issue, which the open pull request #$($pr.number) closes too" }
+        })
+    @{ Closes = $mine; Listed = $others.Count; Problems = $problems }
 }
 
 $TemplateHeadings = 'Summary', 'Evidence', 'Merge Danger'
@@ -771,6 +851,59 @@ function Invoke-SelfTest {
             Write-Host ($noHead.Text.TrimEnd() -replace '(?m)^', '    ')
             $noHead.Code -eq 0 -and $noHead.Text -match 'No head was given, so the 1 cited run\(s\) were NOT read\.' -and
                 $off.Code -eq 0 -and $off.Text -match '1 named no commit here and were NOT checked\.' -and $off.Text -notmatch 'cited run' } }
+        @{ Name = 'a body closing #7 fails where another open pull request closes #7, naming the issue and that pull request; one closing #8 alone passes (#463)'; Test = {
+            $got = Get-ClosingOverlap -Text "Closes #7`nCloses #9`n`nBody." -Repo 'octo/repo' -ListOpen { @([pscustomobject]@{ number = 12; body = "Closes #7`n" }, [pscustomobject]@{ number = 13; body = 'Closes #8' }) }
+            $problems = @($got.Problems)
+            ($got.Closes -join ',') -ceq '7,9' -and $got.Listed -eq 2 -and $problems.Count -eq 1 -and $problems[0] -ceq 'this body closes #7, which the open pull request #12 closes too' } }
+        @{ Name = 'the body''s own pull request is left out of the comparison; with no number, it is compared (#463)'; Test = {
+            $list = { @([pscustomobject]@{ number = 12; body = 'Closes #7' }) }
+            $own = Get-ClosingOverlap -Text 'Closes #7' -Own 12 -ListOpen $list
+            $none = Get-ClosingOverlap -Text 'Closes #7' -ListOpen $list
+            @($own.Problems).Count -eq 0 -and $own.Listed -eq 0 -and @($none.Problems).Count -eq 1 } }
+        @{ Name = 'another pull request''s closing keyword in a sentence counts, by Get-ClosingKeyword''s rule, and so does this repository''s qualified reference and address; another repository''s, and a keyword-less mention, do not (#463)'; Test = {
+            $fixes = Get-ClosingOverlap -Text 'Closes #7' -Repo 'octo/repo' -ListOpen { @([pscustomobject]@{ number = 12; body = 'This fixes #7 in passing.' }) }
+            $theirs = @(Get-ClosedIssue -Repo 'Octo/Repo' -AnyKeyword -Text ('It resolves octo/repo#3, fixes: https://github.com/OCTO/repo/issues/4, closes other/repo#5 ' +
+                    'and https://github.com/other/repo/issues/6, and mentions #8.'))
+            $noRepo = @(Get-ClosedIssue -AnyKeyword -Text 'It fixes octo/repo#3 and closes #4.')
+            $lines = @(Get-ClosedIssue -Text "Closes #2`nIt fixes #4.`nCloses #2")
+            @($fixes.Problems).Count -eq 1 -and $fixes.Problems[0] -match '#7, which the open pull request #12' -and
+                ($theirs -join ',') -ceq '3,4' -and ($noRepo -join ',') -ceq '4' -and ($lines -join ',') -ceq '2' } }
+        @{ Name = 'a list gh cannot give fails the body with what gh said; a body that closes nothing asks for no list (#463)'; Test = {
+            # A list, not a counter: the stand-in runs in a scope of its own.
+            $asked = [System.Collections.Generic.List[string]]::new()
+            $failed = Get-ClosingOverlap -Text 'Closes #7' -ListOpen { 'HTTP 403: Resource not accessible by integration' }
+            $nothing = Get-ClosingOverlap -Text 'It fixes nothing.' -ListOpen { $asked.Add('listed'); @() }
+            $problems = @($failed.Problems)
+            $problems.Count -eq 1 -and $problems[0] -ceq 'the open pull requests could not be listed, so whether another closes an issue this body closes was NOT checked: HTTP 403: Resource not accessible by integration' -and
+                @($nothing.Problems).Count -eq 0 -and $asked.Count -eq 0 } }
+        @{ Name = 'run with -CheckClosing, a gh on the path listing #12 closing #7 fails the body naming both, and -PullRequest 12 passes it; without the switch it passes and gh is never run (#463)'; Test = {
+            $file = Join-Path $temp 'body.md'
+            Set-Content -LiteralPath $file -Value "Closes #7`n`n## Summary`n`nA change.`n`n$marked"
+            # A gh that records each call and lists one open pull request.
+            $bin = Join-Path $temp 'fake-gh'
+            New-Item -ItemType Directory -Path $bin -Force | Out-Null
+            $calls = Join-Path $bin 'calls.txt'
+            if ($IsWindows) { Set-Content -LiteralPath (Join-Path $bin 'gh.cmd') -Value "@echo off`r`necho %* >> `"%~dp0calls.txt`"`r`necho [{`"number`":12,`"body`":`"Closes #7`"}]" }
+            else {
+                Set-Content -LiteralPath (Join-Path $bin 'gh') -Value "#!/bin/sh`necho `"`$*`" >> `"`$(dirname `"`$0`")/calls.txt`"`necho '[{`"number`":12,`"body`":`"Closes #7`"}]'"
+                chmod +x (Join-Path $bin 'gh')
+            }
+            $kept = $env:PATH
+            $env:PATH = "$bin$([IO.Path]::PathSeparator)$env:PATH"
+            try {
+                $off = & $run @($file)
+                $offCalls = Test-Path -LiteralPath $calls
+                $refused = & $run @($file, '-CheckClosing')
+                $own = & $run @($file, '-CheckClosing', '-PullRequest', '12')
+            }
+            finally { $env:PATH = $kept }
+            $said = @(if (Test-Path -LiteralPath $calls) { Get-Content -LiteralPath $calls })
+            Write-Host ($refused.Text.TrimEnd() -replace '(?m)^', '    ')
+            $off.Code -eq 0 -and -not $offCalls -and $off.Text -notmatch 'open pull request' -and
+                $refused.Code -eq 1 -and $refused.Text -match '(?m)^pr-body-check: this body closes #7, which the open pull request #12 closes too\.' -and
+                $refused.Text -match '(?m)^FAILED - pr-body-check: .*1 problem\(s\) with the issues it closes' -and
+                $own.Code -eq 0 -and $own.Text -match 'No other open pull request, of 0 compared, closes an issue it closes\.' -and
+                $said.Count -eq 2 -and -not ($said | Where-Object { $_.Trim() -cne 'pr list --state open --limit 1000 --json number,body' }) } }
     )
 
     $failures = 0
@@ -823,10 +956,30 @@ foreach ($s in $siblings) {
 }
 $runs = @()
 $runNote = ''
-if ($CheckRuns) {
-    # This repository, as origin names it on github.com, for the addresses of its runs.
+# This repository, as origin names it on github.com, for the addresses of its runs and issues.
+$repo = ''
+if ($CheckRuns -or $CheckClosing) {
     $origin = git -C $top remote get-url origin 2>$null
     $repo = if ("$origin" -match 'github\.com[/:]([^/]+/[^/]+?)(?:\.git)?/?$') { $Matches[1] } else { '' }
+}
+$overlaps = @()
+$closingNote = ''
+if ($CheckClosing) {
+    $listOpen = {
+        $said = @(gh pr list --state open --limit 1000 --json number,body 2>&1 | ForEach-Object { "$_" })
+        if ($LASTEXITCODE -ne 0) { return ($said -join ' ').Trim() }
+        $said -join "`n" | ConvertFrom-Json
+    }
+    $closingCheck = Get-ClosingOverlap -Text "$Body" -Own $PullRequest -Repo $repo -ListOpen $listOpen
+    $overlaps = @($closingCheck.Problems)
+    foreach ($o in $overlaps) {
+        Write-Host "pr-body-check: $o. Two open pull requests that close one issue carry its change twice: close it in one of them, or say in each why both stand."
+    }
+    $closingNote = if (-not $closingCheck.Closes) { ' It closes no issue, so no open pull request was compared.' }
+        elseif (-not $overlaps) { " No other open pull request, of $($closingCheck.Listed) compared, closes an issue it closes." }
+        else { '' }
+}
+if ($CheckRuns) {
     $readRun = {
         param([string] $Id)
         $said = @(gh run view $Id --json headSha,workflowName,jobs 2>&1 | ForEach-Object { "$_" })
@@ -844,13 +997,14 @@ if ($CheckRuns) {
         else { '' }
 }
 $unchecked = if ($read.Unknown) { " $($read.Unknown) named no commit here and were NOT checked." } else { '' }
-$unchecked += $runNote
+$unchecked += $runNote + $closingNote
 $found = @("$($read.Off.Count) word(s) of the body name a commit that is not on $Main", "$($closing.Count) closing keyword(s) stand outside a Closes #N line",
     "$($headings.Count) problem(s) with the pr template's three headings", "$($markers.Count) marker(s) of the pr template missing")
 if ($RequireSummaryVisual) { $found += "$($visual.Count) Summary with no visual" }
 if ($CiteSiblings) { $found += "$($siblings.Count) statement(s) about a sibling lack a commit or an ISO date" }
 if ($CheckRuns -and $Head) { $found += "$($runs.Count) problem(s) with the cited runs" }
-if ($read.Off -or $closing -or $headings -or $markers -or $visual -or $siblings -or $runs) {
+if ($CheckClosing) { $found += "$($overlaps.Count) problem(s) with the issues it closes and the other open pull requests" }
+if ($read.Off -or $closing -or $headings -or $markers -or $visual -or $siblings -or $runs -or $overlaps) {
     Write-Host ''
     Write-Host "FAILED - pr-body-check: $(($found | Select-Object -SkipLast 1) -join ', '), and $($found[-1]).$unchecked"
     exit 1
