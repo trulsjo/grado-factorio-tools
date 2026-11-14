@@ -546,14 +546,15 @@ the tip only. `scripts/reword-commit.ps1`, lifted from grado-factorio-modpack (#
 commit of an unpushed branch from a message file, replays the commits above it with their trees,
 authors and author dates, and prints each old and new hash, so a reviewer can see that no tree
 changed. The commit check beside it reads the new messages, with the repository's
-`commit-scopes.txt` where there is one, before the branch moves; a rejected message leaves the
-branch where it was.
+`commit-scopes.txt` where there is one or `-ScopeFile`'s list, before the branch moves; a
+rejected message leaves the branch where it was.
 
     pwsh -File vendor/grado-factorio-tools/scripts/reword-commit.ps1 -Commit <rev> -MessageFile <file>
 
 It refuses, changing nothing, a commit off `origin/main..HEAD` (`-Base` for another), one already
-on the branch's `origin` remote, staged changes, a detached `HEAD` and a merge commit to replay.
-`-SelfTest` proves each, in a scratch repository. What it cannot see is in its header: a check
+on the branch's `origin` remote, staged changes, a detached `HEAD`, a merge commit to replay, and
+a branch that moved while it ran, whose new commit is kept. `-SelfTest` proves each, in a scratch
+repository. What it cannot see is in its header: a check
 the consumer's own `commit-msg` hook chains is not run.
 
 ## Checking Markdown
