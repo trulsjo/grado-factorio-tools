@@ -31,7 +31,8 @@
     after `edit`, or for the current branch's where that word is an option, as in
     `gh pr edit -F b.md 459` (#455); where gh names none, the check reads no run and says so. With
     -CheckClosing, it hands -PullRequest and the number `gh pr view` names for the same pull
-    request, so the check leaves that one out (#463); where gh names none, it hands none. A
+    request, so the check leaves that one out (#463); where gh names none, it hands none, and an
+    edit whose body closes an issue is then refused as closing it with its own pull request. A
     `gh pr create` hands neither: the pull request does not exist yet. The check runs in `cwd`,
     since it asks git about the commits a body cites, and gh which pull request a branch has. The
     `case` keeps PowerShell from starting before every shell command: whatever is refused holds `gh`
@@ -365,16 +366,34 @@ if ($SelfTest) {
     $without = @(Get-CheckArgument -Sub 'pr edit' -Rest @('5') -CheckArgs @('-CiteSiblings') -HeadOf $stub -NumberOf $numberStub)
     $unnamed = @(Get-CheckArgument -Sub 'pr edit' -Rest @('5') -CheckArgs $closingArgs -HeadOf $stub -NumberOf { })
     $askedBefore = $askedNumber.Count
-    # Through the refusal, the number reaches the check: run with -CheckClosing on a body that
-    # closes nothing, the check says it compared none, so gh is not asked to list.
-    $closingThrough = [string] (Get-PrBodyRefusal -Command "gh pr edit 7 -F `"$bad`"" -Cwd $root -CheckArgs @('-CheckClosing') -HeadOf $stub -NumberOf $numberStub)
-    $ok = ($numbered -join ' ') -ceq '-CiteSiblings -CheckClosing -PullRequest 461' -and ($current -join ' ') -ceq '-CiteSiblings -CheckClosing -PullRequest 461' -and
+    # Through the refusal, the number reaches the check that runs: a gh stood in on the path
+    # lists pull request 461 closing #7, which the body closes too. Handed 461, the check leaves
+    # that one out and the edit passes; handed none, the edit is refused for the overlap.
+    $closing = Join-Path $tmp 'closing.md'
+    Set-Content -LiteralPath $closing -NoNewline -Value ("Closes #7`n`n" + ($body -f '    a visual'))
+    $bin = Join-Path $tmp 'fake-gh'
+    New-Item -ItemType Directory -Force -Path $bin | Out-Null
+    $listing = '[{"number":461,"body":"Closes #7"}]'
+    if ($IsWindows) { Set-Content -LiteralPath (Join-Path $bin 'gh.cmd') -Value "@echo off`r`necho $listing" }
+    else {
+        Set-Content -LiteralPath (Join-Path $bin 'gh') -Value "#!/bin/sh`necho '$listing'"
+        chmod +x (Join-Path $bin 'gh')
+    }
+    $keptPath = $env:PATH
+    $env:PATH = "$bin$([IO.Path]::PathSeparator)$env:PATH"
+    try {
+        $closingThrough = Get-PrBodyRefusal -Command "gh pr edit 7 -F `"$closing`"" -Cwd $root -CheckArgs @('-CheckClosing') -HeadOf $stub -NumberOf $numberStub
+        $closingNone = [string] (Get-PrBodyRefusal -Command "gh pr edit 7 -F `"$closing`"" -Cwd $root -CheckArgs @('-CheckClosing') -HeadOf $stub -NumberOf { })
+    }
+    finally { $env:PATH = $keptPath }
+    $ok =($numbered -join ' ') -ceq '-CiteSiblings -CheckClosing -PullRequest 461' -and ($current -join ' ') -ceq '-CiteSiblings -CheckClosing -PullRequest 461' -and
         ($both -join ' ') -ceq '-CheckRuns -CheckClosing -Head abc1234def -PullRequest 461' -and
         ($created -join ' ') -ceq '-CiteSiblings -CheckClosing' -and ($without -join ' ') -ceq '-CiteSiblings' -and ($unnamed -join ' ') -ceq '-CiteSiblings -CheckClosing' -and
         ($askedNumber[0..($askedBefore - 1)] -join ' ') -ceq '<5> <> <5>' -and $askedNumber[-1] -ceq '<7>' -and
-        $closingThrough -match 'fails pr-body-check\.ps1 -CheckClosing -PullRequest 461\.' -and $closingThrough -match 'It closes no issue, so no open pull request was compared\.'
-    if (-not $ok) { Write-Host "    $($numbered -join ' ') | $($current -join ' ') | $($both -join ' ') | $($created -join ' ') | $($without -join ' ') | $($unnamed -join ' ') | $($askedNumber -join ' ') | $closingThrough" }
-    Write-Host ("self-test {0}/{1}: gh pr edit with -CheckClosing hands the check -PullRequest and the number gh names for the pull request it names, and the check is run with it; gh pr create, a wiring without -CheckClosing and a number gh cannot name hand none -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
+        $null -eq $closingThrough -and $closingNone -match 'fails pr-body-check\.ps1 -CheckClosing\.' -and
+        $closingNone -match 'this body closes #7, which the open pull request #461 closes too\.'
+    if (-not $ok) { Write-Host "    $($numbered -join ' ') | $($current -join ' ') | $($both -join ' ') | $($created -join ' ') | $($without -join ' ') | $($unnamed -join ' ') | $($askedNumber -join ' ') | handed: $closingThrough | none: $closingNone" }
+    Write-Host ("self-test {0}/{1}: gh pr edit with -CheckClosing hands the check -PullRequest and the number gh names for the pull request it names, and the check run with it leaves that one out of those it compares; gh pr create, a wiring without -CheckClosing and a number gh cannot name hand none -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++ }
     Pop-Location
     # The wiring as the session runs it: the command the settings file wires for this script,
