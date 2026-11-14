@@ -775,7 +775,7 @@ figures. A page gathered from several pages gives none: the lift names what it t
 | `refuse-hanging-bash`, ported to PowerShell | rf `tools/refuse-hanging-bash.py` | 429 | `b8b6d89` | `ea6db0f` | [#322](https://github.com/trulsjo/grado-factorio-tools/issues/322) rulings 2 to 5 | [#352](https://github.com/trulsjo/grado-factorio-tools/issues/352); expanded 2026-11-11 by [PR #420](https://github.com/trulsjo/grado-factorio-tools/pull/420), its commit on `main`, `74cd2bd`, added by [#355](https://github.com/trulsjo/grado-factorio-tools/issues/355) ([ruled on #335](https://github.com/trulsjo/grado-factorio-tools/issues/335#issuecomment-6697515371)) | [realistic-fusion-refreshed#865](https://github.com/trulsjo/realistic-fusion-refreshed/issues/865) |
 | `ask-before-download.ps1` | modpack `scripts/ask-before-download.ps1` | 202 | `0653339` | `a89fd95` | [#323](https://github.com/trulsjo/grado-factorio-tools/issues/323) ruling 1 | [#353](https://github.com/trulsjo/grado-factorio-tools/issues/353); expanded 2026-11-11 by [PR #420](https://github.com/trulsjo/grado-factorio-tools/pull/420), its commit on `main`, `89a7d28`, added by [#355](https://github.com/trulsjo/grado-factorio-tools/issues/355) ([ruled on #335](https://github.com/trulsjo/grado-factorio-tools/issues/335#issuecomment-6697515371)) | [grado-factorio-modpack#418](https://github.com/trulsjo/grado-factorio-modpack/issues/418) |
 | `absolute-words.ps1` | modpack `scripts/absolute-words.ps1` | 188 | `e7a9586` | `84db46c` | [#329](https://github.com/trulsjo/grado-factorio-tools/issues/329) ruling 1 | [#354](https://github.com/trulsjo/grado-factorio-tools/issues/354); expanded 2026-11-11 by [PR #420](https://github.com/trulsjo/grado-factorio-tools/pull/420), its commit on `main`, `5f09624`, added by [#355](https://github.com/trulsjo/grado-factorio-tools/issues/355) ([ruled on #335](https://github.com/trulsjo/grado-factorio-tools/issues/335#issuecomment-6697515371)) | [grado-factorio-modpack#418](https://github.com/trulsjo/grado-factorio-modpack/issues/418) |
-| `reword-commit.ps1` | modpack `scripts/reword-commit.ps1` | 219 | `233822d` | `b5a5cc2` | [#329](https://github.com/trulsjo/grado-factorio-tools/issues/329) ruling 2 | [#356](https://github.com/trulsjo/grado-factorio-tools/issues/356); expanded 2026-11-14 by PR_NUMBER_PENDING | [grado-factorio-modpack#418](https://github.com/trulsjo/grado-factorio-modpack/issues/418) |
+| `reword-commit.ps1` | modpack `scripts/reword-commit.ps1` | 219 | `233822d` | `b5a5cc2` | [#329](https://github.com/trulsjo/grado-factorio-tools/issues/329) ruling 2 | [#356](https://github.com/trulsjo/grado-factorio-tools/issues/356); expanded 2026-11-14 by [PR #460](https://github.com/trulsjo/grado-factorio-tools/pull/460) | [grado-factorio-modpack#418](https://github.com/trulsjo/grado-factorio-modpack/issues/418) |
 
 † Runs the game. The harness keeps its Steam fallback for now ([#321](https://github.com/trulsjo/grado-factorio-tools/issues/321) ruling 7): Steam updates on
 its own, so a run without `FACTORIO_EXE` set changes version silently. tn pins it in its tracked
@@ -815,9 +815,10 @@ Each recorded as ruled, so that a later survey does not propose it again without
 `.githooks`, or the submodule not initialised. Ruled in *Rulings: the commit-msg hook, its scope
 list, and hook hygiene* ([#317](https://github.com/trulsjo/grado-factorio-tools/issues/317),
 ruling 6); written here by [#357](https://github.com/trulsjo/grado-factorio-tools/issues/357), and wired by each sibling's hooks ticket.
-**Written 2026-11-14** as `scripts/warn-skipped-install.ps1`, by PR_NUMBER_PENDING; its commit on
-`main` is added by the next lift's pull request, as *A lift's pull request cannot name its own
-commit on `main`* above has it.
+**Written 2026-11-14** as `scripts/warn-skipped-install.ps1`, by
+[PR #460](https://github.com/trulsjo/grado-factorio-tools/pull/460); its commit on `main` is added
+by the next lift's pull request, as *A lift's pull request cannot name its own commit on `main`*
+above has it.
 
 **Mod portal upload.** It does not exist in any repo. `pack-mods.ps1` is explicit in its own header:
 
