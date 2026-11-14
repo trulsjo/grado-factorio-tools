@@ -42,16 +42,18 @@
     one that needs neither prints nothing; a .githooks-less repository is not warned of its hooks
     path; a directory outside any repository is said to be not checked. Then the first example's
     command, run through sh, where the project holds no script exits 0 and prints JSON naming the
-    missing path, and for this repository runs the script. With -Settings, the command that file
-    wires for this script, found by its name among the SessionStart entries, exits 0 for its own
-    repository and prints nothing or JSON. Needs git, and sh: the one on the path, or the one Git
-    for Windows ships.
+    missing path, and for this repository runs the script. A settings file's command naming this
+    script, found by its name among the SessionStart entries, is run with this repository's
+    scripts: it must warn the clone that skipped a step and say nothing for the one that did not,
+    a command that never runs the script fails that, and a file with no SessionStart entry wires
+    none. With -Settings, that file's command is held to the same. Needs git, and sh: the one on
+    the path, or the one Git for Windows ships.
 
 .PARAMETER Settings
     With -SelfTest: a consumer's .claude/settings.json, whose SessionStart command naming this
-    script is run, with that file's repository as the project. The first command of any entry that
-    names it is taken (#315 ruling 3). Without it no settings file is read, since this repository
-    does not wire the hook.
+    script is run on the self-test's two clones, with this repository's scripts in place of the
+    path it names. The first command of any entry that names it is taken (#315 ruling 3). Without
+    it no settings file of a repository is read, since this repository does not wire the hook.
 
 .EXAMPLE
     The wired command: the SessionStart hook a consumer puts in its .claude/settings.json, as HOW A
@@ -182,15 +184,44 @@ if ($SelfTest) {
                 $here.Code -eq 0 -and ($here.Text | ConvertFrom-Json).hookSpecificOutput.additionalContext -match 'core\.hooksPath is not set'
         } catch { $false }
         & $check 'the first example''s command, where the script is not there, exits 0 and names the missing path; where it is, runs it on the project' $ok "absent: $($absent.Code) $($absent.Text) | here: $($here.Code) $($here.Text)"
+        # The wiring a settings file holds, found by this script's name among the SessionStart
+        # entries (#315 ruling 3), each key read only where it stands, as strict mode throws on a
+        # missing one. The wired command is run with this repository's scripts in place of a
+        # consumer's vendor/ or scripts/ path, on the clone that skipped a step, which it must warn
+        # of, and on the one that skipped none, where it must print nothing: a command that never
+        # runs the script passes the second and fails the first.
+        $names = [regex]::Escape((Split-Path $PSCommandPath -Leaf))
+        $findWired = {
+            param([string] $path)
+            $hooks = (Get-Content -LiteralPath $path -Raw | ConvertFrom-Json).PSObject.Properties['hooks']?.Value
+            $entries = if ($hooks) { $hooks.PSObject.Properties['SessionStart']?.Value }
+            $found = @($entries) | Where-Object { $_ -and @($_.hooks.command) -match $names } | Select-Object -First 1
+            if ($found) { @($found.hooks.command) -match $names | Select-Object -First 1 }
+        }
+        $scriptsDir = ($PSScriptRoot -replace '\\', '/') + '/'
+        $wiredWarns = {
+            param([string] $line)
+            $local = $line.Replace('$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/', $scriptsDir).Replace('$CLAUDE_PROJECT_DIR/scripts/', $scriptsDir)
+            $warns = & $wire $clone $local; $silent = & $wire $whole $local
+            $told = try { $warns.Text | ConvertFrom-Json } catch { $null }
+            @{ Ok = [bool] ($warns.Code -eq 0 -and $told -and $told.hookSpecificOutput.additionalContext -match 'core\.hooksPath is not set' -and $silent.Code -eq 0 -and -not $silent.Text.Trim())
+                Said = "skipped: $($warns.Code) $($warns.Text) | whole: $($silent.Code) $($silent.Text)" }
+        }
+        $fixture = Join-Path $temp 'settings.json'
+        $write = { param([string[]] $commands) @{ hooks = @{ SessionStart = @(@{ hooks = @($commands | ForEach-Object { @{ type = 'command'; command = $_ } }) }) } } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $fixture }
+        & $write @('echo first', $form)
+        $named = & $findWired $fixture
+        $real = if ($named) { & $wiredWarns $named } else { @{ Ok = $false; Said = 'no command found' } }
+        & $write @(': # warn-skipped-install.ps1')
+        $stub = & $wiredWarns (& $findWired $fixture)
+        @{ hooks = @{ PreToolUse = @() } } | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $fixture
+        $none = try { & $findWired $fixture } catch { "threw: $($_.Exception.Message)" }
+        & $check 'a settings file''s command naming this script is found and warns a clone that skipped a step and says nothing for one that did not; a command that never runs the script fails that; a file with no SessionStart entry wires none' ($named -ceq $form -and $real.Ok -and -not $stub.Ok -and -not $none) "named: $($real.Said) | stub held: $($stub.Ok) | none: $none"
         if ($Settings) {
             $Settings = (Resolve-Path -LiteralPath $Settings).Path
-            $names = [regex]::Escape((Split-Path $PSCommandPath -Leaf))
-            $found = @((Get-Content -LiteralPath $Settings -Raw | ConvertFrom-Json).hooks.SessionStart) |
-                Where-Object { $_ -and @($_.hooks.command) -match $names } | Select-Object -First 1
-            $wired = if ($found) { @($found.hooks.command) -match $names | Select-Object -First 1 }
-            $ran = if ($wired) { & $wire (Split-Path (Split-Path $Settings -Parent) -Parent) $wired }
-            $ok = $wired -and $ran.Code -eq 0 -and (-not $ran.Text.Trim() -or $(try { ($ran.Text | ConvertFrom-Json).hookSpecificOutput.hookEventName -ceq 'SessionStart' } catch { $false }))
-            & $check "the SessionStart command $Settings wires for this script exits 0 for its repository, and prints nothing or SessionStart JSON" $ok $(if ($wired) { "$($ran.Code) $($ran.Text)" } else { "$Settings wires no SessionStart command that names this script" })
+            $wired = & $findWired $Settings
+            $ran = if ($wired) { & $wiredWarns $wired }
+            & $check "the SessionStart command $Settings wires for this script warns a clone that skipped a step and says nothing for one that did not" ([bool] ($wired -and $ran.Ok)) $(if ($wired) { $ran.Said } else { "$Settings wires no SessionStart command that names this script" })
         }
     }
     catch { & $check 'the fixture was built' $false $_.Exception.Message }
