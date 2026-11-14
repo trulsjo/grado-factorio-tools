@@ -120,7 +120,7 @@ older case of that shape, in a file the diff touches elsewhere, is no finding of
 **Read-only.** Edit no file in the repository, commit nothing, push nothing, and post nothing to
 GitHub: the session acts on the findings and posts the review.
 
-**The report is a file.** Write it to `<a scratch folder outside the repository>/<lane>.md` with
+**The answer is a file.** Write it to `<a scratch folder outside the repository>/<lane>.md` with
 the file tool, and end your turn on at most three lines: how many findings, which one matters
 most, and the file's path. It has three sections.
 
@@ -145,29 +145,50 @@ check, with why: the session answers each one.
 ---
 
 **The confirmation turn** is sent to the lane that raised a finding, continued, once its fix is
-committed. It holds the lines below and no account of how a finding was fixed; the session
-fills their blanks, on a first turn and on each later one. Where the lane cannot be continued,
-a fresh agent is sent the brief's *Reads first* paragraph, its diff refilled as the turn's range
-in place of the change's, the *Read-only* paragraph, and the lines below. A confirmation reads
-the diff and runs nothing, whoever makes it (Truls, 2026-11-13, #355): the session's reverts and
-CI's run on the fix commit cover a fix to a script. A `not fixed` gets another fix and another
-turn, or is recorded as left. The review's comment is posted once each fix is confirmed or
-recorded as left, and **a turn after that comment posts a follow-up comment**
+committed. It holds the turn's sentences and no account of how a finding was fixed, on a first
+turn and on each later one: to a panel reviewer, the ones `panel.py turn` fills; to a lane
+outside the panel, the lines at the end of this page. A confirmation reads the diff and runs
+nothing, whoever makes it (Truls, 2026-11-13, #355): the session's reverts and CI's run on the
+fix commit cover a fix to a script. A `not fixed` gets another fix and another turn, or is
+recorded as left. The review's comment is posted once each fix is confirmed or recorded as left,
+and **a turn after that comment posts a follow-up comment**
 ([Truls, 2026-11-13](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6854219710)).
 
 **A commit added after the review that fixes no finding is sent the same way, to each lane that
 reviewed the change**
 ([Truls, 2026-11-13](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6852734986),
-and for each lane the comment linked above): the lines name it among the commits, with a
+and for each lane the comment linked above): the turn names it among the commits, with a
 sentence on what it does, and the lane reads the diff since the commit it last read. **Where
 such a commit changes a line of code in a script, the bug scan runs its reverts on it**
 ([Truls, the same day](https://github.com/trulsjo/grado-factorio-tools/issues/355#issuecomment-6852998339)):
-the session fills the bug scan's blank for that with the brief's *The reverts* paragraph, filled
-for that commit, and sends no other paragraph of the brief with it. The prose lane's blank says
-to run nothing.
+the bug scan's run text is the brief's *The reverts* paragraph, filled for that commit, and no
+other paragraph of the brief goes with it. The prose lane's says to run nothing.
+
+**To a panel reviewer, the turn is sent by the `review-panel` skill's `panel.py turn`**, which
+fills the skill's `turn-template.md`, beside its `SKILL.md`, and fills every blank itself: each
+SHA from git, the turn number from the answer file's last `Turn` section, and each commit as "a
+fix" unless an `--other` names it (#458). Its options are on the skill's page; the
+[panel](review-panel.md) names the reviewers. Each case:
+
+- **After a fix to the reviewer's finding:**
+  `panel.py turn --pr <n> --agent <agent> --from <the full SHA it last read>`, with
+  `--not-fixed "<n>: <why>"` and `--not-under-review "<decision, and where>"` where they apply.
+- **A commit that fixes no finding:** an `--agent` for each panel reviewer of the change, and
+  `--other "<sha>: <what it does>"`.
+- **The reverts on such a commit:** for a reviewer that ran the bug scan,
+  `--run "<the brief's *The reverts* paragraph, filled for that commit>"`. Without `--run`, the
+  command sends "Run no check and no revert.", which the prose lane takes.
+
+**To a lane outside the panel, the session sends the lines below and fills their blanks** (Truls,
+2026-11-14, #458): a first-pass lane the session started, whose answer is in the scratch folder
+the brief names, in no Herdr space, so `panel.py turn` refuses it; and a fresh agent, where a
+lane cannot be continued, which is sent the brief's *Reads first* paragraph, its diff refilled as
+the turn's range in place of the change's, the *Read-only* paragraph, and the lines below. The
+lines are the template's sentences, word for word, with a blank of this page's where the template
+has a placeholder; the template is the panel's copy.
 
 This is turn `<2 for the first turn after the review, and so on>` of the review of pull request
-`#<number>`, in `<the repository's path>`, whose report is `<the report file's full path>`. The
+`#<number>`, in `<the repository's path>`, whose answer is `<the answer file's full path>`. The
 change was last read at `<the full SHA the lane last read: the reviewed one, on turn 2>`. The
 commits since are
 `<each, by full SHA: "a fix", or one sentence on what a commit that fixes no finding does>`:
@@ -175,11 +196,11 @@ read `git diff <the last-read full SHA>..<the tip's full SHA>` and each commit's
 under review:
 `<each decision of Truls's that the commits record, with where he made it | "nothing">`. Not
 fixed, and why: `<each finding, by its number | "none">`. Read the diff as new diff: against the
-report's findings, and by each rule a review here reads by.
-`<Run no check and no revert | Run no check, and no revert but these: The reverts, as the brief
-has the paragraph, filled for each commit that fixes no finding and changes a script's code>`.
+answer's findings, and by each rule a review here reads by.
+`<"Run no check and no revert." | "Run no check, and no revert but these:" and the brief's The
+reverts paragraph, filled for each commit that fixes no finding and changes a script's code>`
 Do not review the change again. Still read-only. Add a section **Turn `<the turn's number>`** at
-the end of the report file: a line for each finding the commits answer, by its number, `fixed`,
+the end of the answer file: a line for each finding the commits answer, by its number, `fixed`,
 `not fixed: <what is left>` or `left unfixed, as said`, then each new finding, numbered on, in
-the report's form. End your turn on at most three lines: how many are fixed, what is left, and
+the answer's form. End your turn on at most three lines: how many are fixed, what is left, and
 the file's path.
