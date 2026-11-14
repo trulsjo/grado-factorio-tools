@@ -48,17 +48,19 @@
     Build scratch repositories and prove: a clone with core.hooksPath unset, one with it set
     elsewhere, and one with it set to another repository's .githooks in full, are warned of; one
     with a submodule not initialised is warned of, naming its path, a path with a space whole; one
-    that needs neither prints nothing, with the hooks path written ./.githooks/ or in full; a
-    repository with no .githooks directory is not warned of its hooks path; a directory outside any
-    repository is said to be not checked, and the script run there says a check could not be made
-    and not that a step was skipped; a skip found and a check not made are each opened in their own
-    words. Then the first example's command, run through sh, where the project holds no script exits
-    0 and prints JSON naming the missing path, and for this repository runs the script. A settings
-    file's command naming this script, found by its name among the SessionStart entries, is run with
-    this repository's scripts: it must warn the clone that skipped a step and say nothing for the
-    one that did not, a command that never runs the script fails that, and a file with no
-    SessionStart entry wires none. With -Settings, that file's command is held to the same. Needs
-    git, and sh: the one on the path, or the one Git for Windows ships.
+    that needs neither prints nothing, with the hooks path written ./.githooks/ or in full; the
+    full path in capitals is warned of nothing on Windows and warned of elsewhere; a path written
+    from ~ is warned of by git's expansion of it; a repository with no .githooks directory is not
+    warned of its hooks path; a directory outside any repository is said to be not checked, and
+    the script run there says a check could not be made and not that a step was skipped; a skip
+    found and a check not made are each opened in their own words. Then the first example's command,
+    run through sh, where the project holds no script exits 0 and prints JSON naming the missing
+    path, and for this repository runs the script. A settings file's command naming this script,
+    found by its name among the SessionStart entries, is run with this repository's scripts: it must
+    warn the clone that skipped a step and say nothing for the one that did not, a command that
+    never runs the script fails that, and a file with no SessionStart entry wires none. With
+    -Settings, that file's command is held to the same. Needs git, and sh: the one on the path, or
+    the one Git for Windows ships.
 
 .PARAMETER Settings
     With -SelfTest: a consumer's .claude/settings.json, whose SessionStart command naming this
@@ -191,6 +193,17 @@ if ($SelfTest) {
         & $git $clone config core.hooksPath (Join-Path $whole '.githooks')
         $another = @(& $said $clone)
         & $check 'a full hooks path naming another repository''s .githooks is warned of, naming it' ([bool] ($another -match 'core\.hooksPath is .*whole.*\.githooks, so git runs none')) ($another -join ' | ')
+        # The clone's full path in capitals: the same directory on Windows, another elsewhere.
+        & $git $clone config core.hooksPath (Join-Path $clone '.githooks').ToUpperInvariant()
+        $inCapitals = @(& $said $clone)
+        if ($IsWindows) { & $check 'on Windows, a full hooks path naming the clone''s .githooks in other case is warned of nothing' (-not $inCapitals) ($inCapitals -join ' | ') }
+        else { & $check 'off Windows, a full hooks path naming the clone''s .githooks in other case is warned of, naming it' ([bool] ($inCapitals -match 'core\.hooksPath is .*CLONE.*\.GITHOOKS, so git runs none')) ($inCapitals -join ' | ') }
+        # A leading ~, read as git expands it to the home directory, where no .githooks of this
+        # clone is: the warning names the expanded path. Git for Windows here took the home from
+        # the user's profile, not from a HOME set for the case, so the case sets none.
+        & $git $clone config core.hooksPath '~/no-such-clone/.githooks'
+        $tilde = @(& $said $clone)
+        & $check 'a hooks path written from ~ is read as git expands it, and warned of by that path' ([bool] ($tilde -match '^core\.hooksPath is [^~]\S*no-such-clone/\.githooks, so git runs none')) ($tilde -join ' | ')
         $bare = Join-Path $temp 'bare'
         New-Item -ItemType Directory -Path $bare | Out-Null; & $git $bare init --quiet
         $noHooks = @(& $said $bare)
