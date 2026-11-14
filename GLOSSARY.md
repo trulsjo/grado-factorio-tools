@@ -83,6 +83,15 @@ A commit that calls itself breaking, by the rule in `scripts/breaking-lib.ps1`'s
 breaks is a consumer's interface, as `CLAUDE.md` defines a breaking change.
 _Avoid_: breaking change, when the commit is meant
 
+### Reviewing a change
+
+**Answer**:
+The file a review lane or a panel reviewer writes its findings to, outside the repository, and
+adds a `Turn` section to on each confirmation turn: `docs/agents/review-brief.md`'s
+*The answer is a file*, and the `review-panel` skill's answer file (#458).
+_Avoid_: report — "report" stays the verb, and the session's own account to Truls; it is not the
+file a lane writes.
+
 ### The game
 
 **Line**:
