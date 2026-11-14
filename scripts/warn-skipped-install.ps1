@@ -20,27 +20,39 @@
     own settings is not ruled (#357).
 
     WHAT IT WARNS OF, in the repository -Root names:
-    - core.hooksPath, read with `git config --get`, not `.githooks` (a trailing slash and a
-      leading ./ are let pass), where the root holds a .githooks directory. A repository with no
-      such directory has no hooks to skip, and is not warned of.
-    - each submodule `git submodule status` marks `-`, not initialised, named by its path. And where
-    git cannot read the root as a repository, that the clone was NOT checked.
+    - core.hooksPath, read with `git config --type=path --get`, that does not name the root's
+      .githooks directory, where the root holds one. The path is resolved against the root before
+      it is compared (#462), so `./.githooks/` and the directory's full path name it as `.githooks`
+      does; on Windows the two are compared in any case. A repository with no such directory has no
+      hooks to skip, and is not warned of.
+    - each submodule `git submodule status` marks `-`, not initialised, named by its whole path,
+      spaces included (#462).
+    Each of those is a step found skipped, and the warning opens them with "this clone skipped an
+    install step." A check it could not make is said in other words, opened with "a check for
+    skipped install steps could not be made." (#462): where git cannot read the root as a
+    repository, where it cannot list the submodules, and where the script itself fails. A warning
+    holding both says each.
 
     WHAT IT CANNOT SEE. A hooks directory that is not .githooks, or a hook file that is not
     executable off Windows, where git skips it. A submodule initialised at a commit other than the
     pin, which `git submodule status` marks `+` and follow-pin.ps1 is for. A hooks path set in the
-    environment, or for one command. Whether the session shows the warning: what the client does
-    with a SessionStart hook's output is not measured here.
+    environment, or for one command, and one reaching .githooks through a link, which is compared as
+    the path it spells. A submodule path git prints quoted. Whether the session shows the warning:
+    what the client does with a SessionStart hook's output is not measured here.
 
 .PARAMETER Root
     The repository to read. The wiring gives "$CLAUDE_PROJECT_DIR". Defaults to the current
     directory.
 
 .PARAMETER SelfTest
-    Build scratch repositories and prove: a clone with core.hooksPath unset, and one with it set
-    elsewhere, are warned of; one with a submodule not initialised is warned of, naming its path;
-    one that needs neither prints nothing; a .githooks-less repository is not warned of its hooks
-    path; a directory outside any repository is said to be not checked. Then the first example's
+    Build scratch repositories and prove: a clone with core.hooksPath unset, one with it set
+    elsewhere, and one with it set to another repository's .githooks in full, are warned of; one
+    with a submodule not initialised is warned of, naming its path, a path with a space whole; one
+    that needs neither prints nothing, with the hooks path written ./.githooks/ or in full; a
+    .githooks-less repository is not warned of its hooks path; a directory outside any repository
+    is said to be not checked, and the script run there says a check could not be made and not that
+    a step was skipped; a skip found and a check not made are each opened in their own words. Then
+    the first example's
     command, run through sh, where the project holds no script exits 0 and prints JSON naming the
     missing path, and for this repository runs the script. A settings file's command naming this
     script, found by its name among the SessionStart entries, is run with this repository's scripts:
@@ -78,32 +90,56 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function New-Finding {
+    <#  One finding: a step found skipped ($Kind 'skipped') or a check that could not be made
+        ('not checked'), and the sentence that says it.  #>
+    param([Parameter(Mandatory)] [ValidateSet('skipped', 'not checked')] [string] $Kind, [Parameter(Mandatory)] [string] $Text)
+    [pscustomobject] @{ Kind = $Kind; Text = $Text }
+}
+
 function Get-SkippedInstall {
-    <#  Each install step the repository at $Dir skipped, as a sentence that names the command that
-        takes it; one sentence saying it was not checked where git cannot read it.  #>
+    <#  What the repository at $Dir was found to skip, as findings (New-Finding): each install step
+        it skipped, as a sentence that names the command that takes it, and each check git could
+        not make, as a sentence saying so.  #>
     param([Parameter(Mandatory)] [string] $Dir)
     $top = git -C $Dir rev-parse --show-toplevel 2>$null
-    if ($LASTEXITCODE -or -not $top) { return "git could not read $Dir as a repository, so it was NOT checked for skipped install steps." }
-    if (Test-Path -LiteralPath (Join-Path $top '.githooks') -PathType Container) {
+    if ($LASTEXITCODE -or -not $top) { return New-Finding 'not checked' "git could not read $Dir as a repository, so it was NOT checked for skipped install steps." }
+    $hooksDir = Join-Path $top '.githooks'
+    if (Test-Path -LiteralPath $hooksDir -PathType Container) {
         # In a string, so an unset path is '' and not $null: [string] of no output is $null.
-        $path = "$(git -C $top config --get core.hooksPath 2>$null)"
-        if (($path.Trim() -replace '^\./', '' -replace '[\\/]+$', '') -cne '.githooks') {
+        # --type=path expands a leading ~ as git does where it reads the hooks.
+        $path = "$(git -C $top config --type=path --get core.hooksPath 2>$null)"
+        # Resolved against the top, where git runs the hooks from, so that ./.githooks/ and the
+        # directory's full path name it as .githooks does. Windows's paths are compared in any case.
+        $full = { param([string] $p) [IO.Path]::GetFullPath($p, $top).TrimEnd('\', '/') }
+        $same = $path.Trim() -and $(if ($IsWindows) { (& $full $path.Trim()) -ieq (& $full $hooksDir) } else { (& $full $path.Trim()) -ceq (& $full $hooksDir) })
+        if (-not $same) {
             $was = if ($path) { "is $path" } else { 'is not set' }
-            "core.hooksPath $was, so git runs none of this repository's hooks: git config core.hooksPath .githooks"
+            New-Finding 'skipped' "core.hooksPath $was, so git runs none of this repository's hooks: git config core.hooksPath .githooks"
         }
     }
     $status = @(git -C $top submodule status 2>$null)
-    if ($LASTEXITCODE) { return "git could not list the submodules of $top, so they were NOT checked." }
+    if ($LASTEXITCODE) { return New-Finding 'not checked' "git could not list the submodules of $top, so they were NOT checked." }
     foreach ($line in $status) {
-        if ($line -match '^-\S+\s+(\S+)') { "the submodule $($Matches[1]) is not initialised: git submodule update --init" }
+        # The whole rest of the line: git prints no describe for a submodule it has not
+        # initialised, and a path may hold spaces.
+        if ($line -match '^-[0-9a-f]+ (.+)$') { New-Finding 'skipped' "the submodule $($Matches[1]) is not initialised: git submodule update --init" }
     }
 }
 
-# The JSON a SessionStart hook prints for $Steps, or nothing where there are none.
+# The JSON a SessionStart hook prints for $Findings, or nothing where there are none. A step found
+# skipped and a check not made are each opened in their own words, so that a check that did not run
+# never reads as a skip found.
 function Format-Warning {
-    param([string[]] $Steps)
-    if (-not $Steps) { return }
-    $text = "warn-skipped-install: this clone skipped an install step. $($Steps -join ' Also, ')"
+    param([object[]] $Findings)
+    if (-not $Findings) { return }
+    $skipped = @($Findings | Where-Object Kind -ceq 'skipped' | ForEach-Object Text)
+    $unchecked = @($Findings | Where-Object Kind -ceq 'not checked' | ForEach-Object Text)
+    $parts = @(
+        if ($skipped) { "this clone skipped an install step. $($skipped -join ' Also, ')" }
+        if ($unchecked) { "a check for skipped install steps could not be made. $($unchecked -join ' Also, ')" }
+    )
+    $text = "warn-skipped-install: $($parts -join ' Separately, ')"
     @{ systemMessage = $text; hookSpecificOutput = @{ hookEventName = 'SessionStart'; additionalContext = $text } } | ConvertTo-Json -Compress
 }
 
@@ -121,38 +157,48 @@ if ($SelfTest) {
         # No param block: a declared parameter would take git's own -A as its name.
         $git = { $at = $args[0]; $a = @($args | Select-Object -Skip 1); git -C $at -c protocol.file.allow=always @a 2>&1 | Out-Null; if ($LASTEXITCODE) { throw "git $($a -join ' ') failed in $at" } }
         $commit = { param([string] $at) & $git $at add -A; & $git $at -c user.name=t -c user.email=t@t commit --quiet -m one }
-        # A repository to stand as the submodule, and one that holds it, with .githooks and the
-        # hooks path set: a clone that needs neither step.
+        # The sentences of what a directory was found to skip.
+        $said = { param([string] $at) @(Get-SkippedInstall $at | ForEach-Object Text) }
+        # A repository to stand as the submodule, and one that holds it twice, once at a path with
+        # a space, with .githooks and the hooks path set: a clone that needs neither step.
         $sub = Join-Path $temp 'sub'; $whole = Join-Path $temp 'whole'
         foreach ($r in $sub, $whole) { New-Item -ItemType Directory -Path $r | Out-Null; & $git $r init --quiet }
         Set-Content -LiteralPath (Join-Path $sub 'a.txt') -Value 'one'; & $commit $sub
         New-Item -ItemType Directory -Path (Join-Path $whole '.githooks') | Out-Null
         Set-Content -LiteralPath (Join-Path $whole '.githooks/commit-msg') -Value '#!/bin/sh'
         & $git $whole submodule add --quiet $sub vendor/tools
+        & $git $whole submodule add --quiet $sub 'vendor/tool kit'
         & $commit $whole
         & $git $whole config core.hooksPath .githooks
         # A clone of it, which git makes with no hooks path and no submodule initialised.
         $clone = Join-Path $temp 'clone'
         & $git $temp clone --quiet $whole $clone
-        $none = @(Get-SkippedInstall $whole)
+        $none = @(& $said $whole)
         & $check 'a clone with the hooks path set and its submodule initialised is warned of nothing' (-not $none) ($none -join ' | ')
-        $both = @(Get-SkippedInstall $clone)
+        $both = @(& $said $clone)
         & $check 'a fresh clone is warned that core.hooksPath is not set, naming the command' ([bool] ($both -match 'core\.hooksPath is not set.*git config core\.hooksPath \.githooks')) ($both -join ' | ')
         & $check 'and that its submodule is not initialised, naming its path and the command' ([bool] ($both -match 'the submodule vendor/tools is not initialised: git submodule update --init')) ($both -join ' | ')
+        & $check 'a submodule not initialised whose path holds a space is named by its whole path' ([bool] ($both -cmatch '^the submodule vendor/tool kit is not initialised: ')) ($both -join ' | ')
         & $git $clone config core.hooksPath hooks
-        $elsewhere = @(Get-SkippedInstall $clone)
+        $elsewhere = @(& $said $clone)
         & $check 'a hooks path set elsewhere is warned of, naming it' ([bool] ($elsewhere -match 'core\.hooksPath is hooks,')) ($elsewhere -join ' | ')
         & $git $clone config core.hooksPath ./.githooks/
         & $git $clone submodule update --init --quiet
-        $fixed = @(Get-SkippedInstall $clone)
+        $fixed = @(& $said $clone)
         & $check 'the clone with both steps taken, the hooks path written ./.githooks/, is warned of nothing' (-not $fixed) ($fixed -join ' | ')
+        & $git $clone config core.hooksPath (Join-Path $clone '.githooks')
+        $inFull = @(& $said $clone)
+        & $check 'a hooks path naming the clone''s .githooks by its full path is warned of nothing' (-not $inFull) ($inFull -join ' | ')
+        & $git $clone config core.hooksPath (Join-Path $whole '.githooks')
+        $another = @(& $said $clone)
+        & $check 'a full hooks path naming another repository''s .githooks is warned of, naming it' ([bool] ($another -match 'core\.hooksPath is .*whole.*\.githooks, so git runs none')) ($another -join ' | ')
         $bare = Join-Path $temp 'bare'
         New-Item -ItemType Directory -Path $bare | Out-Null; & $git $bare init --quiet
-        $noHooks = @(Get-SkippedInstall $bare)
+        $noHooks = @(& $said $bare)
         & $check 'a repository with no .githooks directory is not warned of its hooks path' (-not $noHooks) ($noHooks -join ' | ')
         $outside = Join-Path $temp 'outside'
         New-Item -ItemType Directory -Path $outside | Out-Null
-        $notRepo = @(Get-SkippedInstall $outside)
+        $notRepo = @(& $said $outside)
         & $check 'a directory outside any repository is said to be NOT checked' ([bool] ($notRepo -match 'NOT checked')) ($notRepo -join ' | ')
         # The script itself: JSON for a clone that skipped a step, nothing for one that did not,
         # exit 0 for both.
@@ -164,6 +210,14 @@ if ($SelfTest) {
             $told.hookSpecificOutput.additionalContext -match 'core\.hooksPath' -and $told.systemMessage -ceq $told.hookSpecificOutput.additionalContext -and
             $quietCode -eq 0 -and -not $quiet.Trim()
         & $check 'run on a clone that skipped a step it exits 0 and prints SessionStart JSON; on one that did not, exits 0 and prints nothing' $ok "warned: $warnedCode $warned | quiet: $quietCode $quiet"
+        # Outside a repository nothing was checked, and the warning says that, not that a step
+        # was skipped.
+        $unread = pwsh -NoProfile -File $PSCommandPath -Root $outside 2>&1 | Out-String; $unreadCode = $LASTEXITCODE
+        $toldUnread = try { ($unread | ConvertFrom-Json).hookSpecificOutput.additionalContext } catch { '' }
+        & $check 'run outside a repository it exits 0 and says a check could not be made and nothing was checked, not that a step was skipped' ($unreadCode -eq 0 -and $toldUnread -cmatch '^warn-skipped-install: a check for skipped install steps could not be made\. .*NOT checked' -and $toldUnread -notmatch 'skipped an install step') "$unreadCode $unread"
+        # A skip found and a check not made in one result: each opened as it is.
+        $mixed = (Format-Warning @((New-Finding 'skipped' 'Step one.'), (New-Finding 'not checked' 'Check two.'), (New-Finding 'skipped' 'Step three.')) | ConvertFrom-Json).systemMessage
+        & $check 'a skip found and a check not made are each opened in their own words' ($mixed -ceq 'warn-skipped-install: this clone skipped an install step. Step one. Also, Step three. Separately, a check for skipped install steps could not be made. Check two.') $mixed
         # The first example's form, read from the header so the command shown is the command run.
         $form = [regex]::Match((Get-Content -LiteralPath $PSCommandPath -Raw), 'cat >/dev/null;.*?; fi').Value
         $sh = (Get-Command sh -ErrorAction SilentlyContinue)?.Source ?? (Join-Path (git --exec-path) '../../../usr/bin/sh.exe')
@@ -229,6 +283,6 @@ if ($SelfTest) {
 try { Format-Warning @(Get-SkippedInstall $Root) }
 catch {
     # Loud, and not a stop: a session starts whatever this finds.
-    Format-Warning "it could not read $Root ($($_.Exception.Message)), so the clone was NOT checked for skipped install steps."
+    Format-Warning (New-Finding 'not checked' "it could not read $Root ($($_.Exception.Message)), so the clone was NOT checked for skipped install steps.")
 }
 exit 0
