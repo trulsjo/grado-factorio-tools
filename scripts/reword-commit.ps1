@@ -27,7 +27,7 @@
     WHAT IT REFUSES, changing nothing: a name that is no commit; a commit that is not in
     <base>..HEAD; a commit already on origin/<branch>, because once the branch is pushed the
     message stays; staged changes in the index; a detached HEAD; a merge commit among those to
-    replay.
+    replay; a branch that moved while it ran, as by a commit made then, which is kept.
 
     WHAT IT CANNOT SEE. Whether the new message is true: that is the reviewer's. A push to a
     remote other than `origin`, or one this clone has not fetched. A commit-msg hook is not run:
@@ -52,10 +52,12 @@
 
 .PARAMETER SelfTest
     Prove a tip and a commit below the tip are reworded with trees, authors, dates and later
-    messages kept, that a commit off the branch, one already pushed and staged changes are
-    refused, and that a rejected message, a scope the repository's commit-scopes.txt does not
-    list among them, leaves the branch where it was. Needs git, for a fixture repository in a
-    temp directory, and commit-check.ps1 beside this script.
+    messages kept, that a commit off the branch, one already pushed, staged changes, a detached
+    HEAD and a merge commit to replay are refused, and that a rejected message, a scope the
+    repository's commit-scopes.txt or -ScopeFile does not list among them, leaves the branch
+    where it was. A copy of the script beside a commit check that commits proves a branch moved
+    while it runs keeps that commit. Needs git, for a fixture repository in a temp directory, and
+    commit-check.ps1 beside this script.
 
 .EXAMPLE
     From a consumer's root:
@@ -106,9 +108,10 @@ if ($SelfTest) {
         [IO.File]::WriteAllText((Join-Path $temp 'bad.txt'), "not a conventional message`n", $utf8)
         $temp
     }
-    $run = { param([string] $temp, [string] $commit, [string] $file)
+    $self = $PSCommandPath
+    $run = { param([string] $temp, [string] $commit, [string] $file, [string[]] $more = @(), [string] $script = $self)
         Push-Location $temp
-        try { $text = (& pwsh -NoProfile -File $PSCommandPath -Commit $commit -MessageFile (Join-Path $temp $file) 2>&1 | Out-String) } finally { Pop-Location }
+        try { $text = (& pwsh -NoProfile -File $script -Commit $commit -MessageFile (Join-Path $temp $file) @more 2>&1 | Out-String) } finally { Pop-Location }
         @{ Code = $LASTEXITCODE; Text = $text } }
     $log = { param([string] $temp, [string] $format, [string] $range) @(git -C $temp log --reverse "--format=$format" $range) -join "`n" }
     $refused = { param([string] $temp, [hashtable] $r, [string] $before, [string] $why)
@@ -155,6 +158,40 @@ if ($SelfTest) {
             [IO.File]::WriteAllText((Join-Path $t 'listed.txt'), "🔧 chore(repo): say it another way`n", $utf8)
             $before = git -C $t rev-parse HEAD
             (& $refused $t (& $run $t HEAD unlisted.txt) $before "'other' is not a scope this repository lists") -and (& $run $t HEAD listed.txt).Code -eq 0 } }
+        # -ScopeFile names a list where the top holds none, so without it any scope passes: a
+        # scope it does not list is rejected, and one it lists passes.
+        @{ Name = '-ScopeFile''s list is the one the check holds the message to'; Test = { param($t)
+            $list = Join-Path $t 'elsewhere/scopes.txt'
+            New-Item -ItemType Directory -Path (Split-Path $list) | Out-Null
+            [IO.File]::WriteAllText($list, "repo`n", $utf8)
+            [IO.File]::WriteAllText((Join-Path $t 'unlisted.txt'), "🔧 chore(other): say it another way`n", $utf8)
+            $before = git -C $t rev-parse HEAD
+            (& $refused $t (& $run $t HEAD unlisted.txt @('-ScopeFile', $list)) $before "'other' is not a scope this repository lists") -and
+                (& $run $t HEAD new.txt @('-ScopeFile', $list)).Code -eq 0 } }
+        @{ Name = 'a detached HEAD is refused, and the branch is left where it was'; Test = { param($t)
+            $before = git -C $t rev-parse HEAD
+            git -C $t checkout --quiet --detach 2>&1 | Out-Null
+            (& $refused $t (& $run $t HEAD~1 new.txt) $before 'HEAD is detached') -and (git -C $t rev-parse refs/heads/work) -eq $before } }
+        # A side branch merged above HEAD~1: rewording below the merge would replay it.
+        @{ Name = 'a merge commit among those to replay is refused'; Test = { param($t)
+            git -C $t checkout --quiet -b side HEAD~1 2>&1 | Out-Null
+            Add-Content -LiteralPath (Join-Path $t 'b.txt') -Value 'side'
+            git -C $t add b.txt; git -C $t commit --quiet -m '📝 docs(repo): add b' 2>&1 | Out-Null
+            git -C $t checkout --quiet work 2>&1 | Out-Null
+            git -C $t merge --quiet --no-ff side -m '📝 docs(repo): merge side' 2>&1 | Out-Null
+            $before = git -C $t rev-parse HEAD
+            & $refused $t (& $run $t HEAD~2 new.txt) $before 'is a merge commit' } }
+        # A copy of the script beside a commit check that commits on the branch, as a second
+        # session would while this one runs: that commit is kept, and the replay is not written.
+        @{ Name = 'a branch that moves while it runs keeps the new commit, and the reword is refused'; Test = { param($t)
+            $copy = Join-Path $t 'tools'
+            New-Item -ItemType Directory -Path $copy | Out-Null
+            Copy-Item -LiteralPath $self -Destination $copy
+            [IO.File]::WriteAllText((Join-Path $copy 'commit-check.ps1'), "git commit --quiet --allow-empty -m '📝 docs(repo): meanwhile' | Out-Null`nexit 0`n", $utf8)
+            $r = & $run $t HEAD~1 new.txt @() (Join-Path $copy 'reword-commit.ps1')
+            if ($r.Code -ne 1 -or $r.Text -notmatch 'moved from') { Write-Host ($r.Text.TrimEnd() -replace '(?m)^', '    ') }
+            $r.Code -eq 1 -and $r.Text -match 'moved from' -and (git -C $t log -1 --format=%s work) -eq '📝 docs(repo): meanwhile' -and
+                (git -C $t log -1 --format=%s work~1) -eq '📝 docs(repo): add line 3' } }
     )
     $failures = 0
     $n = 0
@@ -181,7 +218,10 @@ $sha = git rev-parse --verify --quiet "$Commit^{commit}"
 if ($LASTEXITCODE -ne 0) { Stop-Refused "$Commit names no commit here." }
 $branch = git symbolic-ref --quiet --short HEAD
 if ($LASTEXITCODE -ne 0) { Stop-Refused 'HEAD is detached, so there is no branch to move.' }
-$commits = @(git rev-list --reverse "$Base..HEAD")
+# The tip is read once, here: the replay is built from it, and the branch moves only if it is
+# still there, so a commit made while this runs is not overwritten.
+$tip = git rev-parse HEAD
+$commits = @(git rev-list --reverse "$Base..$tip")
 $at = [array]::IndexOf($commits, $sha)
 if ($at -lt 0) { Stop-Refused "$Commit is not in $Base..HEAD." }
 git show-ref --verify --quiet "refs/remotes/origin/$branch"
@@ -237,9 +277,11 @@ if (Test-Path -LiteralPath $check) {
 }
 else { Write-Host "reword-commit: $check not found, so the messages were NOT checked." }
 
-$tip = git rev-parse HEAD
-git update-ref -m "reword-commit: $($sha.Substring(0, 7))" "refs/heads/$branch" $parent $tip
-if ($LASTEXITCODE -ne 0) { throw "git could not move $branch. It is still at $tip." }
+git update-ref -m "reword-commit: $($sha.Substring(0, 7))" "refs/heads/$branch" $parent $tip 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "FAILED - reword-commit: $branch moved from $($tip.Substring(0, 7)) while this ran, so it was not moved. Nothing was changed: run it again on the new tip."
+    exit 1
+}
 
 foreach ($c in $map.Keys) {
     $old = $c.Substring(0, 7); $made = $map[$c].Substring(0, 7)
