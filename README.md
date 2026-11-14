@@ -843,13 +843,15 @@ asks. Run from the sibling's root, with the submodule checked out at the new pin
 
 It clones the sibling twice at GitHub's `main`, one clone per pin, each with that pin's
 `scripts/` in its `vendor/`, and runs each form the sibling lists in its forms file, `-Forms`,
-`scripts/pin-forms.psd1` unless said, at both. `-Out`, empty or new, gets each form's output and
+`scripts/pin-forms.psd1` unless said, at both. A relative `-Forms` is read in the clone; an
+absolute one from that path, as the sibling's working tree, so a form the pin ticket's branch adds
+is run too (#464). `-Out`, empty or new, gets each form's output and
 exit code at both pins, `ls-remote.txt`, `breaking.txt` with the move's breaking commits by the
-rule in `scripts/breaking-lib.ps1` (#255), and `table.md`, which compares the two runs of each form
-and lists each place the sibling names a script here that no form runs. It reports and does not
-judge: exit 0 whatever the forms did, exit 1 only when it could not measure. The forms file's shape
-and its four placeholders are in the header. `-SelfTest` builds both repositories offline and needs
-no game.
+rule in `scripts/breaking-lib.ps1` (#255), and `table.md`, which names the forms file read and
+where from, compares the two runs of each form and lists each place the sibling names a script here
+that no form runs. It reports and does not judge: exit 0 whatever the forms did, exit 1 only when it
+could not measure. The forms file's shape and its four placeholders are in the header. `-SelfTest`
+builds both repositories offline and needs no game.
 
 ## Keeping a sibling's submodule at its pin
 

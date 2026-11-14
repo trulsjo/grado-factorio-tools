@@ -31,13 +31,14 @@
       moved back drops, marked dropped, for the pull request's Merge Danger; "none" where there is
       none. The rule and the text are breaking-lib.ps1's (grado-factorio-tools#255), which its
       header states with an example.
-    - table.md: a Markdown table of each form, its old and new exit, whether the outputs are the
-      same, and each pin's last non-empty output line; a form whose outputs differ while those
-      lines are the same reads "differs above the last line". Outputs are compared with each
-      clone's own path written as <clone>, so a path that only names the clone is no difference.
-      Under the table, each `git grep -n vendor/grado-factorio-tools/scripts` hit in the sibling
-      that no form runs, matched by script name: a hit is run when every script of this
-      repository it names is a form's tools script, wherever the hit sits (#247's brief).
+    - table.md: a line naming the forms file read and where from, then a Markdown table of each
+      form, its old and new exit, whether the outputs are the same, and each pin's last non-empty
+      output line; a form whose outputs differ while those lines are the same reads "differs above
+      the last line". Outputs are compared with each clone's own path written as <clone>, so a path
+      that only names the clone is no difference. Under the table, each
+      `git grep -n vendor/grado-factorio-tools/scripts` hit in the sibling that no form runs,
+      matched by script name: a hit is run when every script of this repository it names is a form's
+      tools script, wherever the hit sits (#247's brief).
 
     It reports and does not judge: a form that differs, or fails at both pins, is evidence for the
     pull request, and the run still exits 0. It exits 1 only when it cannot measure: a pin missing,
@@ -47,11 +48,14 @@
     sibling's own forms and scripts, at origin's main.
 
     THE FORMS FILE, the one contract between this repository and each sibling: a PowerShell data
-    file the sibling keeps, at -Forms in its clone, read with Import-PowerShellDataFile. It holds
-    Forms, a list; each form has a Name, used in the file names; From, `tools` for a script of this
-    repository, found in the pin's copy, or `sibling` for one of the sibling's own, found from its
-    clone's root; Script, its path from there; and Args, a list of arguments. In an argument these
-    are replaced:
+    file the sibling keeps, read with Import-PowerShellDataFile: a relative -Forms in the clone of
+    origin's main, an absolute one from that path as given, as the sibling's working tree, so that a
+    form the pin ticket's branch adds is run (#464). Either way each form runs in both clones, and
+    table.md names the file read; for an absolute one, it says it was not read from a commit. It
+    holds Forms, a list; each form has a Name, used in the file names; From, `tools` for a script of
+    this repository, found in the pin's copy, or `sibling` for one of the sibling's own, found from
+    its clone's root; Script, its path from there; and Args, a list of arguments. In an argument
+    these are replaced:
     - {tools}: the pin's copy of scripts/, in that clone.
     - {headmsg}: the path of a file holding the clone's HEAD commit message, as
       `git log -1 --format=%B` prints it, in UTF-8 with no BOM, each line ending in LF; a CR in
@@ -79,7 +83,8 @@
     The directory everything is written to; empty or not there. Nothing in it is committed.
 
 .PARAMETER Forms
-    The forms file's path in the sibling's clone. Defaults to scripts/pin-forms.psd1.
+    The forms file. A relative path is read in the clone of the sibling at origin's main; an
+    absolute one from that path, as the sibling's working tree. Defaults to scripts/pin-forms.psd1.
 
 .PARAMETER SelfTest
     Build, in a temp directory and offline, a tools repository whose pins have between them a plain
@@ -89,10 +94,11 @@
     both pins, each placeholder, breaking.txt and breaking-lib.ps1's rule, forward, back and over an
     empty range, table.md's rows, a "differs above the last line" row among them, a sibling
     reference no form runs being listed, by script name, and that a write into one clone does not
-    show in the other's run. Then run this script itself: copied into the tools repository, with a
-    pin that is not there, it exits 1, naming it; copied into a sibling that holds the tools
-    repository as its submodule, with forms that differ and none that reads gh, it exits 0. Needs
-    git, and no game and no network.
+    show in the other's run. Check the forms file table.md names, and that an absolute -Forms
+    outside the clone is what is run, or, naming no file, fails naming it. Then run this script
+    itself: copied into the tools repository, with a pin that is not there, it exits 1, naming it;
+    copied into a sibling that holds the tools repository as its submodule, with forms that differ
+    and none that reads gh, it exits 0. Needs git, and no game and no network.
 
 .EXAMPLE
     From the sibling's root, with the submodule at the new pin:
@@ -221,7 +227,12 @@ function Invoke-PinMeasure {
         $clones[$pin] = $clone
     }
 
-    $file = Join-Path $clones['old'] $Forms
+    # A relative -Forms is read in the clone of origin's main; an absolute one from where it names,
+    # as the sibling's working tree, so a form the pin ticket's branch adds is run (#464).
+    $fromTree = [IO.Path]::IsPathFullyQualified($Forms)
+    $file = if ($fromTree) { $Forms } else { Join-Path $clones['old'] $Forms }
+    $formsLine = if ($fromTree) { "Forms read from ``$Forms``, in the working tree, not from a commit." }
+    else { "Forms read from ``$Forms`` in the clone of origin's main at $($main.Substring(0, 7))." }
     $list = try { @((Import-PowerShellDataFile -LiteralPath $file).Forms) } catch { throw "the forms file $file could not be read: $($_.Exception.Message)" }
     $rows = [Collections.Generic.List[object]]::new()
     $runScripts = [Collections.Generic.List[object]]::new()
@@ -264,6 +275,8 @@ function Invoke-PinMeasure {
     Write-BreakingList -Tools $Tools -Old $pins['old'] -New $pins['new'] -Out $Out
 
     $table = [Collections.Generic.List[string]]::new()
+    $table.Add($formsLine)
+    $table.Add('')
     $table.Add('| form | old exit | new exit | output | old last line | new last line |')
     $table.Add('| --- | --- | --- | --- | --- | --- |')
     foreach ($name in $rows) {
@@ -426,8 +439,24 @@ if ($SelfTest) {
             $md -match '(?m)^\| tools \| 0 \| 3 \| same \|') $md
         & $check 'a sibling reference to a script no form runs is listed, even inside a script a form runs; one naming only run scripts is not' (
             $md -match 'docs/use\.md:1:.*unrun\.ps1' -and $md -match 'scripts/w2\.ps1:1:.*elsewhere\.ps1' -and $md -notmatch 'docs/run\.md') $md
+        & $check "table.md names a relative -Forms as read in the clone of origin's main, at its commit" (
+            $md -match "(?m)^Forms read from ``scripts/pin-forms\.psd1`` in the clone of origin's main at [0-9a-f]{7}\.\r?$") $md
         $again = try { Invoke-PinMeasure -Tools $toolsRepo -Sibling $sib -Old $oldPin -New $newPin -Out $outDir -Forms 'scripts/pin-forms.psd1' -Bodies $stub | Out-Null; '' } catch { $_.Exception.Message }
         & $check 'an -Out that is not empty is refused' ($again -match 'not empty') $again
+        # An absolute -Forms outside the clone, as a sibling's working tree is, with a form the
+        # clone's own forms file lacks: that form is run at both pins.
+        $wtForms = Join-Path $temp 'working-tree/pin-forms.psd1'
+        & $write $wtForms "@{ Forms = @( @{ Name = 'branch-only'; From = 'tools'; Script = 't.ps1'; Args = @('last') } ) }"
+        $outAbs = Join-Path $temp 'out-abs'
+        $threw = try { $null = Invoke-PinMeasure -Tools $toolsRepo -Sibling $sib -Old $oldPin -New $newPin -Out $outAbs -Forms $wtForms -Bodies $stub; '' } catch { $_.Exception.Message }
+        $mdAbs = if (Test-Path -LiteralPath (Join-Path $outAbs 'table.md')) { Get-Content -LiteralPath (Join-Path $outAbs 'table.md') -Raw } else { "<no table.md> $threw" }
+        & $check 'an absolute -Forms is read from that path: a form only it lists is run at both pins' (
+            -not $threw -and $mdAbs -match '(?m)^\| branch-only \| 0 \| 3 \| differs \| v1 \| v2 \|\r?$' -and $mdAbs -notmatch '(?m)^\| same \|') $mdAbs
+        & $check 'table.md names an absolute -Forms by its path, as read from the working tree, not from a commit' (
+            $mdAbs.Contains("Forms read from ``$wtForms``, in the working tree, not from a commit.")) $mdAbs
+        $noFile = Join-Path $temp 'working-tree/no-such-forms.psd1'
+        $threw = try { $null = Invoke-PinMeasure -Tools $toolsRepo -Sibling $sib -Old $oldPin -New $newPin -Out (Join-Path $temp 'out-none') -Forms $noFile -Bodies $stub; '' } catch { $_.Exception.Message }
+        & $check 'an absolute -Forms naming no file fails, naming the path' ($threw.Contains("the forms file $noFile could not be read")) $threw
         # The script itself, from inside the tools repository, with a pin that is not there.
         Copy-Item -LiteralPath $PSCommandPath -Destination (Join-Path $toolsRepo 'scripts/pin-measure.ps1')
         Copy-Item -LiteralPath "$PSScriptRoot/breaking-lib.ps1" -Destination (Join-Path $toolsRepo 'scripts/breaking-lib.ps1')
