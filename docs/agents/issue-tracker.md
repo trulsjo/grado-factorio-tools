@@ -291,14 +291,16 @@ Used by `/wayfinder`. The **map** is a single issue with **child** issues as tic
   dev.
 - **Blocking**: as the shared page's *Blocked by* says. Here the POST is spelt
   `gh api --method POST repos/trulsjo/grado-factorio-tools/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`,
-  or the same with `grado-factorio-modpack` for a child there. A ticket is unblocked when every
-  blocker is closed.
+  or the same with `grado-factorio-modpack`, `realistic-fusion-refreshed` or
+  `true-nukes-refreshed` for a child there. A ticket is unblocked when every blocker is closed.
 
   **Run the POST with the Bash tool: a `Bash(...)` rule in the tracked `.claude/settings.json`
-  allows it there, in this spelling, for a ticket of this repository or of
-  `grado-factorio-modpack`, and the file has no `PowerShell(...)` rule** (#135, after
-  trulsjo/grado-factorio-modpack#267). `-X POST` for `--method POST`, and the DELETE that
-  removes an edge, are not covered. Not measured: that the client honours the rule.
+  allows it there, in this spelling, for a ticket of this repository, of
+  `grado-factorio-modpack`, of `realistic-fusion-refreshed` or of `true-nukes-refreshed`, one
+  rule for each, the four every repository holds (#363, #323 ruling 2), and the file has no
+  `PowerShell(...)` rule** (#135, after trulsjo/grado-factorio-modpack#267). `-X POST` for
+  `--method POST`, and the DELETE that removes an edge, are not covered. Not measured: that
+  Claude Code honours the rule.
   trulsjo/grado-factorio-modpack#233's run on a branch with the rule was not made, by Truls's
   decision (#135's first comment), and trulsjo/grado-factorio-modpack#267 left the rule
   unmeasured because the refusal of the write on 2026-10-12 was one event, so a run on a commit
