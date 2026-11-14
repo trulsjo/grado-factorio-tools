@@ -122,8 +122,11 @@
     read it, where it is not of the check workflow, where it ran on a commit other than -Head, or
     where the step that runs scripts/check.ps1 did not conclude success on every job. The workflow's
     name and that step's are read from .github/workflows/check.yml at the repository's top, so a
-    rename is followed. The run's other steps are not read, its body step among them, and nor is its
-    conclusion (Truls, triage of #455): that step runs last in the same run, so after a push it
+    rename is followed; that path is fixed, so a repository whose workflow is in another file, as
+    realistic-fusion-refreshed's gates.yml at 9f3504f (read 2026-10-20), gets an error under
+    -CheckRuns, naming the file it looked for. The self-test stands gh in; the read through gh
+    itself is not in it. The run's other steps are not read, its body step among them, and nor is
+    its conclusion (Truls, triage of #455): that step runs last in the same run, so after a push it
     fails on the body citing the run before, and the run's conclusion would hold the body to its own
     verdict. Every cited run is held to the head, so a body that cites an earlier commit's run
     beside the head's fails (the same ruling). With no -Head, as on `gh pr create` before CI has
@@ -415,7 +418,8 @@ function Get-CheckWorkflow {
     $workflow = $null; $step = $null; $last = $null
     foreach ($line in $Text -split '\r?\n') {
         if ($null -eq $workflow -and $line -match '^name:\s*(.+?)\s*$') { $workflow = $Matches[1] }
-        if ($line -match '^\s*-\s*name:\s*(.+?)\s*$') { $last = $Matches[1] }
+        # Each step starts its name afresh, so an unnamed step does not take the one before's.
+        if ($line -match '^\s*-\s') { $last = if ($line -match '^\s*-\s*name:\s*(.+?)\s*$') { $Matches[1] } else { $null } }
         if ($null -eq $step -and $line -match '^\s*run:\s*pwsh\b.*\sscripts/check\.ps1\s*$') { $step = $last }
     }
     if (-not $workflow) { throw 'the check workflow has no top-level name:, so a cited run cannot be told to be of it.' }
@@ -496,6 +500,11 @@ function Invoke-SelfTest {
         '333333333' = & $fakeRun $onBranch 'failure'
         '444444444' = & $fakeRun $onBranch 'skipped'
         '555555555' = & $fakeRun $onBranch 'success' 'release'
+        # No job; a job without the step; a step not yet concluded.
+        '666666666' = [pscustomobject]@{ headSha = $onBranch; workflowName = 'check'; jobs = @() }
+        '777777777' = [pscustomobject]@{ headSha = $onBranch; workflowName = 'check'; jobs = @((& $job 'windows-latest' 'success'),
+                [pscustomobject]@{ name = 'ubuntu-latest'; steps = @([pscustomobject]@{ name = 'Set up job'; conclusion = 'success' }) }) }
+        '888888888' = & $fakeRun $onBranch ''
     }
     $readRun = { param([string] $Id) if ($fakeRuns.ContainsKey($Id)) { $fakeRuns[$Id] } else { "could not find any workflow run with ID: $Id" } }
     $workflowDir = Join-Path $repo '.github/workflows'
@@ -729,7 +738,9 @@ function Invoke-SelfTest {
             $wf = Get-CheckWorkflow -Text ("# a comment`nname: check`n`njobs:`n  check:`n    steps:`n      - uses: actions/checkout@x`n" +
                 "      - name: Parse every script`n        run: pwsh -NoProfile -File scripts/check.ps1`n      - name: Later`n        run: pwsh -File scripts/other.ps1")
             $none = try { Get-CheckWorkflow -Text "name: check`n"; 'read' } catch { $_.Exception.Message }
-            $wf.Workflow -ceq 'check' -and $wf.Step -ceq 'Parse every script' -and $none -match 'no step' } }
+            $unnamed = try { (Get-CheckWorkflow -Text ("name: check`njobs:`n  check:`n    steps:`n      - name: Set up`n        run: echo`n" +
+                        "      - shell: pwsh`n        run: pwsh -NoProfile -File scripts/check.ps1")).Step } catch { $_.Exception.Message }
+            $wf.Workflow -ceq 'check' -and $wf.Step -ceq 'Parse every script' -and $none -match 'no step' -and $unnamed -match 'no step' } }
         @{ Name = 'a run on the head whose check.ps1 step passed on every job passes, though its body step failed (#455)'; Test = {
             $got = & $runCheck "CI's run 111111111 passed."
             @($got.Ids).Count -eq 1 -and @($got.Problems).Count -eq 0 } }
@@ -740,6 +751,12 @@ function Invoke-SelfTest {
             $failed = @((& $runCheck 'run 333333333').Problems); $skipped = @((& $runCheck 'run 444444444').Problems)
             $failed.Count -eq 1 -and $failed[0] -ceq "run 333333333's step ""$step"" concluded failure on ubuntu-latest" -and
                 $skipped.Count -eq 1 -and $skipped[0] -ceq "run 444444444's step ""$step"" concluded skipped on ubuntu-latest" } }
+        @{ Name = 'a run with no job, one whose job has no check.ps1 step, and one whose step has not concluded each fail, named (#455)'; Test = {
+            $jobless = @((& $runCheck 'run 666666666').Problems); $stepless = @((& $runCheck 'run 777777777').Problems)
+            $pending = @((& $runCheck 'run 888888888').Problems)
+            $jobless.Count -eq 1 -and $jobless[0] -ceq 'run 666666666 has no job' -and
+                $stepless.Count -eq 1 -and $stepless[0] -ceq "run 777777777's step ""$step"" concluded nothing, having no such step, on ubuntu-latest" -and
+                $pending.Count -eq 1 -and $pending[0] -ceq "run 888888888's step ""$step"" concluded nothing yet on ubuntu-latest" } }
         @{ Name = 'a run of another workflow fails, naming it (#455)'; Test = {
             $got = @((& $runCheck 'run 555555555').Problems)
             $got.Count -eq 1 -and $got[0] -ceq 'run 555555555 is of the workflow release, not check' } }

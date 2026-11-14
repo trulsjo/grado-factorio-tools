@@ -27,12 +27,12 @@
     and a consumer adds on its own line the ones its gate uses (ADR 0004 decision 5). This
     repository passes -CiteSiblings -RequireSummaryVisual, as CI and the create command do, and
     -CheckRuns, as CI does. With -CheckRuns among them, a `gh pr edit` also hands the check -Head
-    and the head `gh pr view` names for the pull request the edit names, or for the current branch's
-    where it names none (#455); where gh names none, the check reads no run and says so. A
-    `gh pr create` hands no head: the pull request does not exist yet. The check runs in `cwd`,
-    since it asks git about the commits a body cites, and gh which pull request a branch has. The
-    `case` keeps PowerShell from starting before every shell command: whatever is refused holds `gh`
-    and `pr`, or `gh` and `issue`.
+    and the head `gh pr view` names for the pull request the edit names in the word after `edit`, or
+    for the current branch's where that word is an option, as in `gh pr edit -F b.md 459` (#455);
+    where gh names none, the check reads no run and says so. A `gh pr create` hands no head: the
+    pull request does not exist yet. The check runs in `cwd`, since it asks git about the commits a
+    body cites, and gh which pull request a branch has. The `case` keeps PowerShell from starting
+    before every shell command: whatever is refused holds `gh` and `pr`, or `gh` and `issue`.
 
     WHAT IT REFUSES, for each `gh pr create` and `gh pr edit` in the command (Truls's rulings on
     #259, 2026-10-26):
@@ -132,9 +132,10 @@ $GhHead = {
 function Get-CheckArgument {
     <#  The arguments for pr-body-check.ps1 after the body file, for `gh $Sub` with $Rest the words
         after the subcommand: $CheckArgs, and on `gh pr edit` with -CheckRuns among them, -Head and
-        the head $HeadOf gives for the pull request named by the first of $Rest that is not an
-        option, or for none (#455). Where $HeadOf gives none, no -Head: the check then reads no run,
-        and says so.  #>
+        the head $HeadOf gives for the pull request $Rest's first word names, where that word is not
+        an option, or for none, the current branch's, where it is (#455): `gh pr edit -F b.md 459`
+        gets the current branch's head, not 459's. Where $HeadOf gives none, no -Head: the check
+        then reads no run, and says so.  #>
     param([Parameter(Mandatory)] [string] $Sub, [string[]] $Rest = @(), [string[]] $CheckArgs = @(),
         [Parameter(Mandatory)] [scriptblock] $HeadOf)
     $CheckArgs
@@ -317,11 +318,17 @@ if ($SelfTest) {
     $off = @(Get-CheckArgument -Sub 'pr edit' -Rest @('5') -CheckArgs @('-CiteSiblings') -HeadOf $stub)
     $none = @(Get-CheckArgument -Sub 'pr edit' -Rest @('5') -CheckArgs $runs -HeadOf { })
     $through = Get-PrBodyRefusal -Command "gh pr edit 7 -F `"$good`" -F `"$good`"" -Cwd $root -CheckArgs ($visual + '-CheckRuns') -HeadOf $stub
+    # The check itself is given the head: its report on a body it fails says it held the runs to
+    # one, where with no head it says it read none. No run is cited, so gh is not asked.
+    $failing = "gh pr edit 7 -F `"$bad`""
+    $headed = [string] (Get-PrBodyRefusal -Command $failing -Cwd $root -CheckArgs @('-CheckRuns') -HeadOf { 'abc1234def' })
+    $headless = [string] (Get-PrBodyRefusal -Command $failing -Cwd $root -CheckArgs @('-CheckRuns') -HeadOf { })
     $ok = ($edit -join ' ') -ceq '-CiteSiblings -CheckRuns -Head abc1234def' -and ($branch -join ' ') -ceq '-CiteSiblings -CheckRuns -Head abc1234def' -and
         ($create -join ' ') -ceq '-CiteSiblings -CheckRuns' -and ($off -join ' ') -ceq '-CiteSiblings' -and ($none -join ' ') -ceq '-CiteSiblings -CheckRuns' -and
-        -not $through -and ($asked -join ' ') -ceq '<5> <> <7>'
-    if (-not $ok) { Write-Host "    $($edit -join ' ') | $($branch -join ' ') | $($create -join ' ') | $($off -join ' ') | $($none -join ' ') | $through | $($asked -join ' ')" }
-    Write-Host ("self-test {0}/{1}: gh pr edit with -CheckRuns hands the check -Head and the head gh names for the pull request it names, asked once; gh pr create, a wiring without -CheckRuns and a head gh cannot name hand none -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
+        -not $through -and ($asked -join ' ') -ceq '<5> <> <7>' -and
+        $headed -match 'problem\(s\) with the cited runs' -and $headed -notmatch 'No head was given' -and $headless -match 'No head was given'
+    if (-not $ok) { Write-Host "    $($edit -join ' ') | $($branch -join ' ') | $($create -join ' ') | $($off -join ' ') | $($none -join ' ') | $through | $($asked -join ' ') | $headed | $headless" }
+    Write-Host ("self-test {0}/{1}: gh pr edit with -CheckRuns hands the check -Head and the head gh names for the pull request it names, asked once, and the check is run with it; gh pr create, a wiring without -CheckRuns and a head gh cannot name hand none -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++ }
     Pop-Location
     # The wiring as the session runs it: the command the settings file wires for this script,
