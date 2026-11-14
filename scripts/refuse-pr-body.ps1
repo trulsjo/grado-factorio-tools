@@ -69,7 +69,7 @@
     session's hook. A file the command itself writes before gh runs, as
     `... > body.md && gh pr create -F body.md`, is checked as it stands when the hook runs. And
     whether the settings still reach it, unless -SelfTest is run, which reads the wired command and
-    the matcher of its entry, and nothing else of the settings.
+    the matchers of the entries that run it, and nothing else of the settings.
 
     WHAT IT REFUSES WRONGLY. It reads the command as text and does not parse the shell, so text that
     names one of the five subcommands outside quotes is read as a command: in a heredoc, in an

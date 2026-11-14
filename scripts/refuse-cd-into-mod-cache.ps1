@@ -59,7 +59,7 @@
     text and does not parse the shell, so `cd .mod-cache` where a command could stand is refused
     inside a quoted string too: after a `;`, `&`, `|`, `(` or `{`, or at the start of a line. And
     whether a consumer's settings still reach it, unless -SelfTest is given them. That reads the
-    wired command and the matchers of the entries that name this script, and nothing else of the
+    wired command and the matchers of the entries that run it, and nothing else of the
     settings: not a handler's `if`, which narrows further, and not whether a session reads a
     matcher as hook-matcher.ps1 does.
 

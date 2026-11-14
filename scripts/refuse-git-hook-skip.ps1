@@ -37,8 +37,8 @@
     there is nothing to skip. A command whose switch or subcommand comes from a variable or a
     substitution. Any other subcommand that takes --no-verify, as merge, am and rebase do. A
     person's own terminal: this is a session's hook. And whether the settings still reach it, unless
-    -SelfTest is run. That reads the wired command and the matchers of the entries that name this
-    script, and nothing else of the settings: not a handler's `if`, which narrows further, and not
+    -SelfTest is run. That reads the wired command and the matchers of the entries that run it,
+    and nothing else of the settings: not a handler's `if`, which narrows further, and not
     whether a session reads a matcher as hook-matcher.ps1 does. It reads the command as text and
     does not parse the shell, so it errs towards refusing: a `git commit --no-verify` that is only
     echoed, or stands on a line of a here-document that is not inside quotes, is refused too. So is
