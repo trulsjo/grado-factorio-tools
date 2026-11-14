@@ -38,6 +38,11 @@ trulsjo/realistic-fusion-refreshed at `9fd78b5`.
   `check` workflow the body cites ran on the head, and its step that runs `scripts/check.ps1`
   passed on every job. With no `-Head`, no run is read. The script's header says which words make
   a number a cited run.
+- **`-CheckClosing`**, with `-PullRequest` and the pull request's number: no other open pull
+  request of the repository closes an issue the body closes by a `Closes #N` line (#463). The
+  other bodies are read for any closing keyword, as GitHub reads them. Where gh cannot list the
+  open pull requests, the body fails. With no `-PullRequest`, as on `gh pr create`, every open one
+  is compared.
 
 **The switches are each repository's choice** (ruling 4). A repository turns one on in its own CI
 line and its own hook line.

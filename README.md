@@ -680,11 +680,14 @@ template asks for there (#264); it is asked for too, since a sibling's body may 
 `-CheckRuns` and `-Head`, the pull request's head commit, it fails a body that cites a run of the
 `check` workflow that ran on another commit, or whose step that runs `scripts/check.ps1` did not
 pass on every job (#455). It reads each run with `gh run view`. With no `-Head` it reads none.
+With `-CheckClosing` it fails a body that closes an issue another open pull request closes too,
+naming that pull request, and one where gh cannot list them (#463); `-PullRequest` names the
+body's own, which is left out.
 
-CI runs it, with `-CiteSiblings`, `-RequireSummaryVisual` and `-CheckRuns`, on the body of every
-pull request here, and again when the body is edited. A word that names no commit in the clone,
-such as a commit of a sibling, is said to be unchecked and passes. What else it cannot see is in
-its header. `-SelfTest` proves it can fail.
+CI runs it, with `-CiteSiblings`, `-RequireSummaryVisual`, `-CheckRuns` and `-CheckClosing`, on
+the body of every pull request here, and again when the body is edited. A word that names no
+commit in the clone, such as a commit of a sibling, is said to be unchecked and passes. What else
+it cannot see is in its header. `-SelfTest` proves it can fail.
 
 ## Checking that the commits the tree cites are on main
 
