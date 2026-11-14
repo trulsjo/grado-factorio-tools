@@ -199,10 +199,14 @@ if ($SelfTest) {
         if ($IsWindows) { & $check 'on Windows, a full hooks path naming the clone''s .githooks in other case is warned of nothing' (-not $inCapitals) ($inCapitals -join ' | ') }
         else { & $check 'off Windows, a full hooks path naming the clone''s .githooks in other case is warned of, naming it' ([bool] ($inCapitals -match 'core\.hooksPath is .*CLONE.*\.GITHOOKS, so git runs none')) ($inCapitals -join ' | ') }
         # A leading ~, read as git expands it to the home directory, where no .githooks of this
-        # clone is: the warning names the expanded path. Git for Windows here took the home from
-        # the user's profile, not from a HOME set for the case, so the case sets none.
-        & $git $clone config core.hooksPath '~/no-such-clone/.githooks'
+        # clone is: the warning names the expanded path. Written into the config file, not through
+        # git config: PowerShell 7.6 expands a leading ~ in a native command's argument itself, so
+        # git would store the home's full path. Then one hooks path is set again, for the cases on.
+        & $git $clone config --unset core.hooksPath
+        Add-Content -LiteralPath (Join-Path $clone '.git/config') -Value "[core]`n`thooksPath = ~/no-such-clone/.githooks"
         $tilde = @(& $said $clone)
+        & $git $clone config --unset core.hooksPath
+        & $git $clone config core.hooksPath .githooks
         & $check 'a hooks path written from ~ is read as git expands it, and warned of by that path' ([bool] ($tilde -match '^core\.hooksPath is [^~]\S*no-such-clone/\.githooks, so git runs none')) ($tilde -join ' | ')
         $bare = Join-Path $temp 'bare'
         New-Item -ItemType Directory -Path $bare | Out-Null; & $git $bare init --quiet
