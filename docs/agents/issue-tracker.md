@@ -226,7 +226,11 @@ sibling's gate scripts run ours too, as realistic-fusion-refreshed's `scripts/sh
 at `34f5ebe`, read 2026-10-23; PR #197's review). The script lists, under its table, each place
 the sibling names `vendor/grado-factorio-tools/scripts` that no form runs; a hit in a sibling
 script counts where a gate runs that script, which its `.github/workflows/`, `.githooks/` or
-`.claude/settings.json` says, and is then added as a form. The ticket records the sibling commit,
+`.claude/settings.json` says, and is then added as a form. **A form added on the pin ticket's
+branch is measured by running with `-Forms` given as that file's absolute path in the sibling's
+working tree**: a relative `-Forms` is read in the clone of GitHub's `main`, which lacks it. On
+2026-11-14 grado-factorio-modpack#413's run did not see the `follow-pin-selftest` form its branch
+added (#464). The ticket records the sibling commit,
 and each command with what it printed, as *Conventions* asks.
 
 **Each form that differs is named in the sibling's pull request**, with what the difference is:
