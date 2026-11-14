@@ -28,8 +28,11 @@
 #
 # What the third cannot see, beyond its own header's list: a script is taken as setting strict
 # mode where a line of it begins with Set-StrictMode, after any indent, which a here-string can
-# hold too; one that sets it otherwise is not read. A path holding a comma or a line break is
-# split there, and the check then names a path that is not there.
+# hold too; one that sets it otherwise is not read. A path is listed with core.quotePath off, so
+# one holding a letter outside ASCII is read as it stands; one git quotes even so, as one holding a
+# double quote, a backslash or a line break, is not found as staged, and the commit is refused,
+# naming it, as it is where checkout-index fails. A path holding a comma is split there, and the
+# check then names a path that is not there.
 #
 # The limit is $MARKDOWN_LINE_LIMIT, read from scripts/check.ps1, so the checks cannot drift
 # apart. The posture on a missing pwsh, script or limit is commit-msg's: say what was not checked,
@@ -63,23 +66,39 @@ else
 fi
 
 if [ -f scripts/strict-list-check.ps1 ]; then
-    STAGED="$(git diff --cached --name-only --diff-filter=ACMR -- 'scripts/*.ps1' ':(exclude)scripts/strict-list-check/*')"
+    STAGED="$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR -- 'scripts/*.ps1' ':(exclude)scripts/strict-list-check/*')"
     if [ -z "$STAGED" ]; then
         echo "OK - strict-list check: no scripts/*.ps1 is staged, so none was read."
     else
-        # Under the git directory, a path git and pwsh both read alike on every system.
+        # Under the git directory, a path git and pwsh both read alike on every system. Removed on
+        # every way out, an interrupt included.
         SCRATCH="$(git rev-parse --absolute-git-dir)/strict-list-staged-$$"
-        printf '%s\n' "$STAGED" | git checkout-index --stdin --prefix="$SCRATCH/"
-        STRICT="$(cd "$SCRATCH" && printf '%s\n' "$STAGED" | while IFS= read -r f; do
-            if grep -q '^[[:space:]]*Set-StrictMode' "$f"; then printf '%s\n' "$f"; fi
-        done)"
-        if [ -z "$STRICT" ]; then
-            echo "OK - strict-list check: none of the staged scripts sets strict mode, so none was read."
+        trap 'rm -rf "${SCRATCH:?}"' EXIT
+        trap 'exit 1' HUP INT TERM
+        if ! printf '%s\n' "$STAGED" | git checkout-index --stdin --prefix="$SCRATCH/"; then
+            echo "pre-commit: git checkout-index could not write the staged scripts out, so no script's strict-mode reads were checked." >&2
+            STATUS=1
         else
-            LIST="$(printf '%s\n' "$STRICT" | paste -sd, -)"
-            (cd "$SCRATCH" && pwsh -NoProfile -File "$ROOT/scripts/strict-list-check.ps1" "$LIST") || STATUS=1
+            # A name git still quotes, or one checkout-index did not write, is not passed over.
+            MISSING="$(printf '%s\n' "$STAGED" | while IFS= read -r f; do
+                [ -f "$SCRATCH/$f" ] || printf '%s\n' "$f"
+            done)"
+            if [ -n "$MISSING" ]; then
+                echo "pre-commit: these staged scripts could not be read as staged, so no script's strict-mode reads were checked:" >&2
+                printf '%s\n' "$MISSING" | sed 's/^/    /' >&2
+                STATUS=1
+            else
+                STRICT="$(printf '%s\n' "$STAGED" | while IFS= read -r f; do
+                    if grep -q '^[[:space:]]*Set-StrictMode' "$SCRATCH/$f"; then printf '%s\n' "$f"; fi
+                done)"
+                if [ -z "$STRICT" ]; then
+                    echo "OK - strict-list check: none of the staged scripts sets strict mode, so none was read."
+                else
+                    LIST="$(printf '%s\n' "$STRICT" | paste -sd, -)"
+                    (cd "$SCRATCH" && pwsh -NoProfile -File "$ROOT/scripts/strict-list-check.ps1" "$LIST") || STATUS=1
+                fi
+            fi
         fi
-        rm -rf "${SCRATCH:?}"
     fi
 else
     echo "pre-commit: scripts/strict-list-check.ps1 not found, so no script's strict-mode reads were checked." >&2

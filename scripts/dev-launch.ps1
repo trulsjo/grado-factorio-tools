@@ -31,15 +31,19 @@
     (#454). Those are the Steam build's %APPDATA%\Factorio\mods and the mods folder at the root of
     the install whose Factorio.exe this starts, <root>\bin\x64\Factorio.exe, where a zip install
     keeps its mods (docs/factorio-facts.md, *Read*). Each path is compared in full, in any case and
-    without a trailing separator, so another spelling of it is refused too. The marker alone did not
-    cover them, as #423 took it to: a start of the game with its window, on the Steam build 2.1.24
-    and the zip install of that build, closed by its pid at the main menu, left an empty mod
-    directory empty (docs/factorio-facts.md, *Measured*, #439), which was then taken. It cannot see
-    any other folder the player's game loads mods from, a --mod-directory the player chose or one a
-    config-path.cfg or a config.ini moves; nor a folder that holds a file of the marker's name it
-    did not write, which it then treats as its own. The game runs with the player's own write-data,
-    so saves and settings are the player's. That is the difference from the load harness, which
-    gives every run a write-data of its own.
+    without a trailing separator, so another spelling of it, relative or in other case, is refused
+    too; one that names it through a junction, a link or a short 8.3 name is not. The install is the
+    one -FactorioExe, or $env:FACTORIO_EXE, names; with neither, the Steam path the game is looked
+    for at, so a zip install's mods are guarded only where one of those names its Factorio.exe, as
+    for a run they must for it to start that install. The marker alone did not cover them, as #423
+    took it to: a start of the game with its window, on the Steam build 2.1.24 and the zip install
+    of that build, closed by its pid at the main menu, left an empty mod directory empty
+    (docs/factorio-facts.md, *Measured*, #439), which was then taken. It cannot see any other folder
+    the player's game loads mods from, a --mod-directory the player chose or one a config-path.cfg
+    or a config.ini moves; nor a folder that holds a file of the marker's name it did not write,
+    which it then treats as its own. The game runs with the player's own write-data, so saves and
+    settings are the player's. That is the difference from the load harness, which gives every run a
+    write-data of its own.
 
     ON A STEAM BUILD, running Factorio.exe directly makes the Steam API relaunch the game through
     Steam and exit ("Steam requires game restart, restarting..."), and Steam starts it WITHOUT
