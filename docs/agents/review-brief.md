@@ -165,10 +165,11 @@ the bug scan's run text is the brief's *The reverts* paragraph, filled for that 
 other paragraph of the brief goes with it. The prose lane's says to run nothing.
 
 **To a panel reviewer, the turn is sent by the `review-panel` skill's `panel.py turn`**, which
-fills the skill's `turn-template.md`, beside its `SKILL.md`, and fills every blank itself: each
-SHA from git, the turn number from the answer file's last `Turn` section, and each commit as "a
-fix" unless an `--other` names it (#458). Its options are on the skill's page; the
-[panel](review-panel.md) names the reviewers. Each case:
+fills the skill's `turn-template.md`, beside its `SKILL.md` (#458). It fills the blanks the
+session filled by hand: each SHA from git, the turn number as one past the answer file's last
+`Turn` section, and each commit as "a fix" unless an `--other` names it; the session gives
+what is not fixed, what is not under review and what to run, by option. Its options are on the
+skill's page; the [panel](review-panel.md) names the reviewers. Each case:
 
 - **After a fix to the reviewer's finding:**
   `panel.py turn --pr <n> --agent <agent> --from <the full SHA it last read>`, with
