@@ -59,9 +59,9 @@
     text and does not parse the shell, so `cd .mod-cache` where a command could stand is refused
     inside a quoted string too: after a `;`, `&`, `|`, `(` or `{`, or at the start of a line. And
     whether a consumer's settings still reach it, unless -SelfTest is given them. That reads the
-    wired command and the matcher of its entry, and nothing else of the settings: not a handler's
-    `if`, which narrows further, and not whether a session reads a matcher as hook-matcher.ps1 does.
-    A wiring with an entry for each shell tool fails it, since one entry is read.
+    wired command and the matchers of the entries that name this script, and nothing else of the
+    settings: not a handler's `if`, which narrows further, and not whether a session reads a
+    matcher as hook-matcher.ps1 does.
 
     TO CHECK IT, run the second example below.
 
@@ -262,15 +262,9 @@ if ($SelfTest) {
     # The entry is found by the script's name, wherever it stands among the PreToolUse entries
     # (#315 ruling 3), and its first command that names the script is the one run.
     $names = [regex]::Escape((Split-Path $PSCommandPath -Leaf))
-    # Each key is read only where it stands: strict mode throws on a missing one, and a file with
-    # no PreToolUse entry wires nothing, which is what is said.
-    $findWired = {
-        param([string] $path)
-        $hooks = (Get-Content -LiteralPath $path -Raw | ConvertFrom-Json).PSObject.Properties['hooks']?.Value
-        $entries = if ($hooks) { $hooks.PSObject.Properties['PreToolUse']?.Value }
-        $found = @($entries) | Where-Object { $_ -and @($_.hooks.command) -match $names } | Select-Object -First 1
-        @{ Entry = $found; Command = $(if ($found) { @($found.hooks.command) -match $names | Select-Object -First 1 } else { '' }) }
-    }
+    # Read by hook-matcher.ps1's Get-HookWiring, which reads each key only where it stands, so
+    # a file with no PreToolUse entry wires nothing, which is what is said.
+    . "$PSScriptRoot/hook-matcher.ps1"
     # The first example's form, read from the header so the command shown is the command run.
     $form = [regex]::Match((Get-Content -LiteralPath $PSCommandPath -Raw), 'i=\$\(cat\).*?esac').Value
     # The entry named, not the first: a settings file whose first entry wires another command.
@@ -281,20 +275,20 @@ if ($SelfTest) {
                     @{ matcher = 'Bash'; hooks = @(@{ type = 'command'; command = 'echo other' }) },
                     @{ matcher = 'Bash|PowerShell'; hooks = @(@{ type = 'command'; command = 'echo first' }, @{ type = 'command'; command = $form }) }
                 ) } } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $other
-        $second = & $findWired $other
+        $second = Get-HookWiring -Event PreToolUse -Script (Split-Path $PSCommandPath -Leaf) -Path $other
         @{ hooks = @{ SessionStart = @() } } | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $other
-        $none = try { & $findWired $other } catch { @{ Entry = 'threw'; Command = $_.Exception.Message } }
+        $none = try { Get-HookWiring -Event PreToolUse -Script (Split-Path $PSCommandPath -Leaf) -Path $other } catch { @{ Entries = 'threw'; Command = $_.Exception.Message } }
     }
     finally { Remove-Item -LiteralPath $other -Force -ErrorAction SilentlyContinue }
-    $ok = $second.Entry -and $second.Entry.matcher -ceq 'Bash|PowerShell' -and $second.Command -ceq $form -and -not $none.Entry -and -not $none.Command
+    $ok = $second.Entries -and $second.Entries[0].matcher -ceq 'Bash|PowerShell' -and $second.Command -ceq $form -and -not $none.Entries -and -not $none.Command
     Write-Host ("self-test {0}/{1}: the wiring is read from the command that names this script, not from the first entry or its first command; a file with no PreToolUse entry wires none -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
-    if (-not $ok -and $none.Entry -eq 'threw') { Write-Host "    the file with no PreToolUse entry threw: $($none.Command)" }
+    if (-not $ok -and $none.Entries -eq 'threw') { Write-Host "    the file with no PreToolUse entry threw: $($none.Command)" }
     if (-not $ok) { $failures++ }
     $n++
     if ($Settings) {
         $Settings = (Resolve-Path -LiteralPath $Settings).Path
-        $read = & $findWired $Settings
-        $entry = $read.Entry
+        $read = Get-HookWiring -Event PreToolUse -Script (Split-Path $PSCommandPath -Leaf) -Path $Settings
+        $entry = $read.Entries
         $wired = $read.Command
         if (-not $wired) { Write-Host "    $Settings wires no command that names this script" }
         $project = Split-Path (Split-Path $Settings -Parent) -Parent
@@ -337,13 +331,12 @@ if ($SelfTest) {
         } catch { $false })
     Write-Host ("self-test {0}/{1}: where the project holds no hook script, the wired command exits 0 and prints JSON telling the agent the command was not checked$(if (-not $Settings) { ', naming the missing path' }) -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++; Write-Host "    $($absent.Code) $($absent.Text)" }
-    # Which tools the session starts that command for: the matcher of the entry it was read
-    # from. The command the header shows comes from no file, and has no matcher to read.
+    # Which tools the session starts that command for: the matchers of the entries that wire
+    # it. The command the header shows comes from no file, and has no matcher to read.
     if ($Settings) {
         $n++
-        . "$PSScriptRoot/hook-matcher.ps1"
         $unstarted = @(Get-UnstartedShellTool -Entry $entry)
-        foreach ($tool in $unstarted) { Write-Host "    $Settings`: the matcher ``$($entry.matcher)`` does not start the hook for the $tool tool" }
+        foreach ($tool in $unstarted) { Write-Host "    $Settings`: the matcher $(Get-EntryMatcher $entry) does not start the hook for the $tool tool" }
         Write-Host ("self-test {0}/{1}: the matcher of the entry that wires the hook starts it for the Bash tool and for the PowerShell tool -- {2}" -f $n, $total, $(if ($unstarted) { 'FAILED' } else { 'ok' }))
         if ($unstarted) { $failures++ }
     }

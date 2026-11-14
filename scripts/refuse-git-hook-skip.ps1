@@ -37,15 +37,14 @@
     there is nothing to skip. A command whose switch or subcommand comes from a variable or a
     substitution. Any other subcommand that takes --no-verify, as merge, am and rebase do. A
     person's own terminal: this is a session's hook. And whether the settings still reach it, unless
-    -SelfTest is run. That reads the wired command and the matcher of its entry, and nothing else of
-    the settings: not a handler's `if`, which narrows further, and not whether a session reads a
-    matcher as hook-matcher.ps1 does. A wiring with an entry for each shell tool fails it, since one
-    entry is read. It reads the command as text and does not parse the shell, so it errs towards
-    refusing: a `git commit --no-verify` that is only echoed, or stands on a line of a here-document
-    that is not inside quotes, is refused too. So is a `git commit` whose message is cut short where
-    this reads it: by an apostrophe written as '\'', or by an abbreviation of --message, with -n as
-    the next word; and one with -n in a comment after it. Write such a text to a file with another
-    tool, and give a message with -F.
+    -SelfTest is run. That reads the wired command and the matchers of the entries that name this
+    script, and nothing else of the settings: not a handler's `if`, which narrows further, and not
+    whether a session reads a matcher as hook-matcher.ps1 does. It reads the command as text and
+    does not parse the shell, so it errs towards refusing: a `git commit --no-verify` that is only
+    echoed, or stands on a line of a here-document that is not inside quotes, is refused too. So is
+    a `git commit` whose message is cut short where this reads it: by an apostrophe written as '\'',
+    or by an abbreviation of --message, with -n as the next word; and one with -n in a comment after
+    it. Write such a text to a file with another tool, and give a message with -F.
 
     TO CHECK IT, run the second example below.
 
@@ -199,9 +198,11 @@ if ($SelfTest) {
     $n++
     $Settings = (Resolve-Path -LiteralPath ($Settings ? $Settings : (Join-Path $PSScriptRoot '../.claude/settings.json'))).Path
     $names = [regex]::Escape((Split-Path $PSCommandPath -Leaf))
-    $entry = @((Get-Content -LiteralPath $Settings -Raw | ConvertFrom-Json).hooks.PreToolUse) |
-        Where-Object { @($_.hooks.command) -match $names } | Select-Object -First 1
-    $wired = if ($entry) { @($entry.hooks.command) -match $names | Select-Object -First 1 }
+    # The entries that wire this script, found by its name (hook-matcher.ps1's Get-HookWiring).
+    . "$PSScriptRoot/hook-matcher.ps1"
+    $read = Get-HookWiring -Path $Settings -Event PreToolUse -Script (Split-Path $PSCommandPath -Leaf)
+    $entry = $read.Entries
+    $wired = $read.Command
     $env:CLAUDE_PROJECT_DIR = Split-Path (Split-Path $Settings -Parent) -Parent
     # Git for Windows keeps its sh, and the cat beside it, off the path PowerShell sees.
     $sh = (Get-Command sh -ErrorAction SilentlyContinue)?.Source ?? (Join-Path (git --exec-path) "../../../usr/bin/sh.exe")
@@ -223,11 +224,10 @@ if ($SelfTest) {
     }
     Write-Host ("self-test {0}/{1}: the wired hook refuses a push and a commit that skip the hooks with exit 2 and a reason, and passes a dry run and a plain command -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++ }
-    # Which tools the session starts that command for: the matcher of the entry it was read from.
+    # Which tools the session starts that command for: the matchers of the entries that wire it.
     $n++
-    . "$PSScriptRoot/hook-matcher.ps1"
     $unstarted = @(if ($entry) { Get-UnstartedShellTool -Entry $entry })
-    foreach ($tool in $unstarted) { Write-Host "    $Settings`: the matcher ``$($entry.matcher)`` does not start the hook for the $tool tool" }
+    foreach ($tool in $unstarted) { Write-Host "    $Settings`: the matcher $(Get-EntryMatcher $entry) does not start the hook for the $tool tool" }
     $ok = $entry -and -not $unstarted
     Write-Host ("self-test {0}/{1}: the matcher of the entry that wires the hook starts it for the Bash tool and for the PowerShell tool -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++ }

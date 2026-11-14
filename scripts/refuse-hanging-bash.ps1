@@ -504,14 +504,9 @@ if ($SelfTest) {
         $project = Split-Path (Split-Path $Settings -Parent) -Parent
         $names = [regex]::Escape((Split-Path $PSCommandPath -Leaf))
         # The entry is found by the script's name, wherever it stands among the PreToolUse entries.
-        $findWired = {
-            param([string] $path)
-            $found = @((Get-Content -LiteralPath $path -Raw | ConvertFrom-Json).hooks.PreToolUse) |
-                Where-Object { @($_.hooks.command) -match $names } | Select-Object -First 1
-            @{ Entry = $found; Command = $(if ($found) { @($found.hooks.command) -match $names | Select-Object -First 1 } else { '' }) }
-        }
-        $read = & $findWired $Settings
-        $entry = $read.Entry
+        . "$PSScriptRoot/hook-matcher.ps1"
+        $read = Get-HookWiring -Event PreToolUse -Script (Split-Path $PSCommandPath -Leaf) -Path $Settings
+        $entry = $read.Entries
         $wired = $read.Command
         # Git for Windows keeps its sh, and the cat beside it, off the path PowerShell sees.
         $sh = (Get-Command sh -ErrorAction SilentlyContinue)?.Source ?? (Join-Path (git --exec-path) "../../../usr/bin/sh.exe")
@@ -643,9 +638,8 @@ if ($SelfTest) {
         $named = $told -and ([string] $told.additionalContext) -match 'vendor/grado-factorio-tools/scripts/refuse-hanging-bash\.ps1 was not found, so this command was NOT checked' -and
             $parsed.PSObject.Properties['systemMessage'] -and $parsed.systemMessage -ceq $told.additionalContext
         & $report "the first example's form, where the project holds no hook script, exits 0 and prints JSON naming the missing path to the agent" ([bool] ($form -and $absentCode -eq 0 -and $told -and $told.hookEventName -ceq 'PreToolUse' -and $named)) "$absentCode $absentText"
-        # Which tools the session starts that command for: the matcher of the entry it was read
-        # from.
-        . "$PSScriptRoot/hook-matcher.ps1"
+        # Which tools the session starts that command for: the matchers of the entries that wire
+        # it.
         $unstarted = @(if ($entry) { Get-UnstartedShellTool -Entry $entry })
         & $report 'the matcher of the entry that wires the hook starts it for the Bash tool and for the PowerShell tool' ([bool] ($entry -and -not $unstarted)) "$Settings`: the matcher does not start the hook for: $($unstarted -join ', ')"
         # The log is the consumer's, and git ignores it there (#322 ruling 5).
@@ -659,8 +653,8 @@ if ($SelfTest) {
             @{ matcher = 'Bash'; hooks = @(@{ type = 'command'; command = 'echo other' }) },
             @{ matcher = 'Bash|PowerShell'; hooks = @(@{ type = 'command'; command = "pwsh -File scripts/$(Split-Path $PSCommandPath -Leaf)" }) }
         ) } } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $fixture
-        $second = & $findWired $fixture
-        & $report 'the wiring is read from the entry that names this script, not the first' ([bool] ($second.Entry -and $second.Entry.matcher -ceq 'Bash|PowerShell' -and $second.Command -match $names))
+        $second = Get-HookWiring -Event PreToolUse -Script (Split-Path $PSCommandPath -Leaf) -Path $fixture
+        & $report 'the wiring is read from the entry that names this script, not the first' ([bool] ($second.Entries -and $second.Entries[0].matcher -ceq 'Bash|PowerShell' -and $second.Command -match $names))
         $env:REFUSE_HANGING_BASH_SETTINGS_PROBE = '1'
         try { $took = pwsh -NoProfile -File $PSCommandPath -SelfTest -Settings $fixture 2>&1 | Out-String; $tookCode = $LASTEXITCODE }
         finally { $env:REFUSE_HANGING_BASH_SETTINGS_PROBE = '' }
