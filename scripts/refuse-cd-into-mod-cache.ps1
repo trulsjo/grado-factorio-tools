@@ -264,10 +264,13 @@ if ($SelfTest) {
     # The entry is found by the script's name, wherever it stands among the PreToolUse entries
     # (#315 ruling 3), and its first command that names the script is the one run.
     $names = [regex]::Escape((Split-Path $PSCommandPath -Leaf))
+    # Each key is read only where it stands: strict mode throws on a missing one, and a file with
+    # no PreToolUse entry wires nothing, which is what is said.
     $findWired = {
         param([string] $path)
-        $found = @((Get-Content -LiteralPath $path -Raw | ConvertFrom-Json).hooks.PreToolUse) |
-            Where-Object { $_ -and @($_.hooks.command) -match $names } | Select-Object -First 1
+        $hooks = (Get-Content -LiteralPath $path -Raw | ConvertFrom-Json).PSObject.Properties['hooks']?.Value
+        $entries = if ($hooks) { $hooks.PSObject.Properties['PreToolUse']?.Value }
+        $found = @($entries) | Where-Object { $_ -and @($_.hooks.command) -match $names } | Select-Object -First 1
         @{ Entry = $found; Command = $(if ($found) { @($found.hooks.command) -match $names | Select-Object -First 1 } else { '' }) }
     }
     # The first example's form, read from the header so the command shown is the command run.
@@ -281,10 +284,13 @@ if ($SelfTest) {
                     @{ matcher = 'Bash|PowerShell'; hooks = @(@{ type = 'command'; command = 'echo first' }, @{ type = 'command'; command = $form }) }
                 ) } } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $other
         $second = & $findWired $other
+        @{ hooks = @{ SessionStart = @() } } | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $other
+        $none = try { & $findWired $other } catch { @{ Entry = 'threw'; Command = $_.Exception.Message } }
     }
     finally { Remove-Item -LiteralPath $other -Force -ErrorAction SilentlyContinue }
-    $ok = $second.Entry -and $second.Entry.matcher -ceq 'Bash|PowerShell' -and $second.Command -ceq $form
-    Write-Host ("self-test {0}/{1}: the wiring is read from the command that names this script, not from the first entry or its first command -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
+    $ok = $second.Entry -and $second.Entry.matcher -ceq 'Bash|PowerShell' -and $second.Command -ceq $form -and -not $none.Entry -and -not $none.Command
+    Write-Host ("self-test {0}/{1}: the wiring is read from the command that names this script, not from the first entry or its first command; a file with no PreToolUse entry wires none -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
+    if (-not $ok -and $none.Entry -eq 'threw') { Write-Host "    the file with no PreToolUse entry threw: $($none.Command)" }
     if (-not $ok) { $failures++ }
     $n++
     if ($Settings) {

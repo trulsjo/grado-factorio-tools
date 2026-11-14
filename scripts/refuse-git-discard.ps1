@@ -358,10 +358,13 @@ if ($SelfTest) {
         # The wiring a settings file holds, found by this script's name wherever it stands among
         # the PreToolUse entries (#315 ruling 3): this repository's own unless -Settings names one.
         $names = [regex]::Escape((Split-Path $PSCommandPath -Leaf))
+        # Each key is read only where it stands: strict mode throws on a missing one, and a file
+        # with no PreToolUse entry wires nothing, which is what is said.
         $findWired = {
             param([string] $path)
-            $found = @((Get-Content -LiteralPath $path -Raw | ConvertFrom-Json).hooks.PreToolUse) |
-                Where-Object { $_ -and @($_.hooks.command) -match $names } | Select-Object -First 1
+            $hooks = (Get-Content -LiteralPath $path -Raw | ConvertFrom-Json).PSObject.Properties['hooks']?.Value
+            $entries = if ($hooks) { $hooks.PSObject.Properties['PreToolUse']?.Value }
+            $found = @($entries) | Where-Object { $_ -and @($_.hooks.command) -match $names } | Select-Object -First 1
             @{ Entry = $found; Command = $(if ($found) { @($found.hooks.command) -match $names | Select-Object -First 1 } else { '' }) }
         }
         $Settings = (Resolve-Path -LiteralPath ($Settings ? $Settings : (Join-Path $PSScriptRoot '../.claude/settings.json'))).Path
@@ -384,7 +387,9 @@ if ($SelfTest) {
                     @{ matcher = 'Bash|PowerShell'; hooks = @(@{ type = 'command'; command = 'echo first' }, @{ type = 'command'; command = $form }) }
                 ) } } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $fixture
         $second = & $findWired $fixture
-        & $check 'the wiring is read from the command that names this script, not from the first entry or its first command' ($second.Entry -and $second.Entry.matcher -ceq 'Bash|PowerShell' -and $second.Command -ceq $form) "$($second.Command)"
+        @{ hooks = @{ SessionStart = @() } } | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $fixture
+        $none = try { & $findWired $fixture } catch { @{ Entry = 'threw'; Command = $_.Exception.Message } }
+        & $check 'the wiring is read from the command that names this script, not from the first entry or its first command; a file with no PreToolUse entry wires none' ($second.Entry -and $second.Entry.matcher -ceq 'Bash|PowerShell' -and $second.Command -ceq $form -and -not $none.Entry -and -not $none.Command) "named: $($second.Command) | none: $($none.Entry) $($none.Command)"
     }
     finally { Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue }
     Write-Host ''
