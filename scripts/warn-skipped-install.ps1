@@ -20,11 +20,11 @@
     own settings is not ruled (#357).
 
     WHAT IT WARNS OF, in the repository -Root names:
-    - core.hooksPath, read with `git config --type=path --get`, that does not name the root's
-      .githooks directory, where the root holds one. The path is resolved against the root before
-      it is compared (#462), so `./.githooks/` and the directory's full path name it as `.githooks`
-      does; on Windows the two are compared in any case. A repository with no such directory has no
-      hooks to skip, and is not warned of.
+    - core.hooksPath, read with `git config --type=path --get`, that does not name the
+      root's .githooks directory, where the root holds one. The path is resolved against the root
+      before it is compared (#462), so `./.githooks/` and the directory's full path name it as
+      `.githooks` does; on Windows the two are compared in any case. A repository with no such
+      directory has no hooks to skip, and is not warned of.
     - each submodule `git submodule status` marks `-`, not initialised, named by its whole path,
       spaces included (#462).
     Each of those is a step found skipped, and the warning opens them with "this clone skipped an
@@ -49,17 +49,16 @@
     elsewhere, and one with it set to another repository's .githooks in full, are warned of; one
     with a submodule not initialised is warned of, naming its path, a path with a space whole; one
     that needs neither prints nothing, with the hooks path written ./.githooks/ or in full; a
-    .githooks-less repository is not warned of its hooks path; a directory outside any repository
-    is said to be not checked, and the script run there says a check could not be made and not that
-    a step was skipped; a skip found and a check not made are each opened in their own words. Then
-    the first example's
-    command, run through sh, where the project holds no script exits 0 and prints JSON naming the
-    missing path, and for this repository runs the script. A settings file's command naming this
-    script, found by its name among the SessionStart entries, is run with this repository's scripts:
-    it must warn the clone that skipped a step and say nothing for the one that did not, a command
-    that never runs the script fails that, and a file with no SessionStart entry wires none. With
-    -Settings, that file's command is held to the same. Needs git, and sh: the one on the path, or
-    the one Git for Windows ships.
+    repository with no .githooks directory is not warned of its hooks path; a directory outside any
+    repository is said to be not checked, and the script run there says a check could not be made
+    and not that a step was skipped; a skip found and a check not made are each opened in their own
+    words. Then the first example's command, run through sh, where the project holds no script exits
+    0 and prints JSON naming the missing path, and for this repository runs the script. A settings
+    file's command naming this script, found by its name among the SessionStart entries, is run with
+    this repository's scripts: it must warn the clone that skipped a step and say nothing for the
+    one that did not, a command that never runs the script fails that, and a file with no
+    SessionStart entry wires none. With -Settings, that file's command is held to the same. Needs
+    git, and sh: the one on the path, or the one Git for Windows ships.
 
 .PARAMETER Settings
     With -SelfTest: a consumer's .claude/settings.json, whose SessionStart command naming this
