@@ -72,8 +72,8 @@
     refused case the wiring never hands over turns the self-test red (grado-factorio-modpack#190).
     Each of the wiring's words has a refused case that holds no other of them, which the self-test
     checks (grado-factorio-modpack#196). The first example's form, run for a project with no hook
-    script, exits 0 and prints JSON telling the agent; and the matcher of the entry that wires it
-    starts it for both shell tools. The wired cases need sh: the one on the path, or the one Git for
+    script, exits 0 and prints JSON telling the agent; and the matchers of the entries that wire it
+    start it for both shell tools. The wired cases need sh: the one on the path, or the one Git for
     Windows ships. It prints how long it took.
 
 .PARAMETER Settings
@@ -190,14 +190,9 @@ if ($SelfTest) {
     $project = Split-Path (Split-Path $Settings -Parent) -Parent
     $names = [regex]::Escape((Split-Path $PSCommandPath -Leaf))
     # The entry is found by the script's name, wherever it stands among the PreToolUse entries.
-    $findWired = {
-        param([string] $path)
-        $found = @((Get-Content -LiteralPath $path -Raw | ConvertFrom-Json).hooks.PreToolUse) |
-            Where-Object { @($_.hooks.command) -match $names } | Select-Object -First 1
-        @{ Entry = $found; Command = $(if ($found) { @($found.hooks.command) -match $names | Select-Object -First 1 } else { '' }) }
-    }
-    $read = & $findWired $Settings
-    $entry = $read.Entry
+    . "$PSScriptRoot/hook-matcher.ps1"
+    $read = Get-HookWiring -Event PreToolUse -Script (Split-Path $PSCommandPath -Leaf) -Path $Settings
+    $entry = $read.Entries
     $wired = $read.Command
     $env:CLAUDE_PROJECT_DIR = $project
     # Git for Windows keeps its sh, and the cat beside it, off the path PowerShell sees.
@@ -270,11 +265,10 @@ if ($SelfTest) {
     if (-not $ok) { Write-Host "    absent: $absentCode $absentText"; Write-Host "    here: $($here.Code) $($here.Text)" }
     Write-Host ("self-test {0}/{1}: the first example's form refuses where the script is, and where it is not exits 0 and prints JSON telling the agent -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++ }
-    # Which tools the session starts that command for: the matcher of the entry it was read from.
+    # Which tools the session starts that command for: the matchers of the entries that wire it.
     $n++
-    . "$PSScriptRoot/hook-matcher.ps1"
     $unstarted = @(if ($entry) { Get-UnstartedShellTool -Entry $entry })
-    foreach ($tool in $unstarted) { Write-Host "    $Settings`: the matcher ``$($entry.matcher)`` does not start the hook for the $tool tool" }
+    foreach ($tool in $unstarted) { Write-Host "    $Settings`: the matcher $(Get-EntryMatcher $entry) does not start the hook for the $tool tool" }
     $ok = $entry -and -not $unstarted
     Write-Host ("self-test {0}/{1}: the matcher of the entry that wires the hook starts it for the Bash tool and for the PowerShell tool -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++ }
@@ -297,7 +291,7 @@ if ($SelfTest) {
             @{ matcher = 'Bash'; hooks = @(@{ type = 'command'; command = 'echo other' }) },
             @{ matcher = 'Bash|PowerShell'; hooks = @(@{ type = 'command'; command = "pwsh -File scripts/$(Split-Path $PSCommandPath -Leaf)" }) }
         ) } } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $fixture
-        $second = & $findWired $fixture
+        $second = Get-HookWiring -Event PreToolUse -Script (Split-Path $PSCommandPath -Leaf) -Path $fixture
         # -Settings is read: a child self-test given the fixture says it took the fixture. The
         # variable stops it there, so it never reaches this case.
         $env:ASK_BEFORE_DOWNLOAD_SETTINGS_PROBE = '1'
@@ -305,7 +299,7 @@ if ($SelfTest) {
         finally { $env:ASK_BEFORE_DOWNLOAD_SETTINGS_PROBE = '' }
     }
     finally { Remove-Item -LiteralPath $fixture -Force -ErrorAction SilentlyContinue }
-    $ok = $second.Entry -and $second.Entry.matcher -ceq 'Bash|PowerShell' -and $second.Command -match $names
+    $ok = $second.Entries -and $second.Entries[0].matcher -ceq 'Bash|PowerShell' -and $second.Command -match $names
     Write-Host ("self-test {0}/{1}: the wiring is read from the entry that names this script, not the first -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++ }
     $n++

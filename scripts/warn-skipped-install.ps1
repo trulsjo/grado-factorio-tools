@@ -185,19 +185,13 @@ if ($SelfTest) {
         } catch { $false }
         & $check 'the first example''s command, where the script is not there, exits 0 and names the missing path; where it is, runs it on the project' $ok "absent: $($absent.Code) $($absent.Text) | here: $($here.Code) $($here.Text)"
         # The wiring a settings file holds, found by this script's name among the SessionStart
-        # entries (#315 ruling 3), each key read only where it stands, as strict mode throws on a
-        # missing one. The wired command is run with this repository's scripts in place of a
+        # entries (#315 ruling 3) by hook-matcher.ps1's Get-HookWiring, which reads each key only
+        # where it stands. The wired command is run with this repository's scripts in place of a
         # consumer's vendor/ or scripts/ path, on the clone that skipped a step, which it must warn
         # of, and on the one that skipped none, where it must print nothing: a command that never
         # runs the script passes the second and fails the first.
-        $names = [regex]::Escape((Split-Path $PSCommandPath -Leaf))
-        $findWired = {
-            param([string] $path)
-            $hooks = (Get-Content -LiteralPath $path -Raw | ConvertFrom-Json).PSObject.Properties['hooks']?.Value
-            $entries = if ($hooks) { $hooks.PSObject.Properties['SessionStart']?.Value }
-            $found = @($entries) | Where-Object { $_ -and @($_.hooks.command) -match $names } | Select-Object -First 1
-            if ($found) { @($found.hooks.command) -match $names | Select-Object -First 1 }
-        }
+        . "$PSScriptRoot/hook-matcher.ps1"
+        $wiredCommand = { param([string] $path) (Get-HookWiring -Path $path -Event SessionStart -Script (Split-Path $PSCommandPath -Leaf)).Command }
         $scriptsDir = ($PSScriptRoot -replace '\\', '/') + '/'
         $wiredWarns = {
             param([string] $line)
@@ -210,16 +204,16 @@ if ($SelfTest) {
         $fixture = Join-Path $temp 'settings.json'
         $write = { param([string[]] $commands) @{ hooks = @{ SessionStart = @(@{ hooks = @($commands | ForEach-Object { @{ type = 'command'; command = $_ } }) }) } } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $fixture }
         & $write @('echo first', $form)
-        $named = & $findWired $fixture
+        $named = & $wiredCommand $fixture
         $real = if ($named) { & $wiredWarns $named } else { @{ Ok = $false; Said = 'no command found' } }
         & $write @(': # warn-skipped-install.ps1')
-        $stub = & $wiredWarns (& $findWired $fixture)
+        $stub = & $wiredWarns (& $wiredCommand $fixture)
         @{ hooks = @{ PreToolUse = @() } } | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $fixture
-        $none = try { & $findWired $fixture } catch { "threw: $($_.Exception.Message)" }
+        $none = try { & $wiredCommand $fixture } catch { "threw: $($_.Exception.Message)" }
         & $check 'a settings file''s command naming this script is found and warns a clone that skipped a step and says nothing for one that did not; a command that never runs the script fails that; a file with no SessionStart entry wires none' ($named -ceq $form -and $real.Ok -and -not $stub.Ok -and -not $none) "named: $($real.Said) | stub held: $($stub.Ok) | none: $none"
         if ($Settings) {
             $Settings = (Resolve-Path -LiteralPath $Settings).Path
-            $wired = & $findWired $Settings
+            $wired = & $wiredCommand $Settings
             $ran = if ($wired) { & $wiredWarns $wired }
             & $check "the SessionStart command $Settings wires for this script warns a clone that skipped a step and says nothing for one that did not" ([bool] ($wired -and $ran.Ok)) $(if ($wired) { $ran.Said } else { "$Settings wires no SessionStart command that names this script" })
         }

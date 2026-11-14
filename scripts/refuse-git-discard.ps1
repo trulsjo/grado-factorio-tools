@@ -356,17 +356,11 @@ if ($SelfTest) {
         # The wiring a settings file holds, found by this script's name wherever it stands among
         # the PreToolUse entries (#315 ruling 3): this repository's own unless -Settings names one.
         $names = [regex]::Escape((Split-Path $PSCommandPath -Leaf))
-        # Each key is read only where it stands: strict mode throws on a missing one, and a file
-        # with no PreToolUse entry wires nothing, which is what is said.
-        $findWired = {
-            param([string] $path)
-            $hooks = (Get-Content -LiteralPath $path -Raw | ConvertFrom-Json).PSObject.Properties['hooks']?.Value
-            $entries = if ($hooks) { $hooks.PSObject.Properties['PreToolUse']?.Value }
-            $found = @($entries) | Where-Object { $_ -and @($_.hooks.command) -match $names } | Select-Object -First 1
-            @{ Entry = $found; Command = $(if ($found) { @($found.hooks.command) -match $names | Select-Object -First 1 } else { '' }) }
-        }
+        # Read by hook-matcher.ps1's Get-HookWiring, which reads each key only where it stands, so
+        # a file with no PreToolUse entry wires nothing, which is what is said.
+        . "$PSScriptRoot/hook-matcher.ps1"
         $Settings = (Resolve-Path -LiteralPath ($Settings ? $Settings : (Join-Path $PSScriptRoot '../.claude/settings.json'))).Path
-        $read = & $findWired $Settings
+        $read = Get-HookWiring -Event PreToolUse -Script (Split-Path $PSCommandPath -Leaf) -Path $Settings
         $sRefused = $sPlain = $null
         if ($read.Command) {
             $project = Split-Path (Split-Path $Settings -Parent) -Parent
@@ -374,9 +368,8 @@ if ($SelfTest) {
             $sPlain = & $wire $project 'git status' $read.Command
         }
         & $check "the command $Settings wires refuses with exit 2 and a reason, and passes a plain command" ($sRefused -and $sRefused.Code -eq 2 -and $sRefused.Text -match 'Refused' -and $sPlain.Code -eq 0 -and -not $sPlain.Text.Trim()) $(if (-not $read.Command) { "$Settings wires no command that names this script" } else { "refused: $($sRefused.Code) $($sRefused.Text) | plain: $($sPlain.Code) $($sPlain.Text)" })
-        . "$PSScriptRoot/hook-matcher.ps1"
-        $unstarted = @(if ($read.Entry) { Get-UnstartedShellTool -Entry $read.Entry })
-        & $check 'the matcher of the entry that wires the hook starts it for the Bash tool and for the PowerShell tool' ($read.Entry -and -not $unstarted) $(if ($read.Entry) { "$Settings`: the matcher ``$($read.Entry.matcher)`` does not start the hook for $($unstarted -join ' or ')" } else { "$Settings wires no entry that names this script" })
+        $unstarted = @(if ($read.Entries) { Get-UnstartedShellTool -Entry $read.Entries })
+        & $check 'the matcher of the entry that wires the hook starts it for the Bash tool and for the PowerShell tool' ($read.Entries -and -not $unstarted) $(if ($read.Entries) { "$Settings`: the matcher $(Get-EntryMatcher $read.Entries) does not start the hook for $($unstarted -join ' or ')" } else { "$Settings wires no entry that names this script" })
         # The entry named, not the first: a settings file whose first entry, and whose named
         # entry's first command, wire another command.
         $fixture = Join-Path $temp 'settings.json'
@@ -384,10 +377,10 @@ if ($SelfTest) {
                     @{ matcher = 'Bash'; hooks = @(@{ type = 'command'; command = 'echo other' }) },
                     @{ matcher = 'Bash|PowerShell'; hooks = @(@{ type = 'command'; command = 'echo first' }, @{ type = 'command'; command = $form }) }
                 ) } } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $fixture
-        $second = & $findWired $fixture
+        $second = Get-HookWiring -Event PreToolUse -Script (Split-Path $PSCommandPath -Leaf) -Path $fixture
         @{ hooks = @{ SessionStart = @() } } | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $fixture
-        $none = try { & $findWired $fixture } catch { @{ Entry = 'threw'; Command = $_.Exception.Message } }
-        & $check 'the wiring is read from the command that names this script, not from the first entry or its first command; a file with no PreToolUse entry wires none' ($second.Entry -and $second.Entry.matcher -ceq 'Bash|PowerShell' -and $second.Command -ceq $form -and -not $none.Entry -and -not $none.Command) "named: $($second.Command) | none: $($none.Entry) $($none.Command)"
+        $none = try { Get-HookWiring -Event PreToolUse -Script (Split-Path $PSCommandPath -Leaf) -Path $fixture } catch { @{ Entries = 'threw'; Command = $_.Exception.Message } }
+        & $check 'the wiring is read from the command that names this script, not from the first entry or its first command; a file with no PreToolUse entry wires none' ($second.Entries -and $second.Entries[0].matcher -ceq 'Bash|PowerShell' -and $second.Command -ceq $form -and -not $none.Entries -and -not $none.Command) "named: $($second.Command) | none: $($none.Entries) $($none.Command)"
     }
     finally { Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue }
     Write-Host ''

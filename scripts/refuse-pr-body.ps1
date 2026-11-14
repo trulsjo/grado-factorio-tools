@@ -338,9 +338,11 @@ if ($SelfTest) {
     $n++
     $Settings = (Resolve-Path -LiteralPath ($Settings ? $Settings : (Join-Path $PSScriptRoot '../.claude/settings.json'))).Path
     $names = [regex]::Escape((Split-Path $PSCommandPath -Leaf))
-    $entry = @((Get-Content -LiteralPath $Settings -Raw | ConvertFrom-Json).hooks.PreToolUse) |
-        Where-Object { @($_.hooks.command) -match $names } | Select-Object -First 1
-    $wired = if ($entry) { @($entry.hooks.command) -match $names | Select-Object -First 1 }
+    # The entries that wire this script, found by its name (hook-matcher.ps1's Get-HookWiring).
+    . "$PSScriptRoot/hook-matcher.ps1"
+    $read = Get-HookWiring -Path $Settings -Event PreToolUse -Script (Split-Path $PSCommandPath -Leaf)
+    $entry = $read.Entries
+    $wired = $read.Command
     $env:CLAUDE_PROJECT_DIR = Split-Path (Split-Path $Settings -Parent) -Parent
     # Git for Windows keeps its sh, and the cat beside it, off the path PowerShell sees.
     $sh = (Get-Command sh -ErrorAction SilentlyContinue)?.Source ?? (Join-Path (git --exec-path) "../../../usr/bin/sh.exe")
@@ -375,11 +377,10 @@ if ($SelfTest) {
     if (-not $ok) { Write-Host "    $LASTEXITCODE $unread" }
     Write-Host ("self-test {0}/{1}: a tool call it cannot read exits 1 and says it was not checked -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++ }
-    # Which tools the session starts that command for: the matcher of the entry it was read from.
+    # Which tools the session starts that command for: the matchers of the entries that wire it.
     $n++
-    . "$PSScriptRoot/hook-matcher.ps1"
     $unstarted = @(if ($entry) { Get-UnstartedShellTool -Entry $entry })
-    foreach ($tool in $unstarted) { Write-Host "    $Settings`: the matcher ``$($entry.matcher)`` does not start the hook for the $tool tool" }
+    foreach ($tool in $unstarted) { Write-Host "    $Settings`: the matcher $(Get-EntryMatcher $entry) does not start the hook for the $tool tool" }
     $ok = $entry -and -not $unstarted
     Write-Host ("self-test {0}/{1}: the matcher of the entry that wires the hook starts it for the Bash tool and for the PowerShell tool -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
     if (-not $ok) { $failures++ }
