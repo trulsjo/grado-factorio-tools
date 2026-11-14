@@ -56,8 +56,9 @@
     HEAD and a merge commit to replay are refused, and that a rejected message, a scope the
     repository's commit-scopes.txt or -ScopeFile does not list among them, leaves the branch
     where it was. A copy of the script beside a commit check that commits proves a branch moved
-    while it runs keeps that commit. Needs git, for a fixture repository in a temp directory, and
-    commit-check.ps1 beside this script.
+    while it runs keeps that commit, and beside one that leaves the branch's lock file, that git's
+    reason is shown and no move is claimed. Needs git, for a fixture repository in a temp
+    directory, and commit-check.ps1 beside this script.
 
 .EXAMPLE
     From a consumer's root:
@@ -192,6 +193,19 @@ if ($SelfTest) {
             if ($r.Code -ne 1 -or $r.Text -notmatch 'moved from') { Write-Host ($r.Text.TrimEnd() -replace '(?m)^', '    ') }
             $r.Code -eq 1 -and $r.Text -match 'moved from' -and (git -C $t log -1 --format=%s work) -eq '📝 docs(repo): meanwhile' -and
                 (git -C $t log -1 --format=%s work~1) -eq '📝 docs(repo): add line 3' } }
+        # The same copy beside a commit check that leaves the branch's lock file in place: the
+        # ref cannot be written though it has not moved, so git's reason is shown, not a move.
+        @{ Name = 'a branch git cannot lock is not moved, and git''s reason is shown, not a move'; Test = { param($t)
+            $copy = Join-Path $t 'tools'
+            New-Item -ItemType Directory -Path $copy | Out-Null
+            Copy-Item -LiteralPath $self -Destination $copy
+            [IO.File]::WriteAllText((Join-Path $copy 'commit-check.ps1'), "Set-Content -LiteralPath '.git/refs/heads/work.lock' -Value ''`nexit 0`n", $utf8)
+            $before = git -C $t rev-parse HEAD
+            $r = & $run $t HEAD~1 new.txt @() (Join-Path $copy 'reword-commit.ps1')
+            $ok = $r.Code -eq 1 -and $r.Text -match 'work\.lock' -and $r.Text -match 'could not move work' -and $r.Text -notmatch 'moved from' -and
+                (git -C $t rev-parse refs/heads/work) -eq $before
+            if (-not $ok) { Write-Host ($r.Text.TrimEnd() -replace '(?m)^', '    ') }
+            $ok } }
     )
     $failures = 0
     $n = 0
@@ -277,9 +291,14 @@ if (Test-Path -LiteralPath $check) {
 }
 else { Write-Host "reword-commit: $check not found, so the messages were NOT checked." }
 
-git update-ref -m "reword-commit: $($sha.Substring(0, 7))" "refs/heads/$branch" $parent $tip 2>$null
+$said = git update-ref -m "reword-commit: $($sha.Substring(0, 7))" "refs/heads/$branch" $parent $tip 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "FAILED - reword-commit: $branch moved from $($tip.Substring(0, 7)) while this ran, so it was not moved. Nothing was changed: run it again on the new tip."
+    Write-Host $said.TrimEnd()
+    # git gives one failure for a moved ref and for one it could not lock or write: the tip read
+    # again tells them apart.
+    $now = git rev-parse --verify --quiet "refs/heads/$branch"
+    if ($now -and $now -ne $tip) { Write-Host "FAILED - reword-commit: $branch moved from $($tip.Substring(0, 7)) to $($now.Substring(0, 7)) while this ran, so it was not moved. Nothing was changed: run it again on the new tip." }
+    else { Write-Host "FAILED - reword-commit: git could not move $branch, for the reason above. Nothing was changed: it is still at $($tip.Substring(0, 7))." }
     exit 1
 }
 
