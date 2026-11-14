@@ -62,7 +62,8 @@
     word with its quotes taken off, a backslash or backtick escapes the character after it, and
     nothing is expanded. And whether a session hands a subagent's calls to the hook at all, which is
     not measured. And whether the settings still reach it, unless -SelfTest is run on them: that
-    reads the wired command and the matcher of its entry, and nothing else of the settings.
+    reads the wired command and the matchers of the entries that run it, and nothing else of the
+    settings.
 
     TO CHECK IT, run the second example below.
 
@@ -77,9 +78,9 @@
     NOT-checked message. Then the first example's command, run through sh, refuses with exit 2 and a
     reason, and where the project holds no hook script exits 0 and prints JSON that names the
     missing path to the agent. Then the command -Settings wires, found by this script's name: it
-    refuses with exit 2 and passes a plain command, and the matcher of its entry starts it for the
-    Bash tool and for the PowerShell tool. Needs git, and sh: the one on the path, or the one Git
-    for Windows ships.
+    refuses with exit 2 and passes a plain command, and the matchers of the entries that run it
+    start it for the Bash tool and for the PowerShell tool. Needs git, and sh: the one on the path,
+    or the one Git for Windows ships.
 
 .PARAMETER Settings
     With -SelfTest: the .claude/settings.json whose PreToolUse command naming this script the wired
@@ -355,7 +356,6 @@ if ($SelfTest) {
         & $check 'the first example''s command refuses with exit 2, a reason and git show as the advice after committing, passes a plain command, and where the script is not there exits 0 and prints JSON naming the missing path to the agent' ($wRefused.Code -eq 2 -and $wRefused.Text -match 'Refused' -and $advice -and $wPlain.Code -eq 0 -and -not $wPlain.Text.Trim() -and $wAbsent.Code -eq 0 -and $toldAbsent) "refused: $($wRefused.Code) $($wRefused.Text) | plain: $($wPlain.Code) $($wPlain.Text) | absent: $($wAbsent.Code) $($wAbsent.Text)"
         # The wiring a settings file holds, found by this script's name wherever it stands among
         # the PreToolUse entries (#315 ruling 3): this repository's own unless -Settings names one.
-        $names = [regex]::Escape((Split-Path $PSCommandPath -Leaf))
         # Read by hook-matcher.ps1's Get-HookWiring, which reads each key only where it stands, so
         # a file with no PreToolUse entry wires nothing, which is what is said.
         . "$PSScriptRoot/hook-matcher.ps1"

@@ -12,8 +12,11 @@
     ONE READER (#461). Each hook's self-test kept its own copy of the reader until #461. Six read
     `.hooks.PreToolUse` bare, which strict mode throws on in a file with no such key, and every copy
     took the first entry naming the script, so a wiring of one entry per shell tool was told one
-    tool was not started (PR #460's review). Get-HookWiring reads each key where it stands, and
-    returns every entry that names the script by its file name, in any of its commands.
+    tool was not started (PR #460's review). Get-HookWiring reads each key where it stands, takes
+    the first command that names the script by its whole file name, and returns every entry that
+    runs that command. An entry naming the script in another command is left out (PR #465's
+    review): the self-tests run the one command, so that entry's matcher would be credited with a
+    command no test ran.
 
     WHY. Each session hook's self-test here, on 2026-10-12, ran the command a .claude/settings.json
     wires and read nothing else of the entry. With the matcher narrowed from `Bash|PowerShell` to
@@ -37,20 +40,23 @@
 
     WHAT -SelfTest MEANS HERE. Run as a script with -SelfTest, it holds Test-HookMatcher to a table
     of matchers, Get-UnstartedShellTool to six entries and to a wiring of two, and Get-HookWiring to
-    settings files with no hooks key, no key for the event, a first entry wiring another script,
-    and two entries naming the script. Exit 0 means the matchers are read as the reference's words
-    above say and, where it says nothing, as chosen here: names are compared in exact case, a
-    matcher of spaces alone starts nothing, and neither does one that is no string or a pattern
-    .NET cannot compile; and that the wiring is every entry naming the script, read without a
-    throw.
+    settings files with no hooks key, no key for the event, an event that is no list, a first entry
+    wiring another script, two entries running the script's command, a longer name holding the
+    script's, and an entry naming the script in another command. Exit 0 means the matchers are read
+    as the reference's words above say and, where it says nothing, as chosen here: names are
+    compared in exact case, a matcher of spaces alone starts nothing, and neither does one that is
+    no string or a pattern .NET cannot compile; and that the wiring is every entry running the
+    first command that names the script, read without a throw.
 
     WHAT IT CANNOT SEE. Whether the client does what its reference says: no session was run with a
     narrowed matcher. Where JavaScript's regular expressions and .NET's differ: the pattern is given
     to .NET with its ECMAScript option, and one that .NET compiles and JavaScript refuses, as
     `(?i)bash|powershell` is (grado-factorio-tools#120's review, 2026-10-12), is read here as .NET
     reads it. Any other key of the entry, and so a handler's `if`, which narrows further. A script
-    named in a command by anything but its file name, as through a variable. Settings in another
-    file than the one the entries came from, and a session whose hooks are turned off.
+    named in a command by anything but its whole file name, as through a variable. Whether a
+    command naming the script, other than the first, runs it: its entry is left out, so a tool only
+    such an entry starts is told unstarted. Settings in another file than the one the entries came
+    from, and a session whose hooks are turned off.
 #>
 
 function Test-HookMatcher {
@@ -89,24 +95,34 @@ function Get-EntryMatcher {
 
 function Get-HookWiring {
     <#  The wiring the settings file $Path holds for the script named $Script under the hook event
-        $Event: Entries, every entry of that event with a command that names the script, in the
-        file's order; and Command, the first such command of the first of them. Each key is read
-        only where it stands, so a file with no hooks key, no key for the event, or no entry naming
-        the script gives no entries and an empty command, and throws only where it is no JSON.  #>
+        $Event: Command, the first command of that event's entries that names the script by its
+        whole file name; and Entries, every entry with that command, in the file's order. Each key
+        is read only where it stands, so a file with no hooks key, no key for the event, an event
+        that is no list, or no entry naming the script gives no entries and an empty command, and
+        throws only where it is no JSON.  #>
     param(
         [Parameter(Mandatory)] [string] $Path,
         [Parameter(Mandatory)] [string] $Event,
         [Parameter(Mandatory)] [string] $Script
     )
-    $names = [regex]::Escape($Script)
+    # The whole file name: no word character, dot or hyphen on either side of it.
+    $names = "(?<![\w.-])$([regex]::Escape($Script))(?![\w.-])"
     $field = { param($object, [string] $key) if ($object -is [psobject]) { $object.PSObject.Properties[$key]?.Value } }
-    # The commands of one entry, each read from its own handler.
-    $commands = { param($entry) @(@(& $field $entry 'hooks') | ForEach-Object { & $field $_ 'command' } | Where-Object { $_ -is [string] }) }
+    # The commands of one entry that name the script, each read from its own handler.
+    $naming = { param($entry) @(@(& $field $entry 'hooks') | ForEach-Object { & $field $_ 'command' } | Where-Object { $_ -is [string] -and $_ -match $names }) }
     $settings = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
-    $all = @(& $field (& $field $settings 'hooks') $Event)
-    $entries = @($all | Where-Object { @(& $commands $_) -match $names })
-    $command = if ($entries) { @(& $commands $entries[0]) -match $names | Select-Object -First 1 } else { '' }
-    @{ Entries = $entries; Command = [string] $command }
+    # An event that is no list of entries holds none. Assigned in place, not taken from $field or
+    # an if as their output, which would unroll a list of one entry into no list.
+    $hooks = & $field $settings 'hooks'
+    $listed = $null
+    if ($hooks -is [psobject]) { $listed = $hooks.PSObject.Properties[$Event]?.Value }
+    $all = @()
+    if ($listed -is [array]) { $all = $listed }
+    $first = @($all | ForEach-Object { & $naming $_ }) | Select-Object -First 1
+    $command = if ($null -eq $first) { '' } else { [string] $first }
+    # Only the entries that run that command: the self-tests run it and nothing else.
+    $entries = @(if ($command) { $all | Where-Object { @(& $naming $_) -ccontains $command } })
+    @{ Entries = $entries; Command = $command }
 }
 
 # Only when run as a script. Dot-sourced, InvocationName is '.', and a caller's own -SelfTest is
@@ -152,7 +168,7 @@ if ($MyInvocation.InvocationName -ne '.' -and $args -contains '-SelfTest') {
     )
     $failures = 0
     $n = 0
-    $total = $cases.Count + 5
+    $total = $cases.Count + 7
     foreach ($c in $cases) {
         $n++
         $ok = (Test-HookMatcher -Matcher $c[0] -Tool $c[1]) -eq $c[2]
@@ -192,7 +208,7 @@ if ($MyInvocation.InvocationName -ne '.' -and $args -contains '-SelfTest') {
         Write-Host ("self-test {0}/{1}: the wiring is the entry whose command names the script, not the first entry, and its command is the one that names it, not the entry's first -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
         if (-not $ok) { $failures++; Write-Host "    $(@($second.Entries).Count) entries, command '$($second.Command)'" }
         $n++
-        $split = & $wiring '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"pwsh -File scripts/the-hook.ps1"}]},{"matcher":"PowerShell","hooks":[{"type":"command","command":"pwsh -File scripts/the-hook.ps1 -Shell ps"}]}]}}'
+        $split = & $wiring '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"pwsh -File scripts/the-hook.ps1"}]},{"matcher":"PowerShell","hooks":[{"type":"command","command":"pwsh -File scripts/the-hook.ps1"}]}]}}'
         $gapsSplit = @(Get-UnstartedShellTool -Entry $split.Entries)
         $ok = @($split.Entries).Count -eq 2 -and -not $gapsSplit -and $split.Command -ceq 'pwsh -File scripts/the-hook.ps1' -and
             (Get-EntryMatcher $split.Entries) -ceq '`Bash`, `PowerShell`'
@@ -200,11 +216,27 @@ if ($MyInvocation.InvocationName -ne '.' -and $args -contains '-SelfTest') {
         if (-not $ok) { $failures++; Write-Host "    $(@($split.Entries).Count) entries, unstarted: $($gapsSplit -join ', ')" }
         $n++
         $session = & $wiring '{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"pwsh -File the-hook.ps1 -Root ."}]}]}}' 'SessionStart'
-        $noArray = & $wiring '{"hooks":{"PreToolUse":{"matcher":"Bash"}}}'
+        $noArray = & $wiring '{"hooks":{"PreToolUse":{"matcher":"Bash","hooks":[{"type":"command","command":"pwsh -File the-hook.ps1"}]}}}'
         $ok = @($session.Entries).Count -eq 1 -and $session.Command -ceq 'pwsh -File the-hook.ps1 -Root .' -and -not $noArray.Entries -and
             @(Get-UnstartedShellTool -Entry @()).Count -eq 2
         Write-Host ("self-test {0}/{1}: the event is the one given, SessionStart read as PreToolUse is; an event that is no list of entries wires none; no entries start neither shell tool -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
         if (-not $ok) { $failures++; Write-Host "    session: '$($session.Command)', not a list: '$($noArray.Command)'" }
+        $n++
+        # The name is the file's whole name: a longer name holding it, or a backup of it, is
+        # another script, and its entry's matcher is not this hook's.
+        $longer = & $wiring '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"pwsh -File \"vendor\\tools\\scripts\\the-hook.ps1\" -Root ."}]},{"matcher":"PowerShell","hooks":[{"type":"command","command":"pwsh -File scripts/my-the-hook.ps1"},{"type":"command","command":"pwsh -File scripts/the-hook.ps1.bak"}]}]}}'
+        $gapsLonger = @(Get-UnstartedShellTool -Entry $longer.Entries) -join ','
+        $ok = @($longer.Entries).Count -eq 1 -and $longer.Command -ceq 'pwsh -File "vendor\tools\scripts\the-hook.ps1" -Root .' -and $gapsLonger -ceq 'PowerShell'
+        Write-Host ("self-test {0}/{1}: a command names the script by its whole file name, after a slash, a backslash or a space; my-the-hook.ps1 and the-hook.ps1.bak name another, whose entry starts nothing for it -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
+        if (-not $ok) { $failures++; Write-Host "    $(@($longer.Entries).Count) entries, command '$($longer.Command)', unstarted: $gapsLonger" }
+        $n++
+        # The self-tests run Command alone, so an entry whose command naming the script is another
+        # is not the wiring they ran, and its matcher starts nothing for it.
+        $other = & $wiring '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"pwsh -File scripts/the-hook.ps1"}]},{"matcher":"PowerShell","hooks":[{"type":"command","command":"echo scripts/the-hook.ps1"}]}]}}'
+        $gapsOther = @(Get-UnstartedShellTool -Entry $other.Entries) -join ','
+        $ok = @($other.Entries).Count -eq 1 -and $other.Command -ceq 'pwsh -File scripts/the-hook.ps1' -and $gapsOther -ceq 'PowerShell'
+        Write-Host ("self-test {0}/{1}: an entry whose command naming the script is not the command the wiring runs is not read as wiring it, so its matcher starts no tool -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
+        if (-not $ok) { $failures++; Write-Host "    $(@($other.Entries).Count) entries, command '$($other.Command)', unstarted: $gapsOther" }
     }
     finally { Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue }
     Write-Host ''
