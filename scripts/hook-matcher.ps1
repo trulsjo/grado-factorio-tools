@@ -223,8 +223,9 @@ if ($MyInvocation.InvocationName -ne '.' -and $args -contains '-SelfTest') {
         if (-not $ok) { $failures++; Write-Host "    session: '$($session.Command)', not a list: '$($noArray.Command)'" }
         $n++
         # The name is the file's whole name: a longer name holding it, or a backup of it, is
-        # another script, and its entry's matcher is not this hook's.
-        $longer = & $wiring '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"pwsh -File \"vendor\\tools\\scripts\\the-hook.ps1\" -Root ."}]},{"matcher":"PowerShell","hooks":[{"type":"command","command":"pwsh -File scripts/my-the-hook.ps1"},{"type":"command","command":"pwsh -File scripts/the-hook.ps1.bak"}]}]}}'
+        # another script, and its entry's matcher is not this hook's. Those entries come first,
+        # so a name matched inside another would be taken as the command.
+        $longer = & $wiring '{"hooks":{"PreToolUse":[{"matcher":"PowerShell","hooks":[{"type":"command","command":"pwsh -File scripts/my-the-hook.ps1"}]},{"matcher":"PowerShell","hooks":[{"type":"command","command":"pwsh -File scripts/the-hook.ps1.bak"}]},{"matcher":"Bash","hooks":[{"type":"command","command":"pwsh -File \"vendor\\tools\\scripts\\the-hook.ps1\" -Root ."}]}]}}'
         $gapsLonger = @(Get-UnstartedShellTool -Entry $longer.Entries) -join ','
         $ok = @($longer.Entries).Count -eq 1 -and $longer.Command -ceq 'pwsh -File "vendor\tools\scripts\the-hook.ps1" -Root .' -and $gapsLonger -ceq 'PowerShell'
         Write-Host ("self-test {0}/{1}: a command names the script by its whole file name, after a slash, a backslash or a space; my-the-hook.ps1 and the-hook.ps1.bak name another, whose entry starts nothing for it -- {2}" -f $n, $total, $(if ($ok) { 'ok' } else { 'FAILED' }))
