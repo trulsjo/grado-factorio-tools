@@ -541,9 +541,19 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             git -C $temp rm --cached --quiet bad.md
             Set-Content -LiteralPath (Join-Path $temp 'good.md') -Value 'now *broken on disk only'
             $passed = & $run $temp @()
-            Write-Host ($refused.Text.TrimEnd() -replace '(?m)^', '    ')
-            $refused.Code -eq 1 -and $refused.Text -match '(?m)^bad\.md:3: the link to nowhere\.md' -and
-                $refused.Text -match '(?m)^bad\.md:3: emphasis opened' -and $passed.Code -eq 0 } }
+            $ok = $refused.Code -eq 1 -and $refused.Text -match '(?m)^bad\.md:3: the link to nowhere\.md' -and
+                $refused.Text -match '(?m)^bad\.md:3: emphasis opened' -and $passed.Code -eq 0
+            if ($ok) { Write-Host ($refused.Text.TrimEnd() -replace '(?m)^', '    ') }
+            else {
+                # Each run's code and output, labelled, so a failure says which condition did not
+                # hold: once, in a full check.ps1 run, the first printed nothing (#466).
+                foreach ($r in @(@('first run, both files staged', $refused), @('second run, bad.md unstaged and good.md broken on disk', $passed))) {
+                    Write-Host "    $($r[0]): exit $($r[1].Code), output:"
+                    $text = "$($r[1].Text)".TrimEnd()
+                    Write-Host $(if ($text) { $text -replace '(?m)^', '        ' } else { '        <nothing>' })
+                }
+            }
+            $ok } }
         @{ Name = 'run from a directory below the root, each mode says what it says at the root'; Test = {
             $below = Join-Path $temp 'below'
             New-Item -ItemType Directory -Path $below | Out-Null
