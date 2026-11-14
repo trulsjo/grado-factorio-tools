@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(gh api --method POST repos/trulsjo/grado-factorio-modpack/issues/*/dependencies/blocked_by -F issue_id=*)",
-      "Bash(gh api --method POST repos/trulsjo/grado-factorio-tools/issues/*/dependencies/blocked_by -F issue_id=*)"
+      "Bash(gh api --method POST repos/trulsjo/grado-factorio-tools/issues/*/dependencies/blocked_by -F issue_id=*)",
+      "Bash(gh api --method POST repos/trulsjo/realistic-fusion-refreshed/issues/*/dependencies/blocked_by -F issue_id=*)",
+      "Bash(gh api --method POST repos/trulsjo/true-nukes-refreshed/issues/*/dependencies/blocked_by -F issue_id=*)"
     ]
   },
   "hooks": {
@@ -29,6 +31,10 @@
           {
             "type": "command",
             "command": "i=$(cat); case $i in *npm*|*npx*|*pip*|*gem*|*cargo*|*winget*|*choco*|*scoop*|*release*download*|*.exe*|*.msi*|*.zip*|*.tar.gz*|*.tgz*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/scripts/ask-before-download.ps1\";; esac"
+          },
+          {
+            "type": "command",
+            "command": "i=$(cat); case $i in *checkout*|*switch*|*reset*|*restore*|*stash*|*clean*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/scripts/refuse-git-discard.ps1\";; esac"
           },
           {
             "type": "command",
