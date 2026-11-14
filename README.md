@@ -815,6 +815,13 @@ the revert and a self-test only slower than the limit look the same.
 
     pwsh -File scripts/revert-run.ps1 -Copy <copy> -List <list>
 
+With `-Copy` left out, it clones the HEAD of the repository it is run from into a new folder under
+the temp directory, names the folder and the commit, and runs there (#467). What is uncommitted is
+not in that clone, and the run says so; the clone is kept and named again at the end. Its
+`origin/main` is the caller's `main`, not GitHub's.
+
+    pwsh -File scripts/revert-run.ps1 -List <list>
+
 `-Defaults` names scripts whose default reverts it writes itself and runs after the list's (#382):
 for each parameter its `param()` block gives a default, one revert per element of a list default,
 that element dropped, and one for a scalar default, another value in its place. `-List` may then

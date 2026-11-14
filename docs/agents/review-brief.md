@@ -57,7 +57,12 @@ repository, a clone, since a self-test may ask git for `origin/main` as GitHub h
 `revert-run.ps1` refuses a copy another run has left changed:
 `git clone -q https://github.com/trulsjo/grado-factorio-tools <empty scratch folder>`, then
 `git -C <copy> checkout -q <full SHA>`. It writes the reverts as a list and runs them with
-`pwsh -File scripts/revert-run.ps1 -Copy <copy> -List <list>` (#284); the list's shape and what
+`pwsh -File scripts/revert-run.ps1 -Copy <copy> -List <list>` (#284). Run from a checkout at
+that commit with nothing uncommitted, `pwsh -File scripts/revert-run.ps1 -List <list>`, with
+`-Copy` left out, makes the clone itself, of the checkout's HEAD, and names it (#467); its
+`origin/main` is the checkout's `main`, not GitHub's, so `<base>` below is read in the checkout,
+`git merge-base origin/main <full SHA>`, and given by its full SHA.
+The list's shape and what
 each result means are in that script's header. For each script whose `param()` block the change
 adds, or whose defaults it edits, it also runs
 `pwsh -File scripts/revert-run.ps1 -Copy <copy> -Defaults <scripts>`, which writes those
