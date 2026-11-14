@@ -89,8 +89,8 @@ _Avoid_: breaking change, when the commit is meant
 The file a review lane or a panel reviewer writes its findings to, outside the repository, and
 adds a `Turn` section to on each confirmation turn: `docs/agents/review-brief.md`'s
 *The answer is a file*, and the `review-panel` skill's answer file (#458).
-_Avoid_: report — "report" stays the verb, and the session's own account to Truls; it is not the
-file a lane writes.
+_Avoid_: "report" for the file a lane writes — the word stays as the verb and as the session's own
+account to Truls.
 
 ### The game
 
