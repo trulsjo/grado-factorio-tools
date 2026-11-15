@@ -515,7 +515,7 @@ function Test-Verdict {
         # An operand of an -and chain, read whole from its top link, that is a verdict too: the
         # chain holds with the variable dropped to true, so its reverts are a verdict's.
         $operand = $false
-        if (-not ($negated -or $tested) -and $r.Parent -is [System.Management.Automation.Language.BinaryExpressionAst] -and $r.Parent.Operator -eq 'And') {
+        if ($r.Parent -is [System.Management.Automation.Language.BinaryExpressionAst] -and $r.Parent.Operator -eq 'And') {
             $top = $r.Parent
             while ($top.Parent -is [System.Management.Automation.Language.BinaryExpressionAst] -and $top.Parent.Operator -eq 'And') { $top = $top.Parent }
             $operand = Test-Verdict -Chain $top -Seen $Seen
@@ -1091,13 +1091,16 @@ function Invoke-SelfTest {
                 "    @{ 'name' = 1; `$key = { `$x -ne 'g18' -and `$x -ne 'g19' } }"
                 # A variable read only as an operand of a verdict chain, as the run-as-a-command
                 # case's $under (PR #471's retro); one read in a chain that is no verdict; and one
-                # read in its own chain, which is asked about once.
+                # read in its own chain, which is asked about once; one read in an -or verdict, and
+                # one in an -and chain under an -or, either of which may be false.
                 "    @{ Test = { `$hOk = `$x -ne 'h1' -and `$x -ne 'h2'; `$x -ne 'h3' -and `$hOk } }"
                 "    `$qOk = `$x -ne 'q1' -and `$x -ne 'q2'"
                 "    `$qAll = `$x -ne 'q3' -and `$qOk"
                 '    $qAll | Out-Null'
                 "    `$rOk = `$rOk -and `$x -ne 'r1'"
                 '    if ($rOk) { }'
+                "    @{ Test = { `$sOk = `$x -ne 's1' -and `$x -ne 's2'; `$x -eq 's3' -or `$sOk } }"
+                "    @{ Test = { `$tOk = `$x -ne 't1' -and `$x -ne 't2'; `$tOk -and `$x -ne 't3' -or `$x -eq 't4' } }"
                 '}'
                 'function Invoke-SelfTest {'
                 "    @{ Test = { `$x -ne 'n' -and `$x -ne 'o' } }"
@@ -1123,9 +1126,10 @@ function Invoke-SelfTest {
                 @('u1', 'u2', 'v1', 'v2', 't1', 't2', 'w1', 'w2', 'y1', 'y2', 'z1', 'z2', 'b1', 'b2', 'c1', 'c2', 'd1', 'd2' | ForEach-Object { "`$x -ne '$_'" }) +
                 @("`$x -eq 'g3'", "`$x -eq 'g4'") +
                 @('g5', 'g6', 'g8', 'g9', 'g10', 'g11', 'g12', 'g13', 'g16', 'g17', 'g18', 'g19', 'q1', 'q2', 'q3' | ForEach-Object { "`$x -ne '$_'" }) +
-                @('$qOk', '$rOk', "`$x -ne 'r1'") +
+                @('$qOk', '$rOk', "`$x -ne 'r1'", "`$x -ne 's1'", "`$x -ne 's2'", "`$x -eq 's3'", '$sOk', "`$x -ne 't1'", "`$x -ne 't2'",
+                    "`$tOk -and `$x -ne 't3'", "`$x -eq 't4'", '$tOk', "`$x -ne 't3'") +
                 @('o1', 'o2', 'e1', 'e2', 'p', 'q', 'r', 's', 'g14', 'g15' | ForEach-Object { "`$x -ne '$_'" })
-            $skips = (4, 6, 8, 17, 28, 29, 31, 37, 37, 45 | ForEach-Object { "line $_, 2 operand(s)" }) -join '|'
+            $skips = (4, 6, 8, 17, 28, 29, 31, 37, 37, 47 | ForEach-Object { "line $_, 2 operand(s)" }) -join '|'
             # In this process, on a script whose only chains are verdicts: each is named,
             # and with no revert left the run fails, having run nothing.
             [IO.File]::WriteAllText((Join-Path $repo 'verdicts.ps1'), (@(
