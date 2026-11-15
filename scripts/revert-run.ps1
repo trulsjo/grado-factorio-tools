@@ -16,11 +16,13 @@
     refused, exit 1 and nothing run, when it has uncommitted changes or untracked files, which are
     named. Where -Copy is left out, the run makes one (grado-factorio-tools#467): it clones the
     repository it is run from, at that repository's HEAD, into a new folder under the temp
-    directory, says the folder and the commit by its full SHA before the first revert, and says
-    what is uncommitted or untracked in the caller's tree, which is not in the clone. The clone is
-    kept, passing or failing, and named again on the run's last line. Its origin is the caller's
+    directory, says the folder and the commit by its full SHA before the first revert, and says what
+    is uncommitted or untracked in the caller's tree, which is not in the clone. The clone is kept,
+    passing or failing, and named again on the run's last line. Its origin is the caller's
     repository, so its origin/main is the caller's main branch, not GitHub's. Run from a directory
-    in no repository with no -Copy, it fails, exit 1 and nothing run.
+    in no repository, or a repository with no commit, with no -Copy, it fails, exit 1 and nothing
+    run. The arguments and the list are read before the clone is made, so a run that fails on them
+    makes none.
 
     THE LIST is a PowerShell data file:
 
@@ -632,22 +634,12 @@ function Format-RevertTable {
 # The run over $ListPath in $Root: the rows, printed as they go and as a table; throws where it
 # cannot run.
 function Invoke-RevertRun {
-    param([Parameter(Mandatory)] [string] $Root, [string] $ListPath = '', [string[]] $Defaults = @(), [string[]] $Conditions = @(), [string] $Since = '',
+    param([Parameter(Mandatory)] [string] $Root, [object[]] $Listed = @(), [string[]] $Defaults = @(), [string[]] $Conditions = @(), [string] $Since = '',
         [Parameter(Mandatory)] [int] $TimeoutSeconds)
-    if (-not $ListPath -and -not $Defaults -and -not $Conditions) { throw 'give -List, -Defaults, -Conditions or more than one, so there is a revert to run.' }
-    if ($Since -and -not $Conditions) { throw '-Base limits -Conditions, which is not given.' }
     $dirty = @(Get-DirtyPath -Root $Root)
     if ($dirty) { throw "the copy $Root has uncommitted changes, so no revert was run: $($dirty -join ', ')" }
     $all = [System.Collections.Generic.List[object]]::new()
-    if ($ListPath) {
-        $data = try { Import-PowerShellDataFile -LiteralPath $ListPath } catch { throw "the list $ListPath cannot be read: $($_.Exception.Message)" }
-        if (-not $data.ContainsKey('Reverts') -or -not @($data.Reverts)) { throw "the list $ListPath holds no Reverts." }
-        foreach ($r in @($data.Reverts)) {
-            $missing = @('Name', 'File', 'Find', 'Replace', 'SelfTest' | Where-Object { -not ($r -is [hashtable] -and $r.ContainsKey($_)) })
-            if ($missing) { throw "a revert in $ListPath lacks $($missing -join ', ')." }
-            $all.Add($r)
-        }
-    }
+    foreach ($r in $Listed) { $all.Add($r) }
     foreach ($script in $Defaults) {
         $written = Get-DefaultRevert -Root $Root -Script $script
         Write-Host "revert-run: $($written.Reverts.Count) default revert(s) written for $script."
@@ -688,20 +680,34 @@ function Invoke-RevertRun {
     $rows
 }
 
+# The reverts of the list at $ListPath, each checked for the fields a revert needs; throws where
+# the list cannot be read, holds none, or one lacks a field. Read before any clone is made, so a
+# list that fails leaves none behind.
+function Read-RevertList {
+    param([Parameter(Mandatory)] [string] $ListPath)
+    $data = try { Import-PowerShellDataFile -LiteralPath $ListPath } catch { throw "the list $ListPath cannot be read: $($_.Exception.Message)" }
+    if (-not $data.ContainsKey('Reverts') -or -not @($data.Reverts)) { throw "the list $ListPath holds no Reverts." }
+    foreach ($r in @($data.Reverts)) {
+        $missing = @('Name', 'File', 'Find', 'Replace', 'SelfTest' | Where-Object { -not ($r -is [hashtable] -and $r.ContainsKey($_)) })
+        if ($missing) { throw "a revert in $ListPath lacks $($missing -join ', ')." }
+        $r
+    }
+}
+
 # The copy made where -Copy is left out (#467): a clone of the HEAD of the repository $From is in,
 # in a new folder under $Parent, detached at that commit. It says the clone's path and the commit,
 # and what of the caller's tree is not in it; returns the clone's path, and throws where $From is
-# in no repository or the clone fails.
+# in no repository or the clone fails. git rev-parse prints nothing where it fails, so an empty
+# answer is the test of each.
 function New-HeadClone {
     param([Parameter(Mandatory)] [string] $From, [Parameter(Mandatory)] [string] $Parent)
-    $top = git -C $From rev-parse --show-toplevel 2>$null
-    if ($LASTEXITCODE -or -not $top) { throw "no -Copy was given, and none could be made: $From is not in a git repository." }
-    $top = "$top".Trim()
+    $top = "$(git -C $From rev-parse --show-toplevel 2>$null)".Trim()
+    if (-not $top) { throw "no -Copy was given, and none could be made: $From is not in a git repository." }
     $head = "$(git -C $top rev-parse --verify --quiet 'HEAD^{commit}' 2>$null)".Trim()
-    if ($LASTEXITCODE -or -not $head) { throw "no -Copy was given, and none could be made: $top has no commit at HEAD." }
+    if (-not $head) { throw "no -Copy was given, and none could be made: $top has no commit at HEAD." }
     $clone = Join-Path $Parent "revert-run-copy-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
-    # A detached HEAD is on no branch the clone takes, so HEAD is fetched by name, then checked out.
-    foreach ($step in @(@('clone', '--quiet', '--no-checkout', $top, $clone), @('-C', $clone, 'fetch', '--quiet', $top, 'HEAD'),
+    # A clone takes a detached HEAD's commit as well as the branches, so HEAD is checked out by SHA.
+    foreach ($step in @(@('clone', '--quiet', '--no-checkout', $top, $clone),
             @('-C', $clone, '-c', 'advice.detachedHead=false', 'checkout', '--quiet', '--detach', $head))) {
         $said = & git @step 2>&1
         if ($LASTEXITCODE) { throw "no -Copy was given, and none could be made: git $($step -join ' ') failed: $($said -join ' ')" }
@@ -720,8 +726,12 @@ function Invoke-Main {
         [Parameter(Mandatory)] [int] $TimeoutSeconds, [string] $From = (Get-Location).Path, [string] $CloneParent = [IO.Path]::GetTempPath())
     $clone = ''
     try {
+        # What can be read without the copy is read first, so a run that fails on it makes no clone.
+        if (-not $List -and -not $Defaults -and -not $Conditions) { throw 'give -List, -Defaults, -Conditions or more than one, so there is a revert to run.' }
+        if ($Base -and -not $Conditions) { throw '-Base limits -Conditions, which is not given.' }
+        $listed = if ($List) { @(Read-RevertList -ListPath $List) } else { @() }
         $root = if ($Copy) { (Resolve-Path -LiteralPath $Copy).Path } else { ($clone = New-HeadClone -From $From -Parent $CloneParent) }
-        $rows = @(Invoke-RevertRun -Root $root -ListPath $List -Defaults $Defaults -Conditions $Conditions -Since $Base -TimeoutSeconds $TimeoutSeconds)
+        $rows = @(Invoke-RevertRun -Root $root -Listed $listed -Defaults $Defaults -Conditions $Conditions -Since $Base -TimeoutSeconds $TimeoutSeconds)
     }
     catch {
         Write-Host "FAILED - revert-run: $($_.Exception.Message)"
@@ -1259,14 +1269,102 @@ function Invoke-SelfTest {
             $got.Code -eq 0 -and $clone.StartsWith((Join-Path $temp 'revert-run-copy-'), [StringComparison]::OrdinalIgnoreCase) -and $kept -and
                 $got.Text -match '(?m)^revert-run: R -- fails \(exit 1\): FAILED - self-test: 1 of 1' -and $got.Text -notmatch 'not in the clone' -and
                 $got.Text.TrimEnd().EndsWith("revert-run: the clone is kept at $clone.") -and (& $same) } }
-        @{ Name = 'with -Copy left out, an uncommitted change in the repository is named as not in the clone, and the revert runs against the committed text (#467)'; Test = {
+        @{ Name = 'with -Copy left out, an uncommitted change and an untracked file in the repository are named as not in the clone, and the revert runs against the committed text (#467)'; Test = {
             [IO.File]::WriteAllText($stubPath, ($stub -replace "'alpha'", "'edited'") + "`n")
+            $untracked = Join-Path $repo 'untracked.txt'
+            Set-Content -LiteralPath $untracked -Value 'not committed'
             $p = & $list 'cloned-dirty' "@{ Reverts = @( $(& $one "`$a = ''alpha''" "`$a = ''other''") ) }"
             Push-Location -LiteralPath $repo
-            try { $got = & $main @{ List = $p; CloneParent = $temp } } finally { Pop-Location; & $git checkout -q -- stub.ps1 }
+            try { $got = & $main @{ List = $p; CloneParent = $temp } } finally { Pop-Location; & $git checkout -q -- stub.ps1; Remove-Item -LiteralPath $untracked }
             Write-Host ($got.Text.TrimEnd() -replace '(?m)^', '    ')
-            $got.Code -eq 0 -and $got.Text -match '(?m)^revert-run: what is uncommitted or untracked in .+ is not in the clone: stub\.ps1\.\r?$' -and
+            $got.Code -eq 0 -and $got.Text -match '(?m)^revert-run: what is uncommitted or untracked in .+ is not in the clone: stub\.ps1, untracked\.txt\.\r?$' -and
                 $got.Text -match '(?m)^revert-run: R -- fails \(exit 1\)' -and (& $same) } }
+        @{ Name = 'with -Copy left out, a run that fails after the clone is made keeps the clone and names it after the failure (#467)'; Test = {
+            Push-Location -LiteralPath $repo
+            try { $got = & $main @{ Defaults = @('no-such.ps1'); CloneParent = $temp } } finally { Pop-Location }
+            Write-Host ($got.Text.TrimEnd() -replace '(?m)^', '    ')
+            $clone = if ($got.Text -match '(?m)^revert-run: no -Copy given: cloned HEAD of .+, [0-9a-f]{40}, into (.+)\.\r?$') { $Matches[1] } else { '' }
+            $got.Code -eq 1 -and $clone -and (Test-Path -LiteralPath (Join-Path $clone 'stub.ps1')) -and
+                $got.Text -match '(?m)^FAILED - revert-run: -Defaults names no-such\.ps1, which is not a file in the copy' -and
+                $got.Text.TrimEnd().EndsWith("revert-run: the clone is kept at $clone.") -and (& $same) } }
+        @{ Name = 'with -Copy left out, a list that cannot be read, no revert asked for, and -Base without -Conditions each fail, exit 1, before any clone is made (#467)'; Test = {
+            $parent = Join-Path $temp 'no-clone'
+            New-Item -ItemType Directory -Path $parent | Out-Null
+            $p = & $list 'before-clone' "@{ Reverts = @( $(& $one "`$a = ''alpha''" "`$a = ''other''") ) }"
+            Push-Location -LiteralPath $repo
+            try {
+                $unread = & $main @{ List = (Join-Path $temp 'no-such-list.psd1'); CloneParent = $parent }
+                $none = & $main @{ CloneParent = $parent }
+                $base = & $main @{ List = $p; Base = 'HEAD'; CloneParent = $parent }
+            }
+            finally { Pop-Location }
+            foreach ($r in $unread, $none, $base) { Write-Host ($r.Text.TrimEnd() -replace '(?m)^', '    ') }
+            $unread.Code -eq 1 -and $unread.Text -match 'no-such-list\.psd1 cannot be read' -and $none.Code -eq 1 -and $none.Text -match 'give -List, -Defaults, -Conditions' -and
+                $base.Code -eq 1 -and $base.Text -match '-Base limits -Conditions, which is not given' -and
+                "$($unread.Text)$($none.Text)$($base.Text)" -notmatch 'cloned HEAD' -and -not @(Get-ChildItem -LiteralPath $parent -Force) -and (& $same) } }
+        @{ Name = 'with -Copy left out, run from a repository with no commit, the run fails, exit 1, and makes no clone (#467)'; Test = {
+            $unborn = Join-Path $temp 'unborn'
+            New-Item -ItemType Directory -Path $unborn | Out-Null
+            git -C $unborn init --quiet
+            $p = & $list 'unborn' "@{ Reverts = @( $(& $one "`$a = ''alpha''" "`$a = ''other''") ) }"
+            Push-Location -LiteralPath $unborn
+            try { $got = & $main @{ List = $p; CloneParent = $unborn } } finally { Pop-Location }
+            Write-Host ($got.Text.TrimEnd() -replace '(?m)^', '    ')
+            $got.Code -eq 1 -and $got.Text -match '(?m)^FAILED - revert-run: no -Copy was given, and none could be made: .*unborn has no commit at HEAD\.' -and
+                (@(Get-ChildItem -LiteralPath $unborn -Force | ForEach-Object Name) -join '|') -ceq '.git' -and (& $same) } }
+        @{ Name = 'with -Copy left out, run on a detached HEAD at a commit on no branch, the clone is at that commit (#467)'; Test = {
+            $branch = "$(& $git symbolic-ref --short HEAD)".Trim()
+            $p = & $list 'detached' "@{ Reverts = @( $(& $one "`$a = ''alpha''" "`$a = ''other''") ) }"
+            & $git checkout -q --detach
+            try {
+                Set-Content -LiteralPath (Join-Path $repo 'detached.txt') -Value 'on no branch'
+                & $git add detached.txt
+                & $git commit --quiet -m detached
+                $head = "$(& $git rev-parse HEAD)".Trim()
+                Push-Location -LiteralPath $repo
+                try { $got = & $main @{ List = $p; CloneParent = $temp } } finally { Pop-Location }
+            }
+            finally { & $git checkout -q $branch }
+            Write-Host ($got.Text.TrimEnd() -replace '(?m)^', '    ')
+            $clone = if ($got.Text -match "(?m)^revert-run: no -Copy given: cloned HEAD of .+, $head, into (.+)\.\r?$") { $Matches[1] } else { '' }
+            $got.Code -eq 0 -and $clone -and "$(git -C $clone rev-parse HEAD)".Trim() -ceq $head -and (Test-Path -LiteralPath (Join-Path $clone 'detached.txt')) -and
+                $got.Text -match '(?m)^revert-run: R -- fails \(exit 1\)' -and (& $same) } }
+        @{ Name = 'with -Copy left out, run from a subdirectory of the repository, the clone is of the repository, named by its top folder (#467)'; Test = {
+            $sub = Join-Path $repo 'sub'
+            New-Item -ItemType Directory -Path $sub | Out-Null
+            $top = "$(& $git rev-parse --show-toplevel)".Trim()
+            $p = & $list 'subdir' "@{ Reverts = @( $(& $one "`$a = ''alpha''" "`$a = ''other''") ) }"
+            Push-Location -LiteralPath $sub
+            try { $got = & $main @{ List = $p; CloneParent = $temp } } finally { Pop-Location; Remove-Item -LiteralPath $sub }
+            Write-Host ($got.Text.TrimEnd() -replace '(?m)^', '    ')
+            $got.Code -eq 0 -and $got.Text -match "(?m)^revert-run: no -Copy given: cloned HEAD of $([regex]::Escape($top)), [0-9a-f]{40}, into " -and
+                $got.Text -match '(?m)^revert-run: R -- fails \(exit 1\)' -and (& $same) } }
+        @{ Name = 'with -Copy left out, a git step that fails ends the run, exit 1, naming the step, with no clone named (#467)'; Test = {
+            # A file as the parent: git cannot make the clone's folder inside it.
+            $file = Join-Path $temp 'a-file'
+            Set-Content -LiteralPath $file -Value 'not a folder'
+            $p = & $list 'git-fails' "@{ Reverts = @( $(& $one "`$a = ''alpha''" "`$a = ''other''") ) }"
+            Push-Location -LiteralPath $repo
+            try { $got = & $main @{ List = $p; CloneParent = $file } } finally { Pop-Location }
+            Write-Host ($got.Text.TrimEnd() -replace '(?m)^', '    ')
+            $got.Code -eq 1 -and $got.Text -match '(?m)^FAILED - revert-run: no -Copy was given, and none could be made: git clone --quiet --no-checkout .+ failed' -and
+                $got.Text -notmatch 'cloned HEAD' -and $got.Text -notmatch 'the clone is kept' -and $got.Text -notmatch '(?m)^revert-run: R -- ' -and (& $same) } }
+        @{ Name = 'run as a command with -Copy left out, from the repository, the clone is made in a new folder directly under the temp directory, of the repository run from (#467)'; Test = {
+            # The real defaults of -Copy, -From and -CloneParent, which the cases above inject; the
+            # clone is removed after.
+            $head = "$(& $git rev-parse HEAD)".Trim()
+            $top = "$(& $git rev-parse --show-toplevel)".Trim()
+            $p = & $list 'command' "@{ Reverts = @( $(& $one "`$a = ''alpha''" "`$a = ''other''") ) }"
+            $got = & pwsh -NoProfile -WorkingDirectory $repo -File $PSCommandPath -List $p 2>&1 | Out-String; $code = $LASTEXITCODE
+            Write-Host ($got.TrimEnd() -replace '(?m)^', '    ')
+            $clone = if ($got -match "(?m)^revert-run: no -Copy given: cloned HEAD of $([regex]::Escape($top)), $head, into (.+)\.\r?$") { $Matches[1] } else { '' }
+            try {
+                $under = $clone -and (Split-Path -Parent $clone) -eq [IO.Path]::GetTempPath().TrimEnd('\', '/') -and
+                    (Split-Path -Leaf $clone) -match '^revert-run-copy-[0-9a-f]{8}$' -and (Test-Path -LiteralPath (Join-Path $clone 'stub.ps1'))
+            }
+            finally { if ($clone -and (Test-Path -LiteralPath $clone)) { Remove-Item -LiteralPath $clone -Recurse -Force } }
+            $code -eq 0 -and $under -and $got -match '(?m)^revert-run: R -- fails \(exit 1\)' -and
+                $got.TrimEnd().EndsWith("revert-run: the clone is kept at $clone.") -and (& $same) } }
         @{ Name = 'with -Copy left out, run from a directory in no repository, the run fails, exit 1, makes no clone and runs no revert (#467)'; Test = {
             $nowhere = Join-Path $temp 'nowhere'
             New-Item -ItemType Directory -Path $nowhere | Out-Null
