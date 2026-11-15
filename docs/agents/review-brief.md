@@ -122,19 +122,25 @@ older case of that shape, in a file the diff touches elsewhere, is no finding of
 
 **A ticket or commit a table cell names is checked against git.** The prose lane reads every row
 of each table the diff adds a row to or changes, not only the rows it touches. For each cell that
-names a ticket or a commit for something done to a path, such as a lift, a contraction or a
-deletion, it checks the name against git in the repository the row names, in that repository's
-clone beside this one under `C:\src\factorio`.
+names a ticket or a commit for something done, such as a lift, a contraction or a deletion, it
+checks the name against git in the repository where the thing was done. A lift was done in this
+repository, and a contraction or a deletion in the sibling the row names, read in its clone
+beside this one under `C:\src\factorio` after `git -C <clone> fetch -q origin`. Below, `<repo>`
+is `.` or that clone.
 
-- `git -C <clone> log --diff-filter=<A | D> --format='%h %s' origin/main -- <path>`, with `A`
-  for a path added and `D` for one deleted, gives the commit.
-- That commit's `Refs` or `Closes` footer, in `git -C <clone> log -1 --format=%B <commit>`,
-  gives the ticket.
+- `git -C <repo> log origin/main --format='%h %s' -E --grep='^(Refs|Closes) #<n>$'` lists the
+  commits whose footer names the cell's ticket. The cell's commit is one of them, and the one
+  that does what the row says, as editing a page into a stub. A lift or a contraction that adds
+  or deletes no path is found this way, and not by the next.
+- Where the thing added or deleted a path, `git -C <repo> log --diff-filter=<A | D>
+  --format='%h %s' origin/main -- <path>` gives the same commit, `A` for a path added and `D` for
+  one deleted. A lift's path is the one it added here, which the row may not name.
 - A cell for something not yet done names no commit. Its ticket is read with `gh issue view`,
-  to check it is open and still covers that path.
+  to check it is open and still covers that path. A cell for something done names its commit.
 
 A cell git does not bear out is a finding, and so is a commit not on that repository's
-`origin/main`. A cell can go stale without being edited, which is why the whole table is read. On
+`origin/main`, or a done cell with no commit. A cell can go stale without being edited, which is
+why the whole table is read. On
 2026-11-15 five `docs/extraction-plan.md` rows named trulsjo/grado-factorio-modpack#418 as their
 contraction. That ticket was filed to delete all five copies, but four were deleted under
 trulsjo/grado-factorio-modpack#414, trulsjo/grado-factorio-modpack#416 and
