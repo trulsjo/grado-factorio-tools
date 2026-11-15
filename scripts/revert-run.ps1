@@ -77,14 +77,16 @@
     that is a hashtable's value under a string key, as `Test = { }` or
     `'<what the case holds>' = { }` (#411); the whole of a parenthesised argument to a command
     invoked with & on a variable, as `& $check '<name>' (<chain>) $said` (#411); or the value
-    assigned to a variable its script block reads only as an if's condition or the operand of -not
-    or !. Each is named, `revert-run: <file>, skipped as a verdict: line <n>, <k> operand(s)`. An
-    -or verdict, a chain inside a verdict's operand, one not its block's last statement, one under a
-    key that is not a string, as `$key`, one passed to a command named otherwise, as `& 'name'` or
-    `Check`, or invoked other than with &, as `. $check`, and any other chain keep their reverts.
-    With -Base <ref>, only an operand or element on a line `git -C <copy> diff -U0 <ref>` adds or
-    changes is dropped. As with -Defaults, a script it writes no revert for, -Base or not, or that
-    does not parse, fails the run, exit 1 and nothing run.
+    assigned to a variable its script block reads only as an if's condition, the operand of -not or
+    !, or an operand of an -and chain that is itself a verdict, as `$under` in
+    `$code -eq 0 -and $under`. Each is named,
+    `revert-run: <file>, skipped as a verdict: line <n>, <k> operand(s)`. An -or verdict, a chain
+    inside a verdict's operand, one not its block's last statement, one under a key that is not a
+    string, as `$key`, one passed to a command named otherwise, as `& 'name'` or `Check`, or invoked
+    other than with &, as `. $check`, and any other chain keep their reverts. With -Base <ref>, only
+    an operand or element on a line `git -C <copy> diff -U0 <ref>` adds or changes is dropped. As
+    with -Defaults, a script it writes no revert for, -Base or not, or that does not parse, fails
+    the run, exit 1 and nothing run.
 
     File and SelfTest are paths from the copy's root. Args is optional, handed to the self-test
     after -SelfTest. Lines is optional, 1 unless given. Find and Replace are exact text, matched
@@ -467,9 +469,13 @@ function Get-ExpressionStatement {
 # script block that is a hashtable's value under a string key, as `Test = { }` or a case named by
 # its key; the whole of a parenthesised argument to a command invoked with & on a variable, as
 # `& $check '<name>' (<chain>)`; or the value assigned to a variable that its scope reads only as
-# a truth value, an if's condition or the operand of -not or !.
+# a truth value: an if's condition, the operand of -not or !, or an operand of an -and chain that
+# is itself a verdict, as `$under` in `$code -eq 0 -and $under`. $Seen holds the chains already
+# asked about, so two variables each read in the other's chain end the asking.
 function Test-Verdict {
-    param([Parameter(Mandatory)] [System.Management.Automation.Language.Ast] $Chain)
+    param([Parameter(Mandatory)] [System.Management.Automation.Language.Ast] $Chain,
+        [System.Collections.Generic.HashSet[object]] $Seen = [System.Collections.Generic.HashSet[object]]::new())
+    if (-not $Seen.Add($Chain)) { return $false }
     # An assignment holds its value as an expression statement with no pipeline round it.
     $statement = if ($Chain.Parent.Parent -is [System.Management.Automation.Language.AssignmentStatementAst]) { $Chain.Parent } else { Get-ExpressionStatement $Chain }
     if (-not $statement) { return $false }
@@ -506,7 +512,15 @@ function Test-Verdict {
         # A pipeline whose parent is an if is one of its conditions; its bodies are blocks.
         $condition = Get-ExpressionStatement $r
         $tested = $condition -and $condition.Parent -is [System.Management.Automation.Language.IfStatementAst]
-        if (-not ($negated -or $tested)) { return $false }
+        # An operand of an -and chain, read whole from its top link, that is a verdict too: the
+        # chain holds with the variable dropped to true, so its reverts are a verdict's.
+        $operand = $false
+        if (-not ($negated -or $tested) -and $r.Parent -is [System.Management.Automation.Language.BinaryExpressionAst] -and $r.Parent.Operator -eq 'And') {
+            $top = $r.Parent
+            while ($top.Parent -is [System.Management.Automation.Language.BinaryExpressionAst] -and $top.Parent.Operator -eq 'And') { $top = $top.Parent }
+            $operand = Test-Verdict -Chain $top -Seen $Seen
+        }
+        if (-not ($negated -or $tested -or $operand)) { return $false }
     }
     $true
 }
@@ -1030,7 +1044,7 @@ function Invoke-SelfTest {
                 $brokenCode -eq 1 -and $broken -match 'broken\.ps1 does not parse, so its conditions cannot be read' -and
                 $broken -match '(?m)^revert-run: 23 condition revert\(s\) written for conditions\.ps1\.' -and $broken -notmatch '(?m)^revert-run: condition ' -and
                 $missingCode -eq 1 -and $missing -match '-Conditions names no-such\.ps1, which is not a file in the copy' -and (& $same) } }
-        @{ Name = '-Conditions writes no revert of an -and verdict in a self-test, the last statement of a block under a string key, a variable read only as a truth value, or a chain in parentheses passed to & $<variable>, and names each it skips; an -or verdict, a chain inside a verdict''s operand, one read as a value, one not last, one under a key not a string, one passed to a command not invoked with & on a variable, and each outside the self-test keep theirs (#407, #411)'; Test = {
+        @{ Name = '-Conditions writes no revert of an -and verdict in a self-test, the last statement of a block under a string key, a variable read only as a truth value or as an operand of a verdict chain, or a chain in parentheses passed to & $<variable>, and names each it skips; an -or verdict, a chain inside a verdict''s operand, one read as a value, one not last, one under a key not a string, one passed to a command not invoked with & on a variable, and each outside the self-test keep theirs (#407, #411)'; Test = {
             $verdicts = @(
                 'param([switch] $SelfTest)'
                 "`$x = 'b'"
@@ -1075,6 +1089,15 @@ function Invoke-SelfTest {
                 # Dot-sourced, not invoked with &; and a block under $key beside a string key.
                 "    . `$check 'seven' (`$x -ne 'g16' -and `$x -ne 'g17')"
                 "    @{ 'name' = 1; `$key = { `$x -ne 'g18' -and `$x -ne 'g19' } }"
+                # A variable read only as an operand of a verdict chain, as the run-as-a-command
+                # case's $under (PR #471's retro); one read in a chain that is no verdict; and one
+                # read in its own chain, which is asked about once.
+                "    @{ Test = { `$hOk = `$x -ne 'h1' -and `$x -ne 'h2'; `$x -ne 'h3' -and `$hOk } }"
+                "    `$qOk = `$x -ne 'q1' -and `$x -ne 'q2'"
+                "    `$qAll = `$x -ne 'q3' -and `$qOk"
+                '    $qAll | Out-Null'
+                "    `$rOk = `$rOk -and `$x -ne 'r1'"
+                '    if ($rOk) { }'
                 '}'
                 'function Invoke-SelfTest {'
                 "    @{ Test = { `$x -ne 'n' -and `$x -ne 'o' } }"
@@ -1099,8 +1122,10 @@ function Invoke-SelfTest {
             $want = @("`$x -eq 'b'", "`$x -eq 'd'", "`$x -ne 'f'", "`$x -ne 'g'", "`$x -ne 'h'", "`$x -ne 'i'", "`$x -ne 'l'", "`$x -ne 'm'") +
                 @('u1', 'u2', 'v1', 'v2', 't1', 't2', 'w1', 'w2', 'y1', 'y2', 'z1', 'z2', 'b1', 'b2', 'c1', 'c2', 'd1', 'd2' | ForEach-Object { "`$x -ne '$_'" }) +
                 @("`$x -eq 'g3'", "`$x -eq 'g4'") +
-                @('g5', 'g6', 'g8', 'g9', 'g10', 'g11', 'g12', 'g13', 'g16', 'g17', 'g18', 'g19', 'o1', 'o2', 'e1', 'e2', 'p', 'q', 'r', 's', 'g14', 'g15' | ForEach-Object { "`$x -ne '$_'" })
-            $skips = (4, 6, 8, 17, 28, 29, 31, 39 | ForEach-Object { "line $_, 2 operand(s)" }) -join '|'
+                @('g5', 'g6', 'g8', 'g9', 'g10', 'g11', 'g12', 'g13', 'g16', 'g17', 'g18', 'g19', 'q1', 'q2', 'q3' | ForEach-Object { "`$x -ne '$_'" }) +
+                @('$qOk', '$rOk', "`$x -ne 'r1'") +
+                @('o1', 'o2', 'e1', 'e2', 'p', 'q', 'r', 's', 'g14', 'g15' | ForEach-Object { "`$x -ne '$_'" })
+            $skips = (4, 6, 8, 17, 28, 29, 31, 37, 37, 45 | ForEach-Object { "line $_, 2 operand(s)" }) -join '|'
             # In this process, on a script whose only chains are verdicts: each is named,
             # and with no revert left the run fails, having run nothing.
             [IO.File]::WriteAllText((Join-Path $repo 'verdicts.ps1'), (@(
