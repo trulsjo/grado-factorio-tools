@@ -852,7 +852,8 @@ It clones the sibling twice at GitHub's `main`, one clone per pin, each with tha
 `scripts/` in its `vendor/`, and runs each form the sibling lists in its forms file, `-Forms`,
 `scripts/pin-forms.psd1` unless said, at both. A relative `-Forms` is read in the clone; an
 absolute one from that path, as the sibling's working tree, so a form the pin ticket's branch adds
-is run too (#464). `-Out`, empty or new, gets each form's output and
+is run too (#464); it runs in the clones of `main`, so a `sibling` form whose script only the
+branch adds fails at both pins. `-Out`, empty or new, gets each form's output and
 exit code at both pins, `ls-remote.txt`, `breaking.txt` with the move's breaking commits by the
 rule in `scripts/breaking-lib.ps1` (#255), and `table.md`, which names the forms file read and
 where from, compares the two runs of each form and lists each place the sibling names a script here

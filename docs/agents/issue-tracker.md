@@ -230,7 +230,9 @@ script counts where a gate runs that script, which its `.github/workflows/`, `.g
 branch is measured by running with `-Forms` given as that file's absolute path in the sibling's
 working tree**: a relative `-Forms` is read in the clone of GitHub's `main`, which lacks it. On
 2026-11-14 grado-factorio-modpack#413's run did not see the `follow-pin-selftest` form its branch
-added (#464). The ticket records the sibling commit,
+added at `1454b20` (on `main` as `6f0e3bd`) (#464). Each form still runs in the clones of `main`,
+so a `sibling` form whose script only the branch adds fails at both pins; it is measured in the
+next move. The ticket records the sibling commit,
 and each command with what it printed, as *Conventions* asks.
 
 **Each form that differs is named in the sibling's pull request**, with what the difference is:
