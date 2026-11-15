@@ -21,8 +21,10 @@
     passing or failing, and named again on the run's last line. Its origin is the caller's
     repository, so its origin/main is the caller's main branch, not GitHub's. Run from a directory
     in no repository, or a repository with no commit, with no -Copy, it fails, exit 1 and nothing
-    run. The arguments and the list are read before the clone is made, so a run that fails on them
-    makes none.
+    run. What can be read without the copy is read before the clone is made, so a run that fails on
+    it makes none: the list, which of -List, -Defaults and -Conditions is given, and -Base with no
+    -Conditions. A -Defaults script or a -Base commit is read in the clone, so a run that fails on
+    one fails after the clone is made, and the clone is kept.
 
     THE LIST is a PowerShell data file:
 
@@ -1363,7 +1365,8 @@ function Invoke-SelfTest {
                     (Split-Path -Leaf $clone) -match '^revert-run-copy-[0-9a-f]{8}$' -and (Test-Path -LiteralPath (Join-Path $clone 'stub.ps1'))
             }
             finally { if ($clone -and (Test-Path -LiteralPath $clone)) { Remove-Item -LiteralPath $clone -Recurse -Force } }
-            $code -eq 0 -and $under -and $got -match '(?m)^revert-run: R -- fails \(exit 1\)' -and
+            # The removal is held too, so a self-test run leaves no clone in the temp directory.
+            $code -eq 0 -and $under -and -not (Test-Path -LiteralPath $clone) -and $got -match '(?m)^revert-run: R -- fails \(exit 1\)' -and
                 $got.TrimEnd().EndsWith("revert-run: the clone is kept at $clone.") -and (& $same) } }
         @{ Name = 'with -Copy left out, run from a directory in no repository, the run fails, exit 1, makes no clone and runs no revert (#467)'; Test = {
             $nowhere = Join-Path $temp 'nowhere'
