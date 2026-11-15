@@ -148,8 +148,10 @@
     pipeline whose ForEach-Object block assigned it, a read it does not see, so the chain may be
     skipped though such a read takes its value; a variable read only as a truth value but meant to
     be false, as `if ($stale) { $failures++ }`, whose skipped reverts would have failed (PR #408's
-    review panel); and with -Base, a condition the diff deletes, which leaves nothing to drop, or
-    one it changes by a line outside the operand, as the `if (` above it.
+    review panel), and with it a variable read as an operand of the -and chain such a variable is
+    assigned, as `$v` in `$w = $x -and $v; ... -and -not $w` (PR #485's review panel); and with
+    -Base, a condition the diff deletes, which leaves nothing to drop, or one it changes by a line
+    outside the operand, as the `if (` above it.
 
 .PARAMETER Copy
     The git working tree to revert in. Left out, a clone of the HEAD of the repository the run is
@@ -470,12 +472,21 @@ function Get-ExpressionStatement {
 # its key; the whole of a parenthesised argument to a command invoked with & on a variable, as
 # `& $check '<name>' (<chain>)`; or the value assigned to a variable that its scope reads only as
 # a truth value: an if's condition, the operand of -not or !, or an operand of an -and chain that
-# is itself a verdict, as `$under` in `$code -eq 0 -and $under`. $Seen holds the chains already
-# asked about, so two variables each read in the other's chain end the asking.
+# is itself a verdict, as `$under` in `$code -eq 0 -and $under`. $Seen holds the chains being
+# asked about on the way down, so a variable read in its own chain, or two each read in the
+# other's, end the asking; a chain reached again by another path, as `$v -and $x -and $v`, is
+# asked again.
 function Test-Verdict {
     param([Parameter(Mandatory)] [System.Management.Automation.Language.Ast] $Chain,
         [System.Collections.Generic.HashSet[object]] $Seen = [System.Collections.Generic.HashSet[object]]::new())
     if (-not $Seen.Add($Chain)) { return $false }
+    try { Test-VerdictOnce -Chain $Chain -Seen $Seen } finally { [void] $Seen.Remove($Chain) }
+}
+
+# Test-Verdict's asking of one chain, with $Chain in $Seen.
+function Test-VerdictOnce {
+    param([Parameter(Mandatory)] [System.Management.Automation.Language.Ast] $Chain,
+        [Parameter(Mandatory)] [System.Collections.Generic.HashSet[object]] $Seen)
     # An assignment holds its value as an expression statement with no pipeline round it.
     $statement = if ($Chain.Parent.Parent -is [System.Management.Automation.Language.AssignmentStatementAst]) { $Chain.Parent } else { Get-ExpressionStatement $Chain }
     if (-not $statement) { return $false }
@@ -1093,7 +1104,7 @@ function Invoke-SelfTest {
                 # case's $under (PR #471's retro); one read in a chain that is no verdict; and one
                 # read in its own chain, which is asked about once; one read in an -or verdict, and
                 # one in an -and chain under an -or, either of which may be false.
-                "    @{ Test = { `$hOk = `$x -ne 'h1' -and `$x -ne 'h2'; `$x -ne 'h3' -and `$hOk } }"
+                "    @{ Test = { `$hOk = `$x -ne 'h1' -and `$x -ne 'h2'; `$x -ne 'h3' -and `$hOk -and `$x -ne 'h4' } }"
                 "    `$qOk = `$x -ne 'q1' -and `$x -ne 'q2'"
                 "    `$qAll = `$x -ne 'q3' -and `$qOk"
                 '    $qAll | Out-Null'
@@ -1101,6 +1112,13 @@ function Invoke-SelfTest {
                 '    if ($rOk) { }'
                 "    @{ Test = { `$sOk = `$x -ne 's1' -and `$x -ne 's2'; `$x -eq 's3' -or `$sOk } }"
                 "    @{ Test = { `$tOk = `$x -ne 't1' -and `$x -ne 't2'; `$tOk -and `$x -ne 't3' -or `$x -eq 't4' } }"
+                # A variable read twice in one verdict chain, asked about again on the second
+                # read; and two variables each read in the other's chain, which end the asking.
+                "    @{ Test = { `$aOk = `$x -ne 'a1' -and `$x -ne 'a2'; `$aOk -and `$x -ne 'a3' -and `$aOk } }"
+                "    `$jOk = `$x -ne 'j1' -and `$kOk"
+                "    `$kOk = `$x -ne 'j2' -and `$jOk"
+                '    if ($jOk) { }'
+                '    if ($kOk) { }'
                 '}'
                 'function Invoke-SelfTest {'
                 "    @{ Test = { `$x -ne 'n' -and `$x -ne 'o' } }"
@@ -1127,9 +1145,10 @@ function Invoke-SelfTest {
                 @("`$x -eq 'g3'", "`$x -eq 'g4'") +
                 @('g5', 'g6', 'g8', 'g9', 'g10', 'g11', 'g12', 'g13', 'g16', 'g17', 'g18', 'g19', 'q1', 'q2', 'q3' | ForEach-Object { "`$x -ne '$_'" }) +
                 @('$qOk', '$rOk', "`$x -ne 'r1'", "`$x -ne 's1'", "`$x -ne 's2'", "`$x -eq 's3'", '$sOk', "`$x -ne 't1'", "`$x -ne 't2'",
-                    "`$tOk -and `$x -ne 't3'", "`$x -eq 't4'", '$tOk', "`$x -ne 't3'") +
+                    "`$tOk -and `$x -ne 't3'", "`$x -eq 't4'", '$tOk', "`$x -ne 't3'", "`$x -ne 'j1'", '$kOk', "`$x -ne 'j2'", '$jOk') +
                 @('o1', 'o2', 'e1', 'e2', 'p', 'q', 'r', 's', 'g14', 'g15' | ForEach-Object { "`$x -ne '$_'" })
-            $skips = (4, 6, 8, 17, 28, 29, 31, 37, 37, 47 | ForEach-Object { "line $_, 2 operand(s)" }) -join '|'
+            $skips = @('4, 2', '6, 2', '8, 2', '17, 2', '28, 2', '29, 2', '31, 2', '37, 2', '37, 3', '45, 2', '45, 3', '52, 2' |
+                    ForEach-Object { "line $_ operand(s)" }) -join '|'
             # In this process, on a script whose only chains are verdicts: each is named,
             # and with no revert left the run fails, having run nothing.
             [IO.File]::WriteAllText((Join-Path $repo 'verdicts.ps1'), (@(
