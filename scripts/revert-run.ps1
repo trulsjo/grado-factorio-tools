@@ -23,8 +23,8 @@
     in no repository, or a repository with no commit, with no -Copy, it fails, exit 1 and nothing
     run. What can be read without the copy is read before the clone is made, so a run that fails on
     it makes none: the list, which of -List, -Defaults and -Conditions is given, and -Base with no
-    -Conditions. A -Defaults script or a -Base commit is read in the clone, so a run that fails on
-    one fails after the clone is made, and the clone is kept.
+    -Conditions. A -Defaults script, a -Conditions script or a -Base commit is read in the clone, so
+    a run that fails on one fails after the clone is made, and the clone is kept.
 
     THE LIST is a PowerShell data file:
 
