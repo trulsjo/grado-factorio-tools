@@ -120,6 +120,28 @@ message whole itself, to stderr, and exits, and the case looks for it whole. PR 
 `dev-launch.ps1` case passed locally and failed CI's run 43290205684 on both runners (#435). An
 older case of that shape, in a file the diff touches elsewhere, is no finding of the review.
 
+**A ticket or commit a table cell names is checked against git.** The prose lane reads every row
+of each table the diff adds a row to or changes, not only the rows it touches. For each cell that
+names a ticket or a commit for something done to a path, such as a lift, a contraction or a
+deletion, it checks the name against git in the repository the row names, in that repository's
+clone beside this one under `C:\src\factorio`.
+
+- `git -C <clone> log --diff-filter=<A | D> --format='%h %s' origin/main -- <path>`, with `A`
+  for a path added and `D` for one deleted, gives the commit.
+- That commit's `Refs` or `Closes` footer, in `git -C <clone> log -1 --format=%B <commit>`,
+  gives the ticket.
+- A cell for something not yet done names no commit. Its ticket is read with `gh issue view`,
+  to check it is open and still covers that path.
+
+A cell git does not bear out is a finding, and so is a commit not on that repository's
+`origin/main`. A cell can go stale without being edited, which is why the whole table is read. On
+2026-11-15 five `docs/extraction-plan.md` rows named trulsjo/grado-factorio-modpack#418 as their
+contraction. That ticket was filed to delete all five copies, but four were deleted under
+trulsjo/grado-factorio-modpack#414, trulsjo/grado-factorio-modpack#416 and
+trulsjo/grado-factorio-modpack#417, and the ticket's triage then scoped it to the fifth.
+No cell was changed to match. It was found by chance, while filing a ticket on another row
+(#475).
+
 **Read-only.** Edit no file in the repository, commit nothing, push nothing, and post nothing to
 GitHub: the session acts on the findings and posts the review.
 
