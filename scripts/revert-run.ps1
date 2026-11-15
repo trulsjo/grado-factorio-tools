@@ -1376,7 +1376,7 @@ function Invoke-SelfTest {
             Write-Host ($got.Text.TrimEnd() -replace '(?m)^', '    ')
             $got.Code -eq 1 -and $got.Text -match '(?m)^FAILED - revert-run: no -Copy was given, and none could be made: .*nowhere is not in a git repository' -and
                 $got.Text -notmatch '(?m)^revert-run: R -- ' -and -not @(Get-ChildItem -LiteralPath $nowhere -Force) -and (& $same) } }
-        @{ Name = 'a Find with a line break matches a CRLF file, and one from a CRLF list an LF file, a file with a byte-order mark keeps it, a file git would write back with other line ends is restored as it stood (#422), and a list it cannot read, or one with no Reverts or a field missing, fails'; Test = {
+        @{ Name = 'a Find with a line break matches a CRLF file, and one from a CRLF list an LF file, a file with a byte-order mark keeps it, a file git would write back with other line ends is restored as it stood (#422), and a list it cannot read, or one with no Reverts, an empty Reverts, a revert that is not a hashtable or a field missing, fails'; Test = {
             $crlf = Join-Path $temp 'crlf'
             New-Item -ItemType Directory -Path $crlf | Out-Null
             git -C $crlf init --quiet; git -C $crlf config core.autocrlf false
@@ -1401,11 +1401,15 @@ function Invoke-SelfTest {
             $broken = & $run (& $list 'broken' '@{ Reverts = ')
             $empty = & $run (& $list 'empty' '@{ Other = 1 }')
             $field = & $run (& $list 'field' "@{ Reverts = @( @{ Name = 'R'; File = 'stub.ps1' } ) }")
+            # Reverts there but empty, and a revert that is not a hashtable, which has no field.
+            $none = & $run (& $list 'none' '@{ Reverts = @() }')
+            $text = & $run (& $list 'text' "@{ Reverts = @( 'R' ) }")
             $matched -match '(?m)^revert-run: R -- fails \(exit 1\)' -and $matched -match '(?m)^revert-run: B -- passes \(exit 0\)' -and
                 $matched -match '(?m)^revert-run: L -- passes \(exit 0\)' -and $restored -and
                 $fromCrlf.Text -match '(?m)^revert-run: R -- fails \(exit 1\)' -and (& $same) -and
                 $broken.Code -eq 1 -and $broken.Text -match 'cannot be read' -and $empty.Code -eq 1 -and $empty.Text -match 'holds no Reverts' -and
-                $field.Code -eq 1 -and $field.Text -match 'lacks Find, Replace, SelfTest' } }
+                $field.Code -eq 1 -and $field.Text -match 'lacks Find, Replace, SelfTest' -and $none.Code -eq 1 -and $none.Text -match 'holds no Reverts' -and
+                $text.Code -eq 1 -and $text.Text -match 'lacks Name, File, Find, Replace, SelfTest' } }
     )
 
     $failures = 0
