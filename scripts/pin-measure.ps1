@@ -45,13 +45,16 @@
     a forms file it cannot read, a clone, fetch or archive that fails, gh or the remote out of
     reach, or, for a {prbody} form, an origin that names no github.com/<owner>/<repository>. It
     fetches, lists the remote and reads pull requests with gh; nothing downloaded is run but the
-    sibling's own forms and scripts, at origin's main.
+    sibling's own scripts, at origin's main, as its forms file lists them; that file is read at
+    origin's main too, unless -Forms is absolute.
 
     THE FORMS FILE, the one contract between this repository and each sibling: a PowerShell data
     file the sibling keeps, read with Import-PowerShellDataFile: a relative -Forms in the clone of
     origin's main, an absolute one from that path as given, as the sibling's working tree, so that a
-    form the pin ticket's branch adds is run (#464). Either way each form runs in both clones, and
-    table.md names the file read; for an absolute one, it says it was not read from a commit. It
+    form the pin ticket's branch adds is run (#464). Either way each form runs in both clones, at
+    origin's main, so a `sibling` form whose script only that branch adds fails at both pins; and
+    table.md's first line names the file read; for an absolute one, it says it was not read from a
+    commit. It
     holds Forms, a list; each form has a Name, used in the file names; From, `tools` for a script of
     this repository, found in the pin's copy, or `sibling` for one of the sibling's own, found from
     its clone's root; Script, its path from there; and Args, a list of arguments. In an argument
@@ -439,8 +442,12 @@ if ($SelfTest) {
             $md -match '(?m)^\| tools \| 0 \| 3 \| same \|') $md
         & $check 'a sibling reference to a script no form runs is listed, even inside a script a form runs; one naming only run scripts is not' (
             $md -match 'docs/use\.md:1:.*unrun\.ps1' -and $md -match 'scripts/w2\.ps1:1:.*elsewhere\.ps1' -and $md -notmatch 'docs/run\.md') $md
-        & $check "table.md names a relative -Forms as read in the clone of origin's main, at its commit" (
-            $md -match "(?m)^Forms read from ``scripts/pin-forms\.psd1`` in the clone of origin's main at [0-9a-f]{7}\.\r?$") $md
+        # The first line, then a blank one, so the table under it is a table and not a paragraph.
+        $sibMain = "$(git -C $sib rev-parse HEAD)".Trim().Substring(0, 7)
+        $mdLines = $md -split '\r?\n'
+        & $check "table.md opens with a relative -Forms named as read in the clone of origin's main, at the sibling's main, then a blank line and the table" (
+            $mdLines[0] -ceq "Forms read from ``scripts/pin-forms.psd1`` in the clone of origin's main at $sibMain." -and
+            $mdLines[1] -eq '' -and $mdLines[2] -like '| form |*') $md
         $again = try { Invoke-PinMeasure -Tools $toolsRepo -Sibling $sib -Old $oldPin -New $newPin -Out $outDir -Forms 'scripts/pin-forms.psd1' -Bodies $stub | Out-Null; '' } catch { $_.Exception.Message }
         & $check 'an -Out that is not empty is refused' ($again -match 'not empty') $again
         # An absolute -Forms outside the clone, as a sibling's working tree is, with a form the
@@ -452,8 +459,9 @@ if ($SelfTest) {
         $mdAbs = if (Test-Path -LiteralPath (Join-Path $outAbs 'table.md')) { Get-Content -LiteralPath (Join-Path $outAbs 'table.md') -Raw } else { "<no table.md> $threw" }
         & $check 'an absolute -Forms is read from that path: a form only it lists is run at both pins' (
             -not $threw -and $mdAbs -match '(?m)^\| branch-only \| 0 \| 3 \| differs \| v1 \| v2 \|\r?$' -and $mdAbs -notmatch '(?m)^\| same \|') $mdAbs
-        & $check 'table.md names an absolute -Forms by its path, as read from the working tree, not from a commit' (
-            $mdAbs.Contains("Forms read from ``$wtForms``, in the working tree, not from a commit.")) $mdAbs
+        $absLines = $mdAbs -split '\r?\n'
+        & $check 'table.md opens with an absolute -Forms named by its path, as read from the working tree, not from a commit, then a blank line' (
+            $absLines[0] -ceq "Forms read from ``$wtForms``, in the working tree, not from a commit." -and $absLines[1] -eq '') $mdAbs
         $noFile = Join-Path $temp 'working-tree/no-such-forms.psd1'
         $threw = try { $null = Invoke-PinMeasure -Tools $toolsRepo -Sibling $sib -Old $oldPin -New $newPin -Out (Join-Path $temp 'out-none') -Forms $noFile -Bodies $stub; '' } catch { $_.Exception.Message }
         & $check 'an absolute -Forms naming no file fails, naming the path' ($threw.Contains("the forms file $noFile could not be read")) $threw
