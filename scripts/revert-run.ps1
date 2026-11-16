@@ -889,7 +889,11 @@ function Invoke-SelfTest {
         "param([switch] `$SelfTest, [string[]] `$Kinds = @('a', 'b'), `$When = (Get-Date))`nif (`$Kinds -contains 'a') $verdict`n")
     [IO.File]::WriteAllText((Join-Path $repo 'few-conditions.ps1'),
         "param([switch] `$SelfTest)`n`$x = 'b'`n`$one = `$x -in ,'b'`nif (`$x -in 'a', 'b') $verdict`n")
-    & $git add stub.ps1 bin.dat .gitignore defaults.ps1 nodefault.ps1 broken.ps1 conditions.ps1 few-defaults.ps1 few-conditions.ps1
+    # Two whose every shape is named and not written (#489): lists of one element, and a chain
+    # whose Find occurs twice.
+    [IO.File]::WriteAllText((Join-Path $repo 'singleton.ps1'), "`$one = `$x -in ,'a'`n`$types = ,[int]`n")
+    [IO.File]::WriteAllText((Join-Path $repo 'duplicate.ps1'), "`$a -and `$b`n`$a -and `$b`n")
+    & $git add stub.ps1 bin.dat .gitignore defaults.ps1 nodefault.ps1 broken.ps1 conditions.ps1 few-defaults.ps1 few-conditions.ps1 singleton.ps1 duplicate.ps1
     & $git commit --quiet -m stub
     $list = { param([string] $name, [string] $text) $p = Join-Path $temp "$name.psd1"; Set-Content -LiteralPath $p -Value $text; $p }
     $one = { param([string] $Find, [string] $Replace, [string] $More = '') "@{ Name = 'R'; File = 'stub.ps1'; Find = '$Find'; Replace = '$Replace'; SelfTest = 'stub.ps1'$More }" }
@@ -1061,12 +1065,21 @@ function Invoke-SelfTest {
                 $code -eq 0 -and $got -match '(?m)^revert-run: 2 condition revert\(s\) written for few-conditions\.ps1\.' -and
                 ($printed -join '|') -ceq 'line 3, a -in of one element' -and
                 ($rows -join '|') -ceq "$f 'a': passes|$f 'b': fails" -and (& $same) } }
-        @{ Name = '-Conditions fails, exit 1 and nothing run, a script that yields no revert, does not parse or is not in the copy (#400)'; Test = {
+        @{ Name = '-Conditions fails, exit 1 and nothing run, a script that yields no revert, one whose only shapes are lists of one element or a chain whose Find occurs twice, each named not written, one that does not parse or is not in the copy (#400, #489)'; Test = {
             $r = & $main @{ Copy = $repo; Conditions = @('nodefault.ps1') }; $none = $r.Text; $noneCode = $r.Code
             $r = & $main @{ Copy = $repo; Conditions = @('conditions.ps1', 'broken.ps1') }; $broken = $r.Text; $brokenCode = $r.Code
             $r = & $main @{ Copy = $repo; Conditions = @('no-such.ps1') }; $missing = $r.Text; $missingCode = $r.Code
-            Write-Host (($none + $broken + $missing).TrimEnd() -replace '(?m)^', '    ')
-            $noneCode -eq 1 -and $none -match '-Conditions names nodefault\.ps1, for which no condition revert could be written, so no revert was run' -and
+            $r = & $main @{ Copy = $repo; Conditions = @('singleton.ps1') }; $single = $r.Text; $singleCode = $r.Code
+            $r = & $main @{ Copy = $repo; Conditions = @('duplicate.ps1') }; $twice = $r.Text; $twiceCode = $r.Code
+            Write-Host (($none + $broken + $missing + $single + $twice).TrimEnd() -replace '(?m)^', '    ')
+            $notWritten = { param([string] $said, [string] $file) @([regex]::Matches($said, "(?m)^revert-run: $file, not written: (.+)\.\r?$") | ForEach-Object { $_.Groups[1].Value }) -join '|' }
+            $singleCode -eq 1 -and (& $notWritten $single 'singleton\.ps1') -ceq 'line 1, a -in of one element|line 2, a type list of one element' -and
+                $single -match '-Conditions names singleton\.ps1, for which no condition revert could be written, so no revert was run' -and
+                $single -notmatch '(?m)^revert-run: condition ' -and
+                $twiceCode -eq 1 -and (& $notWritten $twice 'duplicate\.ps1') -ceq 'line 1, a -and whose Find occurs 2 times|line 2, a -and whose Find occurs 2 times' -and
+                $twice -match '-Conditions names duplicate\.ps1, for which no condition revert could be written, so no revert was run' -and
+                $twice -notmatch '(?m)^revert-run: condition ' -and
+                $noneCode -eq 1 -and $none -match '-Conditions names nodefault\.ps1, for which no condition revert could be written, so no revert was run' -and
                 $brokenCode -eq 1 -and $broken -match 'broken\.ps1 does not parse, so its conditions cannot be read' -and
                 $broken -match '(?m)^revert-run: 23 condition revert\(s\) written for conditions\.ps1\.' -and $broken -notmatch '(?m)^revert-run: condition ' -and
                 $missingCode -eq 1 -and $missing -match '-Conditions names no-such\.ps1, which is not a file in the copy' -and (& $same) } }
@@ -1185,7 +1198,7 @@ function Invoke-SelfTest {
             ($dropped -join '|') -ceq ($want -join '|') -and ($written.Skipped -join '|') -ceq $skips -and
                 $code -eq 1 -and ($printed -join '|') -ceq 'line 1, 2 operand(s)|line 2, 3 operand(s)|line 3, 2 operand(s)' -and
                 $got -notmatch '(?m)^revert-run: condition ' -and (& $same) } }
-        @{ Name = '-Base writes condition reverts only on the lines git diff <ref> changes, a hunk of one line or more, a list of one element on a changed line named and not written, the first operand of a chain over two lines when only its line changed, says the ref in the line it prints, drops nothing where no line changed, naming the ref when that fails the run, or where a hunk only deletes, and fails with no -Conditions or a ref git cannot diff (#400)'; Test = {
+        @{ Name = '-Base writes condition reverts only on the lines git diff <ref> changes, a hunk of one line or more, a list of one element on a changed line named and not written, the first operand of a chain over two lines when only its line changed, says the ref in the line it prints, drops nothing where no line changed, naming the ref when that fails the run, where a hunk only deletes, or where the lines changed hold no operand, failing the run, exit 1 and nothing run (#489), and fails with no -Conditions or a ref git cannot diff (#400)'; Test = {
             # Lines 5 and 6 changed in one hunk, line 9 in a hunk of its own, and line 17, a list of
             # one element, in another.
             $lines = [IO.File]::ReadAllText((Join-Path $repo 'conditions.ps1')) -split "`n"
@@ -1218,7 +1231,16 @@ function Invoke-SelfTest {
             [IO.File]::WriteAllText((Join-Path $repo 'del.ps1'), "`$a = `$x -ne 'a' -and `$x -ne 'b'`n")
             & $git commit --quiet -am 'deleted'
             $deleted = @((Get-ConditionRevert -Root $repo -Script 'del.ps1' -Since 'HEAD~1').Reverts)
-            $nothing.Count -eq 0 -and $deleted.Count -eq 0 -and $noneSinceCode -eq 1 -and
+            # A line changed, a comment, and the chain on the next line not: nothing to drop (#489).
+            [IO.File]::WriteAllText((Join-Path $repo 'comment.ps1'), "# one`n`$a = `$x -ne 'a' -and `$x -ne 'b'`n")
+            & $git add comment.ps1; & $git commit --quiet -m 'comment'
+            [IO.File]::WriteAllText((Join-Path $repo 'comment.ps1'), "# two`n`$a = `$x -ne 'a' -and `$x -ne 'b'`n")
+            & $git commit --quiet -am 'comment changed'
+            $r = & $main @{ Copy = $repo; Conditions = @('comment.ps1'); Base = 'HEAD~1' }; $comment = $r.Text; $commentCode = $r.Code
+            Write-Host ($comment.TrimEnd() -replace '(?m)^', '    ')
+            $commentCode -eq 1 -and $comment -match 'comment\.ps1, for which no condition revert could be written on lines changed since HEAD~1, so no revert was run' -and
+                $comment -notmatch '(?m)^revert-run: condition ' -and
+                $nothing.Count -eq 0 -and $deleted.Count -eq 0 -and $noneSinceCode -eq 1 -and
                 $noneSince -match 'spans\.ps1, for which no condition revert could be written on lines changed since HEAD, so no revert was run' -and
                 $sinceCode -eq 0 -and $since -match '(?m)^revert-run: 1 condition revert\(s\) written for spans\.ps1, on lines changed since HEAD~1\.\r?$' -and
                 $spans.Count -eq 1 -and $spans[0].Name -ceq "condition spans.ps1:1 -and drops `$x -ne 'b'" -and $spans[0].Lines -eq 2 -and
@@ -1241,10 +1263,16 @@ function Invoke-SelfTest {
             $order = @((Get-ConditionRevert -Root $nests -Script 'nests.ps1').Reverts | ForEach-Object { ($_.Name -split ' ')[1, 2] -join ' ' })
             $want = @(for ($i = 1; $i -le 30; $i++) { "nests.ps1:$i -or"; "nests.ps1:$i -or"; "nests.ps1:$i -and"; "nests.ps1:$i -and" })
             ($sorted -join '|') -ceq ($wantSorted -join '|') -and ($order -join '|') -ceq ($want -join '|') -and (& $same) } }
-        @{ Name = 'with neither -List, -Defaults nor -Conditions, and with -Defaults naming no file of the copy, the run fails, exit 1, and runs nothing'; Test = {
+        @{ Name = 'with neither -List, -Defaults nor -Conditions, with -Conditions or -Defaults given on the command line as commas only, and with -Defaults naming no file of the copy, the run fails, exit 1, and runs nothing (#489)'; Test = {
             $r = & $main @{ Copy = $repo }; $neither = $r.Text; $neitherCode = $r.Code
             $r = & $main @{ Copy = $repo; Defaults = @('no-such.ps1') }; $missing = $r.Text; $missingCode = $r.Code
+            # Through the command line, as the comma split and the blank filter are the script's.
+            $cond = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Conditions ' , ' 2>&1 | Out-String; $condCode = $LASTEXITCODE
+            $def = & pwsh -NoProfile -File $PSCommandPath -Copy $repo -Defaults ' , ' 2>&1 | Out-String; $defCode = $LASTEXITCODE
+            Write-Host (($cond + $def).TrimEnd() -replace '(?m)^', '    ')
             $neitherCode -eq 1 -and $neither -match 'give -List, -Defaults, -Conditions or more than one' -and
+                $condCode -eq 1 -and $cond -match 'give -List, -Defaults, -Conditions or more than one' -and $cond -notmatch '(?m)^revert-run: ' -and
+                $defCode -eq 1 -and $def -match 'give -List, -Defaults, -Conditions or more than one' -and $def -notmatch '(?m)^revert-run: ' -and
                 $missingCode -eq 1 -and $missing -match '-Defaults names no-such\.ps1, which is not a file in the copy' -and (& $same) } }
         @{ Name = 'Find occurring 0 times, twice, or only ignoring case is refused with the count, and so is an edit that changes no line; the file is unchanged'; Test = {
             $p = & $list 'count' "@{ Reverts = @( $(& $one 'zzz' 'y'), $(& $one "''alpha''" "''other''"), $(& $one "`$A = ''ALPHA''" 'y'), $(& $one "`$b = ''beta''" "`$b = ''beta''") ) }"
