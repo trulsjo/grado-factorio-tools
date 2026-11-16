@@ -29,14 +29,21 @@
     `::WriteAllText`, `WriteAllLines`, `WriteAllBytes` and their `AppendAll` forms with it as the
     first argument; `sed` with an in-place option, `-i` alone or among other short options, with a
     suffix or not, or `--in-place`, naming it; and `cp`, `mv`, `Copy-Item` or `Move-Item` with it as
-    the target. The target is the word after -Destination, or a prefix of it from -De, or after cp's
-    `-t`; else the last word that is no option. A command is found in a compound, after `&&`, `||`,
-    `;`, `|`, `&` or a newline, or inside parentheses or braces, and after the assignments that lead
-    it, as `MSYS_NO_PATHCONV=1 sed -i ...`; a command's name may carry a path or `.exe`.
+    the target. Each redirection, as `2>/dev/null` or `> log.txt`, is set aside before a command's
+    arguments are read. The target of `cp` or `mv` is the last word that is no option, and none
+    with `-t <dir>` or `-t<dir>`. That of `Copy-Item` or `Move-Item` is Get-ItemTarget's: the value
+    of -Destination, named from -Des; else the second word no parameter takes, or the first where
+    -Path or -LiteralPath is named, every parameter but a switch taking the word after it. A
+    command is found in a compound, after `&&`, `||`, `;`, `|`, `&` or a newline, or inside
+    parentheses or braces, and after the assignments that lead it, as `MSYS_NO_PATHCONV=1 sed -i
+    ...`; a command's name may carry a path or `.exe`. A command a `(` broke off goes on after the
+    `)` where the words there open with an option, as
+    `Set-Content -Value (Get-Content b.json) -Path .claude/settings.json`.
 
     WHAT IT LETS THROUGH. A read, as `cat`, `Get-Content`, `grep`, `git show` or `git diff`; the
     file as a copy's source, as `cp .claude/settings.json backup.json`; a redirection of it
-    elsewhere, as `cat .claude/settings.json > backup.json`; a `>` inside quotes; a file with a
+    elsewhere, as `cat .claude/settings.json > backup.json`, and one that reads it, as
+    `sort < .claude/settings.json`; a `>` inside quotes; a file with a
     similar name, as `settings.json.bak` or `my-settings.json`; and every command that names neither
     file, in silence.
 
@@ -124,18 +131,23 @@ function Split-ShellCommand {
 # The word of one command, $Words, that names a settings file the command writes, or nothing.
 function Get-WrittenSetting {
     param([hashtable[]] $Words)
-    # A redirection's target, joined on, as >file, or the word after it.
-    $redirect = $false
-    foreach ($w in $Words) {
-        if ($redirect -and $w.Word -match $FILE_AT) { return $w.Word }
-        $at = $w.Bare.LastIndexOf('>')
-        $redirect = $false
-        if ($at -lt 0) { continue }
+    # A redirection's target, joined on, as >file, or the word after it. Each redirection word, and
+    # a target standing alone after one, is set aside from the arguments read below.
+    # $redirect is the operator, > or <, waiting for its target, or nothing.
+    $redirect = ''
+    $after = [Collections.Generic.List[string]]::new()
+    foreach ($w in @($Words | Select-Object -Skip 1)) {
+        if ($redirect) {
+            if ($redirect -eq '>' -and $w.Word -match $FILE_AT) { return $w.Word }
+            $redirect = ''; continue
+        }
+        $at = $w.Bare.LastIndexOfAny([char[]] '<>')
+        if ($at -lt 0) { $after.Add($w.Word); continue }
         $rest = $w.Raw.Substring($at + 1).TrimStart('|') -replace '"|''', ''
-        if ($rest -match $FILE_AT) { return $rest }
-        $redirect = -not $rest
+        if ($w.Bare[$at] -eq '>' -and $rest -match $FILE_AT) { return $rest }
+        if (-not $rest) { $redirect = [string] $w.Bare[$at] }
     }
-    $after = @($Words | Select-Object -Skip 1 | ForEach-Object { $_.Word })
+    $after = @($after)
     switch -Regex ([IO.Path]::GetFileNameWithoutExtension($Words[0].Word)) {
         '^(tee|Tee-Object)$' { return $after | Where-Object { $_ -match $FILE_AT } | Select-Object -First 1 }
         '^(Set-Content|Add-Content|Out-File)$' {
@@ -148,12 +160,44 @@ function Get-WrittenSetting {
         '^sed$' {
             if ($after -cmatch '^(-[^-]*i|--in-place)') { return $after | Where-Object { $_ -match $FILE_AT } | Select-Object -First 1 }
         }
-        '^(cp|mv|Copy-Item|Move-Item)$' {
-            $named = for ($k = 1; $k -lt $after.Count; $k++) { if ($after[$k - 1] -cmatch '^-(t|[Dd][Ee]\w*)$') { $after[$k] } }
-            $target = @($named) + @($after | Where-Object { $_ -notlike '-*' } | Select-Object -Last 1) | Select-Object -First 1
+        '^(cp|mv)$' {
+            # A target directory, -t <dir> or -t<dir>, takes every file named into it.
+            if ($after -cmatch '^-t') { return }
+            $target = $after | Where-Object { $_ -notlike '-*' } | Select-Object -Last 1
+            if ($target -match $FILE_AT) { return $target }
+        }
+        '^(Copy-Item|Move-Item)$' {
+            $target = Get-ItemTarget -Arguments $after
             if ($target -match $FILE_AT) { return $target }
         }
     }
+}
+
+# The target of a Copy-Item or Move-Item given $Arguments: the value of -Destination, named from
+# -Des; else the second word no parameter takes, or the first where -Path or -LiteralPath is named.
+# A parameter takes the word after it, but a switch: a name that is a prefix of one of the
+# cmdlets' switches and of none of their other parameters, or a switch's alias.
+function Get-ItemTarget {
+    param([string[]] $Arguments)
+    $switches = 'Recurse', 'Force', 'PassThru', 'Container', 'Debug', 'Verbose', 'WhatIf', 'Confirm'
+    $others = 'Path', 'LiteralPath', 'Destination', 'Filter', 'Include', 'Exclude', 'Credential', 'ToSession', 'FromSession',
+        'ErrorAction', 'WarningAction', 'InformationAction', 'ErrorVariable', 'WarningVariable', 'InformationVariable',
+        'OutVariable', 'OutBuffer', 'PipelineVariable', 'ProgressAction'
+    $loose = [Collections.Generic.List[string]]::new()
+    $pathNamed = $false
+    for ($k = 0; $k -lt $Arguments.Count; $k++) {
+        $a = $Arguments[$k]
+        if ($a -notlike '-*') { $loose.Add($a); continue }
+        $name = $a.Substring(1)
+        $isSwitch = $name -in 'wi', 'cf', 'db', 'vb' -or
+            (@($switches | Where-Object { $_.StartsWith($name, [StringComparison]::OrdinalIgnoreCase) }) -and
+                -not @($others | Where-Object { $_.StartsWith($name, [StringComparison]::OrdinalIgnoreCase) }))
+        if ($isSwitch) { continue }
+        $k++
+        if ($name -match '^(?i)des') { return $Arguments | Select-Object -Skip $k -First 1 }
+        if ($name -match '^(?i)(p|pa|pat|path|l|li\w*|lp|psp\w*)$') { $pathNamed = $true }
+    }
+    $loose | Select-Object -Skip ($pathNamed ? 0 : 1) -First 1
 }
 
 # What to do with $Command: @{ Refuse = <the file as named> }, @{ Unchecked = <why> }, or $null to
@@ -168,6 +212,10 @@ function Get-SettingsWrite {
     $words = Split-ShellCommand $Command
     if ($null -eq $words) { return @{ Unchecked = 'its quotes could not be paired, so its commands could not be read' } }
     $one = [Collections.Generic.List[hashtable]]::new()
+    # The command a ( broke off, as `Set-Content -Value (Get-Content b) -Path f`, whose words go on
+    # after the ) where those open with an option.
+    $outer = @()
+    $op = ''
     foreach ($w in @($words) + @(@{ Op = 'end' })) {
         if (-not $w.ContainsKey('Op')) { $one.Add($w); continue }
         # The assignments that lead a command, as `MSYS_NO_PATHCONV=1 sed ...`.
@@ -175,6 +223,9 @@ function Get-SettingsWrite {
         while ($lead -lt $one.Count -and $one[$lead].Word -match '^\w+=') { $lead++ }
         $s = @($one | Select-Object -Skip $lead)
         $one.Clear()
+        if ($op -eq ')' -and $s -and $s[0].Word -like '-*') { $s = @($outer) + $s }
+        $op = $w.Op
+        if ($op -eq '(') { $outer = $s }
         if (-not $s) { continue }
         $file = Get-WrittenSetting -Words $s
         if ($file) { return @{ Refuse = $file } }
@@ -211,13 +262,21 @@ if ($SelfTest) {
             '[System.IO.File]::WriteAllLines("{f}", $l)', "[IO.File]::WriteAllBytes( '{f}', `$b)", "[IO.File]::AppendAllText('{f}', 'x')",
             "sed -i 's/x/y/' {f}", "sed -i.bak 's/x/y/' {f}", "sed -ni 's/x/y/p' {f}", "sed --in-place=.bak 's/x/y/' {f}",
             "/usr/bin/sed -i 's/x/y/' {f}", 'cp backup.json {f}', 'mv -f backup.json {f}', 'Copy-Item backup.json {f} -Force',
-            'Copy-Item -Path b.json -Destination {f}', 'Move-Item -De {f} b.json', "MSYS_NO_PATHCONV=1 sed -i 's/x/y/' {f}",
+            'Copy-Item -Path b.json -Destination {f}', 'Move-Item -Des {f} b.json', "MSYS_NO_PATHCONV=1 sed -i 's/x/y/' {f}",
+            # Redirections and parameters after the target (PR #493's review, finding A).
+            'cp backup.json {f} 2>/dev/null', 'mv tmp.json {f} 2>&1', 'cp backup.json {f} > log.txt',
+            'Copy-Item backup.json {f} -ErrorAction Stop', 'Copy-Item backup.json {f} -Exclude *.bak', 'Copy-Item -Recurse b.json {f}',
+            'Copy-Item -LiteralPath b.json -Destination {f}', 'Move-Item -Path b.json {f}', 'Set-Content -Value (Get-Content b.json) -Path {f}',
             'git status && cp backup.json {f}', 'cat a.json | sed -i s/x/y/ {f}', '(cp backup.json {f})', 'cp backup.json ./{f}',
             'cp backup.json "C:\src\x\{f}"', 'cp backup.json /c/src/x/{f}', "Set-Content -Path '{b}' -Value x", 'X=1; cp backup.json {f}'
         $through = 'cat {f}', 'Get-Content {f}', 'git show HEAD:{f}', 'git diff -- {f}', 'grep hooks {f}', 'cp {f} backup.json',
             'Copy-Item {f} -Destination b.json', 'cp -t backup {f}', 'cat {f} > backup.json', 'Set-Content -Path b.json -Value {f}',
             "'x' | Out-File -InputObject {f} -FilePath b.json", 'echo "x > {f}"', "sed 's/x/y/' {f}", 'sed --debug s/x/y/ {f}',
-            'echo x > {f}.bak', 'echo x > my-settings.json', 'echo x > .claude/my-settings.json', 'cp {f}.bak backup.json'
+            'echo x > {f}.bak', 'echo x > my-settings.json', 'echo x > .claude/my-settings.json', 'cp {f}.bak backup.json',
+            # A source named as the target would be, and writes elsewhere (PR #493's review, A and
+            # M).
+            'Copy-Item backup.json -Path {f}', 'Copy-Item -Debug {f} backup.json', 'cp -tbackup {f}', 'sort < {f}',
+            "[IO.File]::WriteAllText('backup.json', (Get-Content {f} -Raw))", 'cat {f} >backup.json'
         foreach ($f in '.claude/settings.json', '.claude/settings.local.json') {
             $b = $f.Replace('/', '\').ToUpperInvariant()
             foreach ($c in $refused) {
