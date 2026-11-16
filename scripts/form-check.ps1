@@ -146,13 +146,14 @@ function Invoke-FormCheck {
         $names = @(Get-ChildItem -LiteralPath $Tools -Filter *.ps1 -File | ForEach-Object Name)
         if (-not $names) { throw "-Tools $Tools holds no *.ps1, so there is no tools script to look for." }
         $calls = @(Get-ToolCall -Root $Root -Names $names)
+        # pin-measure.ps1 runs a tools form's Script joined onto the pin's scripts/, so a form names
+        # the script its Script resolves to there, as `a.ps1` or `./a.ps1` does. Resolved here, in
+        # the try, so that a Script no path may hold fails the run with a line, not an error view.
+        $dir = [IO.Path]::GetFullPath($Tools)
+        $formed = @($list | Where-Object { $_.From -ceq 'tools' } | ForEach-Object { [IO.Path]::GetFullPath("$($_.Script)", $dir) })
+        $missing = @($calls | Group-Object { $_.Name } | Where-Object { [IO.Path]::GetFullPath($_.Name, $dir) -cnotin $formed })
     }
     catch { Write-Host "FAILED - form-check: $($_.Exception.Message)"; return 1 }
-    # pin-measure.ps1 runs a tools form's Script joined onto the pin's scripts/, so a form names the
-    # script its Script resolves to there, as `a.ps1` or `./a.ps1` does.
-    $dir = [IO.Path]::GetFullPath($Tools)
-    $formed = @($list | Where-Object { $_.From -ceq 'tools' } | ForEach-Object { [IO.Path]::GetFullPath("$($_.Script)", $dir) })
-    $missing = @($calls | Group-Object { $_.Name } | Where-Object { [IO.Path]::GetFullPath($_.Name, $dir) -cnotin $formed })
     foreach ($m in $missing) { Write-Host "form-check: $($m.Name) has no form in $Forms; run by $(@($m.Group | ForEach-Object { $_.At }) -join ', ')." }
     if ($missing) { Write-Host "FAILED - form-check: $($missing.Count) tools script(s) a gate runs have no form in $Forms."; return 1 }
     $scripts = @($calls | ForEach-Object { $_.Name } | Sort-Object -Unique)
