@@ -23,8 +23,9 @@
     <var> to a value ending in `vendor/grado-factorio-tools`; or `$<var>/<name>`, where it sets
     <var> to a value ending in `vendor/grado-factorio-tools/scripts`. `${<var>}` is read as
     `$<var>`. A variable is set by an assignment of the shell's, `<var>=<value>` or
-    `export <var>=<value>`, at a line's start or after a space, `;`, `&`, `|` or `(`, its value in
-    quotes or not. The name is read whole, letters, digits, `.`, `-` and `_`, its trailing dots
+    `export <var>=<value>`, on a line that is no comment, at its start or after a space, `;`, `&`,
+    `|`, `(` or a JSON string's `"`, its value in `"`, `\"` or `'` quotes, spaces and all, or in
+    none. The name is read whole, letters, digits, `.`, `-` and `_`, its trailing dots
     dropped, so `check.ps1` in `commit-check.ps1` is not a call of `check.ps1`; and a name called as
     the sibling's own `scripts/<name>` is not a tools script, even where one shares its name.
     Reading whole files, a variable set to a whole script path, as
@@ -97,12 +98,16 @@ function Get-ToolCall {
     foreach ($g in $gates) {
         $file = [IO.Path]::GetRelativePath($Root, $g.FullName) -replace '\\', '/'
         $lines = @(Get-Content -LiteralPath $g.FullName)
-        # The variables the file sets to the submodule's path or to its scripts/.
+        # The variables the file sets to the submodule's path or to its scripts/, on lines that are
+        # no comment: the name after a line's start, a space, `;`, `&`, `|`, `(` or a JSON string's
+        # `"`, its value in `"`, `\"` or `'` quotes, which may hold spaces, or in none.
         $roots = [Collections.Generic.HashSet[string]]::new()
         $dirs = [Collections.Generic.HashSet[string]]::new()
-        foreach ($m in [regex]::Matches(($lines -join "`n"), '(?m)(?:^|[\s;&|(])(?:export\s+)?([A-Za-z_]\w*)=["'']?([^"''\s;]*)')) {
-            if ($m.Groups[2].Value -match "$([regex]::Escape($TOOLS_PATH))/?$") { [void] $roots.Add($m.Groups[1].Value) }
-            elseif ($m.Groups[2].Value -match "$([regex]::Escape($TOOLS_PATH))/scripts/?$") { [void] $dirs.Add($m.Groups[1].Value) }
+        $code = ($lines | Where-Object { $_ -notmatch '^\s*#' }) -join "`n"
+        $assign = '(?m)(?:^|[\s;&|("])(?:export\s+)?([A-Za-z_]\w*)=(?:\\?"(?<v>[^"\\]*)\\?"|''(?<v>[^'']*)''|(?<v>[^"''\s;\\]*))'
+        foreach ($m in [regex]::Matches($code, $assign)) {
+            if ($m.Groups['v'].Value -match "$([regex]::Escape($TOOLS_PATH))/?$") { [void] $roots.Add($m.Groups[1].Value) }
+            elseif ($m.Groups['v'].Value -match "$([regex]::Escape($TOOLS_PATH))/scripts/?$") { [void] $dirs.Add($m.Groups[1].Value) }
         }
         $via = @("(?:$((@([regex]::Escape($TOOLS_PATH)) + (& $asVar $roots)) -join '|'))/scripts") + (& $asVar $dirs)
         $call = "(?:$($via -join '|'))/([A-Za-z0-9_.-]+)"
@@ -198,14 +203,20 @@ if ($SelfTest) {
         }
         & $check 'a sibling form of the same name does not count for the tools script: it fails, naming the script and the gate line' ($r.Code -eq 1 -and $r.Text -match '(?m)^form-check: follow-pin\.ps1 has no form in scripts/pin-forms\.psd1; run by \.githooks/post-merge:3\.$') $r.Text
         $r = & $sibling @{
+            # A variable set on a comment line, and one set to another folder, are no way in (PR
+            # #493's review, F and N).
             '.githooks/post-checkout' = & $hook ("pwsh -File vendor/grado-factorio-tools/scripts/a.ps1`n# vendor/grado-factorio-tools/scripts/d.ps1`n" +
-                "pwsh -File vendor/grado-factorio-tools/scripts/not-there.ps1`necho `"see vendor/grado-factorio-tools/scripts/a.ps1.`"")
-            '.github/workflows/ci.yml' = "jobs:`n  x:`n    steps:`n      - run: |`n          export TOOLS=`"`$GITHUB_WORKSPACE/vendor/grado-factorio-tools`"`n          pwsh -File `${TOOLS}/scripts/b.ps1`n"
-            '.claude/settings.json' = '{"hooks":{"x":"i=1; d=$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts; pwsh -File \"$d/c.ps1\""}}'
+                "pwsh -File vendor/grado-factorio-tools/scripts/not-there.ps1`necho `"see vendor/grado-factorio-tools/scripts/a.ps1.`"`n" +
+                "# o2=vendor/grado-factorio-tools/scripts`npwsh -File `$o2/c.ps1`no=/opt/other/scripts`npwsh -File `$o/b.ps1")
+            # A quoted value holding a space.
+            '.github/workflows/ci.yml' = "jobs:`n  x:`n    steps:`n      - run: |`n          export TOOLS=`"`$GITHUB_WORKSPACE/my dir/vendor/grado-factorio-tools`"`n          pwsh -File `${TOOLS}/scripts/b.ps1`n"
+            # A variable set right after a JSON string's quote, and one whose value is in \" quotes.
+            '.claude/settings.json' = '{"hooks":{"x":"d=$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts; pwsh -File \"$d/c.ps1\"","y":"e=\"$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools\"; pwsh -File \"$e/scripts/d.ps1\""}}'
             'scripts/pin-forms.psd1' = & $formsOf (& $form 'tools' 'follow-pin.ps1')
         }
         $named = @([regex]::Matches($r.Text, '(?m)^form-check: (\S+) has no form in \S+; run by (.+)\.$') | ForEach-Object { "$($_.Groups[1].Value) $($_.Groups[2].Value)" })
-        & $check 'each call form is a call, a literal path in a hook, ${<var>}/scripts/<name> in a workflow and $<var>/<name> in the settings file, a trailing dot dropped; a comment line, and a name that is no tools script, are not' ($r.Code -eq 1 -and ($named -join '|') -ceq 'a.ps1 .githooks/post-checkout:2, .githooks/post-checkout:5|b.ps1 .github/workflows/ci.yml:6|c.ps1 .claude/settings.json' + ':1') $r.Text
+        $settingsAt = '.claude/settings.json' + ':1'
+        & $check 'each call form is a call, a literal path in a hook, ${<var>}/scripts/<name> in a workflow with a quoted value holding a space, $<var>/<name> and a \"-quoted value in the settings file, a trailing dot dropped; a comment line, a variable set on one, one set to another folder, and a name that is no tools script, are not' ($r.Code -eq 1 -and ($named -join '|') -ceq "a.ps1 .githooks/post-checkout:2, .githooks/post-checkout:5|b.ps1 .github/workflows/ci.yml:6|c.ps1 $settingsAt|d.ps1 $settingsAt") $r.Text
         $r = & $sibling @{
             '.githooks/post-merge' = & $hook "sub=`"`$ROOT/vendor/grado-factorio-tools`"`n`"`$sub/scripts/follow-pin.ps1`" --check`npwsh -File vendor/grado-factorio-tools/scripts/a.ps1"
             'scripts/pin-forms.psd1' = & $formsOf (& $form 'tools' 'follow-pin.ps1' "; Args = @('-SelfTest')"), (& $form 'tools' 'vendor\grado-factorio-tools\scripts\a.ps1')
