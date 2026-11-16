@@ -18,6 +18,8 @@ and *Review the prose, not only the code* at `987e638`, and trulsjo/realistic-fu
 at [#369](https://github.com/trulsjo/grado-factorio-tools/issues/369#issuecomment-6704506057),
 with a sibling read at a commit of its own `main` by
 [a later comment](https://github.com/trulsjo/grado-factorio-tools/issues/369#issuecomment-6706987161),
+its trigger widened to a change that writes or rewrites a stub by
+[#468](https://github.com/trulsjo/grado-factorio-tools/issues/468), ruled at triage on 2026-11-16,
 and the question of whether a cited check could have failed at
 [#370](https://github.com/trulsjo/grado-factorio-tools/issues/370#issuecomment-6704506905). The
 rule on a guard deleted as dead was ruled by Truls's filing of
@@ -60,6 +62,18 @@ keeps its own prose checks beside its link to this page; these are shared.
   both, and the review panel found them
   ([its comment](https://github.com/trulsjo/grado-factorio-tools/pull/368#issuecomment-6703616741),
   findings A and B).
+- **When the change writes or rewrites a stub page, read that stub against each shared page it
+  links**, at the pin the stub links through, for the same finding: a stub sentence that
+  narrows, widens or repeats the shared page. On trulsjo/grado-factorio-modpack's PR #428, which
+  wrote two stubs and edited no shared page, a sentence carried word for word into the review
+  stub, "Every other surviving finding goes in a second comment", had stood on the old page
+  under "Report every finding that survived verification". In the stub it narrowed this page's
+  "Every finding is reported, whatever its grade". The PR's pre-PR review missed it; the plugin
+  pass found it and its verifier graded it 72, short of 80, because the check above opens "When
+  the change edits a shared page"
+  ([its record](https://github.com/trulsjo/grado-factorio-modpack/pull/428#issuecomment-6884289030)
+  and [the class](https://github.com/trulsjo/grado-factorio-modpack/pull/428#issuecomment-6884347765),
+  both read 2026-11-16).
 - **For every check the pull request cites as passing, ask whether it could have failed on this
   change.** A check that reads none of what the change touched passes whatever the change does,
   and citing it is a finding, even with its passing run shown. For code a revert answers the
