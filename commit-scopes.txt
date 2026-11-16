@@ -35,6 +35,7 @@ pr-body-hook
 backtick-hook
 install-hook
 settings-hook
+form-check
 reword-commit
 docs
 repo
