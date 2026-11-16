@@ -137,24 +137,26 @@ function Split-ShellCommand {
 # The word of one command, $Words, that names a settings file the command writes, or nothing.
 function Get-WrittenSetting {
     param([hashtable[]] $Words)
-    # A redirection's target, joined on, as >file, or the word after it. Each redirection word, and
-    # a target standing alone after one, is set aside from the arguments read below.
+    # A redirection's target, joined on, as >file, or the word after it, wherever it stands, the
+    # command's first word too, as `> f echo x`. Each redirection word, and a target standing alone
+    # after one, is set aside; the words left are the command's name and its arguments.
     # $redirect is the operator, > or <, waiting for its target, or nothing.
     $redirect = ''
-    $after = [Collections.Generic.List[string]]::new()
-    foreach ($w in @($Words | Select-Object -Skip 1)) {
+    $plain = [Collections.Generic.List[string]]::new()
+    foreach ($w in $Words) {
         if ($redirect) {
             if ($redirect -eq '>' -and $w.Word -match $FILE_AT) { return $w.Word }
             $redirect = ''; continue
         }
         $at = $w.Bare.LastIndexOfAny([char[]] '<>')
-        if ($at -lt 0) { $after.Add($w.Word); continue }
+        if ($at -lt 0) { $plain.Add($w.Word); continue }
         $rest = $w.Raw.Substring($at + 1).TrimStart('|') -replace '"|''', ''
         if ($w.Bare[$at] -eq '>' -and $rest -match $FILE_AT) { return $rest }
         if (-not $rest) { $redirect = [string] $w.Bare[$at] }
     }
-    $after = @($after)
-    switch -Regex ([IO.Path]::GetFileNameWithoutExtension($Words[0].Word)) {
+    if (-not $plain.Count) { return }
+    $after = @($plain | Select-Object -Skip 1)
+    switch -Regex ([IO.Path]::GetFileNameWithoutExtension($plain[0])) {
         '^(tee|Tee-Object)$' { return $after | Where-Object { $_ -match $FILE_AT } | Select-Object -First 1 }
         '^(Set-Content|Add-Content|Out-File)$' {
             # A -Value or -InputObject is what is written, not where.
@@ -267,6 +269,8 @@ if ($SelfTest) {
             "sed -i 's/x/y/' {f}", "sed -i.bak 's/x/y/' {f}", "sed -ni 's/x/y/p' {f}", "sed --in-place=.bak 's/x/y/' {f}",
             "/usr/bin/sed -i 's/x/y/' {f}", 'cp backup.json {f}', 'mv -f backup.json {f}', 'Copy-Item backup.json {f} -Force',
             'Copy-Item -Path b.json -Destination {f}', 'Move-Item -Des {f} b.json', "MSYS_NO_PATHCONV=1 sed -i 's/x/y/' {f}",
+            # A redirection that opens a command, or a brace group (PR #493's review, turn 2, Q).
+            '> {f}', '>{f} echo x', '{ echo x; } > {f}', '2>/dev/null cp backup.json {f}',
             # Redirections and parameters after the target (PR #493's review, finding A).
             'cp backup.json {f} 2>/dev/null', 'mv tmp.json {f} 2>&1', 'cp backup.json {f} > log.txt',
             'Copy-Item backup.json {f} -ErrorAction Stop', 'Copy-Item backup.json {f} -Exclude *.bak', 'Copy-Item -Recurse b.json {f}', 'Copy-Item -vb b.json {f}',
