@@ -38,7 +38,7 @@
           },
           {
             "type": "command",
-            "command": "i=$(cat); case $i in *settings.json*|*settings.local.json*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/scripts/refuse-settings-write.ps1\";; esac"
+            "command": "i=$(cat); case $i in *[Ss][Ee][Tt][Tt][Ii][Nn][Gg][Ss].[Jj][Ss][Oo][Nn]*|*[Ss][Ee][Tt][Tt][Ii][Nn][Gg][Ss].[Ll][Oo][Cc][Aa][Ll].[Jj][Ss][Oo][Nn]*) printf '%s' \"$i\" | pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/scripts/refuse-settings-write.ps1\";; esac"
           },
           {
             "type": "command",
