@@ -881,7 +881,15 @@ exit code at both pins, `ls-remote.txt`, `breaking.txt` with the move's breaking
 rule in `scripts/breaking-lib.ps1` (#255), and `table.md`, which names the forms file read and
 where from, compares the two runs of each form and lists each place the sibling names a script here
 that no form runs. It reports and does not judge: exit 0 whatever the forms did, exit 1 only when it
-could not measure. The forms file's shape and its four placeholders are in the header. `-SelfTest`
+could not measure. The forms file's shape and its four placeholders are in the header.
+
+`-Ref <commit-ish>` makes a branch measurement (#476): both clones at that commit of the sibling's
+checkout, `HEAD`, a branch or a SHA, instead of GitHub's `main`, with `origin/main` still at the
+fetched `main`. A relative `-Forms` is then read as committed there. `table.md` names the `-Ref`,
+its SHA and each file uncommitted or untracked in the checkout, which the clones lack. Only the
+pull request whose branch it measured cites such a run; a pin move cites one without `-Ref`.
+
+`-SelfTest`
 builds both repositories offline and needs no game.
 
 ## Checking that a sibling's forms cover its gates
