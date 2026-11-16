@@ -703,8 +703,8 @@ template asks for there (#264); it is asked for too, since a sibling's body may 
 pass on every job (#455). It reads each run with `gh run view`. With no `-Head` it reads none.
 With `-CheckClosing` it fails a body that closes an issue another open pull request closes too,
 naming that pull request, and one where gh cannot list them (#463); `-PullRequest` names the
-body's own, which is left out. With `-MaxLineLength` it fails a line longer than the limit, by
-`markdown-check.ps1`'s rule, and names `markdown-rewrap.ps1` (#483).
+body's own, which is left out. With `-MaxLineLength` it fails a prose line longer than the
+limit, by `markdown-check.ps1`'s rule, and names `markdown-rewrap.ps1` (#483).
 
 CI runs it, with `-CiteSiblings`, `-RequireSummaryVisual`, `-CheckRuns`, `-CheckClosing` and
 `-MaxLineLength 100`, on
