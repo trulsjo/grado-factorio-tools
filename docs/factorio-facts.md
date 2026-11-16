@@ -15,6 +15,14 @@ facts to check, not remember* at `e70669f`.
   `runtime` during play. Know which stage code belongs to before writing it.
 - **The installed build is read, never remembered**: `Factorio.exe --version` prints it after
   `Version:` (trulsjo/grado-factorio-tools#199).
+- **When Steam updated the installed build is in its content log**: `logs\content_log.txt` under
+  Steam's install directory dates each update of app 427520 with a line holding
+  `AppID 427520 finished update`, and the installed `Factorio.exe`'s last write time agrees with
+  it. Neither names the version: the build an update installed is inferred from `--version` read
+  after it. On the development machine Steam's directory is `C:\Program Files (x86)\Steam`. Read
+  2026-11-17: the log's last such line is at 2026-10-29 14:29:14, `Factorio.exe` was last written
+  2026-10-29 14:26, and `--version` printed `Version: 2.1.24 (build 87808, win64, steam)`
+  (trulsjo/grado-factorio-tools#479).
 - **API docs are published per build** at <https://lua-api.factorio.com/>. A claim is checked
   against the build being targeted, not from memory.
 - **A recorded fact pins an explicit build**, as `/2.1.23/`: `/stable/` and `/latest/` both move,
