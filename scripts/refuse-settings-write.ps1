@@ -15,10 +15,10 @@
     shell tools, matcher `Bash|PowerShell`, whose command is the first example below (ADR 0004).
     This repository wires it from scripts/ in its own (#323 ruling 3). The session hands the hook
     the tool call as JSON on stdin: this reads `tool_input.command`. The `case` starts this script
-    only when that JSON names `settings.json` or `settings.local.json`, since starting PowerShell
-    takes a second and the hook runs before every shell command. Where the script is not there, as
-    in a clone whose submodule was never fetched, the wired command lets the shell command run and
-    prints JSON that names the missing path and tells the agent it was not checked, as
+    only when that JSON names `settings.json` or `settings.local.json`, in any case, since starting
+    PowerShell takes a second and the hook runs before every shell command. Where the script is not
+    there, as in a clone whose submodule was never fetched, the wired command lets the shell command
+    run and prints JSON that names the missing path and tells the agent it was not checked, as
     refuse-git-discard.ps1's wiring does; -SelfTest runs both branches of the wiring.
 
     WHAT IT REFUSES. A command that writes either file, named with any directory part before
@@ -93,7 +93,7 @@
     The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json, as HOW A
     CONSUMER WIRES IT says. The script takes no option.
 
-        i=$(cat); case $i in *settings.json*|*settings.local.json*) h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-settings-write.ps1"; if [ -f "$h" ]; then printf '%s' "$i" | pwsh -NoProfile -File "$h"; else m='refuse-settings-write: vendor/grado-factorio-tools/scripts/refuse-settings-write.ps1 was not found, so this command was NOT checked by the settings-write hook. git submodule update --init fetches the script.'; printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"%s"}}' "$m" "$m"; fi;; esac
+        i=$(cat); case $i in *[Ss][Ee][Tt][Tt][Ii][Nn][Gg][Ss].[Jj][Ss][Oo][Nn]*|*[Ss][Ee][Tt][Tt][Ii][Nn][Gg][Ss].[Ll][Oo][Cc][Aa][Ll].[Jj][Ss][Oo][Nn]*) h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-settings-write.ps1"; if [ -f "$h" ]; then printf '%s' "$i" | pwsh -NoProfile -File "$h"; else m='refuse-settings-write: vendor/grado-factorio-tools/scripts/refuse-settings-write.ps1 was not found, so this command was NOT checked by the settings-write hook. git submodule update --init fetches the script.'; printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"%s"}}' "$m" "$m"; fi;; esac
 
 .EXAMPLE
     To check it. The first is refused with exit 2, the second passes with exit 0:
@@ -333,6 +333,8 @@ if ($SelfTest) {
         $tools = Split-Path $PSScriptRoot -Parent
         $wRefused = & $wire $tools 'sed -i s/x/x/ .claude/settings.json'
         $wRead = & $wire $tools 'cat .claude/settings.json'
+        # The case guard matches in any case, as Windows reads the path (PR #493's review, B).
+        $wUpper = & $wire $tools 'Set-Content .CLAUDE/SETTINGS.JSON x'
         $wAbsent = & $wire $temp 'sed -i s/x/x/ .claude/settings.json'
         # The missing path is named in both fields (ADR 0004).
         $toldAbsent = try {
@@ -340,19 +342,20 @@ if ($SelfTest) {
             $parsed.hookSpecificOutput.hookEventName -ceq 'PreToolUse' -and $parsed.hookSpecificOutput.additionalContext -match 'vendor/grado-factorio-tools/scripts/refuse-settings-write\.ps1 was not found' -and
                 $parsed.systemMessage -ceq $parsed.hookSpecificOutput.additionalContext
         } catch { $false }
-        & $check 'the first example''s command refuses with exit 2 and a reason, passes a read, and where the script is not there exits 0 and prints JSON naming the missing path to the agent' ($wRefused.Code -eq 2 -and $wRefused.Text -match 'Refused' -and $wRead.Code -eq 0 -and -not $wRead.Text.Trim() -and $wAbsent.Code -eq 0 -and $toldAbsent) "refused: $($wRefused.Code) $($wRefused.Text) | read: $($wRead.Code) $($wRead.Text) | absent: $($wAbsent.Code) $($wAbsent.Text)"
+        & $check 'the first example''s command refuses with exit 2 and a reason, a path in capitals too, passes a read, and where the script is not there exits 0 and prints JSON naming the missing path to the agent' ($wRefused.Code -eq 2 -and $wRefused.Text -match 'Refused' -and $wUpper.Code -eq 2 -and $wRead.Code -eq 0 -and -not $wRead.Text.Trim() -and $wAbsent.Code -eq 0 -and $toldAbsent) "refused: $($wRefused.Code) $($wRefused.Text) | read: $($wRead.Code) $($wRead.Text) | absent: $($wAbsent.Code) $($wAbsent.Text)"
         # The wiring a settings file holds, found by this script's name wherever it stands among
         # the PreToolUse entries (#315 ruling 3): this repository's own unless -Settings names one.
         . "$PSScriptRoot/hook-matcher.ps1"
         $Settings = (Resolve-Path -LiteralPath ($Settings ? $Settings : (Join-Path $PSScriptRoot '../.claude/settings.json'))).Path
         $read = Get-HookWiring -Event PreToolUse -Script (Split-Path $PSCommandPath -Leaf) -Path $Settings
-        $sRefused = $sRead = $null
+        $sRefused = $sRead = $sUpper = $null
         if ($read.Command) {
             $project = Split-Path (Split-Path $Settings -Parent) -Parent
             $sRefused = & $wire $project 'sed -i s/x/x/ .claude/settings.json' $read.Command
+            $sUpper = & $wire $project 'Set-Content .CLAUDE/SETTINGS.JSON x' $read.Command
             $sRead = & $wire $project 'cat .claude/settings.json' $read.Command
         }
-        & $check "the command $Settings wires refuses with exit 2 and a reason, and passes a read" ($sRefused -and $sRefused.Code -eq 2 -and $sRefused.Text -match 'Refused' -and $sRead.Code -eq 0 -and -not $sRead.Text.Trim()) $(if (-not $read.Command) { "$Settings wires no command that names this script" } else { "refused: $($sRefused.Code) $($sRefused.Text) | read: $($sRead.Code) $($sRead.Text)" })
+        & $check "the command $Settings wires refuses with exit 2 and a reason, a path in capitals too, and passes a read" ($sRefused -and $sRefused.Code -eq 2 -and $sRefused.Text -match 'Refused' -and $sUpper.Code -eq 2 -and $sRead.Code -eq 0 -and -not $sRead.Text.Trim()) $(if (-not $read.Command) { "$Settings wires no command that names this script" } else { "refused: $($sRefused.Code) $($sRefused.Text) | read: $($sRead.Code) $($sRead.Text)" })
         $unstarted = @(if ($read.Entries) { Get-UnstartedShellTool -Entry $read.Entries })
         & $check 'the matcher of the entry that wires the hook starts it for the Bash tool and for the PowerShell tool' ($read.Entries -and -not $unstarted) $(if ($read.Entries) { "$Settings`: the matcher $(Get-EntryMatcher $read.Entries) does not start the hook for $($unstarted -join ' or ')" } else { "$Settings wires no entry that names this script" })
     }
