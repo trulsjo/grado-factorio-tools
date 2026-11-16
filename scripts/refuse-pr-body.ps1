@@ -26,9 +26,10 @@
     pr-body-check.ps1 unchanged, after the body file; the example passes none, the check's defaults,
     and a consumer adds on its own line the ones its gate uses (ADR 0004 decision 5). This
     repository passes -CiteSiblings -RequireSummaryVisual, as CI and the create command do, and
-    -CheckRuns and -CheckClosing, as CI does. With -CheckRuns among them, a `gh pr edit` also hands
-    the check -Head and the head `gh pr view` names for the pull request the edit names in the word
-    after `edit`, or for the current branch's where that word is an option, as in
+    -CheckRuns, -CheckClosing and -MaxLineLength 100, as CI does. With -CheckRuns among them, a
+    `gh pr edit` also hands the check -Head and the head `gh pr view` names for the pull request the
+    edit names in the word after `edit`, or for the current branch's where that word is an option,
+    as in
     `gh pr edit -F b.md 459` (#455); where gh names none, the check reads no run and says so. With
     -CheckClosing, it hands -PullRequest and the number `gh pr view` names for the same pull
     request, so the check leaves that one out (#463); where gh names none, it hands none, and an
@@ -52,7 +53,9 @@
     For each `gh pr comment`, `gh issue create` and `gh issue comment` (#386): a body file given no
     path, `-`, a path through the shell, or one that names no file, as for a pull request's body;
     and a body file markdown-check.ps1 -Body fails, with that check's report. The wiring's arguments
-    are pr-body-check.ps1's and do not reach it. An inline body, and a command with no body file, as
+    are pr-body-check.ps1's and do not reach it, but for -MaxLineLength and the word after it,
+    which do, so a comment's or an issue's lines are held to the limit a pull request's are (#483).
+    An inline body, and a command with no body file, as
     one that opens an editor, are let through (Truls's ruling 3 on #386).
 
     WHAT IT LETS THROUGH. A `gh pr create` or `gh pr edit` each of whose body files passes the
@@ -96,8 +99,10 @@
     The arguments that follow the body file on pr-body-check.ps1's command line: every argument this
     is given that it does not take itself. None by default. pr-body-check.ps1's header names its
     options; a consumer's gate may pass -CiteSiblings and -RequireSummaryVisual, as this
-    repository's does, which also passes -CheckRuns and -CheckClosing. With -CheckRuns, -Head is
-    added on `gh pr edit`, and with -CheckClosing, -PullRequest, as HOW IT IS WIRED says.
+    repository's does, which also passes -CheckRuns, -CheckClosing and -MaxLineLength 100. With
+    -CheckRuns, -Head is added on `gh pr edit`, and with -CheckClosing, -PullRequest, as HOW IT IS
+    WIRED says. -MaxLineLength and its value also go to markdown-check.ps1 -Body, as WHAT IT
+    REFUSES says; written -MaxLineLength:100, as one word, they do not.
 
 .EXAMPLE
     The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json, as HOW
@@ -226,8 +231,12 @@ function Get-PrBodyRefusal {
                     if (-not $prose -and $null -eq $bodyArgs) {
                         $bodyArgs = @(Get-CheckArgument -Sub $sub -Rest @($words | Select-Object -Skip ($i + 3)) -CheckArgs $CheckArgs -HeadOf $HeadOf -NumberOf $NumberOf)
                     }
-                    $check = if ($prose) { 'markdown-check.ps1 -Body' } else { "pr-body-check.ps1 $($bodyArgs -join ' ')".TrimEnd() }
-                    $report = if ($prose) { pwsh -NoProfile -File (Join-Path $PSScriptRoot 'markdown-check.ps1') -Body $path 2>&1 | Out-String }
+                    # The wiring's line limit reaches a comment's or an issue's body too (#483).
+                    $proseArgs = @(for ($k = 0; $k + 1 -lt $CheckArgs.Count; $k++) {
+                            if ($CheckArgs[$k] -eq '-MaxLineLength') { '-MaxLineLength'; $CheckArgs[$k + 1]; break }
+                        })
+                    $check = if ($prose) { "markdown-check.ps1 -Body $($proseArgs -join ' ')".TrimEnd() } else { "pr-body-check.ps1 $($bodyArgs -join ' ')".TrimEnd() }
+                    $report = if ($prose) { pwsh -NoProfile -File (Join-Path $PSScriptRoot 'markdown-check.ps1') -Body $path @proseArgs 2>&1 | Out-String }
                     else { pwsh -NoProfile -File (Join-Path $PSScriptRoot 'pr-body-check.ps1') $path @bodyArgs 2>&1 | Out-String }
                 }
                 finally { Pop-Location }
@@ -257,6 +266,11 @@ if ($SelfTest) {
     Set-Content -LiteralPath $note -Value 'A plain comment, with [an address](https://example.com/).'
     $linked = Join-Path $tmp 'linked.md'
     Set-Content -LiteralPath $linked -Value 'See [the page](docs/page.md).'
+    # A line over 40, in a comment's body and in a pull request's that otherwise passes (#483).
+    $wide = Join-Path $tmp 'wide.md'
+    Set-Content -LiteralPath $wide -Value 'A plain comment whose one line runs past the forty character limit.'
+    $wideBody = Join-Path $tmp 'wide-body.md'
+    Set-Content -LiteralPath $wideBody -NoNewline -Value ($body -f "    a visual`n`nThis prose line runs well past the forty character limit.")
     $rel = [IO.Path]::GetRelativePath($root, $good) -replace '\\', '/'
     $msys = $good -replace '\\', '/' -replace '^([a-zA-Z]):', { '/' + $_.Groups[1].Value.ToLower() }
     $visual = '-CiteSiblings', '-RequireSummaryVisual'
@@ -300,6 +314,13 @@ if ($SelfTest) {
         @("gh issue comment 5 -F`"$linked`"", $visual, 'fails markdown-check\.ps1 -Body'),
         @("gh issue comment 5 --body-file=`"$note`"", $visual, $null),
         @("gh issue comment 5 --body-file=`"$linked`"", $visual, 'fails markdown-check\.ps1 -Body'),
+        # The wiring's limit reaches markdown-check.ps1 on a comment and pr-body-check.ps1 on a
+        # pull request's body; with none wired, the same files pass (#483).
+        @("gh pr comment 5 -F `"$wide`"", ($visual + '-MaxLineLength', '40'), 'fails markdown-check\.ps1 -Body -MaxLineLength 40\.'),
+        @("gh issue create --title t -F `"$wide`"", @('-MaxLineLength', '40'), 'over the limit of 40'),
+        @("gh pr comment 5 -F `"$wide`"", $visual, $null),
+        @("gh pr create -F `"$wideBody`"", ($visual + '-MaxLineLength', '40'), 'fails pr-body-check\.ps1 -CiteSiblings -RequireSummaryVisual -MaxLineLength 40\.'),
+        @("gh pr create -F `"$wideBody`"", $visual, $null),
         @('gh issue create --title t --body-file=', @(), 'no path'),
         @('gh pr comment 5 --body-file=', @(), 'no path'),
         @('gh issue comment 5 --body "inline, not seen"', @(), $null),

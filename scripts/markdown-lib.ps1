@@ -6,10 +6,37 @@
     cannot read a line as prose that the check reads as a table row, code or a heading.
     Get-CountedLine, the length rule's count, was taken out of Test-Markdown in the same change, so
     the rewrap measures a line as the check does. Dot-source it; it has no -SelfTest of its own:
-    markdown-check.ps1's holds Test-Markdown and the count.
+    markdown-check.ps1's holds Test-Markdown and the count. Test-LongLineFinding and
+    Get-RewrapHint, which tell a long line's finding apart and name the rewrap for it, moved here
+    from markdown-check.ps1 unchanged, so pr-body-check.ps1 holds a body to the length rule by the
+    check's own reading and failure words (grado-factorio-tools#483).
 #>
 
 Set-StrictMode -Version Latest
+
+function Test-LongLineFinding {
+    <#  Whether a finding of Test-Markdown is of a line over -MaxLineLength, which
+        markdown-rewrap.ps1 rewraps.  #>
+    param([hashtable] $Finding)
+    $Finding.Message -clike 'the line is * characters, over the limit of *'
+}
+
+function Get-RewrapHint {
+    <#  The words that name markdown-rewrap.ps1 for $Long lines over $Max, with the command that
+        rewraps what was read: $Reading, the switch the check read by, and the rewrap's path from
+        the current directory, beside this script, so a consumer is told its own (#444).  #>
+    param([int] $Long, [int] $Max, [string] $Reading)
+    $rewrap = [IO.Path]::GetRelativePath($PWD.ProviderPath, (Join-Path $PSScriptRoot 'markdown-rewrap.ps1')) -replace '\\', '/'
+    " $Long line(s) over $Max are rewrapped by markdown-rewrap.ps1: pwsh -File $(ConvertTo-QuotedArgument $rewrap)$Reading -MaxLineLength $Max"
+}
+
+function ConvertTo-QuotedArgument {
+    <#  $Text in single quotes for PowerShell, each kind of single quote it reads doubled, the curly
+        ones too, as comment-line-check.ps1 quotes its paths (#378), so the printed command runs as
+        printed (PR #452's review).  #>
+    param([string] $Text)
+    "'$([System.Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent($Text))'"
+}
 
 function Get-BareAddress {
     <#  Each bare address in $Text, as @{ Index; Length }, ended where GitHub's renderer ends one

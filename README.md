@@ -430,13 +430,13 @@ command and may be refused: its header's WHAT IT REFUSES WRONGLY says where.
 It checks a `gh pr comment`, `gh issue create` or `gh issue comment` too (#386): one whose body
 file `markdown-check.ps1 -Body` fails, or that it cannot read or that is not there, is refused;
 one with an inline body, or no body file, is let through. The wiring's `case` hands it commands
-holding `gh` and `issue` for these.
+holding `gh` and `issue` for these. A `-MaxLineLength` the wiring passes reaches
+`markdown-check.ps1 -Body` too (#483).
 
 This repository wires it in its tracked `.claude/settings.json`, with the arguments CI hands the
-check, `-CiteSiblings -RequireSummaryVisual`. A consumer's line is the first `.EXAMPLE` in
-[the script's header](scripts/refuse-pr-body.ps1), which passes none, and the consumer adds the
-arguments its own gate uses after the script's path
-([ADR 0004](docs/adr/0004-a-shared-hook-is-wired-from-the-pin-by-each-consumer.md), decision 5).
+check, `-CiteSiblings -RequireSummaryVisual -CheckRuns -CheckClosing -MaxLineLength 100`. A
+consumer's line is the first `.EXAMPLE` in [the script's header](scripts/refuse-pr-body.ps1), which passes none, and the
+consumer adds the arguments its own gate uses after the script's path ([ADR 0004](docs/adr/0004-a-shared-hook-is-wired-from-the-pin-by-each-consumer.md), decision 5).
 
 Every argument after the script, `-CheckArgs`, goes to `pr-body-check.ps1` after the body
 file. Exit 2 refuses; a tool call it cannot read exits 1 and says on stderr that the command was
@@ -703,9 +703,11 @@ template asks for there (#264); it is asked for too, since a sibling's body may 
 pass on every job (#455). It reads each run with `gh run view`. With no `-Head` it reads none.
 With `-CheckClosing` it fails a body that closes an issue another open pull request closes too,
 naming that pull request, and one where gh cannot list them (#463); `-PullRequest` names the
-body's own, which is left out.
+body's own, which is left out. With `-MaxLineLength` it fails a line longer than the limit, by
+`markdown-check.ps1`'s rule, and names `markdown-rewrap.ps1` (#483).
 
-CI runs it, with `-CiteSiblings`, `-RequireSummaryVisual`, `-CheckRuns` and `-CheckClosing`, on
+CI runs it, with `-CiteSiblings`, `-RequireSummaryVisual`, `-CheckRuns`, `-CheckClosing` and
+`-MaxLineLength 100`, on
 the body of every pull request here, and again when the body is edited. A word that names no
 commit in the clone, such as a commit of a sibling, is said to be unchecked and passes. What else
 it cannot see is in its header. `-SelfTest` proves it can fail.
@@ -945,6 +947,7 @@ scripts/     PowerShell entry points, one job each, and the libraries they
              dot-source: load-harness-lib.ps1, dump-lib.ps1, game-mods.ps1,
              mod-info.ps1, which reads a mod's info.json for four of them,
              markdown-lib.ps1, the reading markdown-check.ps1 and markdown-rewrap.ps1 share,
+             and pr-body-check.ps1's line length,
              comment-line-lib.ps1, the comment-line rule check.ps1 and
              comment-line-check.ps1 share, and the help paragraphs
              markdown-rewrap.ps1 -Fill fills,

@@ -14,7 +14,9 @@
     check workflow the body cites ran on the head and passed its check.ps1 step on every job, and
     exit 1 names each run that did not. With -CheckClosing, an eighth: no other open pull request of
     the repository closes an issue the body closes by a `Closes #N` line, and exit 1 names each that
-    does, or says the open pull requests could not be listed.
+    does, or says the open pull requests could not be listed. With -MaxLineLength, a ninth: no line
+    of the body is longer than the limit, by markdown-check.ps1's rule, and exit 1 names each line
+    that is, and markdown-rewrap.ps1.
 
 .DESCRIPTION
     WHY (grado-factorio-tools#96). Pull requests here are rebase-merged, which rewrites every SHA on
@@ -158,6 +160,18 @@
     repository's CI asks, with the event's number, and so does the refuse-pr-body.ps1 hook, with
     the number gh names on `gh pr edit`.
 
+    NO LINE OVER THE LIMIT, WITH -MaxLineLength (grado-factorio-tools#483). PR #477's body went out
+    twice with prose lines over 100 characters: its session chained markdown-check.ps1
+    -MaxLineLength by hand, and the chain was missing the check once and gated on the wrong exit
+    code once. The rule is markdown-check.ps1 -Body -MaxLineLength's, not a copy of it: Get-LongLine
+    asks Test-Markdown in markdown-lib.ps1 for the body's findings at the limit and keeps the long
+    lines alone, so what that check counts, passes over, and says of a line is said here, and the
+    failure line names markdown-rewrap.ps1 as that check's does, through the same Get-RewrapHint.
+    That check's other findings, as a relative link, are not this script's: a body that fails one
+    passes here. A body given by -Body has no file, so the rewrap's command names none. With no
+    limit, no length is checked, so a consumer that does not ask checks what it did before. This
+    repository's CI passes 100, and so does the refuse-pr-body.ps1 hook as wired here.
+
     A SHALLOW CLONE IS REFUSED, and nothing is checked: there an ancestor cannot be told from a
     commit whose history was cut off. CI therefore fetches the whole history for this. Whatever else
     git cannot answer fails the run too; nothing passes for not having been asked.
@@ -246,6 +260,10 @@
     The number of the pull request the body belongs to, for -CheckClosing, which leaves that one
     out. With none, as on `gh pr create`, every open pull request is compared.
 
+.PARAMETER MaxLineLength
+    Fail the body for each line longer than this many characters, 1 or more, as above. Without it,
+    length is not checked.
+
 .PARAMETER SelfTest
     Run the cases that hold the check to what this header says, naming each as it runs. Needs git,
     for fixture repositories in a temp directory. Their commits carry a fixed date, so the same
@@ -256,6 +274,9 @@
 
 .EXAMPLE
     ./scripts/pr-body-check.ps1 -Body "$env:PR_BODY"
+
+.EXAMPLE
+    pwsh -File scripts/pr-body-check.ps1 ../scratch/body.md -MaxLineLength 100
 #>
 
 #Requires -Version 7
@@ -270,7 +291,8 @@ param(
     [switch] $CheckRuns,
     [string] $Head,
     [switch] $CheckClosing,
-    [int] $PullRequest
+    [int] $PullRequest,
+    [int] $MaxLineLength = 0
 )
 
 Set-StrictMode -Version Latest
@@ -308,6 +330,19 @@ function Test-Body {
 # What a closing keyword before an issue reference is, read the same way for a commit message by
 # commit-check.ps1 (#472).
 . "$PSScriptRoot/closing-keyword-lib.ps1"
+# The length rule, markdown-check.ps1's own, read as that check reads a body (#483).
+. "$PSScriptRoot/markdown-lib.ps1"
+
+function Get-LongLine {
+    <#  Each line of $Text over $Max characters, as @{ Line; Message }, by the rule
+        markdown-check.ps1 -Body -MaxLineLength holds a body to: Test-Markdown's, its other
+        findings left out. Lines are split as that check splits them.  #>
+    param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Text, [Parameter(Mandatory)] [int] $Max)
+    $reader = [IO.StringReader]::new($Text)
+    $lines = @(while ($null -ne ($l = $reader.ReadLine())) { $l })
+    Test-Markdown -Lines $lines -Path 'body' -Body -Exists { $false } -Anchors { $null } -MaxLineLength $Max |
+        Where-Object { Test-LongLineFinding $_ } | Sort-Object { $_.Line }
+}
 
 # A line that is `Closes #N` alone, the one form docs/pr-body-convention.md asks for.
 $ClosesLine = '^Closes #(\d+)\s*$'
@@ -908,6 +943,29 @@ function Invoke-SelfTest {
                 $refused.Text -match '(?m)^FAILED - pr-body-check: .*1 problem\(s\) with the issues it closes' -and
                 $own.Code -eq 0 -and $own.Text -match 'No other open pull request, of 0 compared, closes an issue it closes\.' -and
                 $said.Count -eq 2 -and -not ($said | Where-Object { $_.Trim() -cne 'pr list --state open --limit 1000 --json number,body' }) } }
+        @{ Name = 'with -MaxLineLength 40, a prose line over 40 fails the body, named with its length, and the failure line names markdown-rewrap.ps1 with the body''s file, or with none for -Body; a link''s target is not counted, as markdown-check.ps1 counts; 0 is refused (#483)'; Test = {
+            $file = Join-Path $temp 'body-long.md'
+            $text = "## Summary`n`nThis prose line runs well past the forty character limit.`n`nSee [it](https://example.com/a/very/long/address/not/counted/at/all) now.`n`n$marked"
+            Set-Content -LiteralPath $file -Value $text
+            $byPath = & $run @($file, '-MaxLineLength', '40')
+            $byBody = & $run @('-Body', $text, '-MaxLineLength', '40')
+            $zero = & $run @($file, '-MaxLineLength', '0')
+            Write-Host ($byPath.Text.TrimEnd() -replace '(?m)^', '    ')
+            $named = '(?m)^pr-body-check: line 3: the line is 57 characters, over the limit of 40, link targets and addresses not counted\.\r?$'
+            $byPath.Code -eq 1 -and $byPath.Text -match $named -and @([regex]::Matches($byPath.Text, '(?m)^pr-body-check: line ')).Count -eq 1 -and
+                $byPath.Text -match "(?m)^FAILED - pr-body-check: .*, and 1 line\(s\) over 40 characters\. 1 line\(s\) over 40 are rewrapped by markdown-rewrap\.ps1: pwsh -File '[^']*markdown-rewrap\.ps1' -Path '[^']*body-long\.md' -MaxLineLength 40\r?$" -and
+                $byBody.Code -eq 1 -and $byBody.Text -match $named -and
+                $byBody.Text -match '(?m)rewrapped by markdown-rewrap\.ps1: pwsh -File ''[^'']*'' -Path <the body, saved as a \.md file> -MaxLineLength 40\r?$' -and
+                $zero.Code -ne 0 -and $zero.Text -match '-MaxLineLength must be 1 or more' } }
+        @{ Name = 'with no -MaxLineLength, the same long line passes, and the OK line names no limit; with one, a body with no long line passes and says so (#483)'; Test = {
+            $file = Join-Path $temp 'body-free.md'
+            Set-Content -LiteralPath $file -Value "## Summary`n`nThis prose line runs well past the forty character limit.`n`n$marked"
+            $free = & $run @($file)
+            $short = Join-Path $temp 'body-short.md'
+            Set-Content -LiteralPath $short -Value "## Summary`n`nA short line.`n`n$marked"
+            $held = & $run @($short, '-MaxLineLength', '40')
+            $free.Code -eq 0 -and $free.Text -match '(?m)^OK - pr-body-check: ' -and $free.Text -notmatch 'characters' -and
+                $held.Code -eq 0 -and $held.Text -match ' No line is over 40 characters\.' } }
     )
 
     $failures = 0
@@ -930,6 +988,9 @@ function Invoke-SelfTest {
 
 if ($SelfTest) { Invoke-SelfTest }
 
+# A limit that came out as 0 must not pass for a limit that was never asked for, as in
+# markdown-check.ps1.
+if ($PSBoundParameters.ContainsKey('MaxLineLength') -and $MaxLineLength -lt 1) { throw '-MaxLineLength must be 1 or more. Leave it out for no limit.' }
 $top = git rev-parse --show-toplevel
 if ($LASTEXITCODE -ne 0) { throw 'git found no repository here. Run it inside the repository.' }
 if ($Path) { $Body = Get-Content -LiteralPath $Path -Raw }
@@ -958,6 +1019,12 @@ $siblings = @(if ($CiteSiblings) { Get-SiblingProblem -Text "$Body" })
 foreach ($s in $siblings) {
     Write-Host "pr-body-check: line $($s.Line) says `"$($s.Sentence)`", a statement about a sibling with no $($s.Missing -replace '^an? ' -replace ' and an? ', ' and no '). Give it the commit and the date it was read at."
 }
+$long = @(if ($MaxLineLength) { Get-LongLine -Text "$Body" -Max $MaxLineLength })
+foreach ($l in $long) { Write-Host "pr-body-check: line $($l.Line): $($l.Message)." }
+# The rewrap, named as markdown-check.ps1 names it; a body given inline has no file to name.
+$rewrapHint = if (-not $long) { '' }
+    elseif ($Path -match '\.md$') { Get-RewrapHint -Long $long.Count -Max $MaxLineLength -Reading " -Path $(ConvertTo-QuotedArgument $Path)" }
+    else { Get-RewrapHint -Long $long.Count -Max $MaxLineLength -Reading ' -Path <the body, saved as a .md file>' }
 $runs = @()
 $runNote = ''
 # This repository, as origin names it on github.com, for the addresses of its runs and issues.
@@ -1008,12 +1075,14 @@ if ($RequireSummaryVisual) { $found += "$($visual.Count) Summary with no visual"
 if ($CiteSiblings) { $found += "$($siblings.Count) statement(s) about a sibling lack a commit or an ISO date" }
 if ($CheckRuns -and $Head) { $found += "$($runs.Count) problem(s) with the cited runs" }
 if ($CheckClosing) { $found += "$($overlaps.Count) problem(s) with the issues it closes and the other open pull requests" }
-if ($read.Off -or $closing -or $headings -or $markers -or $visual -or $siblings -or $runs -or $overlaps) {
+if ($MaxLineLength) { $found += "$($long.Count) line(s) over $MaxLineLength characters" }
+if ($read.Off -or $closing -or $headings -or $markers -or $visual -or $siblings -or $runs -or $overlaps -or $long) {
     Write-Host ''
-    Write-Host "FAILED - pr-body-check: $(($found | Select-Object -SkipLast 1) -join ', '), and $($found[-1]).$unchecked"
+    Write-Host "FAILED - pr-body-check: $(($found | Select-Object -SkipLast 1) -join ', '), and $($found[-1]).$unchecked$rewrapHint"
     exit 1
 }
 $cited = if ($CiteSiblings) { ' Each statement about a sibling carries a commit and an ISO date.' } else { '' }
 $drawn = if ($RequireSummaryVisual) { ' ## Summary holds a visual.' } else { '' }
-Write-Host "OK - pr-body-check: $($read.On) word(s) of the body name a commit, each on $Main, no closing keyword stands outside a Closes #N line, and the pr template's three headings stand once each, in order, with ## Evidence and ## Merge Danger each carrying its markers.$drawn$cited$unchecked"
+$short = if ($MaxLineLength) { " No line is over $MaxLineLength characters." } else { '' }
+Write-Host "OK - pr-body-check: $($read.On) word(s) of the body name a commit, each on $Main, no closing keyword stands outside a Closes #N line, and the pr template's three headings stand once each, in order, with ## Evidence and ## Merge Danger each carrying its markers.$drawn$cited$short$unchecked"
 exit 0
