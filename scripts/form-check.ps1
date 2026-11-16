@@ -63,7 +63,8 @@
     the sibling's own; a sibling form not counting; each of the three call forms in each gate
     directory and the settings file; a comment line; a -SelfTest form counting; a missing form
     failing with the script and the gate line; and an unreadable, empty or formless forms file, no
-    gate file, and no tools script each failing. Then the second example's command, on a fixture.
+    gate file, and no tools script each failing. Then the second example's command, on a fixture,
+    and the first's, with -Forms and -Tools left out.
 
 .EXAMPLE
     A sibling's gate, from its root, as grado-factorio-modpack#424 wires it:
@@ -253,6 +254,15 @@ if ($SelfTest) {
         try { $said = & pwsh -NoProfile -File $PSCommandPath -Forms forms.psd1 -Tools $fixtureTools 2>&1 | Out-String; $code = $LASTEXITCODE } finally { Pop-Location }
         Write-Host ($said.TrimEnd() -replace '(?m)^', '    ')
         & $check 'run as a command from the sibling''s root, a relative -Forms is read there, and a missing form exits 1' ($code -eq 1 -and $said -match 'a\.ps1 has no form in forms\.psd1; run by \.githooks/commit-msg:2') $said
+        # Run with both arguments left out: -Forms is scripts/pin-forms.psd1 from the root, and
+        # -Tools this script's own folder, which holds form-check.ps1 (PR #493's review, H).
+        $root = Join-Path $temp 'defaults'
+        & $write (Join-Path $root '.githooks/pre-commit') (& $hook 'pwsh -File vendor/grado-factorio-tools/scripts/form-check.ps1')
+        & $write (Join-Path $root 'scripts/pin-forms.psd1') (& $formsOf (& $form 'tools' 'form-check.ps1' "; Args = @('-SelfTest')"))
+        Push-Location -LiteralPath $root
+        try { $said = & pwsh -NoProfile -File $PSCommandPath 2>&1 | Out-String; $code = $LASTEXITCODE } finally { Pop-Location }
+        Write-Host ($said.TrimEnd() -replace '(?m)^', '    ')
+        & $check 'run with -Forms and -Tools left out, it reads scripts/pin-forms.psd1 from the root and the tools scripts beside itself' ($code -eq 0 -and $said -match 'OK - form-check: 1 call\(s\) of 1 tools script\(s\) read in the gates, each with a form in scripts/pin-forms\.psd1') $said
     }
     finally { Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue }
     Write-Host ''
