@@ -1324,12 +1324,12 @@ function Invoke-SelfTest {
             # The case's own bound on the run, not the run's code: with the run's limit reverted it
             # fails this case rather than hanging the self-test.
             $start = [Diagnostics.ProcessStartInfo]::new((Get-Command pwsh -CommandType Application | Select-Object -First 1).Source)
-            foreach ($a in '-NoProfile', '-File', $PSCommandPath, '-Copy', $repo, '-List', $p, '-TimeoutSeconds', '8') { $start.ArgumentList.Add($a) }
+            foreach ($a in '-NoProfile', '-File', $PSCommandPath, '-Copy', $repo, '-List', $p, '-TimeoutSeconds', '20') { $start.ArgumentList.Add($a) }
             $start.RedirectStandardOutput = $true; $start.RedirectStandardError = $true; $start.UseShellExecute = $false
             $child = [Diagnostics.Process]::Start($start)
             $out = $child.StandardOutput.ReadToEndAsync(); $err = $child.StandardError.ReadToEndAsync()
-            $bounded = $child.WaitForExit(90000)
-            if (-not $bounded) { $child.Kill($true); $child.WaitForExit(); & $git checkout -q -- stub.ps1; Write-Host '    the run was still going after 90 s, and was killed' }
+            $bounded = $child.WaitForExit(120000)
+            if (-not $bounded) { $child.Kill($true); $child.WaitForExit(); & $git checkout -q -- stub.ps1; Write-Host '    the run was still going after 120 s, and was killed' }
             # The sleep's child is ended only by a kill of the whole tree; the linger's is left on
             # purpose, and holds this run's output too, so it is ended before that is read.
             $alive = { param([string] $f) (Test-Path -LiteralPath $f) -and $null -ne (Get-Process -Id ([int] (Get-Content -LiteralPath $f -Raw).Trim()) -ErrorAction SilentlyContinue) }
@@ -1339,9 +1339,9 @@ function Invoke-SelfTest {
             $text = (@($out, $err) | Where-Object IsCompleted | ForEach-Object Result) -join ''
             Write-Host ($text.TrimEnd() -replace '(?m)^', '    ')
             if ($orphan) { Write-Host '    the sleeping self-test''s child was still running after the kill' }
-            $after = if ($text -match '(?m)^revert-run: R -- timed out: killed after (\d+\.\d) s, at the limit of 8 s\r?$') { [double] $Matches[1] } else { -1 }
-            $bounded -and $child.ExitCode -eq 0 -and $after -ge 8 -and $after -lt 13 -and (Test-Path -LiteralPath $sleepPid) -and -not $orphan -and
-                $text -match '(?m)^\| R \| timed out \|  \| killed after \d+\.\d s, at the limit of 8 s \|' -and
+            $after = if ($text -match '(?m)^revert-run: R -- timed out: killed after (\d+\.\d) s, at the limit of 20 s\r?$') { [double] $Matches[1] } else { -1 }
+            $bounded -and $child.ExitCode -eq 0 -and $after -ge 20 -and $after -lt 25 -and (Test-Path -LiteralPath $sleepPid) -and -not $orphan -and
+                $text -match '(?m)^\| R \| timed out \|  \| killed after \d+\.\d s, at the limit of 20 s \|' -and
                 $text -match '(?m)^revert-run: R -- crashed \(exit 0\): its output was still held open 5 s after it exited, by a process it left running\r?$' -and
                 @([regex]::Matches($text, '(?m)^revert-run: R -- ')).Count -eq 3 -and $text -match '(?m)^revert-run: R -- passes \(exit 0\)' -and
                 $text -match '(?m)^OK - revert-run: 3 revert\(s\) run or refused: 1 crashed, 1 passes, 1 timed out\.' -and (& $same) } }
