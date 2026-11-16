@@ -34,8 +34,10 @@
 
     THE FORMS FILE is -Forms, read from the working tree, with Import-PowerShellDataFile; its
     contract is pin-measure.ps1's header's. A form names a tools script when its From is `tools` and
-    its Script, with \ read as /, ends in `/<name>` or is `<name>`. A -SelfTest form is enough. A
-    `sibling` form never counts for a tools script, even one of the same name.
+    its Script is `<name>`, as pin-measure.ps1 runs it from the pin's scripts/: a Script holding a
+    path, as `vendor/grado-factorio-tools/scripts/<name>`, runs nothing there, and counts for none.
+    A -SelfTest form is enough. A `sibling` form never counts for a tools script, even one of the
+    same name.
 
     IT FAILS, exit 1 and saying which, where the forms file cannot be read, reads empty or holds no
     forms; where no gate file is there; or where -Tools holds no *.ps1: each a step that would
@@ -144,11 +146,9 @@ function Invoke-FormCheck {
         $calls = @(Get-ToolCall -Root $Root -Names $names)
     }
     catch { Write-Host "FAILED - form-check: $($_.Exception.Message)"; return 1 }
-    $formed = @($list | Where-Object { $_.From -ceq 'tools' } | ForEach-Object { "$($_.Script)" -replace '\\', '/' })
-    $missing = @($calls | Group-Object { $_.Name } | Where-Object {
-            $n = $_.Name
-            -not @($formed | Where-Object { $_ -ceq $n -or $_.EndsWith("/$n", [StringComparison]::Ordinal) })
-        })
+    # pin-measure.ps1 runs a tools form's Script from the pin's scripts/, so the Script is the name.
+    $formed = @($list | Where-Object { $_.From -ceq 'tools' } | ForEach-Object { "$($_.Script)" })
+    $missing = @($calls | Group-Object { $_.Name } | Where-Object { $_.Name -cnotin $formed })
     foreach ($m in $missing) { Write-Host "form-check: $($m.Name) has no form in $Forms; run by $(@($m.Group | ForEach-Object { $_.At }) -join ', ')." }
     if ($missing) { Write-Host "FAILED - form-check: $($missing.Count) tools script(s) a gate runs have no form in $Forms."; return 1 }
     $scripts = @($calls | ForEach-Object { $_.Name } | Sort-Object -Unique)
@@ -219,9 +219,14 @@ if ($SelfTest) {
         & $check 'each call form is a call, a literal path in a hook, ${<var>}/scripts/<name> in a workflow with a quoted value holding a space, $<var>/<name> and a \"-quoted value in the settings file, a trailing dot dropped; a comment line, a variable set on one, one set to another folder, and a name that is no tools script, are not' ($r.Code -eq 1 -and ($named -join '|') -ceq "a.ps1 .githooks/post-checkout:2, .githooks/post-checkout:5|b.ps1 .github/workflows/ci.yml:6|c.ps1 $settingsAt|d.ps1 $settingsAt") $r.Text
         $r = & $sibling @{
             '.githooks/post-merge' = & $hook "sub=`"`$ROOT/vendor/grado-factorio-tools`"`n`"`$sub/scripts/follow-pin.ps1`" --check`npwsh -File vendor/grado-factorio-tools/scripts/a.ps1"
-            'scripts/pin-forms.psd1' = & $formsOf (& $form 'tools' 'follow-pin.ps1' "; Args = @('-SelfTest')"), (& $form 'tools' 'vendor\grado-factorio-tools\scripts\a.ps1')
+            'scripts/pin-forms.psd1' = & $formsOf (& $form 'tools' 'follow-pin.ps1' "; Args = @('-SelfTest')"), (& $form 'tools' 'a.ps1')
         }
-        & $check 'a -SelfTest form counts as a form, and a Script written with \ names its script' ($r.Code -eq 0 -and $r.Text -match '2 call\(s\) of 2 tools script') $r.Text
+        & $check 'a -SelfTest form counts as a form' ($r.Code -eq 0 -and $r.Text -match '2 call\(s\) of 2 tools script') $r.Text
+        $r = & $sibling @{
+            '.githooks/post-merge' = & $hook 'pwsh -File vendor/grado-factorio-tools/scripts/a.ps1'
+            'scripts/pin-forms.psd1' = & $formsOf (& $form 'tools' 'vendor/grado-factorio-tools/scripts/a.ps1'), (& $form 'tools' 'x\a.ps1')
+        }
+        & $check 'a tools form whose Script is a path, which pin-measure.ps1 would not run, does not count (PR #493''s review, N)' ($r.Code -eq 1 -and $r.Text -match '(?m)^form-check: a\.ps1 has no form') $r.Text
         $gate = @{ '.githooks/commit-msg' = & $hook 'pwsh -File vendor/grado-factorio-tools/scripts/a.ps1' }
         $r = & $sibling ($gate + @{ 'scripts/pin-forms.psd1' = '' })
         $empty = $r.Code -eq 1 -and $r.Text -match 'pin-forms\.psd1 reads empty'
