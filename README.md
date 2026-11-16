@@ -555,6 +555,11 @@ realistic-fusion-refreshed's does not at `4f2dc44`. `-Title` checks a pull reque
 needs a scope. `-ScopeFile` names the repository's scopes, one to a line; without it any scope
 passes. `-SelfTest` proves it can fail. What it lets through is in its header.
 
+A closing keyword before an issue reference, as `Closes #N`, is refused in every mode (#472): a
+commit reaches `main` as written and closes that issue, whatever the pull request's body chose.
+A ticket is cited with `Refs #N`. The reading is `scripts/closing-keyword-lib.ps1`'s, which
+`pr-body-check.ps1` loads too.
+
 ## Rewording a commit below the tip
 
 A finding in a commit message is fixed by rewording that commit, and `git commit --amend` reaches
@@ -946,6 +951,8 @@ scripts/     PowerShell entry points, one job each, and the libraries they
              line-cite-check.ps1 and comment-line-check.ps1 are given, with
              its own -SelfTest,
              breaking-lib.ps1, the rule for a pin move's breaking commits pin-measure.ps1 loads,
+             closing-keyword-lib.ps1, the reading of a closing keyword commit-check.ps1
+             and pr-body-check.ps1 share,
              self-test-halves.ps1, the runner a -SelfTest hands its halves to,
              and hook-matcher.ps1, which reads a session hook's matcher;
              grado-count/, the counting mod count-resources.ps1 loads;

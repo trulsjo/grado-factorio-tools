@@ -42,9 +42,10 @@
     as read on 2026-10-12. This reads wider than that page shows: a space before the colon, and none
     after it. The address is not on the page and GitHub closes on it: the merged
     zen-browser/desktop#15894 has four such lines and lists those four issues as closed by it
-    (`closingIssuesReferences`, read 2026-10-12). This half is a second job in one script, because
-    CI and a session already hand this script every body; it reads the text alone and asks git
-    nothing.
+    (`closingIssuesReferences`, read 2026-10-12). The reading is closing-keyword-lib.ps1's, which
+    commit-check.ps1 loads too (grado-factorio-tools#472). This half is a second job in one script,
+    because CI and a session already hand this script every body; it reads the text alone and asks
+    git nothing.
 
     THE PR TEMPLATE'S THREE HEADINGS (grado-factorio-tools#171). Truls ruled on 2026-10-19, in
     grado-factorio-modpack#320, that a pull request body carries the `mattpocock-skills:pr`
@@ -166,7 +167,8 @@
     longer holds. Run locally, origin/main is as this clone last fetched it, so a commit that
     reached main since is reported. A commit cited by fewer than 7 characters is not read. Whether a
     commit on main is the one the prose means. Anything else a body says. Of closing keywords: one
-    GitHub adds after that date. One in a commit message, which that page says GitHub reads too. A
+    GitHub adds after that date. One in a commit message, which GitHub reads too: commit-check.ps1
+    refuses it (#472). A
     keyword with its reference on the next line, or with markup or a link's bracket between the two;
     whether GitHub closes on those was not measured. Whether a `Closes #N` line names the ticket the
     pull request is for. And a keyword in a code span or a fenced block is reported like any other:
@@ -303,6 +305,10 @@ function Test-Body {
     $result
 }
 
+# What a closing keyword before an issue reference is, read the same way for a commit message by
+# commit-check.ps1 (#472).
+. "$PSScriptRoot/closing-keyword-lib.ps1"
+
 # A line that is `Closes #N` alone, the one form docs/pr-body-convention.md asks for.
 $ClosesLine = '^Closes #(\d+)\s*$'
 
@@ -314,9 +320,7 @@ function Get-ClosingKeyword {
     foreach ($line in $Text -split '\r?\n') {
         $n++
         if ($line -cmatch $ClosesLine) { continue }
-        foreach ($m in [regex]::Matches($line, '(?<![0-9A-Za-z-])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)(?:\s*:\s*|\s+)(?:(?:[\w.-]+/[\w.-]+)?#\d+|https://github\.com/[\w.-]+/[\w.-]+/issues/\d+)', 'IgnoreCase')) {
-            @{ Line = $n; Found = $m.Value }
-        }
+        foreach ($found in Find-ClosingKeyword -Line $line) { @{ Line = $n; Found = $found } }
     }
 }
 

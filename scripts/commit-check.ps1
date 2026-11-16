@@ -36,6 +36,12 @@
                 `Revert "..."` and `Merge ...`, are not asked, and may carry either alone.
       blank     A blank line between the subject and the body.
       wrap      Every body line, 72 characters or fewer.
+      closing   No closing keyword before an issue reference, on any line, the subject and the
+                trailers included, by closing-keyword-lib.ps1's reading, the one pr-body-check.ps1
+                reports a body's by (grado-factorio-tools#472): every repository here merges by
+                rebase, so a `Closes #N` footer reaches main as written and closes that issue,
+                whatever the pull request's body chose. A ticket is cited with `Refs #N`. In each
+                mode, a message file, -Title and -Range; a subject skipped below is not asked.
       scope     Only with -ScopeFile: the scope has to be one the file lists. A commit on
                 grado-factorio-tools#53 used `load-harness`, which that repository does not
                 list, and nothing said so. A message with no scope still passes.
@@ -193,6 +199,9 @@ if ($ScopeFile) {
         ForEach-Object { ($_ -replace '#.*').Trim() } | Where-Object { $_ })
     if (-not $SCOPES) { throw "$ScopeFile lists no scope, so every scope would be rejected." }
 }
+
+# What a closing keyword before an issue reference is, read as pr-body-check.ps1 reads one (#472).
+. "$PSScriptRoot/closing-keyword-lib.ps1"
 
 # ♻️, ⚡️ and ⏪️ carry a variation selector (U+FE0F) and are also legible without one. Comparing
 # with it stripped accepts both spellings and is why this is a function rather than an -eq.
@@ -366,6 +375,16 @@ function Test-CommitMessage([string[]] $raw, [string[]] $listed = $SCOPES, [bool
         $bad.Add('put a blank line between the subject and the body')
     }
 
+    # A closing keyword before an issue reference closes that issue when the commit reaches the
+    # default branch, whatever the pull request's body decided (#472). Every line, the subject and
+    # the trailers too.
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        foreach ($found in Find-ClosingKeyword -Line $lines[$i]) {
+            $bad.Add(("line $($i + 1) holds the closing keyword `"$found`", which closes that issue when the commit " +
+                'reaches main: cite the ticket with "Refs #N", and close it with a "Closes #N" line in the pull request''s body'))
+        }
+    }
+
     $trailerStart = Get-TrailerStart $lines
     for ($i = 1; $i -lt $trailerStart; $i++) {
         $line  = $lines[$i]
@@ -432,6 +451,16 @@ if ($SelfTest) {
         # COMMENT CHARACTER ;: a `#` line is the author's, so it is measured.
         @{ why = 'body line 3'; comment = ';'
            msg = @('🐛 fix(repo): with ; a # line is body', '', ('#626 ' + ('wrappable ' * 8).Trim())) }
+        # A CLOSING KEYWORD (#472), in the footer, with a colon, before another repository's issue,
+        # before an issue's address, in the subject, and in a title.
+        @{ why = 'line 5 holds the closing keyword "Closes #12"'; msg = @('🐛 fix(repo): a subject', '', 'Body.', '', 'Closes #12') }
+        @{ why = 'line 3 holds the closing keyword "Fixes: #8"'; msg = @('🐛 fix(repo): a subject', '', 'Fixes: #8') }
+        @{ why = 'line 3 holds the closing keyword "resolved octo-org/octo-repo#9"'
+           msg = @('🐛 fix(repo): a subject', '', 'It resolved octo-org/octo-repo#9 too.') }
+        @{ why = 'line 3 holds the closing keyword "fixes https://github.com/octo-org/octo-repo/issues/5"'
+           msg = @('🐛 fix(repo): a subject', '', 'This fixes https://github.com/octo-org/octo-repo/issues/5.') }
+        @{ why = 'line 1 holds the closing keyword "close #7"'; msg = @('🐛 fix(repo): close #7 in the subject') }
+        @{ why = 'line 1 holds the closing keyword "closes #7"'; title = $true; msg = @('🐛 fix(repo): a title that closes #7') }
     )
 
     $mustPass = @(
@@ -443,6 +472,12 @@ if ($SelfTest) {
         @{ msg = @('💄 feat(graphics): a situational emoji takes any type') }
         @{ msg = @('🔀 chore(repo): merge something (#249)') }
         @{ msg = @('🐛 fix(repo): no scope is allowed') }
+        # Not a closing keyword before a reference (#472): Refs, a keyword with no reference, one
+        # ending a longer word, and a word that is no keyword.
+        @{ msg = @('🐛 fix(repo): cite a ticket', '', 'Body.', '', 'Refs #472') }
+        @{ msg = @('🐛 fix(repo): this fixes the parser', '', 'It closes nothing.') }
+        @{ msg = @('🐛 fix(repo): keep prefixes #3 and unresolved #4') }
+        @{ msg = @('🐛 fix(repo): name a word that is not a keyword', '', 'Closing in on #5.') }
         @{ msg = @('✨ feat(power)!: break a save', '', 'Body.', '', 'BREAKING CHANGE: migrate thus.') }
         @{ msg = @('✨ feat(power)!: break a save', '', 'Body.', '', 'BREAKING-CHANGE: migrate thus.') }
         # Not a footer, so no `!` is asked for: the token inside a line, and in lower case.
@@ -512,13 +547,18 @@ if ($SelfTest) {
         $hash = & $hook
         git -C $repo config core.commentChar ';'
         $set = & $hook
+        # A message file with a closing footer is refused (#472).
+        Set-Content -LiteralPath $file -Encoding utf8 -Value @('🐛 fix(repo): run as a hook', '', 'Body.', '', 'Closes #3')
+        $closing = & $hook
         $wrong = if ($set.Code -ne 0 -or $hash.Code -ne 1 -or $hash.Out -notmatch 'body line 3 is 85 characters') {
             "as a hook, core.commentChar ';' exited $($set.Code) (want 0), and '#' exited $($hash.Code) (want 1, for body line 3): $($hash.Out.Trim())"
+        } elseif ($closing.Code -ne 1 -or $closing.Out -notmatch 'line 5 holds the closing keyword "Closes #3"') {
+            "as a hook, a message file with a Closes footer exited $($closing.Code) (want 1, naming line 5): $($closing.Out.Trim())"
         }
     }
     catch { $wrong = "as a hook, the fixture threw: $($_.Exception.Message)" }
     finally { Remove-Item -LiteralPath $repo -Recurse -Force -ErrorAction SilentlyContinue }
-    Write-Host "self-test: comment character ;, run as a hook in a repository that sets it -- $($wrong ? 'FAILED' : 'ok')"
+    Write-Host "self-test: comment character ;, run as a hook in a repository that sets it, and a closing footer refused as a hook -- $($wrong ? 'FAILED' : 'ok')"
     if ($wrong) { $failures.Add($wrong) }
 
     # THE FIRST EXAMPLE'S WRAPPER (#361), read from the header so the text shown is the text run.
@@ -544,7 +584,7 @@ if ($SelfTest) {
         }
         $absent = & $wrap '🐛 fix(unlisted): run with no submodule'
         $vendor = New-Item -ItemType Directory -Path (Join-Path $repo 'vendor/grado-factorio-tools/scripts')
-        Copy-Item -LiteralPath $PSCommandPath -Destination $vendor
+        Copy-Item -LiteralPath $PSCommandPath, "$PSScriptRoot/closing-keyword-lib.ps1" -Destination $vendor
         $listed = & $wrap '🐛 fix(listed): run with the check in vendor'
         $unlisted = & $wrap '🐛 fix(unlisted): run with the check in vendor'
         $wrong = if ($absent.Code -ne 0 -or $absent.Out -notmatch 'NOT checked' -or $absent.Out -notmatch 'submodule update --init') {
@@ -570,7 +610,15 @@ if ($SelfTest) {
         $empty = & $run @('-Range', 'HEAD..HEAD')
         $required = & $run @('-Range', 'HEAD..HEAD', '-RequireCommits')
         $held = & $run @('-Range', 'HEAD', '-RequireCommits')
-        $wrong = if ($empty.Code -ne 0 -or $empty.Out -notmatch 'no commits in HEAD\.\.HEAD') {
+        # A closing keyword is refused by -Range and by -Title (#472).
+        git -C $repo -c user.name=t -c user.email=t@t commit --quiet --allow-empty -m '🐛 fix(repo): hold a closing footer' -m 'Fixes #4'
+        $ranged = & $run @('-Range', 'HEAD~1..HEAD')
+        $titled = & $run @('-Title', '🐛 fix(repo): a title that resolves #6')
+        $wrong = if ($ranged.Code -ne 1 -or $ranged.Out -notmatch 'line 3 holds the closing keyword "Fixes #4"') {
+            "-Range over a commit with a Fixes footer exited $($ranged.Code) (want 1, naming line 3): $($ranged.Out.Trim())"
+        } elseif ($titled.Code -ne 1 -or $titled.Out -notmatch 'line 1 holds the closing keyword "resolves #6"') {
+            "-Title with a closing keyword exited $($titled.Code) (want 1, naming it): $($titled.Out.Trim())"
+        } elseif ($empty.Code -ne 0 -or $empty.Out -notmatch 'no commits in HEAD\.\.HEAD') {
             "an empty range exited $($empty.Code) (want 0, saying it read no commits): $($empty.Out.Trim())"
         } elseif ($required.Code -ne 1 -or $required.Out -notmatch 'HEAD\.\.HEAD') {
             "an empty range with -RequireCommits exited $($required.Code) (want 1, naming the range): $($required.Out.Trim())"
@@ -580,13 +628,13 @@ if ($SelfTest) {
     }
     catch { $wrong = "the empty-range fixture threw: $($_.Exception.Message)" }
     finally { Remove-Item -LiteralPath $repo -Recurse -Force -ErrorAction SilentlyContinue }
-    Write-Host "self-test: an empty range passes, and fails with -RequireCommits -- $($wrong ? 'FAILED' : 'ok')"
+    Write-Host "self-test: an empty range passes, and fails with -RequireCommits; -Range and -Title refuse a closing keyword -- $($wrong ? 'FAILED' : 'ok')"
     if ($wrong) { $failures.Add($wrong) }
 
     # The floor, for the same reason ship-check carries one: this passes by finding nothing, so a
     # table that stopped being read would print green while checking nothing at all.
     $checks++
-    if ($mustFail.Count -lt 18 -or $mustPass.Count -lt 20) {
+    if ($mustFail.Count -lt 24 -or $mustPass.Count -lt 24) {
         $failures.Add('the self-test tables shrank, so this proves much less than it claims')
     }
 

@@ -68,6 +68,22 @@ ticket's.
 Wrap at 72 — with two exemptions the check makes on purpose, both listed under *What the check is
 blind to*.
 
+## Citing a ticket
+
+**A ticket is cited with a `Refs #N` footer**, `Refs OWNER/REPOSITORY#N` for another
+repository's. A closing keyword before an issue reference, as `Closes #N`, `Fixes: #N` or
+`resolved OWNER/REPOSITORY#N`, is refused on any line of the message, the subject included, and
+in a pull request's title (#472). Every repository here merges by rebase, so each commit reaches
+`main` with its message as written, and GitHub closes the issue a closing keyword in it names,
+whatever the pull request's body decided. What a merge closes is said by the `Closes #N` lines
+of the pull request's body alone. The check reads a closing keyword as `scripts/pr-body-check.ps1`
+reads one in a body, from `scripts/closing-keyword-lib.ps1`.
+
+On trulsjo/grado-factorio-modpack's PR #431 (2026-11-15), a review finding offered Truls the
+choice to hold that body's `Closes` line for #430 until he ruled on it. Had the #430 commit kept
+the `Closes #430` footer its session first wrote, holding the body's line would not have kept the
+ticket open (grado-factorio-tools#472, by that session's account).
+
 ## Breaking changes
 
 Put `!` before the colon *and* a `BREAKING CHANGE:` footer explaining the migration.
@@ -111,8 +127,9 @@ A gate that overstates its coverage is worse than no gate, so:
   parentheses in it is accepted; `()` and a scope containing parentheses are rejected, but by the
   format rule rather than by anything that knows what a scope is. With one, the scope has to be
   listed and nothing more: `pack` on a commit that touches only the resolver is accepted.
-- **What a body says.** The check asks a body for the blank line above it, for lines that wrap
-  and, under *Breaking changes* above, for the `!` and a footer together or neither. It does not
+- **What a body says.** The check asks a body for the blank line above it, for lines that wrap,
+  under *Citing a ticket* above for no closing keyword before an issue reference, and under
+  *Breaking changes* for the `!` and a footer together or neither. It does not
   read what the body tells: one that cites no ticket passes, and so does one that cites an earlier
   pull request or the session from memory, unmarked, or walks through what happened step by step.
   Nor what a footer says, nor a footer in lower case, which is prose to the check and to the
@@ -123,7 +140,8 @@ A gate that overstates its coverage is worse than no gate, so:
 - **A line whose longest single word exceeds the limit passes.** No wrapping makes it fit, and
   flagging it would only teach people to ignore the gate. A bare long URL is the real case.
 - **`fixup!`, `squash!`, `amend!`, `Merge …` and `Revert "…"` subjects skip every rule**, because
-  git writes or rewrites them rather than a person.
+  git writes or rewrites them rather than a person. A closing keyword in such a message is not
+  refused.
 - **Comment lines are skipped, with the repository's comment character.** That is
   `core.commentChar`, or `core.commentString`, read where the check runs, and `#` when neither is
   set. With `auto` it is read off git's own instruction or scissors line, and is `#` where the
