@@ -70,7 +70,11 @@ writes none for, are in that script's header too. For each script the change tou
 `pwsh -File scripts/revert-run.ps1 -Copy <copy> -Conditions <script> -Base <base>`, with `<base>`
 the pull request's base, `git -C <copy> merge-base origin/main <full SHA>` (#402). That run
 writes a revert per operand of each `-and` or `-or` chain and per element of each `-in`, `-notin`
-or type list on a line the diff adds or changes, each run against the script's own self-test.
+or type list on a line the diff adds or changes, each run against the script's own self-test,
+and none for a self-test's `-and` verdict (#407), what counts as one being in `revert-run.ps1`'s
+header, *THE CONDITION REVERTS*. It names each chain it skips so on a line of its own,
+`revert-run: <file>, skipped as a verdict: line <n>, <k> operand(s)`, and the lane reports those
+lines with the run's table.
 **Every other changed condition goes in the lane's list**, beside the claims: a lone test in an
 `if`, `elseif` or `while`, as `Get-DefaultRevert`'s `if ($ast.ParamBlock)`; a `-not`, a
 comparison, an `-is` or `-isnot`; the shapes the header's *WHAT IT CANNOT SEE* lists under "Of
@@ -97,8 +101,10 @@ review comment on PR #428, finding A). Each revert runs the script's whole self-
 at `4534a44`, `-Conditions` writes 133 reverts for `revert-run.ps1`, whose self-test took about
 100 s on PR #412's branch, close to 3.7 hours (#402's brief). It reports each run's table. A
 revert that fails nothing is a finding, unless it is a default revert the pull request lists
-with why it passes, as PR #389 listed `line-cite-check.ps1 -Foreign` (#390): an exception to
-`code-review.md`'s rule. With "none", it reverts
+with why it passes, as PR #389 listed `line-cite-check.ps1 -Foreign` (#390), or a condition
+revert of a self-test's verdict that the run keeps, a verdict of another shape as that header's
+*WHAT IT CANNOT SEE* names, which the lane reports with its line and why it passes by
+construction (#490): each an exception to `code-review.md`'s rule. With "none", it reverts
 nothing. The session answering a review's findings runs its reverts the same way.
 
 **What reads nothing.** The bug scan applies `code-review.md`'s
