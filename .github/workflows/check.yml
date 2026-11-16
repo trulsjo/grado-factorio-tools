@@ -92,7 +92,7 @@ jobs:
       # the pull request's head, read with gh through the token, which `actions: read` above lets
       # read runs (grado-factorio-tools#455). -CheckClosing fails the body for an issue another
       # open pull request closes too, listed with gh, which `pull-requests: read` lets list; the
-      # event's number leaves this one out (#463). -MaxLineLength holds each line to 100
+      # event's number leaves this one out (#463). -MaxLineLength holds each prose line to 100
       # characters, by markdown-check.ps1's rule (#483).
       - name: Check the pull request body
         if: github.event_name == 'pull_request'

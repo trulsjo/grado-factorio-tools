@@ -14,9 +14,9 @@
     check workflow the body cites ran on the head and passed its check.ps1 step on every job, and
     exit 1 names each run that did not. With -CheckClosing, an eighth: no other open pull request of
     the repository closes an issue the body closes by a `Closes #N` line, and exit 1 names each that
-    does, or says the open pull requests could not be listed. With -MaxLineLength, a ninth: no line
-    of the body is longer than the limit, by markdown-check.ps1's rule, and exit 1 names each line
-    that is, and markdown-rewrap.ps1.
+    does, or says the open pull requests could not be listed. With -MaxLineLength, a ninth: no
+    prose line of the body is longer than the limit, by markdown-check.ps1's rule, and exit 1 names
+    each line that is, and markdown-rewrap.ps1.
 
 .DESCRIPTION
     WHY (grado-factorio-tools#96). Pull requests here are rebase-merged, which rewrites every SHA on
@@ -261,8 +261,8 @@
     out. With none, as on `gh pr create`, every open pull request is compared.
 
 .PARAMETER MaxLineLength
-    Fail the body for each line longer than this many characters, 1 or more, as above. Without it,
-    length is not checked.
+    Fail the body for each prose line longer than this many characters, 1 or more, as above.
+    Without it, length is not checked.
 
 .PARAMETER SelfTest
     Run the cases that hold the check to what this header says, naming each as it runs. Needs git,
@@ -965,7 +965,7 @@ function Invoke-SelfTest {
             Set-Content -LiteralPath $short -Value "## Summary`n`nA short line.`n`n$marked"
             $held = & $run @($short, '-MaxLineLength', '40')
             $free.Code -eq 0 -and $free.Text -match '(?m)^OK - pr-body-check: ' -and $free.Text -notmatch 'characters' -and
-                $held.Code -eq 0 -and $held.Text -match ' No line is over 40 characters\.' } }
+                $held.Code -eq 0 -and $held.Text -match ' No prose line is over 40 characters\.' } }
     )
 
     $failures = 0
@@ -1083,6 +1083,6 @@ if ($read.Off -or $closing -or $headings -or $markers -or $visual -or $siblings 
 }
 $cited = if ($CiteSiblings) { ' Each statement about a sibling carries a commit and an ISO date.' } else { '' }
 $drawn = if ($RequireSummaryVisual) { ' ## Summary holds a visual.' } else { '' }
-$short = if ($MaxLineLength) { " No line is over $MaxLineLength characters." } else { '' }
+$short = if ($MaxLineLength) { " No prose line is over $MaxLineLength characters." } else { '' }
 Write-Host "OK - pr-body-check: $($read.On) word(s) of the body name a commit, each on $Main, no closing keyword stands outside a Closes #N line, and the pr template's three headings stand once each, in order, with ## Evidence and ## Merge Danger each carrying its markers.$drawn$cited$short$unchecked"
 exit 0
