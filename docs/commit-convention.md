@@ -128,8 +128,8 @@ A gate that overstates its coverage is worse than no gate, so:
   format rule rather than by anything that knows what a scope is. With one, the scope has to be
   listed and nothing more: `pack` on a commit that touches only the resolver is accepted.
 - **What a body says.** The check asks a body for the blank line above it, for lines that wrap,
-  under *Citing a ticket* above for no closing keyword before an issue reference, and under
-  *Breaking changes* for the `!` and a footer together or neither. It does not
+  under *Citing a ticket* above for no closing keyword before an issue reference, and for the `!`
+  and a footer together or neither, as the section after it says. It does not
   read what the body tells: one that cites no ticket passes, and so does one that cites an earlier
   pull request or the session from memory, unmarked, or walks through what happened step by step.
   Nor what a footer says, nor a footer in lower case, which is prose to the check and to the
