@@ -181,22 +181,18 @@ function Get-WrittenSetting {
 # The target of a Copy-Item or Move-Item given $Arguments: the value of -Destination, named from
 # -Des; else the second word no parameter takes, or the first where -Path or -LiteralPath is named.
 # A parameter takes the word after it, but a switch: a name that is a prefix of one of the
-# cmdlets' switches and of none of their other parameters, or a switch's alias.
+# cmdlets' switches, or a switch's alias. A prefix of a switch and of another parameter is
+# ambiguous to PowerShell, which refuses the command.
 function Get-ItemTarget {
     param([string[]] $Arguments)
     $switches = 'Recurse', 'Force', 'PassThru', 'Container', 'Debug', 'Verbose', 'WhatIf', 'Confirm'
-    $others = 'Path', 'LiteralPath', 'Destination', 'Filter', 'Include', 'Exclude', 'Credential', 'ToSession', 'FromSession',
-        'ErrorAction', 'WarningAction', 'InformationAction', 'ErrorVariable', 'WarningVariable', 'InformationVariable',
-        'OutVariable', 'OutBuffer', 'PipelineVariable', 'ProgressAction'
     $loose = [Collections.Generic.List[string]]::new()
     $pathNamed = $false
     for ($k = 0; $k -lt $Arguments.Count; $k++) {
         $a = $Arguments[$k]
         if ($a -notlike '-*') { $loose.Add($a); continue }
         $name = $a.Substring(1)
-        $isSwitch = $name -in 'wi', 'cf', 'db', 'vb' -or
-            (@($switches | Where-Object { $_.StartsWith($name, [StringComparison]::OrdinalIgnoreCase) }) -and
-                -not @($others | Where-Object { $_.StartsWith($name, [StringComparison]::OrdinalIgnoreCase) }))
+        $isSwitch = $name -in 'wi', 'cf', 'db', 'vb' -or @($switches | Where-Object { $_.StartsWith($name, [StringComparison]::OrdinalIgnoreCase) })
         if ($isSwitch) { continue }
         $k++
         if ($name -match '^(?i)des') { return $Arguments | Select-Object -Skip $k -First 1 }
@@ -270,7 +266,7 @@ if ($SelfTest) {
             'Copy-Item -Path b.json -Destination {f}', 'Move-Item -Des {f} b.json', "MSYS_NO_PATHCONV=1 sed -i 's/x/y/' {f}",
             # Redirections and parameters after the target (PR #493's review, finding A).
             'cp backup.json {f} 2>/dev/null', 'mv tmp.json {f} 2>&1', 'cp backup.json {f} > log.txt',
-            'Copy-Item backup.json {f} -ErrorAction Stop', 'Copy-Item backup.json {f} -Exclude *.bak', 'Copy-Item -Recurse b.json {f}',
+            'Copy-Item backup.json {f} -ErrorAction Stop', 'Copy-Item backup.json {f} -Exclude *.bak', 'Copy-Item -Recurse b.json {f}', 'Copy-Item -vb b.json {f}',
             'Copy-Item -LiteralPath b.json -Destination {f}', 'Move-Item -Path b.json {f}', 'Set-Content -Value (Get-Content b.json) -Path {f}',
             'git status && cp backup.json {f}', 'cat a.json | sed -i s/x/y/ {f}', '(cp backup.json {f})', 'cp backup.json ./{f}',
             'cp backup.json "C:\src\x\{f}"', 'cp backup.json /c/src/x/{f}', "Set-Content -Path '{b}' -Value x", 'X=1; cp backup.json {f}'
