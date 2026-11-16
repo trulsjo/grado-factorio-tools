@@ -109,7 +109,7 @@
     must be accepted, printing each and whether it held. One check runs this script as a hook, in a
     throwaway repository that sets core.commentChar, and another runs the first example's wrapper in
     one with no submodule and in one whose vendor/ holds this script, so it needs git and sh, the
-    one on the path or the one Git for Windows ships, and starts pwsh four times.
+    one on the path or the one Git for Windows ships, and starts pwsh ten times.
 
 .EXAMPLE
     A consumer's .githooks/commit-msg, committed executable
