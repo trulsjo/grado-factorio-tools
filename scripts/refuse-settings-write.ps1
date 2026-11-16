@@ -56,6 +56,12 @@
     where the tool call cannot be read, it lets the command run and prints, on stdout, JSON whose
     additionalContext tells the agent the command was NOT checked.
 
+    IT IS A BEST-EFFORT NET. It reads a shell command line by hand, and no reading of one is
+    complete: PR #493's review panel got past it about a dozen times over five rounds, and one
+    fix's new branch brought two regressions. So a new way past it is named below, under WHAT IT
+    CANNOT SEE, rather than met with a new branch of the reading (Truls, 2026-11-16, from PR
+    #493's retro). The Edit tool's own check stays the gate this net only points the agent to.
+
     WHAT IT CANNOT SEE. A write from a script or program the command runs, as
     `pwsh -File build-settings.ps1`, which names the file only inside the script: it reads the
     command line alone (Truls, 2026-11-16, at #469's triage). A path built from a variable or a
