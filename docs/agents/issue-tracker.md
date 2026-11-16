@@ -235,6 +235,16 @@ so a `sibling` form whose script only the branch adds fails at both pins; it is 
 next move. The ticket records the sibling commit,
 and each command with what it printed, as *Conventions* asks.
 
+**A branch measurement, `pin-measure.ps1 -Ref <commit-ish>`, is cited only by the sibling pull
+request whose branch it measured**, at its head or saying what came after; a pin move's pull
+request cites a run without `-Ref`, at GitHub's `main` (Truls, #476's triage, ruling 6). With
+`-Ref`, both clones are at that commit of the sibling's checkout, so a pull request that adds a
+form, or a script a form runs, is measured on its branch; commit the forms file and give `-Forms`
+relative, which is then read as committed there. It replaces the setup two sibling pull requests
+built by hand, a bare clone at a path ending `github.com\trulsjo\<repository>.git` with the branch
+as its `main`: realistic-fusion-refreshed PR #868 and true-nukes-refreshed PR #78, by #476's
+account. The script's header, *A BRANCH MEASUREMENT*, says what `table.md` then names.
+
 **Each form that differs is named in the sibling's pull request**, with what the difference is:
 the script reports and does not judge, and exits 0 whatever it found. Its table goes in
 *Evidence*.
