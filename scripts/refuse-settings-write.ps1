@@ -199,7 +199,10 @@ if ($SelfTest) {
         Write-Host ("self-test {0}: {1} -- {2}" -f $script:n, $Name, $(if ($Ok) { 'ok' } else { 'FAILED' }))
         if (-not $Ok) { $script:failures++; if ($Said) { Write-Host "    $Said" } }
     }
-    $verdict = { param($r) if (-not $r) { 'through' } elseif ($r.ContainsKey('Refuse')) { 'refused' } else { 'unchecked' } }
+    # A command judged, a throw caught as a verdict of its own, so that the case fails rather than
+    # the self-test stopping before its summary line.
+    $ask = { param([string] $c) try { Get-SettingsWrite $c } catch { @{ Threw = $_.Exception.Message } } }
+    $verdict = { param($r) if (-not $r) { 'through' } elseif ($r.ContainsKey('Refuse')) { 'refused' } elseif ($r.ContainsKey('Threw')) { "threw: $($r.Threw)" } else { 'unchecked' } }
     try {
         # {f} is each settings file in turn.
         $refused = 'echo x > {f}', 'echo x >> {f}', 'echo x>{f}', 'echo x 1>"{f}"', 'echo x | tee {f}', 'echo x | tee -a {f}',
@@ -219,12 +222,12 @@ if ($SelfTest) {
             $b = $f.Replace('/', '\').ToUpperInvariant()
             foreach ($c in $refused) {
                 $cmd = $c.Replace('{f}', $f).Replace('{b}', $b)
-                $got = Get-SettingsWrite $cmd
+                $got = & $ask $cmd
                 & $check "``$cmd``: refused, naming the file" ((& $verdict $got) -eq 'refused' -and $got.Refuse -match '(?i)settings(\.local)?\.json$') "$(& $verdict $got) $(if ($got) { $got.Values })"
             }
             foreach ($c in $through) {
                 $cmd = $c.Replace('{f}', $f)
-                $got = & $verdict (Get-SettingsWrite $cmd)
+                $got = & $verdict (& $ask $cmd)
                 & $check "``$cmd``: let through" ($got -eq 'through') $got
             }
         }
@@ -234,7 +237,7 @@ if ($SelfTest) {
             'an unpaired quote in a command that names neither file' = @('echo "x', 'through')
         }
         foreach ($name in $cases.Keys) {
-            $c = $cases[$name]; $said = & $verdict (Get-SettingsWrite $c[0])
+            $c = $cases[$name]; $said = & $verdict (& $ask $c[0])
             & $check "${name}: $($c[1])" ($said -eq $c[1]) $said
         }
         # The script itself, with the call on stdin: a refusal is exit 2 and a reason on stderr; a
