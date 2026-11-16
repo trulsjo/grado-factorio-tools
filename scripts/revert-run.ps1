@@ -1098,10 +1098,12 @@ function Invoke-SelfTest {
                 "    `$both = !`$vOk"
                 "    `$flag = `$x -ne 'l' -and `$x -ne 'm'"
                 '    $flag | Out-Null'
-                # Not verdicts, each of a shape one guard of Test-Verdict tells apart: a Test
-                # block ending in a pipeline of two, a bare block and an assigned one, a key other
-                # than Test or not a string, a += and a member assigned, and variables read under
-                # -bnot, copied or written out as a statement of its own.
+                # A chain is a verdict only where the case's result is read from it whole. A block
+                # yields its last pipeline, so a chain piped on is not its value. A block is a case
+                # only as a hashtable's value under a string key, any string, so not bare, assigned
+                # or under a key that is no string. An assignment is followed only as a plain = to a
+                # variable, and that variable's chain is a verdict only where each read tests its
+                # truth, which -bnot, a copy or a value written out do not.
                 "    @{ Test = { `$x -ne 'u1' -and `$x -ne 'u2' | Out-Null } }"
                 "    { `$x -ne 'v1' -and `$x -ne 'v2' }"
                 "    `$tb = { `$x -ne 't1' -and `$x -ne 't2' }"
@@ -1116,8 +1118,11 @@ function Invoke-SelfTest {
                 '    $copy = $cOk'
                 "    `$dOk = `$x -ne 'd1' -and `$x -ne 'd2'"
                 '    $dOk'
-                # #411's shapes: a block under a quoted key, and a chain in parentheses passed to a
-                # command invoked with & on a variable; then the boundaries that keep their reverts.
+                # A quoted key names a case as a bare one does, and a check called as & on a
+                # variable reads its parenthesised argument as the case's result (#411). Only that
+                # call is known to be a check, and only its whole argument a verdict: an -or may be
+                # false where one operand holds, a chain inside an operand is not the result, and a
+                # command called by name, or an argument piped on, is not read as one.
                 "    @{ 'a case' = { `$x -ne 'k1' -and `$x -ne 'k2' } }"
                 "    & `$check 'one' (`$x -ne 'g1' -and `$x -ne 'g2') `$x"
                 "    & `$check 'two' (`$x -eq 'g3' -or `$x -eq 'g4')"
@@ -1125,13 +1130,17 @@ function Invoke-SelfTest {
                 "    & 'check' 'four' (`$x -ne 'g8' -and `$x -ne 'g9')"
                 "    Check 'five' (`$x -ne 'g10' -and `$x -ne 'g11')"
                 "    & `$check 'six' (`$x -ne 'g12' -and `$x -ne 'g13' | Out-Null)"
-                # Dot-sourced, not invoked with &; and a block under $key beside a string key.
+                # A check is known only by & on a variable, so a dot-sourced call is not one; and a
+                # key that is a variable may name anything, so a string key beside it makes no case.
                 "    . `$check 'seven' (`$x -ne 'g16' -and `$x -ne 'g17')"
                 "    @{ 'name' = 1; `$key = { `$x -ne 'g18' -and `$x -ne 'g19' } }"
-                # A variable read only as an operand of a verdict chain, as the run-as-a-command
-                # case's $under (PR #471's retro); one read in a chain that is no verdict; and one
-                # read in its own chain, which is asked about once; one read in an -or verdict, and
-                # one in an -and chain under an -or, either of which may be false.
+                # A variable read as an operand of an -and verdict is one too (PR #471's retro): the
+                # case passes only where every operand holds, and a revert that drops an operand of
+                # the variable's chain can only make it hold more often. So the chain is followed up
+                # -and links only, from a top that is itself a verdict. Under an -or, an operand may
+                # be false and the case still pass, so a read there, or in an -and chain under one,
+                # makes no verdict, nor does a read in a chain that is none. A read in its own chain
+                # ends the asking, which would otherwise never stop.
                 "    @{ Test = { `$hOk = `$x -ne 'h1' -and `$x -ne 'h2'; `$x -ne 'h3' -and `$hOk -and `$x -ne 'h4' } }"
                 "    `$qOk = `$x -ne 'q1' -and `$x -ne 'q2'"
                 "    `$qAll = `$x -ne 'q3' -and `$qOk"
@@ -1140,16 +1149,19 @@ function Invoke-SelfTest {
                 '    if ($rOk) { }'
                 "    @{ Test = { `$sOk = `$x -ne 's1' -and `$x -ne 's2'; `$x -eq 's3' -or `$sOk } }"
                 "    @{ Test = { `$tOk = `$x -ne 't1' -and `$x -ne 't2'; `$tOk -and `$x -ne 't3' -or `$x -eq 't4' } }"
-                # A variable read twice in one verdict chain, asked about again on the second
-                # read; and two variables each read in the other's chain, which end the asking.
+                # A chain is asked about once on each path down, not once in all: a second read in
+                # one verdict is a path of its own and is asked again, while chains each read in the
+                # other's are on one path, which ends the asking with no verdict.
                 "    @{ Test = { `$aOk = `$x -ne 'a1' -and `$x -ne 'a2'; `$aOk -and `$x -ne 'a3' -and `$aOk } }"
                 "    `$jOk = `$x -ne 'j1' -and `$kOk"
                 "    `$kOk = `$x -ne 'j2' -and `$jOk"
                 '    if ($jOk) { }'
                 '    if ($kOk) { }'
-                # A variable read under -not in an -and verdict, meant to be false, and one read in
-                # the chain of such a variable, keep their reverts (#488); one read under -not in an
-                # if's condition, inside an -and chain there, is still skipped.
+                # Under -not in an -and verdict, a variable is meant to be false, and a revert that
+                # makes its chain hold can fail the case, so that chain keeps its reverts, as does a
+                # chain read in it (#488). An if's condition is no verdict: a self-test's if on -not
+                # reports a failure, which a revert that makes the chain hold only silences, so
+                # there, inside an -and chain too, the chain is still skipped.
                 "    @{ Test = { `$nOk = `$x -ne 'n1' -and `$x -ne 'n2'; `$x -ne 'n3' -and -not `$nOk } }"
                 "    @{ Test = { `$fOk = `$x -ne 'f1' -and `$x -ne 'f2'; `$gOk = `$x -ne 'f3' -and `$fOk; `$x -ne 'f4' -and -not `$gOk } }"
                 "    `$iOk = `$x -ne 'i1' -and `$x -ne 'i2'"
@@ -1158,7 +1170,9 @@ function Invoke-SelfTest {
                 'function Invoke-SelfTest {'
                 "    @{ Test = { `$x -ne 'n' -and `$x -ne 'o' } }"
                 '}'
-                # Outside the region: another function, and an elseif beside an if ($SelfTest).
+                # Outside a self-test a chain is the script's own logic, which a revert can break,
+                # so nothing is skipped; a self-test is an if ($SelfTest) clause or Invoke-SelfTest
+                # alone, not another function or a clause beside one.
                 'function Other {'
                 "    @{ Test = { `$x -ne 'o1' -and `$x -ne 'o2' } }"
                 '}'
