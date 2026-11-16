@@ -400,6 +400,22 @@ fails a wiring whose `matcher` would not start the hook for both shell tools. Wh
 is in its header: an alias, a script that runs git itself, and both shells' quoting, read
 roughly.
 
+## Keeping an agent session from writing its settings from the shell
+
+A session once wrote a tracked `.claude/settings.json` with a script run through the Bash tool,
+so the session's own check on edits to that file was never asked (#469, from
+grado-factorio-modpack#414). `scripts/refuse-settings-write.ps1` is a hook that refuses, exit 2,
+a shell command that writes `.claude/settings.json` or `.claude/settings.local.json`: a
+redirection onto it, `tee`, `Set-Content`, `Out-File`, `Add-Content`, .NET's `WriteAll` and
+`AppendAll` methods, `sed -i`, and `cp`, `mv`, `Copy-Item` or `Move-Item` with it as the target.
+It says to make the change with the Edit tool. A read, and the file as a copy's source, pass.
+It reads the command line only, so a write from a script the command runs is not seen (Truls, at
+#469's triage).
+
+This repository wires it in its tracked `.claude/settings.json`; a consumer's line is the first
+`.EXAMPLE` in [the script's header](scripts/refuse-settings-write.ps1), and `-SelfTest -Settings`
+runs a consumer's wiring, as the discard hook's does. What it cannot see is in its header.
+
 ## Keeping an agent session from opening a pull request with a failing body
 
 PR #252 was opened with a body `pr-body-check.ps1` failed: the check was piped to `tail`, whose
@@ -930,8 +946,8 @@ scripts/     PowerShell entry points, one job each, and the libraries they
 .claude/     settings.json, which wires the session hooks: one refuses a commit
              or push skipping those, one Python run from a heredoc, one a
              pull request body the check fails, one a Bash command bash
-             would run a backtick span in, one a download of a program, and
-             one a Bash command that hangs
+             would run a backtick span in, one a download of a program, one
+             a Bash command that hangs, and one a shell write to a settings file
 .github/     the workflow that runs scripts/check.ps1 on pull requests and main
 docs/        the commit convention, the ADRs, the notes agents read, the
              extraction record — what moved, from where, and why — and
