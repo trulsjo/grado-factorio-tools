@@ -304,7 +304,7 @@ if ($SelfTest) {
             # PowerShell's cp and mv, a GNU cp beside them, and a parameter with a colon (turn 2, S
             # and T).
             'cp backup.json {f} -ErrorAction Stop', 'cp -Destination {f} b.json', 'mv -Destination {f} b.json', 'cp b.json {f} -Force',
-            'cp -rf backup.json {f}', 'Copy-Item -Confirm:$false b.json {f}', 'Copy-Item b.json -Destination:{f}',
+            'cp -rf backup.json {f}', 'cp -rfv backup.json {f}','Copy-Item -Confirm:$false b.json {f}', 'Copy-Item b.json -Destination:{f}',
             # A case pattern's ), and parentheses two deep (PR #493's review, turn 2, R).
             'case $x in a) cp backup.json {f};; esac', 'case $x in a) sed -i s/x/y/ {f};; esac',
             'Copy-Item (Join-Path (Get-Location) b.json) {f}',
@@ -324,7 +324,7 @@ if ($SelfTest) {
             # A source named as the target would be, and writes elsewhere (PR #493's review, A and
             # M).
             'Copy-Item backup.json -Path {f}', 'Copy-Item -Debug {f} backup.json', 'cp -tbackup {f}', 'sort < {f}', 'sort <{f}', 'Copy-Item (Resolve-Path {f}) backup.json', 'Copy-Item (Join-Path (Get-Location) {f}) backup.json',
-            'cp -Path {f} -Destination backup.json', 'Copy-Item -Destination:backup.json {f}',
+            'cp -Path {f} -Destination backup.json', 'Copy-Item -Destination:backup.json {f}', '> backup.json < {f}',
             "[IO.File]::WriteAllText('backup.json', (Get-Content {f} -Raw))", 'cat {f} >backup.json'
         foreach ($f in '.claude/settings.json', '.claude/settings.local.json') {
             $b = $f.Replace('/', '\').ToUpperInvariant()
