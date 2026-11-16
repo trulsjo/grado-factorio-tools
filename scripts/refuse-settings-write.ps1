@@ -32,7 +32,8 @@
     the target. Each redirection, as `2>/dev/null` or `> log.txt`, is set aside before a command's
     arguments are read. The target of `cp` or `mv` is the last word that is no option, and none
     with `-t <dir>` or `-t<dir>`. That of `Copy-Item` or `Move-Item`, and of `cp` or `mv` where an
-    argument names one of those cmdlets' parameters by three letters or more, as PowerShell's
+    argument names one of those cmdlets' parameters by three letters or more, or by a common
+    parameter's alias, as -ea, but -iv and -pv, which GNU reads as two options each, as PowerShell's
     aliases are written (Test-ItemParameter), is Get-ItemTarget's: the value of -Destination, named
     from -Des; else the second word no parameter takes, or the first where -Path or -LiteralPath
     is named, every parameter but a switch taking the word after it, or the value after its colon,
@@ -132,6 +133,9 @@ $ITEM_VALUED = 'Path', 'LiteralPath', 'Destination', 'Filter', 'Include', 'Exclu
 # one dash, as -ErrorAction or -Des:f: what tells PowerShell's cp from GNU's, whose -rf is no name.
 function Test-ItemParameter {
     param([string] $Word)
+    # The common parameters' aliases of two letters or four, but -iv and -pv, which GNU's cp and
+    # mv read as -i -v and -p -v (PR #493's review, turn 3, W1).
+    if ($Word -match '^-(?i)(ea|wa|ev|wv|ov|ob|infa)(?::.*)?$') { return $true }
     if ($Word -notmatch '^-([A-Za-z]{3,})(?::.*)?$') { return $false }
     $name = $Matches[1]
     [bool] @($ITEM_SWITCHES + $ITEM_VALUED | Where-Object { $_.StartsWith($name, [StringComparison]::OrdinalIgnoreCase) })
@@ -304,7 +308,8 @@ if ($SelfTest) {
             # PowerShell's cp and mv, a GNU cp beside them, and a parameter with a colon (turn 2, S
             # and T).
             'cp backup.json {f} -ErrorAction Stop', 'cp -Destination {f} b.json', 'mv -Destination {f} b.json', 'cp b.json {f} -Force',
-            'cp -rf backup.json {f}', 'cp -rfv backup.json {f}','Copy-Item -Confirm:$false b.json {f}', 'Copy-Item b.json -Destination:{f}',
+            'cp -rf backup.json {f}', 'cp -rfv backup.json {f}', 'Copy-Item -Confirm:$false b.json {f}',
+            'cp backup.json {f} -ea Stop', 'mv tmp.json {f} -ea SilentlyContinue', 'cp -iv backup.json {f}', 'mv -pv tmp.json {f}', 'Copy-Item b.json -Destination:{f}',
             # A case pattern's ), and parentheses two deep (PR #493's review, turn 2, R).
             'case $x in a) cp backup.json {f};; esac', 'case $x in a) sed -i s/x/y/ {f};; esac',
             'Copy-Item (Join-Path (Get-Location) b.json) {f}', 'Copy-Item (Get-Content b.json | Select-Object -First 1) {f}',
