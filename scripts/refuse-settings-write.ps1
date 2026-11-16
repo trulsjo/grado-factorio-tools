@@ -37,9 +37,10 @@
     command is found in a compound, after `&&`, `||`, `;`, `|`, `&` or a newline, or inside
     parentheses or braces, and after the assignments that lead it, as `MSYS_NO_PATHCONV=1 sed -i
     ...`; a command's name may carry a path or `.exe`. A command a `(` broke off goes on after the
-    `)`, one word standing for what the parentheses held, as
+    `)` that closes it, at any depth, one word standing for what the parentheses held, as
     `Set-Content -Value (Get-Content b.json) -Path .claude/settings.json` and
-    `Copy-Item (Resolve-Path b.json) .claude/settings.json`.
+    `Copy-Item (Join-Path (Get-Location) b.json) .claude/settings.json`; a `)` that closes no `(`,
+    as a case pattern's, ends a command and continues none.
 
     WHAT IT LETS THROUGH. A read, as `cat`, `Get-Content`, `grep`, `git show` or `git diff`; the
     file as a copy's source, as `cp .claude/settings.json backup.json`; a redirection of it
@@ -216,11 +217,13 @@ function Get-SettingsWrite {
     $words = Split-ShellCommand $Command
     if ($null -eq $words) { return @{ Unchecked = 'its quotes could not be paired, so its commands could not be read' } }
     $one = [Collections.Generic.List[hashtable]]::new()
-    # The command a ( broke off, as `Set-Content -Value (Get-Content b) -Path f`, whose words go on
-    # after the ), with one word standing for what the parentheses held, so that a word after them
-    # keeps its place, as the target of `Copy-Item (Resolve-Path b) f`.
-    $outer = @()
-    $op = ''
+    # The commands a ( broke off, innermost last, as `Set-Content -Value (Get-Content b) -Path f`:
+    # each goes on after the ) that closes its (, with one word standing for what the parentheses
+    # held, so that a word after them keeps its place, as the target of
+    # `Copy-Item (Resolve-Path b) f`. A ) that closes no (, as a case pattern's `a)`, ends a command
+    # and continues none.
+    $outer = [Collections.Generic.Stack[object]]::new()
+    $resumed = $null
     $held = @{ Raw = '(...)'; Word = '(...)'; Bare = '(...)' }
     foreach ($w in @($words) + @(@{ Op = 'end' })) {
         if (-not $w.ContainsKey('Op')) { $one.Add($w); continue }
@@ -229,9 +232,9 @@ function Get-SettingsWrite {
         while ($lead -lt $one.Count -and $one[$lead].Word -match '^\w+=') { $lead++ }
         $s = @($one | Select-Object -Skip $lead)
         $one.Clear()
-        if ($op -eq ')') { $s = @($outer) + @($held) + $s }
-        $op = $w.Op
-        if ($op -eq '(') { $outer = $s }
+        if ($null -ne $resumed) { $s = @($resumed) + @($held) + $s; $resumed = $null }
+        if ($w.Op -eq '(') { $outer.Push(@($s)); continue }
+        if ($w.Op -eq ')' -and $outer.Count) { $resumed = $outer.Pop() }
         if (-not $s) { continue }
         $file = Get-WrittenSetting -Words $s
         if ($file) { return @{ Refuse = $file } }
@@ -269,6 +272,9 @@ if ($SelfTest) {
             "sed -i 's/x/y/' {f}", "sed -i.bak 's/x/y/' {f}", "sed -ni 's/x/y/p' {f}", "sed --in-place=.bak 's/x/y/' {f}",
             "/usr/bin/sed -i 's/x/y/' {f}", 'cp backup.json {f}', 'mv -f backup.json {f}', 'Copy-Item backup.json {f} -Force',
             'Copy-Item -Path b.json -Destination {f}', 'Move-Item -Des {f} b.json', "MSYS_NO_PATHCONV=1 sed -i 's/x/y/' {f}",
+            # A case pattern's ), and parentheses two deep (PR #493's review, turn 2, R).
+            'case $x in a) cp backup.json {f};; esac', 'case $x in a) sed -i s/x/y/ {f};; esac',
+            'Copy-Item (Join-Path (Get-Location) b.json) {f}',
             # A redirection that opens a command, or a brace group (PR #493's review, turn 2, Q).
             '> {f}', '>{f} echo x', '{ echo x; } > {f}', '2>/dev/null cp backup.json {f}',
             # Redirections and parameters after the target (PR #493's review, finding A).
@@ -284,7 +290,7 @@ if ($SelfTest) {
             'echo x > {f}.bak', 'echo x > my-settings.json', 'echo x > .claude/my-settings.json', 'cp {f}.bak backup.json',
             # A source named as the target would be, and writes elsewhere (PR #493's review, A and
             # M).
-            'Copy-Item backup.json -Path {f}', 'Copy-Item -Debug {f} backup.json', 'cp -tbackup {f}', 'sort < {f}', 'sort <{f}', 'Copy-Item (Resolve-Path {f}) backup.json',
+            'Copy-Item backup.json -Path {f}', 'Copy-Item -Debug {f} backup.json', 'cp -tbackup {f}', 'sort < {f}', 'sort <{f}', 'Copy-Item (Resolve-Path {f}) backup.json', 'Copy-Item (Join-Path (Get-Location) {f}) backup.json',
             "[IO.File]::WriteAllText('backup.json', (Get-Content {f} -Raw))", 'cat {f} >backup.json'
         foreach ($f in '.claude/settings.json', '.claude/settings.local.json') {
             $b = $f.Replace('/', '\').ToUpperInvariant()
