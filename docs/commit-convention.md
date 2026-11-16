@@ -139,9 +139,9 @@ A gate that overstates its coverage is worse than no gate, so:
   URL that cannot be broken, and git parses that block by position.
 - **A line whose longest single word exceeds the limit passes.** No wrapping makes it fit, and
   flagging it would only teach people to ignore the gate. A bare long URL is the real case.
-- **`fixup!`, `squash!`, `amend!`, `Merge …` and `Revert "…"` subjects skip every rule**, because
-  git writes or rewrites them rather than a person. A closing keyword in such a message is not
-  refused.
+- **`fixup!`, `squash!`, `amend!`, `Merge …` and `Revert "…"` subjects skip every rule but
+  one**, because git writes or rewrites them rather than a person. A closing keyword before an
+  issue reference is refused in such a message too: it closes the issue all the same.
 - **Comment lines are skipped, with the repository's comment character.** That is
   `core.commentChar`, or `core.commentString`, read where the check runs, and `#` when neither is
   set. With `auto` it is read off git's own instruction or scissors line, and is `#` where the
