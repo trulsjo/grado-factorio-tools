@@ -57,8 +57,13 @@
     substitution, as `$f` or `$(...)`. A `cd` into `.claude` and then a bare `settings.json`. A
     write by git, as `git checkout -- .claude/settings.json`, which refuse-git-discard.ps1 judges on
     its own grounds. A command named through an alias, as `ac`, or a writer not listed above, as
-    `New-Item -Value`, `dd`, `python` or `node`. A parameter given with a colon, as `-Value:x`, and
-    `cp --target-directory=<dir>`, whose file is then read as the target. Both shells' quoting is
+    `New-Item -Value`, `dd`, `python` or `node`. A command after a shell keyword or a wrapper, as
+    `then`, `do`, `else` or `env`, whose name is then read as the keyword's. A copy into the
+    directory, as `cp x/settings.json .claude/`, and a redirection written `>|`, whose target the
+    `|` cuts off. A parameter given with a colon, as `-Value:x`, and `cp --target-directory=<dir>`
+    or `cp -S <suffix>`, whose value is then read as a file. A .NET writer named inside a quoted
+    string, as `Write-Output "[IO.File]::WriteAllText('.claude/settings.json', 'x')"`, which is
+    refused though it only prints. Both shells' quoting is
     read roughly: a word in double or single quotes is one word with its quotes taken off, a
     backslash or backtick escapes the character after it, and nothing is expanded. And whether the
     settings still reach it, unless -SelfTest is run on them: that reads the wired command and the
