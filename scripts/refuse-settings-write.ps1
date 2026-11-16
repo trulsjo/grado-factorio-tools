@@ -37,8 +37,9 @@
     command is found in a compound, after `&&`, `||`, `;`, `|`, `&` or a newline, or inside
     parentheses or braces, and after the assignments that lead it, as `MSYS_NO_PATHCONV=1 sed -i
     ...`; a command's name may carry a path or `.exe`. A command a `(` broke off goes on after the
-    `)` where the words there open with an option, as
-    `Set-Content -Value (Get-Content b.json) -Path .claude/settings.json`.
+    `)`, one word standing for what the parentheses held, as
+    `Set-Content -Value (Get-Content b.json) -Path .claude/settings.json` and
+    `Copy-Item (Resolve-Path b.json) .claude/settings.json`.
 
     WHAT IT LETS THROUGH. A read, as `cat`, `Get-Content`, `grep`, `git show` or `git diff`; the
     file as a copy's source, as `cp .claude/settings.json backup.json`; a redirection of it
@@ -214,9 +215,11 @@ function Get-SettingsWrite {
     if ($null -eq $words) { return @{ Unchecked = 'its quotes could not be paired, so its commands could not be read' } }
     $one = [Collections.Generic.List[hashtable]]::new()
     # The command a ( broke off, as `Set-Content -Value (Get-Content b) -Path f`, whose words go on
-    # after the ) where those open with an option.
+    # after the ), with one word standing for what the parentheses held, so that a word after them
+    # keeps its place, as the target of `Copy-Item (Resolve-Path b) f`.
     $outer = @()
     $op = ''
+    $held = @{ Raw = '(...)'; Word = '(...)'; Bare = '(...)' }
     foreach ($w in @($words) + @(@{ Op = 'end' })) {
         if (-not $w.ContainsKey('Op')) { $one.Add($w); continue }
         # The assignments that lead a command, as `MSYS_NO_PATHCONV=1 sed ...`.
@@ -224,7 +227,7 @@ function Get-SettingsWrite {
         while ($lead -lt $one.Count -and $one[$lead].Word -match '^\w+=') { $lead++ }
         $s = @($one | Select-Object -Skip $lead)
         $one.Clear()
-        if ($op -eq ')' -and $s -and $s[0].Word -like '-*') { $s = @($outer) + $s }
+        if ($op -eq ')') { $s = @($outer) + @($held) + $s }
         $op = $w.Op
         if ($op -eq '(') { $outer = $s }
         if (-not $s) { continue }
@@ -267,6 +270,7 @@ if ($SelfTest) {
             # Redirections and parameters after the target (PR #493's review, finding A).
             'cp backup.json {f} 2>/dev/null', 'mv tmp.json {f} 2>&1', 'cp backup.json {f} > log.txt',
             'Copy-Item backup.json {f} -ErrorAction Stop', 'Copy-Item backup.json {f} -Exclude *.bak', 'Copy-Item -Recurse b.json {f}', 'Copy-Item -vb b.json {f}',
+            'Copy-Item -wi b.json {f}', 'Copy-Item -cf b.json {f}', 'Copy-Item -db b.json {f}', 'Copy-Item (Resolve-Path b.json) {f}',
             'Copy-Item -LiteralPath b.json -Destination {f}', 'Move-Item -Path b.json {f}', 'Set-Content -Value (Get-Content b.json) -Path {f}',
             'git status && cp backup.json {f}', 'cat a.json | sed -i s/x/y/ {f}', '(cp backup.json {f})', 'cp backup.json ./{f}',
             'cp backup.json "C:\src\x\{f}"', 'cp backup.json /c/src/x/{f}', "Set-Content -Path '{b}' -Value x", 'X=1; cp backup.json {f}'
@@ -276,7 +280,7 @@ if ($SelfTest) {
             'echo x > {f}.bak', 'echo x > my-settings.json', 'echo x > .claude/my-settings.json', 'cp {f}.bak backup.json',
             # A source named as the target would be, and writes elsewhere (PR #493's review, A and
             # M).
-            'Copy-Item backup.json -Path {f}', 'Copy-Item -Debug {f} backup.json', 'cp -tbackup {f}', 'sort < {f}',
+            'Copy-Item backup.json -Path {f}', 'Copy-Item -Debug {f} backup.json', 'cp -tbackup {f}', 'sort < {f}', 'sort <{f}', 'Copy-Item (Resolve-Path {f}) backup.json',
             "[IO.File]::WriteAllText('backup.json', (Get-Content {f} -Raw))", 'cat {f} >backup.json'
         foreach ($f in '.claude/settings.json', '.claude/settings.local.json') {
             $b = $f.Replace('/', '\').ToUpperInvariant()
