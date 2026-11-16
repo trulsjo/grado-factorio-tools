@@ -877,6 +877,18 @@ that no form runs. It reports and does not judge: exit 0 whatever the forms did,
 could not measure. The forms file's shape and its four placeholders are in the header. `-SelfTest`
 builds both repositories offline and needs no game.
 
+## Checking that a sibling's forms cover its gates
+
+`scripts/form-check.ps1`, run from a sibling's root, fails, exit 1, where a script here that one
+of the sibling's gates runs has no form in its forms file, naming the script and each gate line
+(#470, from grado-factorio-modpack#424). The gates are the files under `.githooks/` and
+`.github/workflows/`, and `.claude/settings.json`; a call is the literal path into the submodule,
+or one through a variable the same file sets to it. A `-SelfTest` form is enough (Truls,
+2026-11-14). The forms file is `-Forms`, `scripts/pin-forms.psd1` unless said, read from the
+working tree. What it cannot see is in its header.
+
+    pwsh -NoProfile -File vendor/grado-factorio-tools/scripts/form-check.ps1
+
 ## Keeping a sibling's submodule at its pin
 
 `scripts/follow-pin.ps1` brings a sibling's `vendor/grado-factorio-tools` to the pin the new
