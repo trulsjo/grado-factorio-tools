@@ -161,12 +161,12 @@ if ($SelfTest) {
         if (-not $Ok) { $script:failures++; if ($Said) { Write-Host "    $Said" } }
     }
     $write = { param([string] $path, [string] $text) New-Item -ItemType Directory -Path (Split-Path $path) -Force | Out-Null; [IO.File]::WriteAllText($path, $text) }
-    $tools = Join-Path $temp 'tools'
-    foreach ($s in 'check.ps1', 'commit-check.ps1', 'follow-pin.ps1', 'reword-commit.ps1', 'a.ps1', 'b.ps1', 'c.ps1', 'd.ps1') { & $write (Join-Path $tools $s) '' }
+    $fixtureTools = Join-Path $temp 'tools'
+    foreach ($s in 'check.ps1', 'commit-check.ps1', 'follow-pin.ps1', 'reword-commit.ps1', 'a.ps1', 'b.ps1', 'c.ps1', 'd.ps1') { & $write (Join-Path $fixtureTools $s) '' }
     $k = 0
     # A sibling built from its gate files and forms, the check run there: @{ Code; Text }.
     $sibling = {
-        param([hashtable] $files, [string] $forms = 'scripts/pin-forms.psd1', [string] $toolsDir = $tools)
+        param([hashtable] $files, [string] $forms = 'scripts/pin-forms.psd1', [string] $toolsDir = $fixtureTools)
         $root = Join-Path $temp "sibling-$((++$script:k))"
         New-Item -ItemType Directory -Path $root -Force | Out-Null
         foreach ($f in $files.Keys) { & $write (Join-Path $root $f) $files[$f] }
@@ -205,7 +205,7 @@ if ($SelfTest) {
             'scripts/pin-forms.psd1' = & $formsOf (& $form 'tools' 'follow-pin.ps1')
         }
         $named = @([regex]::Matches($r.Text, '(?m)^form-check: (\S+) has no form in \S+; run by (.+)\.$') | ForEach-Object { "$($_.Groups[1].Value) $($_.Groups[2].Value)" })
-        & $check 'each call form is a call, a literal path in a hook, ${<var>}/scripts/<name> in a workflow and $<var>/<name> in the settings file, a trailing dot dropped; a comment line, and a name that is no tools script, are not' ($r.Code -eq 1 -and ($named -join '|') -ceq 'a.ps1 .githooks/post-checkout:2, .githooks/post-checkout:5|b.ps1 .github/workflows/ci.yml:6|c.ps1 .claude/settings.json:1') $r.Text
+        & $check 'each call form is a call, a literal path in a hook, ${<var>}/scripts/<name> in a workflow and $<var>/<name> in the settings file, a trailing dot dropped; a comment line, and a name that is no tools script, are not' ($r.Code -eq 1 -and ($named -join '|') -ceq 'a.ps1 .githooks/post-checkout:2, .githooks/post-checkout:5|b.ps1 .github/workflows/ci.yml:6|c.ps1 .claude/settings.json' + ':1') $r.Text
         $r = & $sibling @{
             '.githooks/post-merge' = & $hook "sub=`"`$ROOT/vendor/grado-factorio-tools`"`n`"`$sub/scripts/follow-pin.ps1`" --check`npwsh -File vendor/grado-factorio-tools/scripts/a.ps1"
             'scripts/pin-forms.psd1' = & $formsOf (& $form 'tools' 'follow-pin.ps1' "; Args = @('-SelfTest')"), (& $form 'tools' 'vendor\grado-factorio-tools\scripts\a.ps1')
@@ -234,7 +234,7 @@ if ($SelfTest) {
         & $write (Join-Path $root '.githooks/commit-msg') (& $hook 'pwsh -File vendor/grado-factorio-tools/scripts/a.ps1')
         & $write (Join-Path $root 'forms.psd1') (& $formsOf (& $form 'tools' 'b.ps1'))
         Push-Location -LiteralPath $root
-        try { $said = & pwsh -NoProfile -File $PSCommandPath -Forms forms.psd1 -Tools $tools 2>&1 | Out-String; $code = $LASTEXITCODE } finally { Pop-Location }
+        try { $said = & pwsh -NoProfile -File $PSCommandPath -Forms forms.psd1 -Tools $fixtureTools 2>&1 | Out-String; $code = $LASTEXITCODE } finally { Pop-Location }
         Write-Host ($said.TrimEnd() -replace '(?m)^', '    ')
         & $check 'run as a command from the sibling''s root, a relative -Forms is read there, and a missing form exits 1' ($code -eq 1 -and $said -match 'a\.ps1 has no form in forms\.psd1; run by \.githooks/commit-msg:2') $said
     }
