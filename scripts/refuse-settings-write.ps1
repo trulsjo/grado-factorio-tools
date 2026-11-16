@@ -31,9 +31,12 @@
     suffix or not, or `--in-place`, naming it; and `cp`, `mv`, `Copy-Item` or `Move-Item` with it as
     the target. Each redirection, as `2>/dev/null` or `> log.txt`, is set aside before a command's
     arguments are read. The target of `cp` or `mv` is the last word that is no option, and none
-    with `-t <dir>` or `-t<dir>`. That of `Copy-Item` or `Move-Item` is Get-ItemTarget's: the value
-    of -Destination, named from -Des; else the second word no parameter takes, or the first where
-    -Path or -LiteralPath is named, every parameter but a switch taking the word after it. A
+    with `-t <dir>` or `-t<dir>`. That of `Copy-Item` or `Move-Item`, and of `cp` or `mv` where an
+    argument names one of those cmdlets' parameters by three letters or more, as PowerShell's
+    aliases are written (Test-ItemParameter), is Get-ItemTarget's: the value of -Destination, named
+    from -Des; else the second word no parameter takes, or the first where -Path or -LiteralPath
+    is named, every parameter but a switch taking the word after it, or the value after its colon,
+    as `-Destination:<file>`. A
     command is found in a compound, after `&&`, `||`, `;`, `|`, `&` or a newline, or inside
     parentheses or braces, and after the assignments that lead it, as `MSYS_NO_PATHCONV=1 sed -i
     ...`; a command's name may carry a path or `.exe`. A command a `(` broke off goes on after the
@@ -62,7 +65,8 @@
     `New-Item -Value`, `dd`, `python` or `node`. A command after a shell keyword or a wrapper, as
     `then`, `do`, `else` or `env`, whose name is then read as the keyword's. A copy into the
     directory, as `cp x/settings.json .claude/`, and a redirection written `>|`, whose target the
-    `|` cuts off. A parameter given with a colon, as `-Value:x`, and `cp --target-directory=<dir>`
+    `|` cuts off. A parameter given with a colon to `Set-Content`, `Add-Content` or `Out-File`, as
+    `-Value:x`, and `cp --target-directory=<dir>`
     or `cp -S <suffix>`, whose value is then read as a file. A .NET writer named inside a quoted
     string, as `Write-Output "[IO.File]::WriteAllText('.claude/settings.json', 'x')"`, which is
     refused though it only prints. Both shells' quoting is
@@ -117,6 +121,22 @@ $ErrorActionPreference = 'Stop'
 # A word that names either settings file, whatever the directory part before `.claude`.
 $FILE_AT = '(?i)(?:^|[\\/])\.claude[\\/]settings(?:\.local)?\.json$'
 
+# Copy-Item's and Move-Item's switches, and their parameters that take a value, the common ones
+# among them.
+$ITEM_SWITCHES = 'Recurse', 'Force', 'PassThru', 'Container', 'Debug', 'Verbose', 'WhatIf', 'Confirm'
+$ITEM_VALUED = 'Path', 'LiteralPath', 'Destination', 'Filter', 'Include', 'Exclude', 'Credential', 'ToSession', 'FromSession',
+    'ErrorAction', 'WarningAction', 'InformationAction', 'ErrorVariable', 'WarningVariable', 'InformationVariable',
+    'OutVariable', 'OutBuffer', 'PipelineVariable', 'ProgressAction'
+
+# Whether $Word names one of Copy-Item's or Move-Item's parameters by three letters or more, with
+# one dash, as -ErrorAction or -Des:f: what tells PowerShell's cp from GNU's, whose -rf is no name.
+function Test-ItemParameter {
+    param([string] $Word)
+    if ($Word -notmatch '^-([A-Za-z]{3,})(?::.*)?$') { return $false }
+    $name = $Matches[1]
+    [bool] @($ITEM_SWITCHES + $ITEM_VALUED | Where-Object { $_.StartsWith($name, [StringComparison]::OrdinalIgnoreCase) })
+}
+
 # The words of $Command, with each operator that ends a command as one of its own: a word's Raw
 # text, its Bare text with each quoted span blanked to the same length, so that a > inside quotes
 # is no redirection, and its Word, with the quotes taken off; $null where a quote is left open.
@@ -170,6 +190,13 @@ function Get-WrittenSetting {
             if ($after -cmatch '^(-[^-]*i|--in-place)') { return $after | Where-Object { $_ -match $FILE_AT } | Select-Object -First 1 }
         }
         '^(cp|mv)$' {
+            # PowerShell's aliases of Copy-Item and Move-Item, where an argument names one of their
+            # parameters, by three letters or more, as -ErrorAction or -Destination.
+            if (@($after | Where-Object { Test-ItemParameter $_ })) {
+                $target = Get-ItemTarget -Arguments $after
+                if ($target -match $FILE_AT) { return $target }
+                return
+            }
             # A target directory, -t <dir> or -t<dir>, takes every file named into it.
             if ($after -cmatch '^-t') { return }
             $target = $after | Where-Object { $_ -notlike '-*' } | Select-Object -Last 1
@@ -189,18 +216,20 @@ function Get-WrittenSetting {
 # ambiguous to PowerShell, which refuses the command.
 function Get-ItemTarget {
     param([string[]] $Arguments)
-    $switches = 'Recurse', 'Force', 'PassThru', 'Container', 'Debug', 'Verbose', 'WhatIf', 'Confirm'
     $loose = [Collections.Generic.List[string]]::new()
     $pathNamed = $false
     for ($k = 0; $k -lt $Arguments.Count; $k++) {
         $a = $Arguments[$k]
         if ($a -notlike '-*') { $loose.Add($a); continue }
-        $name = $a.Substring(1)
-        $isSwitch = $name -in 'wi', 'cf', 'db', 'vb' -or @($switches | Where-Object { $_.StartsWith($name, [StringComparison]::OrdinalIgnoreCase) })
+        # A parameter given with a colon, as -Confirm:$false or -Destination:f, holds its value.
+        $joined = $a -match '^-([^:]+):(.*)$'
+        $name = if ($joined) { $Matches[1] } else { $a.Substring(1) }
+        $value = if ($joined) { $Matches[2] } else { $Arguments | Select-Object -Skip ($k + 1) -First 1 }
+        $isSwitch = $name -in 'wi', 'cf', 'db', 'vb' -or @($ITEM_SWITCHES | Where-Object { $_.StartsWith($name, [StringComparison]::OrdinalIgnoreCase) })
         if ($isSwitch) { continue }
-        $k++
-        if ($name -match '^(?i)des') { return $Arguments | Select-Object -Skip $k -First 1 }
-        if ($name -match '^(?i)(p|pa|pat|path|l|li\w*|lp|psp\w*)$') { $pathNamed = $true }
+        if (-not $joined) { $k++ }
+        if ($name -match '^(?i)des') { return $value }
+        if ($name -match '^(?i)(pat|path|l|li\w*|lp|psp\w*)$') { $pathNamed = $true }
     }
     $loose | Select-Object -Skip ($pathNamed ? 0 : 1) -First 1
 }
@@ -272,6 +301,10 @@ if ($SelfTest) {
             "sed -i 's/x/y/' {f}", "sed -i.bak 's/x/y/' {f}", "sed -ni 's/x/y/p' {f}", "sed --in-place=.bak 's/x/y/' {f}",
             "/usr/bin/sed -i 's/x/y/' {f}", 'cp backup.json {f}', 'mv -f backup.json {f}', 'Copy-Item backup.json {f} -Force',
             'Copy-Item -Path b.json -Destination {f}', 'Move-Item -Des {f} b.json', "MSYS_NO_PATHCONV=1 sed -i 's/x/y/' {f}",
+            # PowerShell's cp and mv, a GNU cp beside them, and a parameter with a colon (turn 2, S
+            # and T).
+            'cp backup.json {f} -ErrorAction Stop', 'cp -Destination {f} b.json', 'mv -Destination {f} b.json', 'cp b.json {f} -Force',
+            'cp -rf backup.json {f}', 'Copy-Item -Confirm:$false b.json {f}', 'Copy-Item b.json -Destination:{f}',
             # A case pattern's ), and parentheses two deep (PR #493's review, turn 2, R).
             'case $x in a) cp backup.json {f};; esac', 'case $x in a) sed -i s/x/y/ {f};; esac',
             'Copy-Item (Join-Path (Get-Location) b.json) {f}',
@@ -291,6 +324,7 @@ if ($SelfTest) {
             # A source named as the target would be, and writes elsewhere (PR #493's review, A and
             # M).
             'Copy-Item backup.json -Path {f}', 'Copy-Item -Debug {f} backup.json', 'cp -tbackup {f}', 'sort < {f}', 'sort <{f}', 'Copy-Item (Resolve-Path {f}) backup.json', 'Copy-Item (Join-Path (Get-Location) {f}) backup.json',
+            'cp -Path {f} -Destination backup.json', 'Copy-Item -Destination:backup.json {f}',
             "[IO.File]::WriteAllText('backup.json', (Get-Content {f} -Raw))", 'cat {f} >backup.json'
         foreach ($f in '.claude/settings.json', '.claude/settings.local.json') {
             $b = $f.Replace('/', '\').ToUpperInvariant()
