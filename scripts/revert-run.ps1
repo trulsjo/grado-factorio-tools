@@ -78,8 +78,10 @@
     `'<what the case holds>' = { }` (#411); the whole of a parenthesised argument to a command
     invoked with & on a variable, as `& $check '<name>' (<chain>) $said` (#411); or the value
     assigned to a variable its script block reads only as an if's condition, the operand of -not or
-    !, or an operand of an -and chain that is itself a verdict, as `$under` in
-    `$code -eq 0 -and $under`. Each is named,
+    ! where that operator is no operand of an -and verdict, or an operand of an -and chain that is
+    itself a verdict, as `$under` in `$code -eq 0 -and $under`. A read as `-not $v` in an -and
+    verdict means $v is meant to be false, so its chain keeps its reverts, as does the chain of a
+    variable read in it (grado-factorio-tools#488). Each is named,
     `revert-run: <file>, skipped as a verdict: line <n>, <k> operand(s)`. An -or verdict, a chain
     inside a verdict's operand, one not its block's last statement, one under a key that is not a
     string, as `$key`, one passed to a command named otherwise, as `& 'name'` or `Check`, or invoked
@@ -146,10 +148,9 @@
     ($SelfTest) clause nor Invoke-SelfTest, in which nothing is skipped; a verdict variable read
     outside the script block it is assigned in, as by a function through dynamic scope or after the
     pipeline whose ForEach-Object block assigned it, a read it does not see, so the chain may be
-    skipped though such a read takes its value; a variable read only as a truth value but meant to
-    be false, as `if ($stale) { $failures++ }`, whose skipped reverts would have failed (PR #408's
-    review panel), and with it a variable read as an operand of the -and chain such a variable is
-    assigned, as `$v` in `$w = $x -and $v; ... -and -not $w` (PR #485's review panel); and with
+    skipped though such a read takes its value; a variable meant to be false and read in an if's
+    condition, as `if ($stale) { $failures++ }`, or under -not or ! outside an -and verdict, as
+    `$bad = -not $v`, whose skipped reverts would have failed (PR #408's review panel); and with
     -Base, a condition the diff deletes, which leaves nothing to drop, or one it changes by a line
     outside the operand, as the `if (` above it.
 
@@ -471,8 +472,11 @@ function Get-ExpressionStatement {
 # script block that is a hashtable's value under a string key, as `Test = { }` or a case named by
 # its key; the whole of a parenthesised argument to a command invoked with & on a variable, as
 # `& $check '<name>' (<chain>)`; or the value assigned to a variable that its scope reads only as
-# a truth value: an if's condition, the operand of -not or !, or an operand of an -and chain that
-# is itself a verdict, as `$under` in `$code -eq 0 -and $under`. $Seen holds the chains being
+# a truth value: an if's condition, the operand of -not or ! where that operator is no operand of
+# an -and verdict (#488), as `if (-not $ok)`, or an operand of an -and chain that is itself a
+# verdict, as `$under` in `$code -eq 0 -and $under`. A read as `-not $v` in an -and verdict means
+# $v is meant to be false, so its chain keeps its reverts, and so does the chain of a variable
+# read in that one. $Seen holds the chains being
 # asked about on the way down, so a variable read in its own chain, or two each read in the
 # other's, end the asking; a chain reached again by another path, as `$v -and $x -and $v`, is
 # asked again.
@@ -520,20 +524,31 @@ function Test-VerdictOnce {
     if (-not $reads) { return $false }
     foreach ($r in $reads) {
         $negated = $r.Parent -is [System.Management.Automation.Language.UnaryExpressionAst] -and $r.Parent.TokenKind -in 'Not', 'Exclaim'
+        # Under -not that is itself an operand of an -and verdict, as `$code -eq 0 -and -not $v`,
+        # the variable is meant to be false, and a revert of its chain can fail the verdict (#488).
+        if ($negated) {
+            $top = Get-AndChainTop $r.Parent
+            if ($top -and (Test-Verdict -Chain $top -Seen $Seen)) { return $false }
+        }
         # A pipeline whose parent is an if is one of its conditions; its bodies are blocks.
         $condition = Get-ExpressionStatement $r
         $tested = $condition -and $condition.Parent -is [System.Management.Automation.Language.IfStatementAst]
         # An operand of an -and chain, read whole from its top link, that is a verdict too: the
         # chain holds with the variable dropped to true, so its reverts are a verdict's.
-        $operand = $false
-        if ($r.Parent -is [System.Management.Automation.Language.BinaryExpressionAst] -and $r.Parent.Operator -eq 'And') {
-            $top = $r.Parent
-            while ($top.Parent -is [System.Management.Automation.Language.BinaryExpressionAst] -and $top.Parent.Operator -eq 'And') { $top = $top.Parent }
-            $operand = Test-Verdict -Chain $top -Seen $Seen
-        }
+        $top = Get-AndChainTop $r
+        $operand = $top -and (Test-Verdict -Chain $top -Seen $Seen)
         if (-not ($negated -or $tested -or $operand)) { return $false }
     }
     $true
+}
+
+# The top link of the -and chain $Operand is an operand of, climbed through -and links only, or
+# nothing where its parent is no -and link.
+function Get-AndChainTop {
+    param([Parameter(Mandatory)] [System.Management.Automation.Language.Ast] $Operand)
+    $top = $null
+    for ($p = $Operand.Parent; $p -is [System.Management.Automation.Language.BinaryExpressionAst] -and $p.Operator -eq 'And'; $p = $p.Parent) { $top = $p }
+    $top
 }
 
 # What is uncommitted or untracked in the copy, one path to a line, or nothing.
@@ -1055,7 +1070,7 @@ function Invoke-SelfTest {
                 $brokenCode -eq 1 -and $broken -match 'broken\.ps1 does not parse, so its conditions cannot be read' -and
                 $broken -match '(?m)^revert-run: 23 condition revert\(s\) written for conditions\.ps1\.' -and $broken -notmatch '(?m)^revert-run: condition ' -and
                 $missingCode -eq 1 -and $missing -match '-Conditions names no-such\.ps1, which is not a file in the copy' -and (& $same) } }
-        @{ Name = '-Conditions writes no revert of an -and verdict in a self-test, the last statement of a block under a string key, a variable read only as a truth value or as an operand of a verdict chain, or a chain in parentheses passed to & $<variable>, and names each it skips; an -or verdict, a chain inside a verdict''s operand, one read as a value, one not last, one under a key not a string, one passed to a command not invoked with & on a variable, and each outside the self-test keep theirs (#407, #411)'; Test = {
+        @{ Name = '-Conditions writes no revert of an -and verdict in a self-test, the last statement of a block under a string key, a variable read only as a truth value or as an operand of a verdict chain, or a chain in parentheses passed to & $<variable>, and names each it skips; an -or verdict, a chain inside a verdict''s operand, one read as a value, one not last, one under a key not a string, one passed to a command not invoked with & on a variable, a variable read as -not $v in an -and verdict and one read in its chain, and each outside the self-test keep theirs, while a -not read in an if''s condition is still skipped (#407, #411, #488)'; Test = {
             $verdicts = @(
                 'param([switch] $SelfTest)'
                 "`$x = 'b'"
@@ -1119,6 +1134,13 @@ function Invoke-SelfTest {
                 "    `$kOk = `$x -ne 'j2' -and `$jOk"
                 '    if ($jOk) { }'
                 '    if ($kOk) { }'
+                # A variable read under -not in an -and verdict, meant to be false, and one read in
+                # the chain of such a variable, keep their reverts (#488); one read under -not in an
+                # if's condition, inside an -and chain there, is still skipped.
+                "    @{ Test = { `$nOk = `$x -ne 'n1' -and `$x -ne 'n2'; `$x -ne 'n3' -and -not `$nOk } }"
+                "    @{ Test = { `$fOk = `$x -ne 'f1' -and `$x -ne 'f2'; `$gOk = `$x -ne 'f3' -and `$fOk; `$x -ne 'f4' -and -not `$gOk } }"
+                "    `$iOk = `$x -ne 'i1' -and `$x -ne 'i2'"
+                '    if (-not $iOk -and $x) { }'
                 '}'
                 'function Invoke-SelfTest {'
                 "    @{ Test = { `$x -ne 'n' -and `$x -ne 'o' } }"
@@ -1146,8 +1168,9 @@ function Invoke-SelfTest {
                 @('g5', 'g6', 'g8', 'g9', 'g10', 'g11', 'g12', 'g13', 'g16', 'g17', 'g18', 'g19', 'q1', 'q2', 'q3' | ForEach-Object { "`$x -ne '$_'" }) +
                 @('$qOk', '$rOk', "`$x -ne 'r1'", "`$x -ne 's1'", "`$x -ne 's2'", "`$x -eq 's3'", '$sOk', "`$x -ne 't1'", "`$x -ne 't2'",
                     "`$tOk -and `$x -ne 't3'", "`$x -eq 't4'", '$tOk', "`$x -ne 't3'", "`$x -ne 'j1'", '$kOk', "`$x -ne 'j2'", '$jOk') +
+                @("`$x -ne 'n1'", "`$x -ne 'n2'", "`$x -ne 'f1'", "`$x -ne 'f2'", "`$x -ne 'f3'", '$fOk', '-not $iOk', '$x') +
                 @('o1', 'o2', 'e1', 'e2', 'p', 'q', 'r', 's', 'g14', 'g15' | ForEach-Object { "`$x -ne '$_'" })
-            $skips = @('4, 2', '6, 2', '8, 2', '17, 2', '28, 2', '29, 2', '31, 2', '37, 2', '37, 3', '45, 2', '45, 3', '52, 2' |
+            $skips = @('4, 2', '6, 2', '8, 2', '17, 2', '28, 2', '29, 2', '31, 2', '37, 2', '37, 3', '45, 2', '45, 3', '50, 2', '51, 2', '52, 2', '56, 2' |
                     ForEach-Object { "line $_ operand(s)" }) -join '|'
             # In this process, on a script whose only chains are verdicts: each is named,
             # and with no revert left the run fails, having run nothing.
