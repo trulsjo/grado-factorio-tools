@@ -307,7 +307,7 @@ if ($SelfTest) {
             'cp -rf backup.json {f}', 'cp -rfv backup.json {f}','Copy-Item -Confirm:$false b.json {f}', 'Copy-Item b.json -Destination:{f}',
             # A case pattern's ), and parentheses two deep (PR #493's review, turn 2, R).
             'case $x in a) cp backup.json {f};; esac', 'case $x in a) sed -i s/x/y/ {f};; esac',
-            'Copy-Item (Join-Path (Get-Location) b.json) {f}',
+            'Copy-Item (Join-Path (Get-Location) b.json) {f}', 'Copy-Item (Get-Content b.json | Select-Object -First 1) {f}',
             # A redirection that opens a command, or a brace group (PR #493's review, turn 2, Q).
             '> {f}', '>{f} echo x', '{ echo x; } > {f}', '2>/dev/null cp backup.json {f}',
             # Redirections and parameters after the target (PR #493's review, finding A).
