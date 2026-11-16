@@ -34,8 +34,9 @@
 
     THE FORMS FILE is -Forms, read from the working tree, with Import-PowerShellDataFile; its
     contract is pin-measure.ps1's header's. A form names a tools script when its From is `tools` and
-    its Script is `<name>`, as pin-measure.ps1 runs it from the pin's scripts/: a Script holding a
-    path, as `vendor/grado-factorio-tools/scripts/<name>`, runs nothing there, and counts for none.
+    its Script, joined onto -Tools, resolves to that script, as pin-measure.ps1 joins it onto the
+    pin's scripts/ to run it: `<name>` or `./<name>` counts, and a Script that resolves elsewhere,
+    as `vendor/grado-factorio-tools/scripts/<name>`, runs nothing there and counts for none.
     A -SelfTest form is enough. A `sibling` form never counts for a tools script, even one of the
     same name.
 
@@ -147,9 +148,11 @@ function Invoke-FormCheck {
         $calls = @(Get-ToolCall -Root $Root -Names $names)
     }
     catch { Write-Host "FAILED - form-check: $($_.Exception.Message)"; return 1 }
-    # pin-measure.ps1 runs a tools form's Script from the pin's scripts/, so the Script is the name.
-    $formed = @($list | Where-Object { $_.From -ceq 'tools' } | ForEach-Object { "$($_.Script)" })
-    $missing = @($calls | Group-Object { $_.Name } | Where-Object { $_.Name -cnotin $formed })
+    # pin-measure.ps1 runs a tools form's Script joined onto the pin's scripts/, so a form names the
+    # script its Script resolves to there, as `a.ps1` or `./a.ps1` does.
+    $dir = [IO.Path]::GetFullPath($Tools)
+    $formed = @($list | Where-Object { $_.From -ceq 'tools' } | ForEach-Object { [IO.Path]::GetFullPath("$($_.Script)", $dir) })
+    $missing = @($calls | Group-Object { $_.Name } | Where-Object { [IO.Path]::GetFullPath($_.Name, $dir) -cnotin $formed })
     foreach ($m in $missing) { Write-Host "form-check: $($m.Name) has no form in $Forms; run by $(@($m.Group | ForEach-Object { $_.At }) -join ', ')." }
     if ($missing) { Write-Host "FAILED - form-check: $($missing.Count) tools script(s) a gate runs have no form in $Forms."; return 1 }
     $scripts = @($calls | ForEach-Object { $_.Name } | Sort-Object -Unique)
@@ -228,6 +231,11 @@ if ($SelfTest) {
             'scripts/pin-forms.psd1' = & $formsOf (& $form 'tools' 'vendor/grado-factorio-tools/scripts/a.ps1'), (& $form 'tools' 'x\a.ps1')
         }
         & $check 'a tools form whose Script is a path, which pin-measure.ps1 would not run, does not count (PR #493''s review, N)' ($r.Code -eq 1 -and $r.Text -match '(?m)^form-check: a\.ps1 has no form') $r.Text
+        $r = & $sibling @{
+            '.githooks/post-merge' = & $hook 'pwsh -File vendor/grado-factorio-tools/scripts/a.ps1'
+            'scripts/pin-forms.psd1' = & $formsOf (& $form 'tools' './a.ps1')
+        }
+        & $check 'a tools form whose Script resolves to the script, as ./a.ps1, counts (PR #493''s review, turn 2, U)' ($r.Code -eq 0 -and $r.Text -match '1 call\(s\) of 1 tools script') $r.Text
         $gate = @{ '.githooks/commit-msg' = & $hook 'pwsh -File vendor/grado-factorio-tools/scripts/a.ps1' }
         $r = & $sibling ($gate + @{ 'scripts/pin-forms.psd1' = '' })
         $empty = $r.Code -eq 1 -and $r.Text -match 'pin-forms\.psd1 reads empty'
