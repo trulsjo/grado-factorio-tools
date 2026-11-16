@@ -64,7 +64,9 @@
     write by git, as `git checkout -- .claude/settings.json`, which refuse-git-discard.ps1 judges on
     its own grounds. A command named through an alias, as `ac`, or a writer not listed above, as
     `New-Item -Value`, `dd`, `python` or `node`. A command after a shell keyword or a wrapper, as
-    `then`, `do`, `else` or `env`, whose name is then read as the keyword's. A copy into the
+    `then`, `do`, `else` or `env`, whose name is then read as the keyword's, and one after a case
+    pattern written with both parentheses, as `case $x in (a) cp ...`, whose `)` closes its `(`,
+    so that `case` is read as the command's name. A copy into the
     directory, as `cp x/settings.json .claude/`, and a redirection written `>|`, whose target the
     `|` cuts off. A parameter given with a colon to `Set-Content`, `Add-Content` or `Out-File`, as
     `-Value:x`, and `cp --target-directory=<dir>`
