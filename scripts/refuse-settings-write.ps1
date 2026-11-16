@@ -33,16 +33,15 @@
     arguments are read. The target of `cp` or `mv` is the last word that is no option, and none
     with `-t <dir>` or `-t<dir>`. That of `Copy-Item` or `Move-Item`, and of `cp` or `mv` where an
     argument names one of those cmdlets' parameters by three letters or more, or by a common
-    parameter's alias, as -ea, but -iv and -pv, which GNU reads as two options each, as PowerShell's
-    aliases are written (Test-ItemParameter), is Get-ItemTarget's: the value of -Destination, named
-    from -Des; else the second word no parameter takes, or the first where -Path or -LiteralPath
-    is named, every parameter but a switch taking the word after it, or the value after its colon,
-    as `-Destination:<file>`. A
-    command is found in a compound, after `&&`, `||`, `;`, `|`, `&` or a newline, or inside
-    parentheses or braces, and after the assignments that lead it, as `MSYS_NO_PATHCONV=1 sed -i
-    ...`; a command's name may carry a path or `.exe`. A command a `(` broke off goes on after the
-    `)` that closes it, at any depth, one word standing for what the parentheses held, as
-    `Set-Content -Value (Get-Content b.json) -Path .claude/settings.json` and
+    parameter's alias, as -ea, but -iv, -pv and -infa, which GNU reads as options of its own, as
+    PowerShell's aliases are written (Test-ItemParameter), is Get-ItemTarget's: the value of
+    -Destination, named from -Des; else the second word no parameter takes, or the first where -Path
+    or -LiteralPath is named, every parameter but a switch taking the word after it, or the value
+    after its colon, as `-Destination:<file>`. A command is found in a compound, after `&&`, `||`,
+    `;`, `|`, `&` or a newline, or inside parentheses or braces, and after the assignments that lead
+    it, as `MSYS_NO_PATHCONV=1 sed -i ...`; a command's name may carry a path or `.exe`. A command a
+    `(` broke off goes on after the `)` that closes it, at any depth, one word standing for what the
+    parentheses held, as `Set-Content -Value (Get-Content b.json) -Path .claude/settings.json` and
     `Copy-Item (Join-Path (Get-Location) b.json) .claude/settings.json`; a `)` that closes no `(`,
     as a case pattern's, ends a command and continues none.
 
@@ -135,9 +134,10 @@ $ITEM_VALUED = 'Path', 'LiteralPath', 'Destination', 'Filter', 'Include', 'Exclu
 # one dash, as -ErrorAction or -Des:f: what tells PowerShell's cp from GNU's, whose -rf is no name.
 function Test-ItemParameter {
     param([string] $Word)
-    # The common parameters' aliases of two letters or four, but -iv and -pv, which GNU's cp and
-    # mv read as -i -v and -p -v (PR #493's review, turn 3, W1).
-    if ($Word -match '^-(?i)(ea|wa|ev|wv|ov|ob|infa)(?::.*)?$') { return $true }
+    # The common parameters' aliases of two letters, but -iv and -pv, which GNU's cp and mv read as
+    # -i -v and -p -v (PR #493's review, turn 3, W1); and not -infa, which GNU's cp reads as
+    # -i -n -f -a (turn 4, X1).
+    if ($Word -match '^-(?i)(ea|wa|ev|wv|ov|ob)(?::.*)?$') { return $true }
     if ($Word -notmatch '^-([A-Za-z]{3,})(?::.*)?$') { return $false }
     $name = $Matches[1]
     [bool] @($ITEM_SWITCHES + $ITEM_VALUED | Where-Object { $_.StartsWith($name, [StringComparison]::OrdinalIgnoreCase) })
@@ -311,7 +311,7 @@ if ($SelfTest) {
             # and T).
             'cp backup.json {f} -ErrorAction Stop', 'cp -Destination {f} b.json', 'mv -Destination {f} b.json', 'cp b.json {f} -Force',
             'cp -rf backup.json {f}', 'cp -rfv backup.json {f}', 'Copy-Item -Confirm:$false b.json {f}',
-            'cp backup.json {f} -ea Stop', 'mv tmp.json {f} -ea SilentlyContinue', 'cp -iv backup.json {f}', 'mv -pv tmp.json {f}', 'Copy-Item b.json -Destination:{f}',
+            'cp backup.json {f} -ea Stop', 'mv tmp.json {f} -ea SilentlyContinue', 'cp -iv backup.json {f}', 'mv -pv tmp.json {f}', 'cp -infa backup.json {f}', 'Copy-Item b.json -Destination:{f}',
             # A case pattern's ), and parentheses two deep (PR #493's review, turn 2, R).
             'case $x in a) cp backup.json {f};; esac', 'case $x in a) sed -i s/x/y/ {f};; esac',
             'Copy-Item (Join-Path (Get-Location) b.json) {f}', 'Copy-Item (Get-Content b.json | Select-Object -First 1) {f}',
