@@ -80,9 +80,10 @@ of the pull request's body alone. The check reads a closing keyword as `scripts/
 reads one in a body, from `scripts/closing-keyword-lib.ps1`.
 
 On trulsjo/grado-factorio-modpack's PR #431 (2026-11-15), a review finding offered Truls the
-choice to hold that body's `Closes` line for #430 until he ruled on it. Had the #430 commit kept
-the `Closes #430` footer its session first wrote, holding the body's line would not have kept the
-ticket open (grado-factorio-tools#472, by that session's account).
+choice to hold that body's `Closes` line for trulsjo/grado-factorio-modpack#430 until he ruled on
+it. Had that ticket's commit kept the `Closes #430` footer its session first wrote, holding the
+body's line would not have kept the ticket open (grado-factorio-tools#472, by that session's
+account).
 
 ## Breaking changes
 
