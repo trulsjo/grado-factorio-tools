@@ -96,14 +96,14 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
 - **What a pull request body must hold, and how a branch commit is named, are on
   [`docs/pr-body-convention.md`](../pr-body-convention.md)**, the page that declares what
   `scripts/pr-body-check.ps1` checks. Here CI and the `refuse-pr-body.ps1` hook run the check
-  with its four switches, `-CiteSiblings`, `-RequireSummaryVisual`, `-CheckRuns` and
-  `-CheckClosing`; the hook gives `-CheckRuns` a head, and `-CheckClosing` the pull request's
-  number, on `gh pr edit` only, and CI on every run.
+  with its five switches, `-CiteSiblings`, `-RequireSummaryVisual`, `-CheckRuns`,
+  `-CheckClosing` and `-MaxLineLength 100`; the hook gives `-CheckRuns` a head, and
+  `-CheckClosing` the pull request's number, on `gh pr edit` only, and CI on every run.
 - **The title and the body are checked before the create, in one command joined with `&&`**, so
   that a failure of either stops it. The body file is drafted first, by the pr skill, as
   *Pull request body* below says:
 
-      pwsh -File scripts/commit-check.ps1 -ScopeFile commit-scopes.txt -Title "<title>" && pwsh -File scripts/pr-body-check.ps1 <body file> -CiteSiblings -RequireSummaryVisual && gh pr create --title "<title>" --body-file <body file>
+      pwsh -File scripts/commit-check.ps1 -ScopeFile commit-scopes.txt -Title "<title>" && pwsh -File scripts/pr-body-check.ps1 <body file> -CiteSiblings -RequireSummaryVisual -MaxLineLength 100 && gh pr create --title "<title>" --body-file <body file>
 
   PR #104 was opened with a 76-character title, by the session's account of 2026-10-11: the
   check ran in a command joined with `;`, which does not stop on a failure.

@@ -43,6 +43,9 @@ trulsjo/realistic-fusion-refreshed at `9fd78b5`.
   other bodies are read for any closing keyword, as GitHub reads them. Where gh cannot list the
   open pull requests, the body fails. With no `-PullRequest`, as on `gh pr create`, every open one
   is compared.
+- **`-MaxLineLength`**, with a limit: no line of the body is longer than it, by
+  `markdown-check.ps1 -Body -MaxLineLength`'s rule, and a failure names `markdown-rewrap.ps1`
+  (#483).
 
 **The switches are each repository's choice** (ruling 4). A repository turns one on in its own CI
 line and its own hook line.

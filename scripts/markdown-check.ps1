@@ -296,30 +296,6 @@ function Invoke-Check {
     @{ Found = $count; Long = $long }
 }
 
-function Test-LongLineFinding {
-    <#  Whether a finding of Test-Markdown is of a line over -MaxLineLength, which
-        markdown-rewrap.ps1 rewraps.  #>
-    param([hashtable] $Finding)
-    $Finding.Message -clike 'the line is * characters, over the limit of *'
-}
-
-function Get-RewrapHint {
-    <#  The words that name markdown-rewrap.ps1 for $Long lines over $Max, with the command that
-        rewraps what was read: $Reading, the switch the check read by, and the rewrap's path from
-        the current directory, beside this script, so a consumer is told its own (#444).  #>
-    param([int] $Long, [int] $Max, [string] $Reading)
-    $rewrap = [IO.Path]::GetRelativePath($PWD.ProviderPath, (Join-Path $PSScriptRoot 'markdown-rewrap.ps1')) -replace '\\', '/'
-    " $Long line(s) over $Max are rewrapped by markdown-rewrap.ps1: pwsh -File $(ConvertTo-QuotedArgument $rewrap)$Reading -MaxLineLength $Max"
-}
-
-function ConvertTo-QuotedArgument {
-    <#  $Text in single quotes for PowerShell, each kind of single quote it reads doubled, the curly
-        ones too, as comment-line-check.ps1 quotes its paths (#378), so the printed command runs as
-        printed (PR #452's review).  #>
-    param([string] $Text)
-    "'$([System.Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent($Text))'"
-}
-
 function Invoke-SelfTest {
     $exists = { param($p) $p -cin 'docs', 'docs/there.md', 'README.md' }
     $anchors = { param($p) if ($p -ceq 'README.md') { , (Get-HeadingAnchor -Lines '# The chain') } elseif ($p -ceq 'docs/there.md') { , (Get-HeadingAnchor -Lines '## Results', '## Results') } }

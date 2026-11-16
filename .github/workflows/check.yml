@@ -92,7 +92,8 @@ jobs:
       # the pull request's head, read with gh through the token, which `actions: read` above lets
       # read runs (grado-factorio-tools#455). -CheckClosing fails the body for an issue another
       # open pull request closes too, listed with gh, which `pull-requests: read` lets list; the
-      # event's number leaves this one out (#463).
+      # event's number leaves this one out (#463). -MaxLineLength holds each line to 100
+      # characters, by markdown-check.ps1's rule (#483).
       - name: Check the pull request body
         if: github.event_name == 'pull_request'
         env:
@@ -101,4 +102,4 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
-        run: ./scripts/pr-body-check.ps1 -Body "$env:PR_BODY" -CiteSiblings -RequireSummaryVisual -CheckRuns -Head $env:PR_HEAD -CheckClosing -PullRequest $env:PR_NUMBER
+        run: ./scripts/pr-body-check.ps1 -Body "$env:PR_BODY" -CiteSiblings -RequireSummaryVisual -CheckRuns -Head $env:PR_HEAD -CheckClosing -PullRequest $env:PR_NUMBER -MaxLineLength 100
