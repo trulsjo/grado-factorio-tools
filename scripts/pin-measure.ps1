@@ -21,7 +21,8 @@
     WHAT IT DOES, in -Out, which must be empty or not there:
     - ls-remote.txt: `git ls-remote <origin> refs/heads/main`, origin being the sibling's.
     - clone-old/ and clone-new/: two clones of the sibling, from one fetch of origin's main, both
-      detached there with origin/main set to it. Each clone's vendor/grado-factorio-tools/scripts/
+      detached there with origin/main set to it; with -Ref, detached at that commit instead, as
+      A BRANCH MEASUREMENT says. Each clone's vendor/grado-factorio-tools/scripts/
       holds its pin's copy of scripts/. The clones share no directory, so a form that writes into
       its clone leaves the other pin's run as it was. The old pin runs first.
     - <form>.old.txt, <form>.old.exit, <form>.new.txt and <form>.new.exit for every form: its
@@ -31,7 +32,8 @@
       moved back drops, marked dropped, for the pull request's Merge Danger; "none" where there is
       none. The rule and the text are breaking-lib.ps1's (grado-factorio-tools#255), which its
       header states with an example.
-    - table.md: a line naming the forms file read and where from, then a Markdown table of each
+    - table.md: a line naming the forms file read and where from, with -Ref the lines A BRANCH
+      MEASUREMENT names under it, then a Markdown table of each
       form, its old and new exit, whether the outputs are the same, and each pin's last non-empty
       output line; a form whose outputs differ while those lines are the same reads "differs above
       the last line". Outputs are compared with each clone's own path written as <clone>, so a path
@@ -70,6 +72,24 @@
       form on its stdin, as a hook's tool call is. Its cwd may be `.`: the form runs in the clone.
     An example is the second below.
 
+    A BRANCH MEASUREMENT, WITH -Ref (grado-factorio-tools#476). Without -Ref the clones are at
+    GitHub's main, so a sibling pull request that adds a form, or a script a form runs, cannot be
+    measured on its branch; realistic-fusion-refreshed PR #868 and true-nukes-refreshed PR #78
+    each built a stand-in for it by hand. -Ref names a commit of the sibling's checkout, `HEAD`, a
+    branch or a SHA, which is resolved there once, before -Out is written, to a full SHA; a name
+    that is no commit there fails the run, naming it, with -Out left as it was. Both clones are
+    then detached at that SHA; origin's main is still fetched, and each clone's origin/main set to
+    it. {headmsg} is that commit's message and the grep is at it. ls-remote.txt is unchanged.
+    table.md gains, under its forms line, a line naming -Ref as given, its SHA and the checkout,
+    saying it is a local commit, not GitHub's main, with ls-remote.txt's SHA; then, where the
+    checkout holds any, a line naming each file uncommitted or untracked there, which the clones
+    lack, as only committed content reaches them. The run goes on. The output prints both lines
+    with the table. A relative -Forms is read as committed at -Ref, an absolute one from the
+    working tree as without it: with -Ref, commit the forms file and give it relative.
+    Only the sibling pull request whose branch is measured cites a -Ref run, at its head or saying
+    what came after; a pin move's pull request cites a run without -Ref, at GitHub's main (Truls,
+    #476's triage, rulings 6 and 7).
+
     WHAT IT CANNOT SEE. What Pin tickets says the copy cannot: the clone's own submodule is not
     initialised, its index matches HEAD, and a form over origin/main...HEAD reads nothing. A form
     the sibling's file does not list, though the grep under the table names each reference no form
@@ -88,6 +108,11 @@
 .PARAMETER Forms
     The forms file. A relative path is read in the clone of the sibling at origin's main; an
     absolute one from that path, as the sibling's working tree. Defaults to scripts/pin-forms.psd1.
+    With -Ref, a relative one is read as committed at that commit.
+
+.PARAMETER Ref
+    A commit of the sibling's checkout, as `HEAD`, a branch or a SHA, to clone at instead of
+    origin's main: a branch measurement, as above. Left out, the run is at origin's main.
 
 .PARAMETER SelfTest
     Build, in a temp directory and offline, a tools repository whose pins have between them a plain
@@ -98,15 +123,25 @@
     empty range, table.md's rows, a "differs above the last line" row among them, a sibling
     reference no form runs being listed, by script name, and that a write into one clone does not
     show in the other's run. Check the forms file table.md names, and that an absolute -Forms
-    outside the clone is what is run, or, naming no file, fails naming it. Then run this script
+    outside the clone is what is run, or, naming no file, fails naming it. Check that without -Ref
+    ls-remote.txt is origin's main and table.md has no branch measurement line; that with -Ref
+    naming a local branch, both clones are at its commit with origin/main at origin's, a script
+    only it adds is run, and table.md names the -Ref and the files uncommitted or untracked; and
+    that a -Ref naming no commit fails with -Out not written. Then run this script
     itself: copied into the tools repository, with a pin that is not there, it exits 1, naming it;
     copied into a sibling that holds the tools repository as its submodule, with forms that differ
-    and none that reads gh, it exits 0. Needs git, and no game and no network.
+    and none that reads gh, it exits 0, and with a -Ref naming no commit, 1. Needs git, and no
+    game and no network.
 
 .EXAMPLE
     From the sibling's root, with the submodule at the new pin:
 
         pwsh -File vendor/grado-factorio-tools/scripts/pin-measure.ps1 -Old 8189e45 -New 2c13393 -Out ../pin-8189e45-2c13393
+
+.EXAMPLE
+    A branch measurement, of the sibling checkout's HEAD, with its forms file committed there:
+
+        pwsh -File vendor/grado-factorio-tools/scripts/pin-measure.ps1 -Old 36b34f7 -New 36b34f7 -Ref HEAD -Out ../pin-branch
 
 .EXAMPLE
     A forms file, scripts/pin-forms.psd1 in the sibling:
@@ -129,6 +164,7 @@ param(
     [string] $New,
     [string] $Out,
     [string] $Forms = 'scripts/pin-forms.psd1',
+    [string] $Ref,
     [switch] $SelfTest
 )
 
@@ -194,14 +230,26 @@ function Expand-Form {
 }
 
 # The measurement, into $Out: see the header. $Tools is this repository, $Sibling the sibling's
-# checkout, and $Bodies reads pull request bodies, as Expand-Form says.
+# checkout, and $Bodies reads pull request bodies, as Expand-Form says. With $Ref, a branch
+# measurement: both clones at that commit of $Sibling, not at origin's main (#476).
 function Invoke-PinMeasure {
-    param([string] $Tools, [string] $Sibling, [string] $Old, [string] $New, [string] $Out, [string] $Forms, [scriptblock] $Bodies)
+    param([string] $Tools, [string] $Sibling, [string] $Old, [string] $New, [string] $Out, [string] $Forms, [scriptblock] $Bodies,
+        [string] $Ref)
     $pins = [ordered]@{}
     foreach ($p in @{ old = $Old; new = $New }.GetEnumerator() | Sort-Object Name -Descending) {
         $sha = git -C $Tools rev-parse --verify --quiet "$($p.Value)^{commit}" 2>$null
         if ($LASTEXITCODE -or -not $sha) { throw "the $($p.Name) pin, $($p.Value), is not a commit of $Tools; fetch it there first." }
         $pins[$p.Name] = $sha
+    }
+    # Resolved once, before -Out is touched, so every later output names the one commit; and what
+    # the checkout holds that no commit does, which the clones therefore lack.
+    $refSha = ''
+    $uncommitted = @()
+    if ($Ref) {
+        $refSha = "$(git -C $Sibling rev-parse --verify --quiet "$Ref^{commit}" 2>$null)".Trim()
+        if ($LASTEXITCODE -or -not $refSha) { throw "-Ref $Ref is not a commit of the sibling checkout $Sibling, so nothing was measured." }
+        $uncommitted = @(Invoke-Git 'listing what is uncommitted in the sibling' -C $Sibling status --porcelain=v1 --untracked-files=all |
+                ForEach-Object { "$_".Substring(3) })
     }
     if ((Test-Path -LiteralPath $Out) -and (Get-ChildItem -LiteralPath $Out -Force)) { throw "$Out is not empty; give a new directory." }
     New-Item -ItemType Directory -Path $Out -Force | Out-Null
@@ -218,8 +266,10 @@ function Invoke-PinMeasure {
         if (-not $clones.Count) {
             Invoke-Git "fetching origin's main" -C $clone fetch --quiet $origin main | Out-Null
             $main = Invoke-Git 'reading the fetch' -C $clone rev-parse FETCH_HEAD
+            # HEAD is the -Ref commit where one is given; origin/main is origin's main either way.
+            $head = if ($refSha) { $refSha } else { $main }
         }
-        Invoke-Git 'checking out the clone' -C $clone -c advice.detachedHead=false switch --quiet --detach $main | Out-Null
+        Invoke-Git 'checking out the clone' -C $clone -c advice.detachedHead=false switch --quiet --detach $head | Out-Null
         Invoke-Git 'setting origin/main' -C $clone update-ref refs/remotes/origin/main $main | Out-Null
         $scripts = Join-Path $clone 'vendor/grado-factorio-tools'
         New-Item -ItemType Directory -Path $scripts -Force | Out-Null
@@ -230,12 +280,20 @@ function Invoke-PinMeasure {
         $clones[$pin] = $clone
     }
 
-    # A relative -Forms is read in the clone of origin's main; an absolute one from where it names,
-    # as the sibling's working tree, so a form the pin ticket's branch adds is run (#464).
+    # A relative -Forms is read in the clone, at origin's main or the -Ref commit; an absolute one
+    # from where it names, as the sibling's working tree, so a form the pin ticket's branch adds is
+    # run (#464).
     $fromTree = [IO.Path]::IsPathFullyQualified($Forms)
     $file = if ($fromTree) { $Forms } else { Join-Path $clones['old'] $Forms }
     $formsLine = if ($fromTree) { "Forms read from ``$Forms``, in the working tree, not from a commit." }
+    elseif ($refSha) { "Forms read from ``$Forms`` in the clone at the -Ref commit, $($refSha.Substring(0, 7))." }
     else { "Forms read from ``$Forms`` in the clone of origin's main at $($main.Substring(0, 7))." }
+    # A branch measurement says so under the forms line, and names what it could not see (#476).
+    $spans = @($uncommitted | ForEach-Object { '`' + $_ + '`' }) -join ', '
+    $refLines = @(if ($refSha) {
+            "Branch measurement: -Ref ``$Ref`` is $refSha in the sibling checkout $Sibling, a local commit, not GitHub's main, which ls-remote.txt gives as $main."
+            if ($uncommitted) { "Uncommitted or untracked in the sibling checkout, so not in the clones: $spans." }
+        })
     $list = try { @((Import-PowerShellDataFile -LiteralPath $file).Forms) } catch { throw "the forms file $file could not be read: $($_.Exception.Message)" }
     $rows = [Collections.Generic.List[object]]::new()
     $runScripts = [Collections.Generic.List[object]]::new()
@@ -279,6 +337,7 @@ function Invoke-PinMeasure {
 
     $table = [Collections.Generic.List[string]]::new()
     $table.Add($formsLine)
+    foreach ($l in $refLines) { $table.Add($l) }
     $table.Add('')
     $table.Add('| form | old exit | new exit | output | old last line | new last line |')
     $table.Add('| --- | --- | --- | --- | --- | --- |')
@@ -296,7 +355,7 @@ function Invoke-PinMeasure {
         $hit
     }
     $table.Add('')
-    $table.Add("Sibling references no form runs (``git grep -n vendor/grado-factorio-tools/scripts`` at $($main.Substring(0, 7))):")
+    $table.Add("Sibling references no form runs (``git grep -n vendor/grado-factorio-tools/scripts`` at $($head.Substring(0, 7))):")
     $table.Add('')
     # Two backticks, and a space inside each, so a hit's own backticks stay in the span.
     if ($unrun) { foreach ($u in $unrun) { $table.Add("- ```` $u ````") } } else { $table.Add('- none') }
@@ -465,6 +524,38 @@ if ($SelfTest) {
         $noFile = Join-Path $temp 'working-tree/no-such-forms.psd1'
         $threw = try { $null = Invoke-PinMeasure -Tools $toolsRepo -Sibling $sib -Old $oldPin -New $newPin -Out (Join-Path $temp 'out-none') -Forms $noFile -Bodies $stub; '' } catch { $_.Exception.Message }
         & $check 'an absolute -Forms naming no file fails, naming the path' ($threw.Contains("the forms file $noFile could not be read")) $threw
+        # Without -Ref, ls-remote.txt is origin's main as git lists it, and table.md holds no
+        # line of a branch measurement (#476).
+        $sibMainFull = "$(git -C $sib rev-parse HEAD)".Trim()
+        & $check 'without -Ref, ls-remote.txt is origin''s main and table.md has no branch measurement line' (
+            (& $read 'ls-remote.txt') -ceq "$sibMainFull`trefs/heads/main" -and $md -notmatch 'Branch measurement|Uncommitted') "$(& $read 'ls-remote.txt') | $md"
+        # A branch measurement: a local branch, not on origin's main, adds a script and the form
+        # that runs it, committed; then an uncommitted edit and an untracked file, which the
+        # clones lack.
+        git -C $sib switch --quiet -c feature
+        & $write (Join-Path $sib 'scripts/branch-only.ps1') "'branch script ran'"
+        & $write (Join-Path $sib 'scripts/pin-forms-ref.psd1') "@{ Forms = @( @{ Name = 'branch-script'; From = 'sibling'; Script = 'scripts/branch-only.ps1'; Args = @() } ) }"
+        $refSha = & $commit $sib 'feat: a branch form'
+        & $write (Join-Path $sib 'scripts/branch-only.ps1') "'edited, not committed'"
+        & $write (Join-Path $sib 'untracked.txt') 'not committed'
+        $outRef = Join-Path $temp 'out-ref'
+        try { $threw = try { $null = Invoke-PinMeasure -Tools $toolsRepo -Sibling $sib -Old $oldPin -New $newPin -Out $outRef -Forms 'scripts/pin-forms-ref.psd1' -Bodies $stub -Ref 'feature'; '' } catch { $_.Exception.Message } }
+        finally { git -C $sib checkout --quiet -- scripts/branch-only.ps1; Remove-Item -LiteralPath (Join-Path $sib 'untracked.txt'); git -C $sib switch --quiet main }
+        $mdRef = if (Test-Path -LiteralPath (Join-Path $outRef 'table.md')) { Get-Content -LiteralPath (Join-Path $outRef 'table.md') -Raw } else { "<no table.md> $threw" }
+        $heads = @(foreach ($pin in 'old', 'new') { "$(git -C (Join-Path $outRef "clone-$pin") rev-parse HEAD)".Trim(); "$(git -C (Join-Path $outRef "clone-$pin") rev-parse origin/main)".Trim() })
+        & $check 'with -Ref, both clones are at that commit with origin/main at origin''s, and a script only it adds is run at both pins, as committed' (
+            -not $threw -and ($heads -join ' ') -ceq "$refSha $sibMainFull $refSha $sibMainFull" -and $refSha -cne $sibMainFull -and
+            $mdRef -match '(?m)^\| branch-script \| 0 \| 0 \| same \| branch script ran \| branch script ran \|\r?$') "$($heads -join ' ') | $mdRef"
+        $refLines = $mdRef -split '\r?\n'
+        & $check 'with -Ref, table.md names the -Ref as given and its full SHA under the forms line, then the uncommitted and untracked files, then a blank line' (
+            $refLines[0] -ceq "Forms read from ``scripts/pin-forms-ref.psd1`` in the clone at the -Ref commit, $($refSha.Substring(0, 7))." -and
+            $refLines[1] -ceq "Branch measurement: -Ref ``feature`` is $refSha in the sibling checkout $sib, a local commit, not GitHub's main, which ls-remote.txt gives as $sibMainFull." -and
+            $refLines[2] -ceq 'Uncommitted or untracked in the sibling checkout, so not in the clones: `scripts/branch-only.ps1`, `untracked.txt`.' -and
+            $refLines[3] -eq '' -and (Get-Content -LiteralPath (Join-Path $outRef 'ls-remote.txt') -Raw).Trim() -ceq "$sibMainFull`trefs/heads/main") $mdRef
+        $outBad = Join-Path $temp 'out-bad-ref'
+        $threw = try { $null = Invoke-PinMeasure -Tools $toolsRepo -Sibling $sib -Old $oldPin -New $newPin -Out $outBad -Forms 'scripts/pin-forms.psd1' -Bodies $stub -Ref 'no-such-ref'; '' } catch { $_.Exception.Message }
+        & $check 'a -Ref that names no commit of the checkout fails, naming it, and -Out is not written' (
+            $threw -ceq "-Ref no-such-ref is not a commit of the sibling checkout $sib, so nothing was measured." -and -not (Test-Path -LiteralPath $outBad)) $threw
         # The script itself, from inside the tools repository, with a pin that is not there.
         Copy-Item -LiteralPath $PSCommandPath -Destination (Join-Path $toolsRepo 'scripts/pin-measure.ps1')
         Copy-Item -LiteralPath "$PSScriptRoot/breaking-lib.ps1" -Destination (Join-Path $toolsRepo 'scripts/breaking-lib.ps1')
@@ -480,6 +571,10 @@ if ($SelfTest) {
         $code = $LASTEXITCODE
         $row = if (Test-Path -LiteralPath (Join-Path $out3 'table.md')) { Get-Content -LiteralPath (Join-Path $out3 'table.md') -Raw } else { '' }
         & $check 'run from a sibling, with forms that differ: exit 0' ($code -eq 0 -and $row -match '(?m)^\| last \| 0 \| 3 \| differs \|') "$code $said"
+        $out4 = Join-Path $temp 'out4'
+        $said = & pwsh -NoProfile -File $inSub -Old $oldPin -New $newPin -Out $out4 -Ref no-such-ref 2>&1 | Out-String
+        & $check 'run from a sibling with a -Ref that names no commit: exit 1, naming it, and -Out not written' (
+            $LASTEXITCODE -eq 1 -and $said -match 'FAILED - pin-measure: -Ref no-such-ref is not a commit' -and -not (Test-Path -LiteralPath $out4)) "$LASTEXITCODE $said"
     }
     finally { Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue }
     Write-Host ''
@@ -505,7 +600,7 @@ try {
         if ($LASTEXITCODE) { throw "the pin $pin is not a commit of $tools; fetch it there first." }
     }
     if (-not $sibling) { throw "$tools is not a submodule of a sibling; run this from the sibling's vendor/grado-factorio-tools/scripts/." }
-    Invoke-PinMeasure -Tools $tools -Sibling $sibling -Old $Old -New $New -Out $Out -Forms $Forms -Bodies $bodies
+    Invoke-PinMeasure -Tools $tools -Sibling $sibling -Old $Old -New $New -Out $Out -Forms $Forms -Bodies $bodies -Ref $Ref
     Write-Host ''
     Write-Host "OK - pin-measure: measured $Old to $New; everything is in $Out."
     exit 0

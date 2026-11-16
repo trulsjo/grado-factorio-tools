@@ -68,6 +68,16 @@ A change to the commit of this repository that a consumer records for its `vendo
 range is the commits between the old pin and the new one.
 _Avoid_: pin bump, upgrade
 
+**Pin measurement**:
+Running a consumer's forms at the old pin and the new one, in clones of the consumer at GitHub's
+`main`, and tabling the differences. What a pin move cites.
+_Avoid_: pin test, pin check — it asserts nothing about the pin, so it is not a **check**.
+
+**Branch measurement**:
+A pin measurement made in clones of a commit of the consumer's own checkout instead of GitHub's
+`main`. Cited only by the consumer's pull request whose branch it measured, never by a pin move.
+_Avoid_: stand-in (the hand-built setup it replaces), local run
+
 **Stub page**:
 A page at a fixed path that a skill or a repository's `CLAUDE.md` sends a session to, such as
 `docs/agents/issue-tracker.md`, that holds one repository's own parts and links a shared page
