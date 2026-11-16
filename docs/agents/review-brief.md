@@ -142,11 +142,15 @@ is `.` or that clone.
   --format='%h %s' origin/main -- <path>` gives the same commit, `A` for a path added and `D` for
   one deleted. A lift's path is the one it added here, which the row may not name.
 - A cell for something not yet done names no commit. Its ticket is read with `gh issue view`,
-  to check it is open and still covers that path. A cell for something done names its commit.
+  to check it is open and still covers that path. In a table of `docs/extraction-plan.md`, a
+  cell for something done names its commit.
 
-A cell git does not bear out is a finding, and so is a commit not on that repository's
-`origin/main`, or a done cell with no commit. A cell can go stale without being edited, which is
-why the whole table is read. On
+A cell git does not bear out is a finding, in any table, and so is a commit not on that
+repository's `origin/main`. In a table of `docs/extraction-plan.md`, so is a done cell with no
+commit: a reviewer can check a done cell against git only through its commit (Truls,
+2026-11-16, [#481's ruling](https://github.com/trulsjo/grado-factorio-tools/issues/481#issuecomment-6931598258)).
+In another table, a done cell is checked for the ticket and the commit it does name. A cell can
+go stale without being edited, which is why the whole table is read. On
 2026-11-15 five `docs/extraction-plan.md` rows named trulsjo/grado-factorio-modpack#418 as their
 contraction. That ticket was filed to delete all five copies, but four were deleted under
 trulsjo/grado-factorio-modpack#414, trulsjo/grado-factorio-modpack#416 and
