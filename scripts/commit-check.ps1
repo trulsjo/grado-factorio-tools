@@ -41,7 +41,8 @@
                 reports a body's by (grado-factorio-tools#472): every repository here merges by
                 rebase, so a `Closes #N` footer reaches main as written and closes that issue,
                 whatever the pull request's body chose. A ticket is cited with `Refs #N`. In each
-                mode, a message file, -Title and -Range; a subject skipped below is not asked.
+                mode, a message file, -Title and -Range, and in a message whose subject is
+                skipped below, as git's `Revert "..."`, which no other rule asks.
       scope     Only with -ScopeFile: the scope has to be one the file lists. A commit on
                 grado-factorio-tools#53 used `load-harness`, which that repository does not
                 list, and nothing said so. A message with no scope still passes.
@@ -301,10 +302,21 @@ function Test-CommitMessage([string[]] $raw, [string[]] $listed = $SCOPES, [bool
 
     $subject = $lines[0]
 
-    # Git writes these, not a person, and rebase rewrites the first three away.
+    # A closing keyword before an issue reference closes that issue when the commit reaches the
+    # default branch, whatever the pull request's body decided (#472). Every line, the subject and
+    # the trailers too, and in a message of git's below as in a person's (PR #493's review, G).
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        foreach ($found in Find-ClosingKeyword -Line $lines[$i]) {
+            $bad.Add(("line $($i + 1) holds the closing keyword `"$found`", which closes that issue when the commit " +
+                'reaches main: cite the ticket with "Refs #N", and close it with a "Closes #N" line in the pull request''s body'))
+        }
+    }
+
+    # Git writes these, not a person, and rebase rewrites the first three away: no other rule asks
+    # anything of them.
     if ($subject -match '^(fixup|squash|amend)! ' -or
         $subject -match '^Merge ' -or $subject -match '^Revert "') {
-        return , @()
+        return , $bad.ToArray()
     }
 
     # ------------------------------------------------------------------------------- the subject
@@ -373,16 +385,6 @@ function Test-CommitMessage([string[]] $raw, [string[]] $listed = $SCOPES, [bool
     # ---------------------------------------------------------------------------------- the body
     if ($lines.Count -ge 2 -and $lines[1] -ne '') {
         $bad.Add('put a blank line between the subject and the body')
-    }
-
-    # A closing keyword before an issue reference closes that issue when the commit reaches the
-    # default branch, whatever the pull request's body decided (#472). Every line, the subject and
-    # the trailers too.
-    for ($i = 0; $i -lt $lines.Count; $i++) {
-        foreach ($found in Find-ClosingKeyword -Line $lines[$i]) {
-            $bad.Add(("line $($i + 1) holds the closing keyword `"$found`", which closes that issue when the commit " +
-                'reaches main: cite the ticket with "Refs #N", and close it with a "Closes #N" line in the pull request''s body'))
-        }
     }
 
     $trailerStart = Get-TrailerStart $lines
@@ -461,6 +463,11 @@ if ($SelfTest) {
            msg = @('🐛 fix(repo): a subject', '', 'This fixes https://github.com/octo-org/octo-repo/issues/5.') }
         @{ why = 'line 1 holds the closing keyword "close #7"'; msg = @('🐛 fix(repo): close #7 in the subject') }
         @{ why = 'line 1 holds the closing keyword "closes #7"'; title = $true; msg = @('🐛 fix(repo): a title that closes #7') }
+        # In a message whose subject skips every other rule (PR #493's review, G).
+        @{ why = 'line 1 holds the closing keyword "fixes #4"'; msg = @('Revert "fixes #4"') }
+        @{ why = 'line 3 holds the closing keyword "Closes #5"'; msg = @('Merge branch ''topic''', '', 'Closes #5') }
+        @{ why = 'line 1 holds the closing keyword "resolves #6"'; msg = @('fixup! 🐛 fix(repo): resolves #6') }
+        @{ why = 'line 1 holds the closing keyword "fixes #4"'; title = $true; msg = @('Revert "fixes #4"') }
     )
 
     $mustPass = @(
