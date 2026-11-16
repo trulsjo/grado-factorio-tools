@@ -97,7 +97,8 @@ A ticket that waits on another records it in three places, kept in step:
    wait later loses it in the same step as the edge and the section are written. On 2026-10-12
    trulsjo/grado-factorio-modpack#225 was handed to a session as `ready-for-agent`, with "None"
    under its "Blocked by", while a decision of the day before that it waits stood in its
-   comments (by that repository's page).
+   comments (by that repository's page). The label comes back when the last blocker closes, by
+   *Before closing*'s *Give a blocked ticket its label back*.
 
 **Each write is read back**:
 `gh api repos/<owner>/<repo>/issues/<n>/dependencies/blocked_by --jq '[.[].number]'`, and the
@@ -115,6 +116,25 @@ What a session may run unasked for the POST, and in which tool, is each reposito
 issues it blocks, and `gh issue list --state open --search "<n>"` for open issues that name it,
 such as a child's `## Parent`. Re-parent or close each in the same pass: an open child of a
 closed issue reports to nothing (trulsjo/true-nukes-refreshed).
+
+**Give a blocked ticket its label back** in the same pass. For each issue `<m>` the closing one
+blocks:
+
+- Read its open blockers,
+  `gh api repos/<owner>/<repo>/issues/<m>/dependencies/blocked_by --jq '[.[] | select(.state == "open") | .number]'`,
+  and its `## Blocked by` section.
+- Where the closing issue is its last open blocker, give it the state label its triage named
+  for when the block lifts, in its agent brief or a ruling comment. Where none is named, give it
+  `needs-triage`.
+- Remove the closed blocker from its `## Blocked by` section, as *Blocked by* asks of an edge
+  that changes, and read the label back with `gh issue view <m> --json labels`.
+- Where another blocker is still open, it keeps no `ready-for-agent`, as *Blocked by*'s third
+  place says.
+
+In trulsjo/grado-factorio-tools, #470 was triaged on 2026-11-15 with an agent brief saying
+"`ready-for-agent` is added when #464 closes". #464 closed on 2026-11-15 when PR #471 merged, and
+#470 stayed unlabelled until its triage was taken up again on 2026-11-16, read from its timeline
+(`gh api repos/trulsjo/grado-factorio-tools/issues/470/timeline`, 2026-11-16).
 
 **Close a duplicate with `gh issue close <n> --duplicate-of <m>`** (gh 2.103.1, read from
 `gh issue close --help` on 2026-10-26, not run, as trulsjo/grado-factorio-modpack's page
