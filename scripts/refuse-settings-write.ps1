@@ -1,0 +1,312 @@
+<#
+.SYNOPSIS
+    A hook for agent sessions: refuses a shell command that writes .claude/settings.json or
+    .claude/settings.local.json, and says to make the change with the Edit tool. Exit 2 refuses the
+    command before it runs; exit 0 lets it run.
+
+.DESCRIPTION
+    WHY (grado-factorio-tools#469, from grado-factorio-modpack#414). A session wrote that
+    repository's tracked .claude/settings.json with a script run through the Bash tool. The ticket's
+    brief said to stop and ask Truls if the auto-mode check refused the edit, as it had before; but
+    a file written by the shell never reaches the Edit tool, so that check was never asked, and
+    nothing said so. The content was right; the gate Truls relies on was not reached.
+
+    HOW A CONSUMER WIRES IT. In its tracked .claude/settings.json, a PreToolUse hook on the two
+    shell tools, matcher `Bash|PowerShell`, whose command is the first example below (ADR 0004).
+    This repository wires it from scripts/ in its own (#323 ruling 3). The session hands the hook
+    the tool call as JSON on stdin: this reads `tool_input.command`. The `case` starts this script
+    only when that JSON names `settings.json` or `settings.local.json`, since starting PowerShell
+    takes a second and the hook runs before every shell command. Where the script is not there, as
+    in a clone whose submodule was never fetched, the wired command lets the shell command run and
+    prints JSON that names the missing path and tells the agent it was not checked, as
+    refuse-git-discard.ps1's wiring does; -SelfTest runs both branches of the wiring.
+
+    WHAT IT REFUSES. A command that writes either file, named with any directory part before
+    `.claude/`, as `./.claude/settings.json` or an absolute path, with / or \ between the parts, in
+    any case: a redirection onto it, `>` or `>>`, its target a word of its own or joined on; `tee`
+    or `Tee-Object` naming it; `Set-Content`, `Add-Content` or `Out-File` naming it, other than as
+    the value of a parameter that begins -Va or -In, as -Value and -InputObject; .NET's
+    `::WriteAllText`, `WriteAllLines`, `WriteAllBytes` and their `AppendAll` forms with it as the
+    first argument; `sed` with an in-place option, `-i` alone or among other short options, with a
+    suffix or not, or `--in-place`, naming it; and `cp`, `mv`, `Copy-Item` or `Move-Item` with it as
+    the target. The target is the word after -Destination, or a prefix of it from -De, or after cp's
+    `-t`; else the last word that is no option. A command is found in a compound, after `&&`, `||`,
+    `;`, `|`, `&` or a newline, or inside parentheses or braces, and after the assignments that lead
+    it, as `MSYS_NO_PATHCONV=1 sed -i ...`; a command's name may carry a path or `.exe`.
+
+    WHAT IT LETS THROUGH. A read, as `cat`, `Get-Content`, `grep`, `git show` or `git diff`; the
+    file as a copy's source, as `cp .claude/settings.json backup.json`; a redirection of it
+    elsewhere, as `cat .claude/settings.json > backup.json`; a `>` inside quotes; a file with a
+    similar name, as `settings.json.bak` or `my-settings.json`; and every command that names neither
+    file, in silence.
+
+    IT FAILS OPEN, LOUDLY. Where a command that names either file has quotes it cannot pair, or
+    where the tool call cannot be read, it lets the command run and prints, on stdout, JSON whose
+    additionalContext tells the agent the command was NOT checked.
+
+    WHAT IT CANNOT SEE. A write from a script or program the command runs, as
+    `pwsh -File build-settings.ps1`, which names the file only inside the script: it reads the
+    command line alone (Truls, 2026-11-16, at #469's triage). A path built from a variable or a
+    substitution, as `$f` or `$(...)`. A `cd` into `.claude` and then a bare `settings.json`. A
+    write by git, as `git checkout -- .claude/settings.json`, which refuse-git-discard.ps1 judges on
+    its own grounds. A command named through an alias, as `ac`, or a writer not listed above, as
+    `New-Item -Value`, `dd`, `python` or `node`. A parameter given with a colon, as `-Value:x`, and
+    `cp --target-directory=<dir>`, whose file is then read as the target. Both shells' quoting is
+    read roughly: a word in double or single quotes is one word with its quotes taken off, a
+    backslash or backtick escapes the character after it, and nothing is expanded. And whether the
+    settings still reach it, unless -SelfTest is run on them: that reads the wired command and the
+    matchers of the entries that run it, and nothing else of the settings.
+
+    TO CHECK IT, run the second example below.
+
+.PARAMETER SelfTest
+    Prove each refused form refused for each file and each let-through form let through, a command
+    with an unpaired quote let through with the NOT-checked message, and the script run on a tool
+    call on stdin: exit 2 and a reason for a write, exit 0 and nothing for a read, exit 0 and the
+    NOT-checked JSON for a call it cannot read. Then the first example's command, run through sh,
+    refuses with exit 2 and a reason, passes a read, and where the project holds no hook script
+    exits 0 and prints JSON that names the missing path to the agent. Then the command -Settings
+    wires, found by this script's name: it refuses with exit 2 and passes a read, and the matchers
+    of the entries that run it start it for the Bash tool and for the PowerShell tool. Needs sh: the
+    one on the path, or the one Git for Windows ships.
+
+.PARAMETER Settings
+    With -SelfTest: the .claude/settings.json whose PreToolUse command naming this script the wired
+    cases run, with that file's repository as the project. The first command of any entry that names
+    this script is taken, wherever it stands in the file (#315 ruling 3). Defaults to this
+    repository's own, which check.ps1, and so CI, runs. A consumer runs it on its own file to know
+    its wiring still reaches the hook.
+
+.EXAMPLE
+    The wired command: the PreToolUse hook a consumer puts in its .claude/settings.json, as HOW A
+    CONSUMER WIRES IT says. The script takes no option.
+
+        i=$(cat); case $i in *settings.json*|*settings.local.json*) h="$CLAUDE_PROJECT_DIR/vendor/grado-factorio-tools/scripts/refuse-settings-write.ps1"; if [ -f "$h" ]; then printf '%s' "$i" | pwsh -NoProfile -File "$h"; else m='refuse-settings-write: vendor/grado-factorio-tools/scripts/refuse-settings-write.ps1 was not found, so this command was NOT checked by the settings-write hook. git submodule update --init fetches the script.'; printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"%s"}}' "$m" "$m"; fi;; esac
+
+.EXAMPLE
+    To check it. The first is refused with exit 2, the second passes with exit 0:
+
+        '{"tool_input":{"command":"sed -i s/x/x/ .claude/settings.json"}}' | pwsh -NoProfile -File scripts/refuse-settings-write.ps1; $LASTEXITCODE
+        '{"tool_input":{"command":"cat .claude/settings.json"}}' | pwsh -NoProfile -File scripts/refuse-settings-write.ps1; $LASTEXITCODE
+#>
+
+#Requires -Version 7
+[CmdletBinding()]
+param(
+    [switch] $SelfTest,
+    [string] $Settings
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+# A word that names either settings file, whatever the directory part before `.claude`.
+$FILE_AT = '(?i)(?:^|[\\/])\.claude[\\/]settings(?:\.local)?\.json$'
+
+# The words of $Command, with each operator that ends a command as one of its own: a word's Raw
+# text, its Bare text with each quoted span blanked to the same length, so that a > inside quotes
+# is no redirection, and its Word, with the quotes taken off; $null where a quote is left open.
+function Split-ShellCommand {
+    param([AllowEmptyString()] [string] $Command)
+    $quoted = '"(?:[^"\\`]|[\\`].)*"|''[^'']*'''
+    $pattern = '(?<op>&&|\|\||[;|&\n(){}])|(?<word>(?:[^\s;|&(){}"''\\`]|[\\`].|' + $quoted + ')+)|[ \t\r]+'
+    $matched = [regex]::Matches($Command, $pattern)
+    if (($matched | Measure-Object Length -Sum).Sum -ne $Command.Length) { return $null }
+    , @(foreach ($m in $matched) {
+            if ($m.Groups['op'].Success) { @{ Op = $m.Value } }
+            elseif ($m.Groups['word'].Success) {
+                @{ Raw = $m.Value; Word = $m.Value -replace '"|''', ''
+                    Bare = [regex]::Replace($m.Value, $quoted, { param($q) '_' * $q.Length }) }
+            }
+        })
+}
+
+# The word of one command, $Words, that names a settings file the command writes, or nothing.
+function Get-WrittenSetting {
+    param([hashtable[]] $Words)
+    # A redirection's target, joined on, as >file, or the word after it.
+    $redirect = $false
+    foreach ($w in $Words) {
+        if ($redirect -and $w.Word -match $FILE_AT) { return $w.Word }
+        $at = $w.Bare.LastIndexOf('>')
+        $redirect = $false
+        if ($at -lt 0) { continue }
+        $rest = $w.Raw.Substring($at + 1).TrimStart('|') -replace '"|''', ''
+        if ($rest -match $FILE_AT) { return $rest }
+        $redirect = -not $rest
+    }
+    $after = @($Words | Select-Object -Skip 1 | ForEach-Object { $_.Word })
+    switch -Regex ([IO.Path]::GetFileNameWithoutExtension($Words[0].Word)) {
+        '^(tee|Tee-Object)$' { return $after | Where-Object { $_ -match $FILE_AT } | Select-Object -First 1 }
+        '^(Set-Content|Add-Content|Out-File)$' {
+            # A -Value or -InputObject is what is written, not where.
+            for ($k = 0; $k -lt $after.Count; $k++) {
+                if ($after[$k] -match '^(?i)-(va|in)') { $k++; continue }
+                if ($after[$k] -match $FILE_AT) { return $after[$k] }
+            }
+        }
+        '^sed$' {
+            if ($after -cmatch '^(-[^-]*i|--in-place)') { return $after | Where-Object { $_ -match $FILE_AT } | Select-Object -First 1 }
+        }
+        '^(cp|mv|Copy-Item|Move-Item)$' {
+            $named = for ($k = 1; $k -lt $after.Count; $k++) { if ($after[$k - 1] -cmatch '^-(t|[Dd][Ee]\w*)$') { $after[$k] } }
+            $target = @($named) + @($after | Where-Object { $_ -notlike '-*' } | Select-Object -Last 1) | Select-Object -First 1
+            if ($target -match $FILE_AT) { return $target }
+        }
+    }
+}
+
+# What to do with $Command: @{ Refuse = <the file as named> }, @{ Unchecked = <why> }, or $null to
+# let it through in silence.
+function Get-SettingsWrite {
+    param([AllowEmptyString()] [string] $Command)
+    if ($Command -notmatch '(?i)\.claude[\\/]settings(?:\.local)?\.json') { return $null }
+    # .NET's writers take the path inside the parentheses the words are split on.
+    foreach ($m in [regex]::Matches($Command, '(?i)::(?:Write|Append)All(?:Text|Lines|Bytes)\s*\(\s*[''"]?([^''",)]+)')) {
+        if ($m.Groups[1].Value -match $FILE_AT) { return @{ Refuse = $m.Groups[1].Value } }
+    }
+    $words = Split-ShellCommand $Command
+    if ($null -eq $words) { return @{ Unchecked = 'its quotes could not be paired, so its commands could not be read' } }
+    $one = [Collections.Generic.List[hashtable]]::new()
+    foreach ($w in @($words) + @(@{ Op = 'end' })) {
+        if (-not $w.ContainsKey('Op')) { $one.Add($w); continue }
+        # The assignments that lead a command, as `MSYS_NO_PATHCONV=1 sed ...`.
+        $lead = 0
+        while ($lead -lt $one.Count -and $one[$lead].Word -match '^\w+=') { $lead++ }
+        $s = @($one | Select-Object -Skip $lead)
+        $one.Clear()
+        if (-not $s) { continue }
+        $file = Get-WrittenSetting -Words $s
+        if ($file) { return @{ Refuse = $file } }
+    }
+    $null
+}
+
+# The JSON that tells the agent a command was let through unchecked, and why.
+function Format-Unchecked {
+    param([string] $Why)
+    $text = "refuse-settings-write: $Why, so this command was NOT checked for a write to .claude/settings.json."
+    @{ systemMessage = $text; hookSpecificOutput = @{ hookEventName = 'PreToolUse'; additionalContext = $text } } | ConvertTo-Json -Compress
+}
+
+if ($SelfTest) {
+    $temp = Join-Path ([IO.Path]::GetTempPath()) "refuse-settings-write-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+    New-Item -ItemType Directory -Path $temp -Force | Out-Null
+    $failures = 0; $n = 0
+    $check = {
+        param([string] $Name, [bool] $Ok, [string] $Said)
+        $script:n++
+        Write-Host ("self-test {0}: {1} -- {2}" -f $script:n, $Name, $(if ($Ok) { 'ok' } else { 'FAILED' }))
+        if (-not $Ok) { $script:failures++; if ($Said) { Write-Host "    $Said" } }
+    }
+    $verdict = { param($r) if (-not $r) { 'through' } elseif ($r.ContainsKey('Refuse')) { 'refused' } else { 'unchecked' } }
+    try {
+        # {f} is each settings file in turn.
+        $refused = 'echo x > {f}', 'echo x >> {f}', 'echo x>{f}', 'echo x 1>"{f}"', 'echo x | tee {f}', 'echo x | tee -a {f}',
+            "'x' | Tee-Object {f}", "'x' | Tee-Object -FilePath '{f}'", 'Set-Content -Path {f} -Value x', 'Set-Content {f} x',
+            "'x' | Out-File -FilePath {f}", 'Add-Content -Value x {f}', "[IO.File]::WriteAllText('{f}', 'x')",
+            '[System.IO.File]::WriteAllLines("{f}", $l)', "[IO.File]::WriteAllBytes( '{f}', `$b)", "[IO.File]::AppendAllText('{f}', 'x')",
+            "sed -i 's/x/y/' {f}", "sed -i.bak 's/x/y/' {f}", "sed -ni 's/x/y/p' {f}", "sed --in-place=.bak 's/x/y/' {f}",
+            "/usr/bin/sed -i 's/x/y/' {f}", 'cp backup.json {f}', 'mv -f backup.json {f}', 'Copy-Item backup.json {f} -Force',
+            'Copy-Item -Path b.json -Destination {f}', 'Move-Item -De {f} b.json', "MSYS_NO_PATHCONV=1 sed -i 's/x/y/' {f}",
+            'git status && cp backup.json {f}', 'cat a.json | sed -i s/x/y/ {f}', '(cp backup.json {f})', 'cp backup.json ./{f}',
+            'cp backup.json "C:\src\x\{f}"', 'cp backup.json /c/src/x/{f}', "Set-Content -Path '{b}' -Value x", 'X=1; cp backup.json {f}'
+        $through = 'cat {f}', 'Get-Content {f}', 'git show HEAD:{f}', 'git diff -- {f}', 'grep hooks {f}', 'cp {f} backup.json',
+            'Copy-Item {f} -Destination b.json', 'cp -t backup {f}', 'cat {f} > backup.json', 'Set-Content -Path b.json -Value {f}',
+            "'x' | Out-File -InputObject {f} -FilePath b.json", 'echo "x > {f}"', "sed 's/x/y/' {f}", 'sed --debug s/x/y/ {f}',
+            'echo x > {f}.bak', 'echo x > my-settings.json', 'echo x > .claude/my-settings.json', 'cp {f}.bak backup.json'
+        foreach ($f in '.claude/settings.json', '.claude/settings.local.json') {
+            $b = $f.Replace('/', '\').ToUpperInvariant()
+            foreach ($c in $refused) {
+                $cmd = $c.Replace('{f}', $f).Replace('{b}', $b)
+                $got = Get-SettingsWrite $cmd
+                & $check "``$cmd``: refused, naming the file" ((& $verdict $got) -eq 'refused' -and $got.Refuse -match '(?i)settings(\.local)?\.json$') "$(& $verdict $got) $(if ($got) { $got.Values })"
+            }
+            foreach ($c in $through) {
+                $cmd = $c.Replace('{f}', $f)
+                $got = & $verdict (Get-SettingsWrite $cmd)
+                & $check "``$cmd``: let through" ($got -eq 'through') $got
+            }
+        }
+        $cases = [ordered]@{
+            'a command that names neither file' = @('ls -la > out.txt', 'through')
+            'an unpaired quote in a command that names a settings file' = @('echo "x > .claude/settings.json', 'unchecked')
+            'an unpaired quote in a command that names neither file' = @('echo "x', 'through')
+        }
+        foreach ($name in $cases.Keys) {
+            $c = $cases[$name]; $said = & $verdict (Get-SettingsWrite $c[0])
+            & $check "${name}: $($c[1])" ($said -eq $c[1]) $said
+        }
+        # The script itself, with the call on stdin: a refusal is exit 2 and a reason on stderr; a
+        # call it cannot read is exit 0 and the JSON on stdout; one it lets through, exit 0 and
+        # nothing.
+        $run = {
+            param($json)
+            $out = $json | & pwsh -NoProfile -File $PSCommandPath 2>&1 | Out-String
+            @{ Code = $LASTEXITCODE; Text = $out }
+        }
+        $sRun = & $run (@{ tool_input = @{ command = 'sed -i s/x/y/ .claude/settings.json' } } | ConvertTo-Json -Compress)
+        $rRun = & $run (@{ tool_input = @{ command = 'cat .claude/settings.json' } } | ConvertTo-Json -Compress)
+        $bad = & $run 'not json'
+        $toldBad = try { ($bad.Text | ConvertFrom-Json).hookSpecificOutput.additionalContext -match 'NOT checked' } catch { $false }
+        & $check 'run on a write: exit 2, a reason naming the file and the Edit tool; on a read: exit 0 and nothing; on a call it cannot read: exit 0 and the NOT-checked JSON' ($sRun.Code -eq 2 -and $sRun.Text -match 'Refused: .*\.claude/settings\.json' -and $sRun.Text -match 'Edit tool' -and $rRun.Code -eq 0 -and -not $rRun.Text.Trim() -and $bad.Code -eq 0 -and $toldBad) "write: $($sRun.Code) $($sRun.Text) | read: $($rRun.Code) $($rRun.Text) | bad: $($bad.Code) $($bad.Text)"
+        # The wiring as the session runs it, through sh, for a project that holds this script and
+        # for one that does not, read from the header's first example, so the command shown is the
+        # command run.
+        $form = [regex]::Match((Get-Content -LiteralPath $PSCommandPath -Raw), 'i=\$\(cat\).*?esac').Value
+        $wired = $form.Replace('/vendor/grado-factorio-tools/scripts/', '/scripts/')
+        $sh = (Get-Command sh -ErrorAction SilentlyContinue)?.Source ?? (Join-Path (git --exec-path) '../../../usr/bin/sh.exe')
+        $env:PATH = "$(Split-Path $sh)$([IO.Path]::PathSeparator)$env:PATH"
+        $wire = {
+            param($project, $command, $line = $wired)
+            $env:CLAUDE_PROJECT_DIR = $project
+            $text = (@{ tool_input = @{ command = $command } } | ConvertTo-Json -Compress) | & $sh -c $line 2>&1 | Out-String
+            @{ Code = $LASTEXITCODE; Text = $text }
+        }
+        $tools = Split-Path $PSScriptRoot -Parent
+        $wRefused = & $wire $tools 'sed -i s/x/x/ .claude/settings.json'
+        $wRead = & $wire $tools 'cat .claude/settings.json'
+        $wAbsent = & $wire $temp 'sed -i s/x/x/ .claude/settings.json'
+        # The missing path is named in both fields (ADR 0004).
+        $toldAbsent = try {
+            $parsed = $wAbsent.Text | ConvertFrom-Json
+            $parsed.hookSpecificOutput.hookEventName -ceq 'PreToolUse' -and $parsed.hookSpecificOutput.additionalContext -match 'vendor/grado-factorio-tools/scripts/refuse-settings-write\.ps1 was not found' -and
+                $parsed.systemMessage -ceq $parsed.hookSpecificOutput.additionalContext
+        } catch { $false }
+        & $check 'the first example''s command refuses with exit 2 and a reason, passes a read, and where the script is not there exits 0 and prints JSON naming the missing path to the agent' ($wRefused.Code -eq 2 -and $wRefused.Text -match 'Refused' -and $wRead.Code -eq 0 -and -not $wRead.Text.Trim() -and $wAbsent.Code -eq 0 -and $toldAbsent) "refused: $($wRefused.Code) $($wRefused.Text) | read: $($wRead.Code) $($wRead.Text) | absent: $($wAbsent.Code) $($wAbsent.Text)"
+        # The wiring a settings file holds, found by this script's name wherever it stands among
+        # the PreToolUse entries (#315 ruling 3): this repository's own unless -Settings names one.
+        . "$PSScriptRoot/hook-matcher.ps1"
+        $Settings = (Resolve-Path -LiteralPath ($Settings ? $Settings : (Join-Path $PSScriptRoot '../.claude/settings.json'))).Path
+        $read = Get-HookWiring -Event PreToolUse -Script (Split-Path $PSCommandPath -Leaf) -Path $Settings
+        $sRefused = $sRead = $null
+        if ($read.Command) {
+            $project = Split-Path (Split-Path $Settings -Parent) -Parent
+            $sRefused = & $wire $project 'sed -i s/x/x/ .claude/settings.json' $read.Command
+            $sRead = & $wire $project 'cat .claude/settings.json' $read.Command
+        }
+        & $check "the command $Settings wires refuses with exit 2 and a reason, and passes a read" ($sRefused -and $sRefused.Code -eq 2 -and $sRefused.Text -match 'Refused' -and $sRead.Code -eq 0 -and -not $sRead.Text.Trim()) $(if (-not $read.Command) { "$Settings wires no command that names this script" } else { "refused: $($sRefused.Code) $($sRefused.Text) | read: $($sRead.Code) $($sRead.Text)" })
+        $unstarted = @(if ($read.Entries) { Get-UnstartedShellTool -Entry $read.Entries })
+        & $check 'the matcher of the entry that wires the hook starts it for the Bash tool and for the PowerShell tool' ($read.Entries -and -not $unstarted) $(if ($read.Entries) { "$Settings`: the matcher $(Get-EntryMatcher $read.Entries) does not start the hook for $($unstarted -join ' or ')" } else { "$Settings wires no entry that names this script" })
+    }
+    finally { Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue }
+    Write-Host ''
+    if ($failures) { Write-Host "FAILED - self-test: $failures of $n case(s) did not hold."; exit 1 }
+    Write-Host "OK - self-test passed: all $n cases."
+    exit 0
+}
+
+try {
+    $call = [Console]::In.ReadToEnd() | ConvertFrom-Json
+    $verdict = Get-SettingsWrite -Command ([string] $call.tool_input.command)
+}
+catch { $verdict = @{ Unchecked = "the tool call could not be read ($($_.Exception.Message))" } }
+if ($verdict -and $verdict.ContainsKey('Unchecked')) { Format-Unchecked $verdict.Unchecked; exit 0 }
+if ($verdict) {
+    [Console]::Error.WriteLine(@"
+Refused: this command writes $($verdict.Refuse) from the shell, so the session's own checks on that
+file are never asked. Make the change with the Edit tool, so that they are.
+"@)
+    exit 2
+}
+exit 0
