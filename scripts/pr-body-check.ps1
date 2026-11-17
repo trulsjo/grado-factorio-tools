@@ -966,6 +966,12 @@ function Invoke-SelfTest {
             $held = & $run @($short, '-MaxLineLength', '40')
             $free.Code -eq 0 -and $free.Text -match '(?m)^OK - pr-body-check: ' -and $free.Text -notmatch 'characters' -and
                 $held.Code -eq 0 -and $held.Text -match ' No prose line is over 40 characters\.' } }
+        @{ Name = 'with -MaxLineLength, markdown-check.ps1''s other findings are not this check''s: a body with a relative link and no long line passes (#483)'; Test = {
+            $linked = Join-Path $temp 'body-linked.md'
+            Set-Content -LiteralPath $linked -Value "## Summary`n`nSee [the page](docs/page.md).`n`n$marked"
+            $got = & $run @($linked, '-MaxLineLength', '40')
+            Write-Host ($got.Text.TrimEnd() -replace '(?m)^', '    ')
+            $got.Code -eq 0 -and $got.Text -match ' No prose line is over 40 characters\.' } }
     )
 
     $failures = 0
