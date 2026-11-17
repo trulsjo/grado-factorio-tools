@@ -972,6 +972,15 @@ function Invoke-SelfTest {
             $got = & $run @($linked, '-MaxLineLength', '40')
             Write-Host ($got.Text.TrimEnd() -replace '(?m)^', '    ')
             $got.Code -eq 0 -and $got.Text -match ' No prose line is over 40 characters\.' } }
+        @{ Name = 'a body that fails for another reason, with or without -MaxLineLength, and has no long line, names no rewrap (#483)'; Test = {
+            $bare = Join-Path $temp 'body-bare.md'
+            Set-Content -LiteralPath $bare -Value 'No headings at all.'
+            $limited = & $run @($bare, '-MaxLineLength', '40')
+            $unlimited = & $run @($bare)
+            Write-Host ($limited.Text.TrimEnd() -replace '(?m)^', '    ')
+            $limited.Code -eq 1 -and $limited.Text -match '(?m)^FAILED - pr-body-check: .*, and 0 line\(s\) over 40 characters\.\r?$' -and
+                $unlimited.Code -eq 1 -and $unlimited.Text -match '(?m)^FAILED - pr-body-check: ' -and
+                $limited.Text -notmatch 'markdown-rewrap' -and $unlimited.Text -notmatch 'markdown-rewrap' } }
     )
 
     $failures = 0
