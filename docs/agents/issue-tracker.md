@@ -265,9 +265,11 @@ review and the first body all missed it; the plugin pass found it (PR #387's com
 
 What the copy cannot see: the sibling's own submodule is not initialised, so `vendor/` holds
 only the pin's `scripts/`, and a link to anything else there is reported as not checked; its
-index matches `HEAD`, so a no-argument form reads no staged file; and a form over
+index matches `HEAD`, so a no-argument form reads no staged file; and without `-Ref` a form over
 `origin/main...HEAD` reads nothing at `main`, so a range of the sibling's own history, as
-`HEAD~20...HEAD`, stands in for a pull request's and is named as such.
+`HEAD~20...HEAD`, stands in for a pull request's and is named as such. With `-Ref`, each clone's
+`origin/main` is GitHub's `main` and its `HEAD` the measured commit, so such a form reads the
+measured branch's commits since `main`.
 
 ## Pull requests as a triage surface
 
