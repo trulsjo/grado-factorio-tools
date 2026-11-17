@@ -1120,9 +1120,10 @@ function Invoke-SelfTest {
                 '    $dOk'
                 # A quoted key names a case as a bare one does, and a check called as & on a
                 # variable reads its parenthesised argument as the case's result (#411). Only that
-                # call is known to be a check, and only its whole argument a verdict: an -or may be
-                # false where one operand holds, a chain inside an operand is not the result, and a
-                # command called by name, or an argument piped on, is not read as one.
+                # call is known to be a check, and only its whole argument a verdict: an -or holds
+                # where any one operand does, so a revert that drops one can fail it, a chain inside
+                # an operand is not the result, and a command called by name, or an argument piped
+                # on, is not read as one.
                 "    @{ 'a case' = { `$x -ne 'k1' -and `$x -ne 'k2' } }"
                 "    & `$check 'one' (`$x -ne 'g1' -and `$x -ne 'g2') `$x"
                 "    & `$check 'two' (`$x -eq 'g3' -or `$x -eq 'g4')"
