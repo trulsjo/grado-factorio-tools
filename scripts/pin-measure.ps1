@@ -91,7 +91,8 @@
     #476's triage, rulings 6 and 7).
 
     WHAT IT CANNOT SEE. What Pin tickets says the copy cannot: the clone's own submodule is not
-    initialised, its index matches HEAD, and a form over origin/main...HEAD reads nothing. A form
+    initialised, its index matches HEAD, and without -Ref a form over origin/main...HEAD reads
+    nothing; with -Ref it reads the measured branch's commits since origin's main. A form
     the sibling's file does not list, though the grep under the table names each reference no form
     runs, by name only: a script one form runs may still be called with other arguments elsewhere.
     And what a difference means, which is the pull request's to say.
