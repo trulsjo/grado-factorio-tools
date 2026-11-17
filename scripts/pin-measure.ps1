@@ -564,6 +564,8 @@ if ($SelfTest) {
             $refLines[1] -ceq "Branch measurement: -Ref ``feature`` is $refSha in the sibling checkout $sib, a local commit, not GitHub's main, which ls-remote.txt gives as $sibMainFull." -and
             $refLines[2] -ceq 'Uncommitted or untracked in the sibling checkout, so not in the clones: `scripts/branch-only.ps1`, `untracked.txt`.' -and
             $refLines[3] -eq '' -and (Get-Content -LiteralPath (Join-Path $outRef 'ls-remote.txt') -Raw).Trim() -ceq "$sibMainFull`trefs/heads/main") $mdRef
+        & $check 'with -Ref, the grep line names the -Ref commit, where the clones are, not origin''s main' (
+            $refLines -ccontains "Sibling references no form runs (``git grep -n vendor/grado-factorio-tools/scripts`` at $($refSha.Substring(0, 7))):") $mdRef
         $outBad = Join-Path $temp 'out-bad-ref'
         $threw = try { $null = Invoke-PinMeasure -Tools $toolsRepo -Sibling $sib -Old $oldPin -New $newPin -Out $outBad -Forms 'scripts/pin-forms.psd1' -Bodies $stub -Ref 'no-such-ref'; '' } catch { $_.Exception.Message }
         & $check 'a -Ref that names no commit of the checkout fails, naming it, and -Out is not written' (
