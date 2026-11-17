@@ -529,6 +529,18 @@ if ($SelfTest) {
         $sibMainFull = "$(git -C $sib rev-parse HEAD)".Trim()
         & $check 'without -Ref, ls-remote.txt is origin''s main and table.md has no branch measurement line' (
             (& $read 'ls-remote.txt') -ceq "$sibMainFull`trefs/heads/main" -and $md -notmatch 'Branch measurement|Uncommitted') "$(& $read 'ls-remote.txt') | $md"
+        # And table.md whole, line for line, as the script wrote it before -Ref was added, for the
+        # absolute -Forms run, whose one form makes every line fixed: the forms line, the table,
+        # and the grep line at origin's main with the two hits no form runs (#476).
+        $wholeAbs = @(
+            "Forms read from ``$wtForms``, in the working tree, not from a commit.", '',
+            '| form | old exit | new exit | output | old last line | new last line |', '| --- | --- | --- | --- | --- | --- |',
+            '| branch-only | 0 | 3 | differs | v1 | v2 |', '',
+            "Sibling references no form runs (``git grep -n vendor/grado-factorio-tools/scripts`` at $sibMain):", '',
+            '- `` docs/use.md:1:Run `vendor/grado-factorio-tools/scripts/t.ps1` and `vendor/grado-factorio-tools/scripts/unrun.ps1`. ``',
+            '- `` scripts/w2.ps1:1:# runs vendor/grado-factorio-tools/scripts/elsewhere.ps1 ``') -join "`n"
+        $gotAbs = ($mdAbs -replace '\r', '').TrimEnd("`n")
+        & $check 'without -Ref, table.md is held whole, line for line, as before -Ref was added' ($gotAbs -ceq $wholeAbs) "got:`n$gotAbs`nwanted:`n$wholeAbs"
         # A branch measurement: a local branch, not on origin's main, adds a script and the form
         # that runs it, committed; then an uncommitted edit and an untracked file, which the
         # clones lack.
