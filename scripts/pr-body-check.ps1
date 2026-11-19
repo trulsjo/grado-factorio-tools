@@ -952,10 +952,13 @@ function Invoke-SelfTest {
             $zero = & $run @($file, '-MaxLineLength', '0')
             Write-Host ($byPath.Text.TrimEnd() -replace '(?m)^', '    ')
             $named = '(?m)^pr-body-check: line 3: the line is 57 characters, over the limit of 40, link targets and addresses not counted\.\r?$'
+            # The rewrap beside this script, from the directory $run runs in, and the body's own
+            # file, each whole: a hint naming another folder's rewrap or another file fails.
+            $rewrap = [regex]::Escape("pwsh -File '$([IO.Path]::GetRelativePath($repo, (Join-Path $PSScriptRoot 'markdown-rewrap.ps1')) -replace '\\', '/')'")
             $byPath.Code -eq 1 -and $byPath.Text -match $named -and @([regex]::Matches($byPath.Text, '(?m)^pr-body-check: line ')).Count -eq 1 -and
-                $byPath.Text -match "(?m)^FAILED - pr-body-check: .*, and 1 line\(s\) over 40 characters\. 1 line\(s\) over 40 are rewrapped by markdown-rewrap\.ps1: pwsh -File '[^']*markdown-rewrap\.ps1' -Path '[^']*body-long\.md' -MaxLineLength 40\r?$" -and
+                $byPath.Text -match "(?m)^FAILED - pr-body-check: .*, and 1 line\(s\) over 40 characters\. 1 line\(s\) over 40 are rewrapped by markdown-rewrap\.ps1: $rewrap -Path $([regex]::Escape("'$file'")) -MaxLineLength 40\r?$" -and
                 $byBody.Code -eq 1 -and $byBody.Text -match $named -and
-                $byBody.Text -match '(?m)rewrapped by markdown-rewrap\.ps1: pwsh -File ''[^'']*'' -Path <the body, saved as a \.md file> -MaxLineLength 40\r?$' -and
+                $byBody.Text -match "(?m)rewrapped by markdown-rewrap\.ps1: $rewrap -Path <the body, saved as a \.md file> -MaxLineLength 40\r?$" -and
                 $zero.Code -ne 0 -and $zero.Text -match '-MaxLineLength must be 1 or more' } }
         @{ Name = 'with no -MaxLineLength, the same long line passes, and the OK line names no limit; with one, a body with no long line passes and says so (#483)'; Test = {
             $file = Join-Path $temp 'body-free.md'
