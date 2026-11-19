@@ -82,12 +82,14 @@
     it. {headmsg} is that commit's message and the grep is at it. ls-remote.txt is unchanged.
     table.md gains, under its forms line, a line naming -Ref as given, its SHA and the checkout,
     saying it is a local commit, not GitHub's main, with ls-remote.txt's SHA; then, where the
-    checkout holds any, a line naming each file uncommitted or untracked there, which the clones
-    lack, as only committed content reaches them. That list is git status against the checkout's
-    HEAD, not the -Ref commit: with -Ref other than HEAD, a file it names may be committed at -Ref,
-    and so in the clones. The run goes on. The output prints both lines
-    with the table. A relative -Forms is read as committed at -Ref, an absolute one from the
-    working tree as without it: with -Ref, commit the forms file and give it relative.
+    checkout holds any, a line naming each file with uncommitted changes or untracked there. That
+    list is git status against the checkout's HEAD, not the -Ref commit. Where -Ref is HEAD the
+    clones hold none of those changes, as only committed content reaches them: a tracked file
+    named is in the clones as committed, without its edits, and an untracked one is not there.
+    With -Ref other than HEAD, the list says nothing of what the -Ref commit holds. The run goes
+    on. The output prints both lines with the table. A relative -Forms is read as committed at
+    -Ref, an absolute one from the working tree as without it: with -Ref, commit the forms file
+    and give it relative.
     Only the sibling pull request whose branch is measured cites a -Ref run, at its head or saying
     what came after; a pin move's pull request cites a run without -Ref, at GitHub's main (Truls,
     #476's triage, rulings 6 and 7).
@@ -297,7 +299,7 @@ function Invoke-PinMeasure {
     $spans = @($uncommitted | ForEach-Object { '`' + $_ + '`' }) -join ', '
     $refLines = @(if ($refSha) {
             "Branch measurement: -Ref ``$Ref`` is $refSha in the sibling checkout $Sibling, a local commit, not GitHub's main, which ls-remote.txt gives as $main."
-            if ($uncommitted) { "Uncommitted or untracked against the sibling checkout's HEAD, not the -Ref commit, so not in the clones where -Ref is HEAD: $spans." }
+            if ($uncommitted) { "Changed or untracked against the sibling checkout's HEAD, not the -Ref commit; where -Ref is HEAD, the clones hold none of these changes: $spans." }
         })
     $list = try { @((Import-PowerShellDataFile -LiteralPath $file).Forms) } catch { throw "the forms file $file could not be read: $($_.Exception.Message)" }
     $rows = [Collections.Generic.List[object]]::new()
@@ -567,7 +569,7 @@ if ($SelfTest) {
         & $check 'with -Ref, table.md names the -Ref as given and its full SHA under the forms line, then the uncommitted and untracked files, then a blank line' (
             $refLines[0] -ceq "Forms read from ``scripts/pin-forms-ref.psd1`` in the clone at the -Ref commit, $($refSha.Substring(0, 7))." -and
             $refLines[1] -ceq "Branch measurement: -Ref ``feature`` is $refSha in the sibling checkout $sib, a local commit, not GitHub's main, which ls-remote.txt gives as $sibMainFull." -and
-            $refLines[2] -ceq 'Uncommitted or untracked against the sibling checkout''s HEAD, not the -Ref commit, so not in the clones where -Ref is HEAD: `scripts/branch-only.ps1`, `untracked.txt`.' -and
+            $refLines[2] -ceq 'Changed or untracked against the sibling checkout''s HEAD, not the -Ref commit; where -Ref is HEAD, the clones hold none of these changes: `scripts/branch-only.ps1`, `untracked.txt`.' -and
             $refLines[3] -eq '' -and (Get-Content -LiteralPath (Join-Path $outRef 'ls-remote.txt') -Raw).Trim() -ceq "$sibMainFull`trefs/heads/main") $mdRef
         & $check 'with -Ref, the grep line names the -Ref commit, where the clones are, not origin''s main' (
             $refLines -ccontains "Sibling references no form runs (``git grep -n vendor/grado-factorio-tools/scripts`` at $($refSha.Substring(0, 7))):") $mdRef
