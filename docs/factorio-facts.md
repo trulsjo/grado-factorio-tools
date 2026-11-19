@@ -18,11 +18,14 @@ facts to check, not remember* at `e70669f`.
 - **When Steam updated the installed build is in its content log**: `logs\content_log.txt` under
   Steam's install directory dates each update of app 427520 with a line holding
   `AppID 427520 finished update`, and the installed `Factorio.exe`'s last write time agrees with
-  it. Neither names the version: the build an update installed is inferred from `--version` read
-  after it. On the development machine Steam's directory is `C:\Program Files (x86)\Steam`. Read
-  2026-11-17: the log's last such line is at 2026-10-29 14:29:14, `Factorio.exe` was last written
-  2026-10-29 14:26, and `--version` printed `Version: 2.1.24 (build 87808, win64, steam)`
-  (trulsjo/grado-factorio-tools#479).
+  it. Each such line names Steam's `BuildID`, which is not Factorio's build number, and a line is
+  not always a new build: compare its `BuildID` with the line before. On 2026-08-14 two lines
+  69 s apart go to `BuildID 24592963` and back to `23347942`. Neither the log nor the write time
+  names the version: the build an update installed is inferred from `--version` read after it. On
+  the development machine Steam's directory is `C:\Program Files (x86)\Steam`. Read 2026-11-17:
+  the log's last such line is at 2026-10-29 14:29:14, `BuildID 26246811`, after `26076417`;
+  `Factorio.exe` was last written 2026-10-29 14:26, and `--version` printed
+  `Version: 2.1.24 (build 87808, win64, steam)` (trulsjo/grado-factorio-tools#479).
 - **API docs are published per build** at <https://lua-api.factorio.com/>. A claim is checked
   against the build being targeted, not from memory.
 - **A recorded fact pins an explicit build**, as `/2.1.23/`: `/stable/` and `/latest/` both move,
