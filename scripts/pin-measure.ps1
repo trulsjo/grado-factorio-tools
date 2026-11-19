@@ -115,7 +115,8 @@
 
 .PARAMETER Ref
     A commit of the sibling's checkout, as `HEAD`, a branch or a SHA, to clone at instead of
-    origin's main: a branch measurement, as above. Left out, the run is at origin's main.
+    origin's main: a branch measurement, as above. Left out, the run is at origin's main; given
+    empty, the run fails before -Out is written.
 
 .PARAMETER SelfTest
     Build, in a temp directory and offline, a tools repository whose pins have between them a plain
@@ -133,7 +134,8 @@
     that a -Ref naming no commit fails with -Out not written. Then run this script
     itself: copied into the tools repository, with a pin that is not there, it exits 1, naming it;
     copied into a sibling that holds the tools repository as its submodule, with forms that differ
-    and none that reads gh, it exits 0, and with a -Ref naming no commit, 1. Needs git, and no
+    and none that reads gh, it exits 0, and with a -Ref naming no commit or an empty one, 1. Needs
+    git, and no
     game and no network.
 
 .EXAMPLE
@@ -592,6 +594,10 @@ if ($SelfTest) {
         $said = & pwsh -NoProfile -File $inSub -Old $oldPin -New $newPin -Out $out4 -Ref no-such-ref 2>&1 | Out-String
         & $check 'run from a sibling with a -Ref that names no commit: exit 1, naming it, and -Out not written' (
             $LASTEXITCODE -eq 1 -and $said -match 'FAILED - pin-measure: -Ref no-such-ref is not a commit' -and -not (Test-Path -LiteralPath $out4)) "$LASTEXITCODE $said"
+        $out5 = Join-Path $temp 'out5'
+        $said = & pwsh -NoProfile -File $inSub -Old $oldPin -New $newPin -Out $out5 -Ref '' 2>&1 | Out-String
+        & $check 'run from a sibling with an empty -Ref: exit 1, naming it, and -Out not written' (
+            $LASTEXITCODE -eq 1 -and $said -match 'FAILED - pin-measure: -Ref is empty' -and -not (Test-Path -LiteralPath $out5)) "$LASTEXITCODE $said"
     }
     finally { Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue }
     Write-Host ''
@@ -602,6 +608,8 @@ if ($SelfTest) {
 
 try {
     if (-not ($Old -and $New -and $Out)) { throw 'give -Old, -New and -Out.' }
+    # An empty -Ref would read as left out and measure GitHub's main, where a branch was asked for.
+    if ($PSBoundParameters.ContainsKey('Ref') -and -not $Ref) { throw "-Ref is empty; give a commit, or leave -Ref out to measure GitHub's main." }
     $tools = Split-Path $PSScriptRoot -Parent
     $sibling = git -C $tools rev-parse --show-superproject-working-tree 2>$null
     $bodies = {
