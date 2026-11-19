@@ -1098,8 +1098,9 @@ function Invoke-SelfTest {
                 "    `$both = !`$vOk"
                 "    `$flag = `$x -ne 'l' -and `$x -ne 'm'"
                 '    $flag | Out-Null'
-                # A chain is a verdict only where the case's result is read from it whole. A block
-                # yields its last pipeline, so a chain piped on is not its value. A block is a case
+                # A chain is a verdict only where the case's result is read from it whole. The
+                # verdict is read from a block's last statement, and a chain piped on is not that
+                # statement's value. A block is a case
                 # only as a hashtable's value under a string key, any string, so not bare, assigned
                 # or under a key that is no string. An assignment is followed only as a plain = to a
                 # variable, and that variable's chain is a verdict only where each read tests its
