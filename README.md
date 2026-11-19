@@ -886,7 +886,8 @@ could not measure. The forms file's shape and its four placeholders are in the h
 `-Ref <commit-ish>` makes a branch measurement (#476): both clones at that commit of the sibling's
 checkout, `HEAD`, a branch or a SHA, instead of GitHub's `main`, with `origin/main` still at the
 fetched `main`. A relative `-Forms` is then read as committed there. `table.md` names the `-Ref`,
-its SHA and each file uncommitted or untracked in the checkout, which the clones lack. Only the
+its SHA and each file uncommitted or untracked against the checkout's `HEAD`, which the clones lack
+where `-Ref` is `HEAD`. Only the
 pull request whose branch it measured cites such a run; a pin move cites one without `-Ref`.
 
 `-SelfTest`
