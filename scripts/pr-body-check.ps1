@@ -944,7 +944,7 @@ function Invoke-SelfTest {
                 $own.Code -eq 0 -and $own.Text -match 'No other open pull request, of 0 compared, closes an issue it closes\.' -and
                 $said.Count -eq 2 -and -not ($said | Where-Object { $_.Trim() -cne 'pr list --state open --limit 1000 --json number,body' }) } }
         @{ Name = 'with -MaxLineLength 40, a prose line over 40 fails the body, named with its length, and the failure line names markdown-rewrap.ps1 with the body''s file, or with none for -Body; a link''s target is not counted, as markdown-check.ps1 counts; 0 is refused (#483)'; Test = {
-            $file = Join-Path $temp 'body-long.md'
+            $file = Join-Path $temp "body-long's.md"
             $text = "## Summary`n`nThis prose line runs well past the forty character limit.`n`nSee [it](https://example.com/a/very/long/address/not/counted/at/all) now.`n`n$marked"
             Set-Content -LiteralPath $file -Value $text
             $byPath = & $run @($file, '-MaxLineLength', '40')
@@ -953,10 +953,12 @@ function Invoke-SelfTest {
             Write-Host ($byPath.Text.TrimEnd() -replace '(?m)^', '    ')
             $named = '(?m)^pr-body-check: line 3: the line is 57 characters, over the limit of 40, link targets and addresses not counted\.\r?$'
             # The rewrap beside this script, from the directory $run runs in, and the body's own
-            # file, each whole: a hint naming another folder's rewrap or another file fails.
-            $rewrap = [regex]::Escape("pwsh -File '$([IO.Path]::GetRelativePath($repo, (Join-Path $PSScriptRoot 'markdown-rewrap.ps1')) -replace '\\', '/')'")
+            # file, each whole and quoted as a command line takes it, the file's apostrophe doubled:
+            # a hint naming another folder's rewrap or another file, or quoting it so, fails.
+            $rewrap = [regex]::Escape("pwsh -File $(ConvertTo-QuotedArgument ([IO.Path]::GetRelativePath($repo, (Join-Path $PSScriptRoot 'markdown-rewrap.ps1')) -replace '\\', '/'))")
+            $quotedFile = [regex]::Escape("'" + $file.Replace("'", "''") + "'")
             $byPath.Code -eq 1 -and $byPath.Text -match $named -and @([regex]::Matches($byPath.Text, '(?m)^pr-body-check: line ')).Count -eq 1 -and
-                $byPath.Text -match "(?m)^FAILED - pr-body-check: .*, and 1 line\(s\) over 40 characters\. 1 line\(s\) over 40 are rewrapped by markdown-rewrap\.ps1: $rewrap -Path $([regex]::Escape("'$file'")) -MaxLineLength 40\r?$" -and
+                $byPath.Text -match "(?m)^FAILED - pr-body-check: .*, and 1 line\(s\) over 40 characters\. 1 line\(s\) over 40 are rewrapped by markdown-rewrap\.ps1: $rewrap -Path $quotedFile -MaxLineLength 40\r?$" -and
                 $byBody.Code -eq 1 -and $byBody.Text -match $named -and
                 $byBody.Text -match "(?m)rewrapped by markdown-rewrap\.ps1: $rewrap -Path <the body, saved as a \.md file> -MaxLineLength 40\r?$" -and
                 $zero.Code -ne 0 -and $zero.Text -match '-MaxLineLength must be 1 or more' } }
