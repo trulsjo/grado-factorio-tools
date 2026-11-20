@@ -887,9 +887,9 @@ could not measure. The forms file's shape and its four placeholders are in the h
 checkout, `HEAD`, a branch or a SHA, instead of GitHub's `main`, with `origin/main` still at the
 fetched `main`. A relative `-Forms` is then read as committed there. `table.md` names the `-Ref`,
 its SHA and each file changed or untracked against the checkout's `HEAD`. Where `-Ref` is `HEAD`
-the clones hold none of those changes: a tracked file is there as committed, without its edits,
-and an untracked one is not there. Only the pull request whose branch it measured cites such a
-run; a pin move cites one without `-Ref`.
+the clones hold none of those changes: a file committed at `HEAD` is there as committed, without
+its edits, and one never committed, staged or untracked, is not there. Only the pull request whose
+branch it measured cites such a run; a pin move cites one without `-Ref`.
 
 `-SelfTest`
 builds both repositories offline and needs no game.

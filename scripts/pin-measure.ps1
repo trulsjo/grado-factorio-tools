@@ -84,12 +84,12 @@
     saying it is a local commit, not GitHub's main, with ls-remote.txt's SHA; then, where the
     checkout holds any, a line naming each file with uncommitted changes or untracked there. That
     list is git status against the checkout's HEAD, not the -Ref commit. Where -Ref is HEAD the
-    clones hold none of those changes, as only committed content reaches them: a tracked file
-    named is in the clones as committed, without its edits, and an untracked one is not there.
-    With -Ref other than HEAD, the list says nothing of what the -Ref commit holds. The run goes
-    on. The output prints both lines with the table. A relative -Forms is read as committed at
-    -Ref, an absolute one from the working tree as without it: with -Ref, commit the forms file
-    and give it relative.
+    clones hold none of those changes, as only committed content reaches them: a file committed
+    at HEAD is in the clones as committed, without its edits, and one never committed, staged or
+    untracked, is not there. With -Ref other than HEAD, the list says nothing of what the -Ref
+    commit holds. The run goes on. The output prints both lines with the table. A relative -Forms
+    is read as committed at -Ref, an absolute one from the working tree as without it: with -Ref,
+    commit the forms file and give it relative.
     Only the sibling pull request whose branch is measured cites a -Ref run, at its head or saying
     what came after; a pin move's pull request cites a run without -Ref, at GitHub's main (Truls,
     #476's triage, rulings 6 and 7).
