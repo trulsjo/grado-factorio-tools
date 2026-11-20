@@ -21,8 +21,11 @@ running.
   Codex needs `--no-daemon`, or its commands run outside hc.
 - **Clear**: what `panel.py reset` sends to start a new conversation; empty means `/clear`. A clear
   keeps the program and its model: after editing a Command, run `panel.py up --restart`.
-- **max-line-length**, in the frontmatter: the limit `switch_ids.py` holds each line it changes
-  to, this repository's 100 for bodies and comments (#515).
+- **max-line-length**, in the frontmatter: 100, the limit the `refuse-pr-body.ps1` hook holds pull
+  request bodies, issues and comments to (`.claude/settings.json`). A line `switch_ids.py` would
+  change past it stops the switch, which names each such line, writes nothing and exits 1: rewrap
+  or reword, and run it again. It never rewraps, and does not measure fenced code blocks, table
+  rows or lines it leaves unchanged (#515).
 
 Codex's sandbox starts `pwsh` 7 from the MSI install, `C:\Program Files\PowerShell\7`, and not
 from the Microsoft Store's, which it cannot reach. On a machine with the Store copy alone, Codex's
