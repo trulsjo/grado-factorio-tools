@@ -1333,7 +1333,7 @@ function Invoke-SelfTest {
             $last = Get-RevertResult -ExitCode 1 -Said "OK - self-test passed: all 2 cases.`nFAILED - self-test: 1 of 3 case(s) did not hold."
             $got.Code -eq 0 -and $got.Text -match '(?m)^revert-run: R -- crashed \(exit 1\): \r?$' -and "$judged" -eq 'crashed crashed crashed' -and
                 $last.Result -eq 'fails' -and $last.Summary -eq 'FAILED - self-test: 1 of 3 case(s) did not hold.' -and (& $same) } }
-        @{ Name = 'a self-test still running at -TimeoutSeconds is killed with the child it waits on and reported timed out within a few seconds of the limit, with the seconds it ran and no exit code; one that leaves a child holding its output open is reported crashed a few seconds after it exits; the copy is clean after each, and the next revert runs (#424)'; Test = {
+        @{ Name = 'a self-test still running at -TimeoutSeconds is killed with the child it waits on and reported timed out at the limit or after it and under 60 s, with the seconds it ran and no exit code; one that leaves a child holding its output open is reported crashed a few seconds after it exits; the copy is clean after each, and the next revert runs (#424)'; Test = {
             $sleepPid = Join-Path $temp 'sleep.pid'; $lingerPid = Join-Path $temp 'linger.pid'
             $p = & $list 'timeout' ("@{ Reverts = @( $(& $one "`$b = ''beta''" "`$b = ''other''" "; Args = @('-Mode', 'sleep', '-PidFile', '$sleepPid')"), " +
                 "$(& $one "`$b = ''beta''" "`$b = ''held''" "; Args = @('-Mode', 'linger', '-PidFile', '$lingerPid')"), $(& $one "`$b = ''beta''" "`$b = ''next''") ) }")
@@ -1356,7 +1356,9 @@ function Invoke-SelfTest {
             Write-Host ($text.TrimEnd() -replace '(?m)^', '    ')
             if ($orphan) { Write-Host '    the sleeping self-test''s child was still running after the kill' }
             $after = if ($text -match '(?m)^revert-run: R -- timed out: killed after (\d+\.\d) s, at the limit of 20 s\r?$') { [double] $Matches[1] } else { -1 }
-            $bounded -and $child.ExitCode -eq 0 -and $after -ge 20 -and $after -lt 25 -and (Test-Path -LiteralPath $sleepPid) -and -not $orphan -and
+            # Under 60 s, not five past the limit: a loaded pre-push check.ps1 run killed it at
+            # 26.8 s (#510).
+            $bounded -and $child.ExitCode -eq 0 -and $after -ge 20 -and $after -lt 60 -and (Test-Path -LiteralPath $sleepPid) -and -not $orphan -and
                 $text -match '(?m)^\| R \| timed out \|  \| killed after \d+\.\d s, at the limit of 20 s \|' -and
                 $text -match '(?m)^revert-run: R -- crashed \(exit 0\): its output was still held open 5 s after it exited, by a process it left running\r?$' -and
                 @([regex]::Matches($text, '(?m)^revert-run: R -- ')).Count -eq 3 -and $text -match '(?m)^revert-run: R -- passes \(exit 0\)' -and
