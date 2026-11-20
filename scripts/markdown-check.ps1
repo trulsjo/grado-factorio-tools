@@ -708,18 +708,26 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             Set-Content -LiteralPath (Join-Path $own 'notes.txt') -Value 'text'
             Set-Content -LiteralPath (Join-Path $temp 'outside.md') -Value 'text'
             $said = @(
-                @{ Run = & $run $own @('-Path', 'page.md', '-All'); Want = 'cannot be combined' }
-                @{ Run = & $run $own @('-Path', 'page.md', '-Range', 'HEAD~1..HEAD'); Want = 'cannot be combined' }
-                @{ Run = & $run $own @('-Path', 'page.md,notes.txt'); Want = 'notes\.txt is not a Markdown file' }
-                @{ Run = & $run $own @('-Path', 'page.md,missing.md'); Want = 'missing\.md is no file' }
-                @{ Run = & $run $own @('-Path', 'page.md,../outside.md'); Want = '\.\./outside\.md is outside the repository' }
-                @{ Run = & $run $own @('-Path', ','); Want = '-Path named no file' }
-                @{ Run = & $run $own @('-Path', ',', '-All'); Want = 'cannot be combined' }
+                @{ Args = @('-Path', 'page.md', '-All'); Want = 'cannot be combined' }
+                @{ Args = @('-Path', 'page.md', '-Range', 'HEAD~1..HEAD'); Want = 'cannot be combined' }
+                @{ Args = @('-Path', 'page.md,notes.txt'); Want = 'notes\.txt is not a Markdown file' }
+                @{ Args = @('-Path', 'page.md,missing.md'); Want = 'missing\.md is no file' }
+                @{ Args = @('-Path', 'page.md,../outside.md'); Want = '\.\./outside\.md is outside the repository' }
+                @{ Args = @('-Path', ','); Want = '-Path named no file' }
+                @{ Args = @('-Path', ',', '-All'); Want = 'cannot be combined' }
             )
             $ok = $true
             foreach ($s in $said) {
-                $held = $s.Run.Code -ne 0 -and $s.Run.Text -match $s.Want -and $s.Run.Text -notmatch '(?m)^page\.md:'
-                if (-not $held) { Write-Host ($s.Run.Text.TrimEnd() -replace '(?m)^', '    ') }
+                $ran = & $run $own $s.Args
+                $held = $ran.Code -ne 0 -and $ran.Text -match $s.Want -and $ran.Text -notmatch '(?m)^page\.md:'
+                if (-not $held) {
+                    # The run, its code, what it wanted and its output, labelled, so a failure
+                    # says which run did not hold: once, in a full check.ps1 run, one printed
+                    # nothing (#512).
+                    Write-Host "    run with $($s.Args -join ' '): exit $($ran.Code), wanted /$($s.Want)/, output:"
+                    $text = "$($ran.Text)".TrimEnd()
+                    Write-Host $(if ($text) { $text -replace '(?m)^', '        ' } else { '        <nothing>' })
+                }
                 $ok = $ok -and $held
             }
             $ok } }
