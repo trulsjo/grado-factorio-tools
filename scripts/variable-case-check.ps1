@@ -113,9 +113,12 @@ function Get-CaseClash {
         $line = $v.Extent.StartLineNumber
         if (-not $spellings.ContainsKey($name) -or $line -lt $spellings[$name]) { $spellings[$name] = $line }
     }
+    # Each dictionary below is keyed by a variable's name or spelling, and member access reads a
+    # key before a property: so its Values and Count are read through their getters, or a variable
+    # named Values hides its scope's clashes and one named Count reads as a clash (#517).
     foreach ($variable in $scopes.Values) {
-        foreach ($spellings in $variable.Values) {
-            if ($spellings.Count -gt 1) { @{ Spellings = @($spellings.GetEnumerator() | Sort-Object Value, Key | ForEach-Object { @{ Name = $_.Key; Line = $_.Value } }) } }
+        foreach ($spellings in $variable.get_Values()) {
+            if ($spellings.get_Count() -gt 1) { @{ Spellings = @($spellings.GetEnumerator() | Sort-Object Value, Key | ForEach-Object { @{ Name = $_.Key; Line = $_.Value } }) } }
         }
     }
 }
@@ -187,6 +190,13 @@ function Invoke-SelfTest {
             $got = & $read "`$x = 1`n`$script:X = 2`n`$path = `$env:Path`n`$p = `$env:PATH`n`$n = `$global:N`n`$global:n = 1"
             $using = & $read "function f {`n    `$K = 1`n    `$using:k`n}"
             $got -eq '' -and $using -eq '' } }
+        @{ Name = 'a variable named Count, Keys or Values spelt one way passes, first used past line 1; each spelt two ways in one scope fails (#517)'; Test = {
+            $one = @('Count', 'Keys', 'Values' | ForEach-Object { & $read "`n`n`$$_ = 1`n`$$_" })
+            $two = @('Count', 'Keys', 'Values' | ForEach-Object { & $read "`$$_ = 1`n`$$($_.ToLower()) = 2" })
+            -not ($one | Where-Object { $_ -ne '' }) -and ($two -join '|') -ceq 'Count@1,count@2|Keys@1,keys@2|Values@1,values@2' } }
+        @{ Name = 'a clash in a scope that also holds a variable named Count, Keys or Values is found (#517)'; Test = {
+            $beside = @('Count', 'Keys', 'Values' | ForEach-Object { & $read "`$$_ = 1`n`$$_`n`$Out = 1`n`$out" })
+            ($beside -join '|') -ceq 'Out@3,out@4|Out@3,out@4|Out@3,out@4' } }
         @{ Name = 'one spelling used many times passes, and three spellings are named each at its first line'; Test = {
             $one = & $read "`$a = 1`n`$a++`n`$a"
             $three = & $read "`$Abc = 1`n`$abc = 2`n`$Abc`n`$ABC = 3"
