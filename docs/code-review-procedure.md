@@ -79,7 +79,7 @@ script's header).
    the sentence now says of it: for the files a checkout holds, committed, modified, staged-new,
    untracked and ignored. On trulsjo/grado-factorio-tools's PR #499 two such sentences took three
    rounds of fixes each, every fix right about the member its finding named and wrong about
-   another (#513).
+   another (trulsjo/grado-factorio-tools#513).
 9. **Every finding and its outcome is recorded once on the pull request** (row 29). Where a
    second pass runs, a finding it raised that the first pass missed has its class named: as a
    ticket for a check, as a line in a review page, or as "one-off, no rule" (row 30).
