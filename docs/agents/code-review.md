@@ -6,6 +6,8 @@ values and its own steps. The evidence is in [code-review-evidence.md](code-revi
 
 ## How a review is run
 
+- **`/code-review` runs this page, not the plugin's steps**; no argument of it, `--comment`
+  among them, changes when or how the review is recorded.
 - **When: on the pull request.** Skip the review step inside `/implement` or any skill. Before
   the first push the session walks the absolute-words list, and before each it runs whatever
   its diff or message says a script or a command does, prints, refuses or exits with.
