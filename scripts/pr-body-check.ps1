@@ -1030,6 +1030,23 @@ function Invoke-SelfTest {
             Write-Host ($fragment.Text.TrimEnd() -replace '(?m)^', '    ')
             $fragment.Code -eq 0 -and $fragment.Text -match '(?m)^OK - pr-body-check: 1 word\(s\) of the body name a commit, each on origin/main, and no closing keyword stands outside a Closes #N line\. Read as a fragment, so the pr template''s headings, markers and Summary were NOT checked\.' -and
                 $whole.Code -eq 1 -and $whole.Text -match '`## Evidence` is missing' } }
+        @{ Name = 'with -Fragment, every other switch runs as asked: -CiteSiblings, -MaxLineLength and -CheckClosing each fail a fragment, and so does -CheckRuns; each FAILED line says the template was NOT checked and counts no template problem, though -RequireSummaryVisual is given and the Summary holds no visual (#509)'; Test = {
+            $file = Join-Path $temp 'fragment-switches.md'
+            Set-Content -LiteralPath $file -Value "Closes #7`n`n## Summary`n`nThe sibling repository does this too, in a line over forty.`n`nCI's run 111111111 passed."
+            $offHead = '{"headSha":"' + $onMain + '","workflowName":"check","jobs":[{"name":"ubuntu-latest","steps":[{"name":"' + $step + '","conclusion":"success"}]}]}'
+            $prose = & $runWith (& $standIn 'fragment-list' '[{"number":12,"body":"Closes #7"}]' '') @($file, '-Fragment', '-RequireSummaryVisual', '-CiteSiblings', '-MaxLineLength', '40', '-CheckClosing')
+            $runs = & $runWith (& $standIn 'fragment-run' $offHead '') @($file, '-Fragment', '-RequireSummaryVisual', '-CheckRuns', '-Head', $onBranch)
+            ($prose, $runs) | ForEach-Object { Write-Host ($_.Text.TrimEnd() -replace '(?m)^', '    ') }
+            $failed = { param([string] $Text) ($Text -split '\r?\n' | Where-Object { $_ -match '^FAILED - pr-body-check:' }) -join '' }
+            $proseLine = & $failed $prose.Text; $runsLine = & $failed $runs.Text
+            $prose.Code -eq 1 -and $prose.Text -match '(?m)^pr-body-check: line 5 says "The sibling repository' -and
+                $prose.Text -match '(?m)^pr-body-check: line 5: the line is \d+ characters, over the limit of 40' -and
+                $prose.Text -match '(?m)^pr-body-check: this body closes #7, which the open pull request #12 closes too\.' -and
+                $proseLine -match '1 statement\(s\) about a sibling' -and $proseLine -match 'line\(s\) over 40 characters' -and
+                $proseLine -match '1 problem\(s\) with the issues it closes' -and
+                $runs.Code -eq 1 -and $runs.Text -match "(?m)^pr-body-check: run 111111111 ran on $onMain, not on the head" -and
+                $runsLine -match '1 problem\(s\) with the cited runs' -and
+                -not (@($proseLine, $runsLine) | Where-Object { $_ -notmatch 'Read as a fragment, so the pr template''s headings, markers and Summary were NOT checked\.' -or $_ -match 'Summary with no visual|pr template''s three headings|marker\(s\) of the pr template' }) } }
         @{ Name = 'a gh that exits 1 has what it wrote on stderr in the check''s output: the run could not be read, and the open pull requests could not be listed (#511)'; Test = {
             $file = Join-Path $temp 'refused.md'
             Set-Content -LiteralPath $file -Value "Closes #7`n`n## Summary`n`nCI's run 111111111 passed.`n`n$marked"
