@@ -15,6 +15,8 @@ trulsjo/realistic-fusion-refreshed at `9fd78b5`.
 
 ## The four rules every run checks
 
+A run with `-Fragment`, below, checks the first two alone.
+
 1. **A commit the body cites is on `main`.** Pull requests are rebase-merged, which rewrites every
    commit on the branch, so a branch commit's hash names something the merge deletes. A hash may
    be cited once it is on `main`. The check asks git whether each word that names a commit is an
@@ -46,6 +48,10 @@ trulsjo/realistic-fusion-refreshed at `9fd78b5`.
 - **`-MaxLineLength`**, with a limit: no prose line of the body is longer than it, by
   `markdown-check.ps1 -Body -MaxLineLength`'s rule, and a failure names `markdown-rewrap.ps1`
   (#483).
+- **`-Fragment`**, for text that is not a whole body, as a reviewer's report that goes into one:
+  the template's headings and markers, rules 3 and 4, are not checked, nor is
+  `-RequireSummaryVisual`; the rest run as asked, and the summary line says the template was not
+  checked (#509).
 
 **The switches are each repository's choice** (ruling 4). A repository turns one on in its own CI
 line and its own hook line.
