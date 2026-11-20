@@ -216,15 +216,15 @@ function Get-RepoSlug {
     "$($Matches[1])/$($Matches[2])"
 }
 
-# The last $Count merged pull requests of $Slug, newest first, as @{ Number; Body }, from gh's
+# The last $Last merged pull requests of $Slug, newest first, as @{ Number; Body }, from gh's
 # stdout alone: gh 2.105.0 writes a hint: block to stderr for some reads while exiting 0, and a
 # parse of both streams fails on it (#511). Where gh exits non-zero, it throws with what gh wrote.
 function Get-MergedBody {
-    param([string] $Slug, [int] $Count)
+    param([string] $Slug, [int] $Last)
     $said = @(gh pr list --repo $Slug --state merged --limit 30 --json number,body,mergedAt 2>&1)
     if ($LASTEXITCODE) { throw "gh could not read $Slug's merged pull requests: $(($said | ForEach-Object { "$_" }) -join ' ')" }
     @($said | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] } | ForEach-Object { "$_" }) -join "`n" | ConvertFrom-Json |
-        Sort-Object mergedAt -Descending | Select-Object -First $Count | ForEach-Object { @{ Number = $_.number; Body = $_.body } }
+        Sort-Object mergedAt -Descending | Select-Object -First $Last | ForEach-Object { @{ Number = $_.number; Body = $_.body } }
 }
 
 # The runs of one form: each its name, its arguments with the placeholders filled, its stdin and
@@ -612,9 +612,9 @@ if ($SelfTest) {
         $kept = $env:PATH
         try {
             $env:PATH = "$hinted$([IO.Path]::PathSeparator)$kept"
-            $read = try { @(Get-MergedBody -Slug 'octo/repo' -Count 2) } catch { $_.Exception.Message }
+            $read = try { @(Get-MergedBody -Slug 'octo/repo' -Last 2) } catch { $_.Exception.Message }
             $env:PATH = "$refusing$([IO.Path]::PathSeparator)$kept"
-            $threw = try { $null = Get-MergedBody -Slug 'octo/repo' -Count 2; '' } catch { $_.Exception.Message }
+            $threw = try { $null = Get-MergedBody -Slug 'octo/repo' -Last 2; '' } catch { $_.Exception.Message }
         }
         finally { $env:PATH = $kept }
         & $check 'a gh that exits 0 with a hint: on stderr has its merged pull requests read from stdout, newest first (#511)' (
@@ -660,7 +660,7 @@ try {
     $sibling = git -C $tools rev-parse --show-superproject-working-tree 2>$null
     $bodies = {
         param([int] $count)
-        Get-MergedBody -Slug (Get-RepoSlug (git -C $sibling remote get-url origin)) -Count $count
+        Get-MergedBody -Slug (Get-RepoSlug (git -C $sibling remote get-url origin)) -Last $count
     }
     # The pins are checked first, so a pin that is not there is named before anything else.
     foreach ($pin in $Old, $New) {
