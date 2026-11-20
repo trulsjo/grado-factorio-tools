@@ -74,7 +74,12 @@ script's header).
    needs Truls's decision is not fixed by the session, and is listed as waiting on him (row 25).
 8. **Fixes are commits of their own** (row 26). **The reviewer that raised a finding confirms
    its fix, from the fix diff alone**, with no list of what was done (row 27). Where that
-   reviewer cannot be continued, a fresh one is handed its report and the fix diff.
+   reviewer cannot be continued, a fresh one is handed its report and the fix diff. **A fix that
+   rewrites a sentence about a set lists the set's members in its commit body**, each with what
+   the sentence now says of it: for the files a checkout holds, committed, modified, staged-new,
+   untracked and ignored. On trulsjo/grado-factorio-tools's PR #499 two such sentences took three
+   rounds of fixes each, every fix right about the member its finding named and wrong about
+   another (#513).
 9. **Every finding and its outcome is recorded once on the pull request** (row 29). Where a
    second pass runs, a finding it raised that the first pass missed has its class named: as a
    ticket for a check, as a line in a review page, or as "one-off, no rule" (row 30).
