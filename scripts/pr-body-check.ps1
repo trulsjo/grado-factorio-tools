@@ -546,6 +546,17 @@ function Get-CheckWorkflow {
     @{ Workflow = $workflow; Step = $step }
 }
 
+function Read-GhJson {
+    <#  gh run with $Arguments: its stdout parsed as JSON where it exits 0, and where it does not, a
+        string of what it wrote, stderr with stdout. What gh writes to stderr while exiting 0 is
+        not parsed: gh 2.105.0 writes a hint: block there for a run tied to a pull request whose
+        checks are in progress, and the parse of both streams failed on it (#511).  #>
+    param([Parameter(Mandatory)] [string[]] $Arguments)
+    $said = @(gh @Arguments 2>&1)
+    if ($LASTEXITCODE -ne 0) { return (($said | ForEach-Object { "$_" }) -join ' ').Trim() }
+    @($said | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] } | ForEach-Object { "$_" }) -join "`n" | ConvertFrom-Json
+}
+
 function Get-RunCheck {
     <#  The runs $Text cites, and each problem with them, as @{ Ids; Problems }: with $Head, each is
         read by $ReadRun, which gives gh's view of a run by its id, or a string of what went wrong,
@@ -630,6 +641,32 @@ function Invoke-SelfTest {
     New-Item -ItemType Directory -Path $workflowDir -Force | Out-Null
     Set-Content -LiteralPath (Join-Path $workflowDir 'check.yml') -Value "name: check`njobs:`n  check:`n    steps:`n      - name: $step`n        run: pwsh -NoProfile -File scripts/check.ps1"
     $runCheck = { param([string] $Text) Get-RunCheck -Text $Text -Head $onBranch -Top $repo -Repo 'octo/repo' -ReadRun $readRun }
+    # A gh in a folder of its own, $Name under $temp, that writes $Out to stdout and $Err to stderr
+    # and exits $Code, whatever it is asked (#511). Each is one line with no quote of the shell's.
+    $standIn = {
+        param([string] $Name, [string] $Out, [string] $Err, [int] $Code = 0)
+        $bin = Join-Path $temp $Name
+        New-Item -ItemType Directory -Path $bin -Force | Out-Null
+        if ($IsWindows) {
+            # The redirection first: after the text, cmd keeps the space before it.
+            $lines = @('@echo off'); if ($Err) { $lines += ">&2 echo $Err" }; if ($Out) { $lines += "echo $Out" }
+            Set-Content -LiteralPath (Join-Path $bin 'gh.cmd') -Value (($lines + "exit /b $Code") -join "`r`n")
+        }
+        else {
+            $lines = @('#!/bin/sh'); if ($Err) { $lines += "printf '%s\n' '$Err' >&2" }; if ($Out) { $lines += "printf '%s\n' '$Out'" }
+            Set-Content -LiteralPath (Join-Path $bin 'gh') -Value (($lines + "exit $Code") -join "`n")
+            chmod +x (Join-Path $bin 'gh')
+        }
+        $bin
+    }
+    # Runs the script with $Arguments and the gh in $Bin first on the path.
+    $runWith = {
+        param([string] $Bin, [string[]] $Arguments)
+        $kept = $env:PATH
+        $env:PATH = "$Bin$([IO.Path]::PathSeparator)$env:PATH"
+        try { & $run $Arguments } finally { $env:PATH = $kept }
+    }
+    $hint = 'hint: if you need to wait for the checks of this pull request to finish, run gh pr checks --watch'
 
     # A case passes on one output, $true (#419). Any other output fails it, saying
     # why: [bool] of two values or more is true whatever they are, so a case that
@@ -943,6 +980,25 @@ function Invoke-SelfTest {
                 $refused.Text -match '(?m)^FAILED - pr-body-check: .*1 problem\(s\) with the issues it closes' -and
                 $own.Code -eq 0 -and $own.Text -match 'No other open pull request, of 0 compared, closes an issue it closes\.' -and
                 $said.Count -eq 2 -and -not ($said | Where-Object { $_.Trim() -cne 'pr list --state open --limit 1000 --json number,body' }) } }
+        @{ Name = 'a gh that exits 0 with a hint: on stderr and the JSON on stdout is read from stdout: with -CheckRuns the cited run passes, and with -CheckClosing the open pull request closing #7 is named (#511)'; Test = {
+            $file = Join-Path $temp 'hinted.md'
+            Set-Content -LiteralPath $file -Value "Closes #7`n`n## Summary`n`nCI's run 111111111 passed.`n`n$marked"
+            $runJson = '{"headSha":"' + $onBranch + '","workflowName":"check","jobs":[{"name":"ubuntu-latest","steps":[{"name":"' + $step + '","conclusion":"success"}]}]}'
+            $runs = & $runWith (& $standIn 'hinted-run' $runJson $hint) @($file, '-CheckRuns', '-Head', $onBranch)
+            $open = & $runWith (& $standIn 'hinted-list' '[{"number":12,"body":"Closes #7"}]' $hint) @($file, '-CheckClosing')
+            ($runs, $open) | ForEach-Object { Write-Host ($_.Text.TrimEnd() -replace '(?m)^', '    ') }
+            $runs.Code -eq 0 -and $runs.Text -match '1 cited run\(s\) of the check workflow, each on the head' -and
+                $open.Code -eq 1 -and $open.Text -match '(?m)^pr-body-check: this body closes #7, which the open pull request #12 closes too\.' -and
+                ($runs.Text + $open.Text) -notmatch 'ConvertFrom-Json|Conversion from JSON' } }
+        @{ Name = 'a gh that exits 1 has what it wrote on stderr in the check''s output: the run could not be read, and the open pull requests could not be listed (#511)'; Test = {
+            $file = Join-Path $temp 'refused.md'
+            Set-Content -LiteralPath $file -Value "Closes #7`n`n## Summary`n`nCI's run 111111111 passed.`n`n$marked"
+            $bin = & $standIn 'refusing' '' 'HTTP 404: Not Found' 1
+            $runs = & $runWith $bin @($file, '-CheckRuns', '-Head', $onBranch)
+            $open = & $runWith $bin @($file, '-CheckClosing')
+            ($runs, $open) | ForEach-Object { Write-Host ($_.Text.TrimEnd() -replace '(?m)^', '    ') }
+            $runs.Code -eq 1 -and $runs.Text -match 'run 111111111 could not be read: HTTP 404: Not Found' -and
+                $open.Code -eq 1 -and $open.Text -match 'the open pull requests could not be listed, .*: HTTP 404: Not Found' } }
         @{ Name = 'with -MaxLineLength 40, a prose line over 40 fails the body, named with its length, and the failure line names markdown-rewrap.ps1 with the body''s file, or with none for -Body; a link''s target is not counted, as markdown-check.ps1 counts; 0 is refused (#483)'; Test = {
             $file = Join-Path $temp "body-long's.md"
             $text = "## Summary`n`nThis prose line runs well past the forty character limit.`n`nSee [it](https://example.com/a/very/long/address/not/counted/at/all) now.`n`n$marked"
@@ -1056,11 +1112,7 @@ if ($CheckRuns -or $CheckClosing) {
 $overlaps = @()
 $closingNote = ''
 if ($CheckClosing) {
-    $listOpen = {
-        $said = @(gh pr list --state open --limit 1000 --json number,body 2>&1 | ForEach-Object { "$_" })
-        if ($LASTEXITCODE -ne 0) { return ($said -join ' ').Trim() }
-        $said -join "`n" | ConvertFrom-Json
-    }
+    $listOpen = { Read-GhJson -Arguments @('pr', 'list', '--state', 'open', '--limit', '1000', '--json', 'number,body') }
     $closingCheck = Get-ClosingOverlap -Text "$Body" -Own $PullRequest -Repo $repo -ListOpen $listOpen
     $overlaps = @($closingCheck.Problems)
     foreach ($o in $overlaps) {
@@ -1071,12 +1123,7 @@ if ($CheckClosing) {
         else { '' }
 }
 if ($CheckRuns) {
-    $readRun = {
-        param([string] $Id)
-        $said = @(gh run view $Id --json headSha,workflowName,jobs 2>&1 | ForEach-Object { "$_" })
-        if ($LASTEXITCODE -ne 0) { return ($said -join ' ').Trim() }
-        $said -join "`n" | ConvertFrom-Json
-    }
+    $readRun = { param([string] $Id) Read-GhJson -Arguments @('run', 'view', $Id, '--json', 'headSha,workflowName,jobs') }
     $check = Get-RunCheck -Text "$Body" -Head $Head -Top $top -Repo $repo -ReadRun $readRun
     $runs = @($check.Problems)
     foreach ($r in $runs) {
