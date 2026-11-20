@@ -216,6 +216,17 @@ function Get-RepoSlug {
     "$($Matches[1])/$($Matches[2])"
 }
 
+# The last $Count merged pull requests of $Slug, newest first, as @{ Number; Body }, from gh's
+# stdout alone: gh 2.105.0 writes a hint: block to stderr for some reads while exiting 0, and a
+# parse of both streams fails on it (#511). Where gh exits non-zero, it throws with what gh wrote.
+function Get-MergedBody {
+    param([string] $Slug, [int] $Count)
+    $said = @(gh pr list --repo $Slug --state merged --limit 30 --json number,body,mergedAt 2>&1)
+    if ($LASTEXITCODE) { throw "gh could not read $Slug's merged pull requests: $(($said | ForEach-Object { "$_" }) -join ' ')" }
+    @($said | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] } | ForEach-Object { "$_" }) -join "`n" | ConvertFrom-Json |
+        Sort-Object mergedAt -Descending | Select-Object -First $Count | ForEach-Object { @{ Number = $_.number; Body = $_.body } }
+}
+
 # The runs of one form: each its name, its arguments with the placeholders filled, its stdin and
 # its PR_BODY. $Bodies reads the last <n> merged pull requests' bodies as @{ Number; Body }.
 function Expand-Form {
@@ -577,6 +588,39 @@ if ($SelfTest) {
         $threw = try { $null = Invoke-PinMeasure -Tools $toolsRepo -Sibling $sib -Old $oldPin -New $newPin -Out $outBad -Forms 'scripts/pin-forms.psd1' -Bodies $stub -Ref 'no-such-ref'; '' } catch { $_.Exception.Message }
         & $check 'a -Ref that names no commit of the checkout fails, naming it, and -Out is not written' (
             $threw -ceq "-Ref no-such-ref is not a commit of the sibling checkout $sib, so nothing was measured." -and -not (Test-Path -LiteralPath $outBad)) $threw
+        # The merged pull requests' reader, with a gh of its own first on the path (#511): one that
+        # exits 0 with a hint: on stderr and the list on stdout, and one that exits 1.
+        $standIn = {
+            param([string] $Name, [string] $Out, [string] $Err, [int] $Code)
+            $bin = Join-Path $temp $Name
+            New-Item -ItemType Directory -Path $bin -Force | Out-Null
+            if ($IsWindows) {
+                # The redirection first: after the text, cmd keeps the space before it.
+                $lines = @('@echo off', ">&2 echo $Err"); if ($Out) { $lines += "echo $Out" }
+                Set-Content -LiteralPath (Join-Path $bin 'gh.cmd') -Value (($lines + "exit /b $Code") -join "`r`n")
+            }
+            else {
+                $lines = @('#!/bin/sh', "printf '%s\n' '$Err' >&2"); if ($Out) { $lines += "printf '%s\n' '$Out'" }
+                Set-Content -LiteralPath (Join-Path $bin 'gh') -Value (($lines + "exit $Code") -join "`n")
+                chmod +x (Join-Path $bin 'gh')
+            }
+            $bin
+        }
+        $merged = '[{"number":4,"body":"four","mergedAt":"2026-01-04T00:00:00Z"},{"number":5,"body":"five","mergedAt":"2026-01-05T00:00:00Z"},{"number":3,"body":"three","mergedAt":"2026-01-03T00:00:00Z"}]'
+        $hinted = & $standIn 'gh-hinted' $merged 'hint: if you need to wait for the checks of this pull request to finish, run gh pr checks --watch' 0
+        $refusing = & $standIn 'gh-refusing' '' 'HTTP 404: Not Found' 1
+        $kept = $env:PATH
+        try {
+            $env:PATH = "$hinted$([IO.Path]::PathSeparator)$kept"
+            $read = try { @(Get-MergedBody -Slug 'octo/repo' -Count 2) } catch { $_.Exception.Message }
+            $env:PATH = "$refusing$([IO.Path]::PathSeparator)$kept"
+            $threw = try { $null = Get-MergedBody -Slug 'octo/repo' -Count 2; '' } catch { $_.Exception.Message }
+        }
+        finally { $env:PATH = $kept }
+        & $check 'a gh that exits 0 with a hint: on stderr has its merged pull requests read from stdout, newest first (#511)' (
+            $read -isnot [string] -and @($read).Count -eq 2 -and $read[0].Number -eq 5 -and $read[0].Body -ceq 'five' -and $read[1].Number -eq 4) "$read"
+        & $check 'a gh that exits 1 throws, naming the repository and what gh wrote on stderr (#511)' (
+            $threw -ceq "gh could not read octo/repo's merged pull requests: HTTP 404: Not Found") $threw
         # The script itself, from inside the tools repository, with a pin that is not there.
         Copy-Item -LiteralPath $PSCommandPath -Destination (Join-Path $toolsRepo 'scripts/pin-measure.ps1')
         Copy-Item -LiteralPath "$PSScriptRoot/breaking-lib.ps1" -Destination (Join-Path $toolsRepo 'scripts/breaking-lib.ps1')
@@ -616,10 +660,7 @@ try {
     $sibling = git -C $tools rev-parse --show-superproject-working-tree 2>$null
     $bodies = {
         param([int] $count)
-        $slug = Get-RepoSlug (git -C $sibling remote get-url origin)
-        $json = gh pr list --repo $slug --state merged --limit 30 --json number,body,mergedAt 2>&1
-        if ($LASTEXITCODE) { throw "gh could not read $slug's merged pull requests: $json" }
-        $json | ConvertFrom-Json | Sort-Object mergedAt -Descending | Select-Object -First $count | ForEach-Object { @{ Number = $_.number; Body = $_.body } }
+        Get-MergedBody -Slug (Get-RepoSlug (git -C $sibling remote get-url origin)) -Count $count
     }
     # The pins are checked first, so a pin that is not there is named before anything else.
     foreach ($pin in $Old, $New) {
