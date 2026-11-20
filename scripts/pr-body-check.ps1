@@ -1023,12 +1023,13 @@ function Invoke-SelfTest {
                 ($named.Text + $keyword.Text) -notmatch 'is missing|pr template''s three headings' } }
         @{ Name = 'with -Fragment, a fragment with no template, no branch commit and no stray closing keyword passes, saying the template was NOT checked, though -RequireSummaryVisual is given; without it the same file fails on the template (#509)'; Test = {
             $file = Join-Path $temp 'fragment-clean.md'
-            Set-Content -LiteralPath $file -Value "A plain report naming PR #499 and ``$($onMain.Substring(0, 7))``, on main."
+            # A Summary with no code block, which -RequireSummaryVisual would fail were it read.
+            Set-Content -LiteralPath $file -Value "## Summary`n`nA plain report naming PR #499 and ``$($onMain.Substring(0, 7))``, on main."
             $fragment = & $run @($file, '-Fragment', '-RequireSummaryVisual')
             $whole = & $run @($file)
             Write-Host ($fragment.Text.TrimEnd() -replace '(?m)^', '    ')
             $fragment.Code -eq 0 -and $fragment.Text -match '(?m)^OK - pr-body-check: 1 word\(s\) of the body name a commit, each on origin/main, and no closing keyword stands outside a Closes #N line\. Read as a fragment, so the pr template''s headings, markers and Summary were NOT checked\.' -and
-                $whole.Code -eq 1 -and $whole.Text -match '`## Summary` is missing' } }
+                $whole.Code -eq 1 -and $whole.Text -match '`## Evidence` is missing' } }
         @{ Name = 'a gh that exits 1 has what it wrote on stderr in the check''s output: the run could not be read, and the open pull requests could not be listed (#511)'; Test = {
             $file = Join-Path $temp 'refused.md'
             Set-Content -LiteralPath $file -Value "Closes #7`n`n## Summary`n`nCI's run 111111111 passed.`n`n$marked"
