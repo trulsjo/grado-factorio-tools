@@ -591,23 +591,27 @@ if ($SelfTest) {
         # The merged pull requests' reader, with a gh of its own first on the path (#511): one that
         # exits 0 with a hint: on stderr and the list on stdout, and one that exits 1.
         $standIn = {
-            param([string] $Name, [string] $Out, [string] $Err, [int] $Code)
+            param([string] $Name, [string] $Out, [string[]] $Err, [int] $Code)
             $bin = Join-Path $temp $Name
             New-Item -ItemType Directory -Path $bin -Force | Out-Null
             if ($IsWindows) {
                 # The redirection first: after the text, cmd keeps the space before it.
-                $lines = @('@echo off', ">&2 echo $Err"); if ($Out) { $lines += "echo $Out" }
+                $lines = @('@echo off') + @($Err | ForEach-Object { ">&2 echo $_" }); if ($Out) { $lines += "echo $Out" }
                 Set-Content -LiteralPath (Join-Path $bin 'gh.cmd') -Value (($lines + "exit /b $Code") -join "`r`n")
             }
             else {
-                $lines = @('#!/bin/sh', "printf '%s\n' '$Err' >&2"); if ($Out) { $lines += "printf '%s\n' '$Out'" }
+                $lines = @('#!/bin/sh') + @($Err | ForEach-Object { "printf '%s\n' '$_' >&2" }); if ($Out) { $lines += "printf '%s\n' '$Out'" }
                 Set-Content -LiteralPath (Join-Path $bin 'gh') -Value (($lines + "exit $Code") -join "`n")
                 chmod +x (Join-Path $bin 'gh')
             }
             $bin
         }
         $merged = '[{"number":4,"body":"four","mergedAt":"2026-01-04T00:00:00Z"},{"number":5,"body":"five","mergedAt":"2026-01-05T00:00:00Z"},{"number":3,"body":"three","mergedAt":"2026-01-03T00:00:00Z"}]'
-        $hinted = & $standIn 'gh-hinted' $merged 'hint: if you need to wait for the checks of this pull request to finish, run gh pr checks --watch' 0
+        # gh 2.105.0's block as #511's triage comment quotes it: only its first line opens hint:.
+        $hint = @('hint: if you need to wait for the checks of this pull request to finish before continuing, use this instead of polling:',
+            '    gh event listen --resource https://github.com/octo/repo/pull/12 --event com.github.pull_request.check_suite.status.changed.v1',
+            '  - It prints the first event as a JSON line on stdout and exits; run it again to wait for the next one.')
+        $hinted = & $standIn 'gh-hinted' $merged $hint 0
         $refusing = & $standIn 'gh-refusing' '' 'HTTP 404: Not Found' 1
         $kept = $env:PATH
         try {
