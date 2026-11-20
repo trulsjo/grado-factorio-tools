@@ -704,7 +704,9 @@ pass on every job (#455). It reads each run with `gh run view`. With no `-Head` 
 With `-CheckClosing` it fails a body that closes an issue another open pull request closes too,
 naming that pull request, and one where gh cannot list them (#463); `-PullRequest` names the
 body's own, which is left out. With `-MaxLineLength` it fails a prose line longer than the
-limit, by `markdown-check.ps1`'s rule, and names `markdown-rewrap.ps1` (#483).
+limit, by `markdown-check.ps1`'s rule, and names `markdown-rewrap.ps1` (#483). With
+`-Fragment` it reads text that is not a whole body, as a reviewer's report, and leaves out the
+template's headings, markers and Summary, saying so (#509).
 
 CI runs it, with `-CiteSiblings`, `-RequireSummaryVisual`, `-CheckRuns`, `-CheckClosing` and
 `-MaxLineLength 100`, on

@@ -16,7 +16,8 @@
     the repository closes an issue the body closes by a `Closes #N` line, and exit 1 names each that
     does, or says the open pull requests could not be listed. With -MaxLineLength, a ninth: no
     prose line of the body is longer than the limit, by markdown-check.ps1's rule, and exit 1 names
-    each line that is, and markdown-rewrap.ps1.
+    each line that is, and markdown-rewrap.ps1. With -Fragment, the template's headings, markers
+    and Summary are not checked, and exit 0 says nothing of them.
 
 .DESCRIPTION
     WHY (grado-factorio-tools#96). Pull requests here are rebase-merged, which rewrites every SHA on
@@ -172,6 +173,17 @@
     limit, no length is checked, so a consumer that does not ask checks what it did before. This
     repository's CI passes 100, and so does the refuse-pr-body.ps1 hook as wired here.
 
+    TEXT THAT IS NOT A WHOLE BODY, WITH -Fragment (grado-factorio-tools#509). A reviewer's report
+    pasted into a body, or a comment, carries no template, so it failed on the headings and markers
+    whatever else it held: in trulsjo/grado-factorio-modpack#437 a pre-PR reviewer's report named
+    branch commits and quoted a closing keyword, and had no check to run on itself. With -Fragment
+    the third and fourth jobs are not run, nor -RequireSummaryVisual's, which reads the Summary;
+    every other job runs as without it, each switch given as asked. The summary line says the
+    template was not checked. The refuse-pr-body.ps1 hook does not give it: a comment there is held
+    to markdown-check.ps1 -Body alone, since a comment cites a branch commit by design, as a review
+    panel's does before its IDs are switched, and a closing keyword in a comment closes nothing
+    (Truls, 2026-11-20, on #509).
+
     A SHALLOW CLONE IS REFUSED, and nothing is checked: there an ancestor cannot be told from a
     commit whose history was cut off. CI therefore fetches the whole history for this. Whatever else
     git cannot answer fails the run too; nothing passes for not having been asked.
@@ -264,6 +276,10 @@
     Fail the body for each prose line longer than this many characters, 1 or more, as above.
     Without it, length is not checked.
 
+.PARAMETER Fragment
+    Read the text as a fragment of a body, as a reviewer's report or a comment: the template's
+    headings, markers and Summary are not checked, as above. Off unless asked.
+
 .PARAMETER SelfTest
     Run the cases that hold the check to what this header says, naming each as it runs. Needs git,
     for fixture repositories in a temp directory. Their commits carry a fixed date, so the same
@@ -277,6 +293,9 @@
 
 .EXAMPLE
     pwsh -File scripts/pr-body-check.ps1 ../scratch/body.md -MaxLineLength 100
+
+.EXAMPLE
+    pwsh -File scripts/pr-body-check.ps1 ../scratch/report.md -Fragment
 #>
 
 #Requires -Version 7
@@ -292,7 +311,8 @@ param(
     [string] $Head,
     [switch] $CheckClosing,
     [int] $PullRequest,
-    [int] $MaxLineLength = 0
+    [int] $MaxLineLength = 0,
+    [switch] $Fragment
 )
 
 Set-StrictMode -Version Latest
@@ -990,6 +1010,25 @@ function Invoke-SelfTest {
             $runs.Code -eq 0 -and $runs.Text -match '1 cited run\(s\) of the check workflow, each on the head' -and
                 $open.Code -eq 1 -and $open.Text -match '(?m)^pr-body-check: this body closes #7, which the open pull request #12 closes too\.' -and
                 ($runs.Text + $open.Text) -notmatch 'ConvertFrom-Json|Conversion from JSON' } }
+        @{ Name = 'with -Fragment, a fragment naming a branch commit fails naming it, and one with a closing keyword outside a Closes #N line fails naming its line, though neither carries the template (#509)'; Test = {
+            $branch = Join-Path $temp 'fragment-branch.md'
+            Set-Content -LiteralPath $branch -Value "The reviewer read ``$($onBranch.Substring(0, 7))``."
+            $closes = Join-Path $temp 'fragment-closes.md'
+            Set-Content -LiteralPath $closes -Value "A plain report.`nIt fixes #4 in passing."
+            $named = & $run @($branch, '-Fragment')
+            $keyword = & $run @($closes, '-Fragment')
+            ($named, $keyword) | ForEach-Object { Write-Host ($_.Text.TrimEnd() -replace '(?m)^', '    ') }
+            $named.Code -eq 1 -and $named.Text -match "(?m)^pr-body-check: $($onBranch.Substring(0, 7)) is a commit that is not on origin/main\." -and
+                $keyword.Code -eq 1 -and $keyword.Text -match '(?m)^pr-body-check: line 2 says "fixes #4"' -and
+                ($named.Text + $keyword.Text) -notmatch 'is missing|pr template''s three headings' } }
+        @{ Name = 'with -Fragment, a fragment with no template, no branch commit and no stray closing keyword passes, saying the template was NOT checked, though -RequireSummaryVisual is given; without it the same file fails on the template (#509)'; Test = {
+            $file = Join-Path $temp 'fragment-clean.md'
+            Set-Content -LiteralPath $file -Value "A plain report naming PR #499 and ``$($onMain.Substring(0, 7))``, on main."
+            $fragment = & $run @($file, '-Fragment', '-RequireSummaryVisual')
+            $whole = & $run @($file)
+            Write-Host ($fragment.Text.TrimEnd() -replace '(?m)^', '    ')
+            $fragment.Code -eq 0 -and $fragment.Text -match '(?m)^OK - pr-body-check: 1 word\(s\) of the body name a commit, each on origin/main, and no closing keyword stands outside a Closes #N line\. Read as a fragment, so the pr template''s headings, markers and Summary were NOT checked\.' -and
+                $whole.Code -eq 1 -and $whole.Text -match '`## Summary` is missing' } }
         @{ Name = 'a gh that exits 1 has what it wrote on stderr in the check''s output: the run could not be read, and the open pull requests could not be listed (#511)'; Test = {
             $file = Join-Path $temp 'refused.md'
             Set-Content -LiteralPath $file -Value "Closes #7`n`n## Summary`n`nCI's run 111111111 passed.`n`n$marked"
@@ -1079,15 +1118,17 @@ $closing = @(Get-ClosingKeyword -Text "$Body")
 foreach ($c in $closing) {
     Write-Host "pr-body-check: line $($c.Line) says `"$($c.Found)`", which GitHub reads as closing that issue when this merges. If it is meant, give it a line of its own, as Closes #N; if not, reword it."
 }
-$headings = @(Get-HeadingProblem -Text "$Body")
+# A fragment carries no template, so neither its headings, its markers nor its Summary is
+# read (#509).
+$headings = @(if (-not $Fragment) { Get-HeadingProblem -Text "$Body" })
 foreach ($h in $headings) {
     Write-Host "pr-body-check: $h. The body carries ## Summary, ## Evidence and ## Merge Danger, once each and in that order."
 }
-$markers = @(Get-MarkerProblem -Text "$Body")
+$markers = @(if (-not $Fragment) { Get-MarkerProblem -Text "$Body" })
 foreach ($m in $markers) {
     Write-Host "pr-body-check: $m. Under ## Evidence the body carries **Before:** and **After:**, each saying none where there is nothing to show, and under ## Merge Danger **Door:** and **Blast Radius:**."
 }
-$visual = @(if ($RequireSummaryVisual) { Get-VisualProblem -Text "$Body" })
+$visual = @(if ($RequireSummaryVisual -and -not $Fragment) { Get-VisualProblem -Text "$Body" })
 foreach ($v in $visual) {
     Write-Host "pr-body-check: $v. The pr skill's Summary is the smallest diagram, diff sketch, tree or pseudocode that makes the point, in a code block."
 }
@@ -1136,9 +1177,10 @@ if ($CheckRuns) {
 }
 $unchecked = if ($read.Unknown) { " $($read.Unknown) named no commit here and were NOT checked." } else { '' }
 $unchecked += $runNote + $closingNote
-$found = @("$($read.Off.Count) word(s) of the body name a commit that is not on $Main", "$($closing.Count) closing keyword(s) stand outside a Closes #N line",
-    "$($headings.Count) problem(s) with the pr template's three headings", "$($markers.Count) marker(s) of the pr template missing")
-if ($RequireSummaryVisual) { $found += "$($visual.Count) Summary with no visual" }
+if ($Fragment) { $unchecked += " Read as a fragment, so the pr template's headings, markers and Summary were NOT checked." }
+$found = @("$($read.Off.Count) word(s) of the body name a commit that is not on $Main", "$($closing.Count) closing keyword(s) stand outside a Closes #N line")
+if (-not $Fragment) { $found += "$($headings.Count) problem(s) with the pr template's three headings", "$($markers.Count) marker(s) of the pr template missing" }
+if ($RequireSummaryVisual -and -not $Fragment) { $found += "$($visual.Count) Summary with no visual" }
 if ($CiteSiblings) { $found += "$($siblings.Count) statement(s) about a sibling lack a commit or an ISO date" }
 if ($CheckRuns -and $Head) { $found += "$($runs.Count) problem(s) with the cited runs" }
 if ($CheckClosing) { $found += "$($overlaps.Count) problem(s) with the issues it closes and the other open pull requests" }
@@ -1149,7 +1191,8 @@ if ($read.Off -or $closing -or $headings -or $markers -or $visual -or $siblings 
     exit 1
 }
 $cited = if ($CiteSiblings) { ' Each statement about a sibling carries a commit and an ISO date.' } else { '' }
-$drawn = if ($RequireSummaryVisual) { ' ## Summary holds a visual.' } else { '' }
+$drawn = if ($RequireSummaryVisual -and -not $Fragment) { ' ## Summary holds a visual.' } else { '' }
 $short = if ($MaxLineLength) { " No prose line is over $MaxLineLength characters." } else { '' }
-Write-Host "OK - pr-body-check: $($read.On) word(s) of the body name a commit, each on $Main, no closing keyword stands outside a Closes #N line, and the pr template's three headings stand once each, in order, with ## Evidence and ## Merge Danger each carrying its markers.$drawn$cited$short$unchecked"
+$template = if ($Fragment) { '' } else { ", and the pr template's three headings stand once each, in order, with ## Evidence and ## Merge Danger each carrying its markers" }
+Write-Host "OK - pr-body-check: $($read.On) word(s) of the body name a commit, each on $Main$(if ($Fragment) { ', and' } else { ',' }) no closing keyword stands outside a Closes #N line$template.$drawn$cited$short$unchecked"
 exit 0
