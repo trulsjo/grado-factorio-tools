@@ -51,7 +51,9 @@ keeps its own prose checks beside its link to this page; these are shared.
 - **Treat a quantifier as an instruction to list every case.** "Every", "none", "the only one", "no
   replacement was found": a claim about all or none of a set is checked by walking the set, never
   by agreeing with its tone. A fix that adds a figure walks again every quantifier that covers the
-  place it lands.
+  place it lands, and a fix that rewrites a sentence about a set walks the set again. A sentence
+  with no quantifier word can still speak of every member: "the uncommitted files are not in the
+  clones" is about each state a file can be in.
 - **When the change edits a shared page, read every stub page that links it against it.** The
   stubs are the hits of `git grep -l <the page's file name>`, run in this repository on the
   change and in each sibling at a commit of its `main` cited with its date, whose stubs link
