@@ -96,9 +96,9 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
 - **What a pull request body must hold, and how a branch commit is named, are on
   [`docs/pr-body-convention.md`](../pr-body-convention.md)**, the page that declares what
   `scripts/pr-body-check.ps1` checks. Here CI and the `refuse-pr-body.ps1` hook run the check
-  with its five switches, `-CiteSiblings`, `-RequireSummaryVisual`, `-CheckRuns`,
-  `-CheckClosing` and `-MaxLineLength 100`; the hook gives `-CheckRuns` a head, and
-  `-CheckClosing` the pull request's number, on `gh pr edit` only, and CI on every run.
+  with five of its switches, `-CiteSiblings`, `-RequireSummaryVisual`, `-CheckRuns`,
+  `-CheckClosing` and `-MaxLineLength 100`, and not `-Fragment`; the hook gives `-CheckRuns` a
+  head, and `-CheckClosing` the pull request's number, on `gh pr edit` only, and CI on every run.
 - **The title and the body are checked before the create, in one command joined with `&&`**, so
   that a failure of either stops it. The body file is drafted first, by the pr skill, as
   *Pull request body* below says:
