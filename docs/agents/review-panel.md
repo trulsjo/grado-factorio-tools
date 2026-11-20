@@ -1,5 +1,6 @@
 ---
 prefix: gft
+max-line-length: 100
 ---
 
 # Review panel
@@ -20,6 +21,8 @@ running.
   Codex needs `--no-daemon`, or its commands run outside hc.
 - **Clear**: what `panel.py reset` sends to start a new conversation; empty means `/clear`. A clear
   keeps the program and its model: after editing a Command, run `panel.py up --restart`.
+- **max-line-length**, in the frontmatter: the limit `switch_ids.py` holds each line it changes
+  to, this repository's 100 for bodies and comments (#515).
 
 Codex's sandbox starts `pwsh` 7 from the MSI install, `C:\Program Files\PowerShell\7`, and not
 from the Microsoft Store's, which it cannot reach. On a machine with the Store copy alone, Codex's
