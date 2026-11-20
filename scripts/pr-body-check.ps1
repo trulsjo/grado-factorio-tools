@@ -661,19 +661,21 @@ function Invoke-SelfTest {
     New-Item -ItemType Directory -Path $workflowDir -Force | Out-Null
     Set-Content -LiteralPath (Join-Path $workflowDir 'check.yml') -Value "name: check`njobs:`n  check:`n    steps:`n      - name: $step`n        run: pwsh -NoProfile -File scripts/check.ps1"
     $runCheck = { param([string] $Text) Get-RunCheck -Text $Text -Head $onBranch -Top $repo -Repo 'octo/repo' -ReadRun $readRun }
-    # A gh in a folder of its own, $Name under $temp, that writes $Out to stdout and $Err to stderr
-    # and exits $Code, whatever it is asked (#511). Each is one line with no quote of the shell's.
+    # A gh in a folder of its own, $Name under $temp, that writes $Out to stdout and the lines of
+    # $Err to stderr and exits $Code, whatever it is asked (#511). No line holds a quote of the
+    # shell's.
     $standIn = {
-        param([string] $Name, [string] $Out, [string] $Err, [int] $Code = 0)
+        param([string] $Name, [string] $Out, [string[]] $Err, [int] $Code = 0)
         $bin = Join-Path $temp $Name
         New-Item -ItemType Directory -Path $bin -Force | Out-Null
+        $errLines = @($Err | Where-Object { $_ })
         if ($IsWindows) {
             # The redirection first: after the text, cmd keeps the space before it.
-            $lines = @('@echo off'); if ($Err) { $lines += ">&2 echo $Err" }; if ($Out) { $lines += "echo $Out" }
+            $lines = @('@echo off') + @($errLines | ForEach-Object { ">&2 echo $_" }); if ($Out) { $lines += "echo $Out" }
             Set-Content -LiteralPath (Join-Path $bin 'gh.cmd') -Value (($lines + "exit /b $Code") -join "`r`n")
         }
         else {
-            $lines = @('#!/bin/sh'); if ($Err) { $lines += "printf '%s\n' '$Err' >&2" }; if ($Out) { $lines += "printf '%s\n' '$Out'" }
+            $lines = @('#!/bin/sh') + @($errLines | ForEach-Object { "printf '%s\n' '$_' >&2" }); if ($Out) { $lines += "printf '%s\n' '$Out'" }
             Set-Content -LiteralPath (Join-Path $bin 'gh') -Value (($lines + "exit $Code") -join "`n")
             chmod +x (Join-Path $bin 'gh')
         }
@@ -686,7 +688,10 @@ function Invoke-SelfTest {
         $env:PATH = "$Bin$([IO.Path]::PathSeparator)$env:PATH"
         try { & $run $Arguments } finally { $env:PATH = $kept }
     }
-    $hint = 'hint: if you need to wait for the checks of this pull request to finish, run gh pr checks --watch'
+    # gh 2.105.0's block as #511's triage comment quotes it: only its first line opens hint:.
+    $hint = @('hint: if you need to wait for the checks of this pull request to finish before continuing, use this instead of polling:',
+        '    gh event listen --resource https://github.com/octo/repo/pull/12 --event com.github.pull_request.check_suite.status.changed.v1',
+        '  - It prints the first event as a JSON line on stdout and exits; run it again to wait for the next one.')
 
     # A case passes on one output, $true (#419). Any other output fails it, saying
     # why: [bool] of two values or more is true whatever they are, so a case that
