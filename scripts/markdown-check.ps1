@@ -586,6 +586,11 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             $count = Get-FrontMatterLineCount -Lines '---', 'name: demo', "description: $wide"
             $open | ForEach-Object { Write-Host "    $_" }
             $open.Count -eq 0 -and $count -eq 3 } }
+        @{ Name = 'an empty page and a lone --- hold no front matter, and are read without a throw (PR #522''s panel review)'; Test = {
+            $empty = try { Get-FrontMatterLineCount -Lines @() } catch { "threw: $_" }
+            $lone = try { Get-FrontMatterLineCount -Lines @('---') } catch { "threw: $_" }
+            Write-Host "    empty: $empty; lone ---: $lone"
+            $empty -eq 0 -and $lone -eq 0 } }
         @{ Name = 'front matter after a byte-order mark, as a file read from disk or git holds it, is not held to the limit, as markdown-rewrap.ps1 reads it (PR #522''s panel review)'; Test = {
             $wide = 'word ' * 12
             $f = @(& $long "$([char] 0xFEFF)---`nname: demo`ndescription: $wide`n---`n`n$wide" 40)
