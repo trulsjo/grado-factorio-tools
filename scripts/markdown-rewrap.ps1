@@ -64,12 +64,13 @@
     WHAT IT LEAVES, and names: a line the check still reports once it is rewrapped, as one holding a
     word and a token too long to share a line. A line of one token longer than the limit is not
     named: the check passes it, having no space to break at. What the check exempts is never
-    flagged, so never touched: front matter, as markdown-check.ps1's header reads it, comes back
-    byte for byte, whatever its lines' lengths (#496). With -Comment, every comment line over the
-    limit after the run is named, rewrapped or not, a keyword line or a `##` line, which it never
-    rewraps, among them. It exempts what comment-line-lib.ps1 does, a line under `.EXAMPLE` and a
-    line of one word after its marker, and also a shebang and a line over only by its trailing
-    spaces, which the lib names.
+    flagged, so never touched: front matter, as markdown-check.ps1's header reads it, keeps its
+    text, whatever its lines' lengths (#496). Not its line endings, where a file mixes them: a file
+    it rewrites is written with one, CRLF where any line has it (PR #522's panel review). With
+    -Comment, every comment line over the limit after the run is named, rewrapped or not, a keyword
+    line or a `##` line, which it never rewraps, among them. It exempts what comment-line-lib.ps1
+    does, a line under `.EXAMPLE` and a line of one word after its marker, and also a shebang and a
+    line over only by its trailing spaces, which the lib names.
 
     WHAT IT CANNOT SEE. Whether the wrap reads well: it is greedy, not balanced. A flagged line that
     starts inside a code span opened on the line before, whose backticks it then pairs wrongly:
@@ -385,7 +386,7 @@ function Invoke-SelfTest {
         'an HTML comment stays whole on the line of the word before it' = {
             $in = @('A first line that is long enough, break <!-- deliberate: word --> then more.')
             -not @(& $naive $in | Where-Object { $_ -match 'break <!-- deliberate: word -->' }) -and (& $holds $in { param($l) @($l | Where-Object { $_ -match 'break <!-- deliberate: word -->' }).Count -eq 1 }) }
-        'front matter comes back byte for byte, a line of it over the limit too, and a long paragraph after it is rewrapped (#496)' = {
+        'front matter keeps its text, a line of it over the limit too, and a long paragraph after it is rewrapped (#496)' = {
             $front = @('---', 'name: demo', "description: $('word ' * 12)and more", '---')
             $in = $front + @('', 'A prose line after the front matter that runs past the limit.')
             & $holds $in { param($l) ($l[0..3] -join "`n") -ceq ($front -join "`n") -and $l.Count -gt $in.Count } }
