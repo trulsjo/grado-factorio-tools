@@ -576,6 +576,12 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             ($front + $later + $rule) | ForEach-Object { Write-Host "    $_" }
             $front.Count -eq 1 -and $front[0] -match '^8: the line is' -and $later.Count -eq 1 -and $later[0] -match '^4: the line is' -and
                 $rule.Count -eq 1 -and $rule[0] -match '^3: the line is' } }
+        @{ Name = 'front matter that no --- closes runs to the end of the page, so none of its lines is held to the limit (#496)'; Test = {
+            $wide = 'word ' * 12
+            $open = @(& $long "---`nname: demo`ndescription: $wide`n`n$wide" 40)
+            $count = Get-FrontMatterLength -Lines '---', 'name: demo', "description: $wide"
+            $open | ForEach-Object { Write-Host "    $_" }
+            $open.Count -eq 0 -and $count -eq 3 } }
         @{ Name = 'a line indented four spaces after a blank one is code and not held to the limit, unless it continues a list item'; Test = {
             $wide = 'word ' * 12
             $f = @(& $long "text`n`n    $wide`n    $wide`n`ntext`n`n- item`n`n    $wide" 40)
