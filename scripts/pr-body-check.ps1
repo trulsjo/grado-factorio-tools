@@ -170,8 +170,9 @@
     failure line names markdown-rewrap.ps1 as that check's does, through the same Get-RewrapHint.
     That check's other findings, as a relative link, are not this script's: a body that fails one
     passes here. A body given by -Body has no file, so the rewrap's command names none. A long line
-    in the block a body opens with, from its first `---` to the next, is named as rewrapped by
-    hand, as that check names it: the rewrap reads a file, and leaves the block as front matter.
+    in the block a body opens with, from its first `---` to the next or to its end, is named as
+    rewrapped by hand, as that check names it: the rewrap reads a file, and leaves the block as
+    front matter. The rewrap's command is named for the other long lines alone.
     With no limit, no length is checked, so a consumer that does not ask checks what it did before.
     This repository's CI passes 100, and so does the refuse-pr-body.ps1 hook as wired here.
 
@@ -1093,7 +1094,8 @@ function Invoke-SelfTest {
             # name.
             $byBody = & $run @("-Body:$text", '-MaxLineLength', '40')
             ($byPath, $byBody) | ForEach-Object { Write-Host ($_.Text.TrimEnd() -replace '(?m)^', '    ') }
-            $hand = '2 line\(s\) over 40 are rewrapped by markdown-rewrap\.ps1: .* -MaxLineLength 40\. 1 of them, in the block the body opens with from its first --- to the next, are rewrapped by hand'
+            # The command for the line after the block alone, then the one in it by hand.
+            $hand = '1 line\(s\) over 40 are rewrapped by markdown-rewrap\.ps1: .* -MaxLineLength 40\. 1 line\(s\) over 40, in the block the body opens with from its first --- to the next or to its end, are rewrapped by hand'
             $byPath.Code -eq 1 -and $byPath.Text -match $hand -and $byBody.Code -eq 1 -and $byBody.Text -match $hand } }
         @{ Name = 'with no -MaxLineLength, the same long line passes, and the OK line names no limit; with one, a body with no long line passes and says so (#483)'; Test = {
             $file = Join-Path $temp 'body-free.md'
