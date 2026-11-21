@@ -74,7 +74,7 @@ function Get-BareAddress {
     }
 }
 
-function Get-FrontMatterLength {
+function Get-FrontMatterLineCount {
     <#  How many lines at the start of $Lines are front matter, 0 when none: a first line of ---, a
         second line that is not blank, and every line down to and including the next ---, or to the
         end where none closes it. A first --- with a blank line after it is a rule, not front
@@ -103,7 +103,7 @@ function Get-HeadingAnchor {
     $seen = @{}
     # Front matter is no paragraph, so its closing --- underlines nothing and a `# comment` in it
     # is no heading.
-    $i = Get-FrontMatterLength -Lines $Lines
+    $i = Get-FrontMatterLineCount -Lines $Lines
     $fence = $null
     $blank = $true
     for (; $i -lt $Lines.Count; $i++) {
@@ -347,8 +347,8 @@ function Test-Markdown {
     }
     $fence = $null
     $numbered = $false
-    # The lines of front matter, which only the length rule leaves alone.
-    $frontMatter = Get-FrontMatterLength -Lines $Lines
+    # How many lines of front matter the page opens with, which only the length rule leaves alone.
+    $frontMatterLines = Get-FrontMatterLineCount -Lines $Lines
     # The lines PowerShell's own Markdown parser puts in an indented code block, counted from 0,
     # which no rule reads as prose (grado-factorio-tools#261). The parser is asked, and nothing
     # here follows lists, blank lines or rules to work it out (grado-factorio-tools#95). A fenced
@@ -412,7 +412,7 @@ function Test-Markdown {
         # inside a code span is no place to break: a command wrapped there is no longer the command.
         # A line of an indented code block never reaches here. Front matter is YAML, not prose, and
         # a line of it wrapped is no longer the value it held (#496).
-        if ($MaxLineLength -gt 0 -and $i -ge $frontMatter) {
+        if ($MaxLineLength -gt 0 -and $i -ge $frontMatterLines) {
             $counted = Get-CountedLine $Lines[$i]
             if ($counted.Length -gt $MaxLineLength -and $line -notmatch '^\s{0,3}#{1,6}\s' -and $prose -notmatch '^\s{0,3}\[[^\]^][^\]]*\]:') {
                 $lead = [regex]::Match($counted, '^(\s*>)*\s*(([-*+]|\d+[.)])\s+)?').Length
