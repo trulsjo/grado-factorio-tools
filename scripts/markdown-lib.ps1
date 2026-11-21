@@ -348,7 +348,8 @@ function Test-Markdown {
     $fence = $null
     $numbered = $false
     # How many lines of front matter the page opens with, which only the length rule leaves alone.
-    $frontMatterLines = Get-FrontMatterLineCount -Lines $Lines
+    # A body has none: GitHub reads a body's first --- as a rule (PR #522's panel review).
+    $frontMatterLines = if ($Body) { 0 } else { Get-FrontMatterLineCount -Lines $Lines }
     # The lines PowerShell's own Markdown parser puts in an indented code block, counted from 0,
     # which no rule reads as prose (grado-factorio-tools#261). The parser is asked, and nothing
     # here follows lists, blank lines or rules to work it out (grado-factorio-tools#95). A fenced
