@@ -85,9 +85,9 @@
     fewer: not the two quotes, nor a `;` that ends no entity. The check follows the renderer. FRONT
     MATTER is a first line of `---`, a second line that is not blank, and every line down to and
     including the next `---`, or to the end where none closes it; a first `---` with a blank line
-    after it is a rule. Get-FrontMatterLength in markdown-lib.ps1 reads it, for the anchors, where
-    it holds no heading, and for the length rule, which leaves it alone (#496); every other rule
-    reads it as the rest of the page.
+    after it is a rule. Get-FrontMatterLineCount in markdown-lib.ps1 reads it, for the anchors,
+    where it holds no heading, and for the length rule, which leaves it alone (#496); every other
+    rule reads it as the rest of the page.
 
     LINE LENGTH, ONLY WHEN HANDED A LIMIT (grado-factorio-tools#93). With no -MaxLineLength the
     check is silent on length, so a repository that never asked is not held to one. With it, a line
@@ -579,7 +579,7 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
         @{ Name = 'front matter that no --- closes runs to the end of the page, so none of its lines is held to the limit (#496)'; Test = {
             $wide = 'word ' * 12
             $open = @(& $long "---`nname: demo`ndescription: $wide`n`n$wide" 40)
-            $count = Get-FrontMatterLength -Lines '---', 'name: demo', "description: $wide"
+            $count = Get-FrontMatterLineCount -Lines '---', 'name: demo', "description: $wide"
             $open | ForEach-Object { Write-Host "    $_" }
             $open.Count -eq 0 -and $count -eq 3 } }
         @{ Name = 'a line indented four spaces after a blank one is code and not held to the limit, unless it continues a list item'; Test = {
