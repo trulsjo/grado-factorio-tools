@@ -96,7 +96,8 @@ function Get-CaseClash {
     $errors = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($File, [ref] $null, [ref] $errors)
     if ($errors) { throw "$(Split-Path $File -Leaf) does not parse: line $($errors[0].Extent.StartLineNumber), $($errors[0].Message)" }
-    # Not @{}: a key such as values would shadow .Values, which is read below.
+    # Keyed by each scope's node, which no variable's name equals: so $scopes.Values below reads
+    # the property, where a dictionary keyed by a name could read a key named Values (#517).
     $scopes = [System.Collections.Generic.Dictionary[object, object]]::new()
     foreach ($v in $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.VariableExpressionAst] }, $true)) {
         $name = $v.VariablePath.UserPath
@@ -113,9 +114,10 @@ function Get-CaseClash {
         $line = $v.Extent.StartLineNumber
         if (-not $spellings.ContainsKey($name) -or $line -lt $spellings[$name]) { $spellings[$name] = $line }
     }
-    # Each dictionary below is keyed by a variable's name or spelling, and member access reads a
-    # key before a property: so its Values and Count are read through their getters, or a variable
-    # named Values hides its scope's clashes and one named Count reads as a clash (#517).
+    # $variable is keyed by a variable's name and $spellings by a spelling, and member access on
+    # a dictionary reads a key before a property: so their Values and Count are read through the
+    # getters, or a variable named Values hides its scope's clashes, and one named Count reads as
+    # its first line: a lone spelling past line 1 fails, and a clash from line 1 passes (#517).
     foreach ($variable in $scopes.Values) {
         foreach ($spellings in $variable.get_Values()) {
             if ($spellings.get_Count() -gt 1) { @{ Spellings = @($spellings.GetEnumerator() | Sort-Object Value, Key | ForEach-Object { @{ Name = $_.Key; Line = $_.Value } }) } }
