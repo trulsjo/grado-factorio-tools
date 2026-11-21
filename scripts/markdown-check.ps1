@@ -580,12 +580,15 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             $front.Count -eq 1 -and $front[0] -match '^8: the line is' -and
                 $later.Count -eq 2 -and $later[0] -match '^2: the line is' -and $later[1] -match '^6: the line is' -and
                 $rule.Count -eq 1 -and $rule[0] -match '^3: the line is' } }
-        @{ Name = 'front matter that no --- closes runs to the end of the page, so none of its lines is held to the limit (#496)'; Test = {
+        @{ Name = 'front matter that no --- closes runs to the end of the page, so none of its lines is held to the limit; closed, its count takes in the closing --- (#496)'; Test = {
             $wide = 'word ' * 12
             $open = @(& $long "---`nname: demo`ndescription: $wide`n`n$wide" 40)
             $count = Get-FrontMatterLineCount -Lines '---', 'name: demo', "description: $wide"
+            # Closed, the count takes in the closing ---, so a heading straight under it is read.
+            $closed = Get-FrontMatterLineCount -Lines '---', 'a: b', '---', 'text'
             $open | ForEach-Object { Write-Host "    $_" }
-            $open.Count -eq 0 -and $count -eq 3 } }
+            Write-Host "    unclosed: $count; closed: $closed"
+            $open.Count -eq 0 -and $count -eq 3 -and $closed -eq 3 } }
         @{ Name = 'an empty page and a lone --- hold no front matter, and are read without a throw (PR #522''s panel review)'; Test = {
             $empty = try { Get-FrontMatterLineCount -Lines @() } catch { "threw: $_" }
             $lone = try { Get-FrontMatterLineCount -Lines @('---') } catch { "threw: $_" }
