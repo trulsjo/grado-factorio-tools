@@ -116,8 +116,9 @@ function Get-CaseClash {
     }
     # $variable is keyed by a variable's name and $spellings by a spelling, and member access on
     # a dictionary reads a key before a property: so their Values and Count are read through the
-    # getters, or a variable named Values hides its scope's clashes, and one named Count reads as
-    # its first line: a lone spelling past line 1 fails, and a clash from line 1 passes (#517).
+    # getters, or a variable named Values hides its scope's clashes, and the spelling Count,
+    # exactly, reads as its first line: alone past line 1 it fails, and on line 1 beside another
+    # spelling of it the clash passes (#517).
     foreach ($variable in $scopes.Values) {
         foreach ($spellings in $variable.get_Values()) {
             if ($spellings.get_Count() -gt 1) { @{ Spellings = @($spellings.GetEnumerator() | Sort-Object Value, Key | ForEach-Object { @{ Name = $_.Key; Line = $_.Value } }) } }
