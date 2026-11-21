@@ -96,9 +96,10 @@
     `[text](target)` link and each address, `https://...` bare or `<scheme:...>` in angle brackets,
     none of which can be wrapped. What stands straight after a bare address, where it ends as said
     above, is counted. A `<placeholder>` is counted. Not held to it: a table row, a line in a fence,
-    a `# heading`, a `[label]: target` line, a line of an indented code block, and a line with no
-    space to break at within the limit. A space inside a code span is no such place, so a command in
-    one is never wrapped. Trailing spaces are not counted. A limit below 1 is refused. A FIGURE
+    a `# heading`, a `[label]: target` line, a line of an indented code block, a line of front
+    matter, as FRONT MATTER above reads it, and a line with no space to break at within the limit.
+    A space inside a code span is no such place, so a command in one is never wrapped. Trailing
+    spaces are not counted. A limit below 1 is refused. A FIGURE
     GROUPED IN THOUSANDS SPLIT ACROSS A LINE END, WITH A LIMIT OR NONE (grado-factorio-tools#345,
     from realistic-fusion-refreshed's #662, where a rewrap split "133 423" and "580 000" and
     reviewers found them by reading). That repository held its wrapped files alone to it; Truls
