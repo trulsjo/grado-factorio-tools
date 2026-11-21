@@ -83,12 +83,12 @@
     them, where GitHub makes no link. So emphasis that closes straight after an address is closed,
     as in `*see https://example.com*`, and a `*` or `_` inside one is part of it. The spec names
     fewer: not the two quotes, nor a `;` that ends no entity. The check follows the renderer. FRONT
-    MATTER is a first line of `---`, a second line that is not blank, and every line down to and
-    including the next `---`, or to the end where none closes it; a first `---` with a blank line
-    after it is a rule. Get-FrontMatterLineCount in markdown-lib.ps1 reads it, for the anchors,
-    where it holds no heading, and for the length rule, which leaves it alone (#496); every other
-    rule reads it as the rest of the page. Read with -Body, the length rule finds none: GitHub
-    reads a body's first `---` as a rule.
+    MATTER is a first line of `---`, a byte-order mark before it or not, a second line that is not
+    blank, and every line down to and including the next `---`, or to the end where none closes
+    it; a first `---` with a blank line after it is a rule. Get-FrontMatterLineCount in
+    markdown-lib.ps1 reads it, for the anchors, where it holds no heading, and for the length rule,
+    which leaves it alone (#496); every other rule reads it as the rest of the page. Read with
+    -Body, the length rule finds none: GitHub reads a body's first `---` as a rule.
 
     LINE LENGTH, ONLY WHEN HANDED A LIMIT (grado-factorio-tools#93). With no -MaxLineLength the
     check is silent on length, so a repository that never asked is not held to one. With it, a line
@@ -583,6 +583,11 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             $count = Get-FrontMatterLineCount -Lines '---', 'name: demo', "description: $wide"
             $open | ForEach-Object { Write-Host "    $_" }
             $open.Count -eq 0 -and $count -eq 3 } }
+        @{ Name = 'front matter after a byte-order mark, as a file read from disk or git holds it, is not held to the limit, as markdown-rewrap.ps1 reads it (PR #522''s panel review)'; Test = {
+            $wide = 'word ' * 12
+            $f = @(& $long "$([char] 0xFEFF)---`nname: demo`ndescription: $wide`n---`n`n$wide" 40)
+            $f | ForEach-Object { Write-Host "    $_" }
+            $f.Count -eq 1 -and $f[0] -match '^6: the line is' } }
         @{ Name = 'read with -Body, a body that opens with --- and a line that is not blank is held to the limit throughout: a body has no front matter (PR #522''s panel review)'; Test = {
             $wide = 'word ' * 12
             # A short line under the long one, so that it is no setext heading's text.

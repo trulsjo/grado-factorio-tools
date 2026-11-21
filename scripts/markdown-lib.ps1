@@ -78,9 +78,12 @@ function Get-FrontMatterLineCount {
     <#  How many lines at the start of $Lines are front matter, 0 when none: a first line of ---, a
         second line that is not blank, and every line down to and including the next ---, or to the
         end where none closes it. A first --- with a blank line after it is a rule, not front
-        matter. Get-HeadingAnchor and Test-Markdown's length rule both read it here (#496).  #>
+        matter. A byte-order mark before the first --- is read past: markdown-check.ps1 keeps one
+        on a file's first line, where markdown-rewrap.ps1 drops it, and the two must agree (PR
+        #522's panel review). Get-HeadingAnchor and Test-Markdown's length rule both read it here
+        (#496).  #>
     param([Parameter(Mandatory)] [AllowEmptyCollection()] [AllowEmptyString()] [string[]] $Lines)
-    if ($Lines.Count -lt 2 -or $Lines[0] -notmatch '^---\s*$' -or $Lines[1] -notmatch '\S') { return 0 }
+    if ($Lines.Count -lt 2 -or $Lines[0] -notmatch '^﻿?---\s*$' -or $Lines[1] -notmatch '\S') { return 0 }
     for ($i = 1; $i -lt $Lines.Count; $i++) { if ($Lines[$i] -match '^---\s*$') { return $i + 1 } }
     $Lines.Count
 }
