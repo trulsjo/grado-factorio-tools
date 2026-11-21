@@ -570,8 +570,9 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
         @{ Name = 'a line of front matter is not held to the limit, and one after its closing --- is; a --- that is not the first line, or has a blank line after it, opens none (#496)'; Test = {
             $wide = 'word ' * 12
             $front = @(& $long "---`nname: demo`ndescription: $wide`n---`n`n# Demo`n`n$wide" 40)
-            $later = @(& $long "text`n`n---`ndescription: $wide`n---" 40)
-            $rule = @(& $long "---`n`ndescription: $wide`n---" 40)
+            # A short line under each long one, so that no long line is a setext heading's text.
+            $later = @(& $long "text`n`n---`ndescription: $wide`nname: demo`n---" 40)
+            $rule = @(& $long "---`n`ndescription: $wide`nname: demo`n---" 40)
             ($front + $later + $rule) | ForEach-Object { Write-Host "    $_" }
             $front.Count -eq 1 -and $front[0] -match '^8: the line is' -and $later.Count -eq 1 -and $later[0] -match '^4: the line is' -and
                 $rule.Count -eq 1 -and $rule[0] -match '^3: the line is' } }
