@@ -82,7 +82,12 @@
     `)` that no `(` in the address opened. Inside square brackets it ends at the `]` that closes
     them, where GitHub makes no link. So emphasis that closes straight after an address is closed,
     as in `*see https://example.com*`, and a `*` or `_` inside one is part of it. The spec names
-    fewer: not the two quotes, nor a `;` that ends no entity. The check follows the renderer.
+    fewer: not the two quotes, nor a `;` that ends no entity. The check follows the renderer. FRONT
+    MATTER is a first line of `---`, a second line that is not blank, and every line down to and
+    including the next `---`, or to the end where none closes it; a first `---` with a blank line
+    after it is a rule. Get-FrontMatterLength in markdown-lib.ps1 reads it, for the anchors, where
+    it holds no heading, and for the length rule, which leaves it alone (#496); every other rule
+    reads it as the rest of the page.
 
     LINE LENGTH, ONLY WHEN HANDED A LIMIT (grado-factorio-tools#93). With no -MaxLineLength the
     check is silent on length, so a repository that never asked is not held to one. With it, a line
@@ -562,6 +567,14 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
         @{ Name = 'a table row, a fenced line, a heading and a line with no space to break at outside a code span are not held to the limit'; Test = {
             $wide = 'word ' * 12
             @(& $long "| $wide | b |`n|---|---|`n| 1 | 2 |`n`n``````text`n$wide`n```````n`n## $wide`n`n- $('x' * 60)`n`n$('x' * 60) and more`n`n``$('gh pr ' * 10)`` and more" 40).Count -eq 0 } }
+        @{ Name = 'a line of front matter is not held to the limit, and one after its closing --- is; a --- that is not the first line, or has a blank line after it, opens none (#496)'; Test = {
+            $wide = 'word ' * 12
+            $front = @(& $long "---`nname: demo`ndescription: $wide`n---`n`n# Demo`n`n$wide" 40)
+            $later = @(& $long "text`n`n---`ndescription: $wide`n---" 40)
+            $rule = @(& $long "---`n`ndescription: $wide`n---" 40)
+            ($front + $later + $rule) | ForEach-Object { Write-Host "    $_" }
+            $front.Count -eq 1 -and $front[0] -match '^8: the line is' -and $later.Count -eq 1 -and $later[0] -match '^4: the line is' -and
+                $rule.Count -eq 1 -and $rule[0] -match '^3: the line is' } }
         @{ Name = 'a line indented four spaces after a blank one is code and not held to the limit, unless it continues a list item'; Test = {
             $wide = 'word ' * 12
             $f = @(& $long "text`n`n    $wide`n    $wide`n`ntext`n`n- item`n`n    $wide" 40)

@@ -74,6 +74,17 @@ function Get-BareAddress {
     }
 }
 
+function Get-FrontMatterLength {
+    <#  How many lines at the start of $Lines are front matter, 0 when none: a first line of ---, a
+        second line that is not blank, and every line down to and including the next ---, or to the
+        end where none closes it. A first --- with a blank line after it is a rule, not front
+        matter. Get-HeadingAnchor and Test-Markdown's length rule both read it here (#496).  #>
+    param([Parameter(Mandatory)] [AllowEmptyCollection()] [AllowEmptyString()] [string[]] $Lines)
+    if ($Lines.Count -lt 2 -or $Lines[0] -notmatch '^---\s*$' -or $Lines[1] -notmatch '\S') { return 0 }
+    for ($i = 1; $i -lt $Lines.Count -and $Lines[$i] -notmatch '^---\s*$'; $i++) { }
+    [Math]::Min($i + 1, $Lines.Count)
+}
+
 function Get-HeadingAnchor {
     <#  The anchor GitHub gives each heading in $Lines, as a set, asked of it on 2026-10-15
         (grado-factorio-tools#155; the answers are in docs/measurements.md). The anchor is made from
@@ -91,9 +102,8 @@ function Get-HeadingAnchor {
     $anchors = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     $seen = @{}
     # Front matter is no paragraph, so its closing --- underlines nothing and a `# comment` in it
-    # is no heading. A --- with a blank line after it is a rule, not front matter.
-    $i = 0
-    if ($Lines.Count -gt 1 -and $Lines[0] -match '^---\s*$' -and $Lines[1] -match '\S') { for ($i = 1; $i -lt $Lines.Count -and $Lines[$i] -notmatch '^---\s*$'; $i++) { }; $i++ }
+    # is no heading.
+    $i = Get-FrontMatterLength -Lines $Lines
     $fence = $null
     $blank = $true
     for (; $i -lt $Lines.Count; $i++) {
@@ -337,6 +347,8 @@ function Test-Markdown {
     }
     $fence = $null
     $numbered = $false
+    # The lines of front matter, which only the length rule leaves alone.
+    $frontMatter = Get-FrontMatterLength -Lines $Lines
     # The lines PowerShell's own Markdown parser puts in an indented code block, counted from 0,
     # which no rule reads as prose (grado-factorio-tools#261). The parser is asked, and nothing
     # here follows lists, blank lines or rules to work it out (grado-factorio-tools#95). A fenced
@@ -398,8 +410,9 @@ function Test-Markdown {
         # wrapped. A heading and a `[label]: target` line cannot be broken at all, and neither can a
         # line with no space at or before the limit, past its list marker and first word. A space
         # inside a code span is no place to break: a command wrapped there is no longer the command.
-        # A line of an indented code block never reaches here.
-        if ($MaxLineLength -gt 0) {
+        # A line of an indented code block never reaches here. Front matter is YAML, not prose, and
+        # a line of it wrapped is no longer the value it held (#496).
+        if ($MaxLineLength -gt 0 -and $i -ge $frontMatter) {
             $counted = Get-CountedLine $Lines[$i]
             if ($counted.Length -gt $MaxLineLength -and $line -notmatch '^\s{0,3}#{1,6}\s' -and $prose -notmatch '^\s{0,3}\[[^\]^][^\]]*\]:') {
                 $lead = [regex]::Match($counted, '^(\s*>)*\s*(([-*+]|\d+[.)])\s+)?').Length
