@@ -91,7 +91,10 @@
     it; a first `---` with a blank line after it is a rule. Get-FrontMatterLineCount in
     markdown-lib.ps1 reads it, for the anchors, where it holds no heading, and for the length rule,
     which leaves it alone (#496); every other rule reads it as the rest of the page. Read with
-    -Body, the length rule finds none: GitHub reads a body's first `---` as a rule.
+    -Body, the length rule finds none: this check reads a body's first `---` as a rule, as it takes
+    GitHub to render a pull request's or an issue's body, which is not measured. The anchors still
+    read the block as front matter there, so a heading inside it makes no anchor (PR #522's panel
+    review).
 
     LINE LENGTH, ONLY WHEN HANDED A LIMIT (grado-factorio-tools#93). With no -MaxLineLength the
     check is silent on length, so a repository that never asked is not held to one. With it, a line
