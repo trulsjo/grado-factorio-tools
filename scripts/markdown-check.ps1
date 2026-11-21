@@ -87,7 +87,8 @@
     including the next `---`, or to the end where none closes it; a first `---` with a blank line
     after it is a rule. Get-FrontMatterLineCount in markdown-lib.ps1 reads it, for the anchors,
     where it holds no heading, and for the length rule, which leaves it alone (#496); every other
-    rule reads it as the rest of the page.
+    rule reads it as the rest of the page. Read with -Body, the length rule finds none: GitHub
+    reads a body's first `---` as a rule.
 
     LINE LENGTH, ONLY WHEN HANDED A LIMIT (grado-factorio-tools#93). With no -MaxLineLength the
     check is silent on length, so a repository that never asked is not held to one. With it, a line
@@ -582,6 +583,15 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             $count = Get-FrontMatterLineCount -Lines '---', 'name: demo', "description: $wide"
             $open | ForEach-Object { Write-Host "    $_" }
             $open.Count -eq 0 -and $count -eq 3 } }
+        @{ Name = 'read with -Body, a body that opens with --- and a line that is not blank is held to the limit throughout: a body has no front matter (PR #522''s panel review)'; Test = {
+            $wide = 'word ' * 12
+            # A short line under the long one, so that it is no setext heading's text.
+            $text = "---`nSummary line.`n`n$wide`nShort.`n---`n`n$wide"
+            $body = @(Test-Markdown -Lines ($text -split "`n") -Path 'body.md' -Body -Exists { $false } -Anchors { $null } -MaxLineLength 40 | ForEach-Object { "$($_.Line): $($_.Message)" })
+            $page = @(& $long $text 40)
+            ($body + $page) | ForEach-Object { Write-Host "    $_" }
+            $body.Count -eq 2 -and $body[0] -match '^4: the line is' -and $body[1] -match '^8: the line is' -and
+                $page.Count -eq 1 -and $page[0] -match '^8: the line is' } }
         @{ Name = 'a line indented four spaces after a blank one is code and not held to the limit, unless it continues a list item'; Test = {
             $wide = 'word ' * 12
             $f = @(& $long "text`n`n    $wide`n    $wide`n`ntext`n`n- item`n`n    $wide" 40)
