@@ -44,9 +44,10 @@
     -All or -Range, naming no file, or naming one that holds no text, as a failed write leaves, it
     fails before anything is checked, and says why. A byte-order mark at the file's start is
     dropped. Where a long line stands in the block a body opens with, from its first `---` to the
-    next, as FRONT MATTER below reads it, the summary line says that line is rewrapped by hand:
-    markdown-rewrap.ps1 reads a file, and leaves that block as front matter (PR #522's panel
-    review).
+    next or to its end, as FRONT MATTER below reads it, the summary line says that line is
+    rewrapped by hand, whatever the file's name: markdown-rewrap.ps1 reads a file, and leaves that
+    block as front matter. The rewrap's command is named for the other long lines alone, and only
+    for a body whose name ends in .md (PR #522's panel review).
 
     WHAT IT READS AS WHAT. A paragraph ends at a blank line, a heading, a list item, a table or a
     fenced or indented code block; nothing inside either is read, no emphasis and no link
@@ -954,9 +955,36 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             $go = { param([string] $f) $t = (& pwsh -NoProfile -File $PSCommandPath -Body $f -MaxLineLength 20 2>&1 | Out-String); @{ Code = $LASTEXITCODE; Text = $t } }
             $a = & $go $opened; $b = & $go $plain
             ($a, $b) | ForEach-Object { Write-Host ($_.Text.TrimEnd() -replace '(?m)^', '    ') }
-            $hand = 'of them, in the block the body opens with from its first --- to the next, are rewrapped by hand'
-            $a.Code -eq 1 -and $a.Text -match "(?m)2 line\(s\) over 20 are rewrapped by markdown-rewrap\.ps1: .* -MaxLineLength 20\. 1 $hand" -and
+            # The command for the line after the block alone, then the one in it by hand.
+            $hand = '1 line\(s\) over 20, in the block the body opens with from its first --- to the next or to its end, are rewrapped by hand'
+            $a.Code -eq 1 -and $a.Text -match "(?m)1 line\(s\) over 20 are rewrapped by markdown-rewrap\.ps1: .* -MaxLineLength 20\. $hand" -and
                 $b.Code -eq 1 -and $b.Text -match '1 line\(s\) over 20 are rewrapped' -and $b.Text -notmatch 'by hand' } }
+        @{ Name = 'with -Body, where every long line is in the opening block, the rewrap''s command is not named, as it would change nothing (PR #522''s panel review)'; Test = {
+            $own = Join-Path $temp 'body-all-hand'
+            New-Item -ItemType Directory -Path $own -Force | Out-Null
+            $f = Join-Path $own 'all.md'
+            Set-Content -LiteralPath $f -Value '---', ('word ' * 6).Trim(), '', '---', '', 'Short.'
+            $t = (& pwsh -NoProfile -File $PSCommandPath -Body $f -MaxLineLength 20 2>&1 | Out-String); $code = $LASTEXITCODE
+            Write-Host ($t.TrimEnd() -replace '(?m)^', '    ')
+            $code -eq 1 -and $t -match '1 line\(s\) over 20, in the block the body opens with .* are rewrapped by hand' -and $t -notmatch 'rewrapped by markdown-rewrap\.ps1:' } }
+        @{ Name = 'with -Body, a body not named .md still has its long line in the opening block named as rewrapped by hand, with no command, as the rewrap takes no such file (PR #522''s panel review)'; Test = {
+            $own = Join-Path $temp 'body-txt-hand'
+            New-Item -ItemType Directory -Path $own -Force | Out-Null
+            $long = ('word ' * 6).Trim()
+            $f = Join-Path $own 'body.txt'
+            Set-Content -LiteralPath $f -Value '---', $long, '', '---', '', $long
+            $t = (& pwsh -NoProfile -File $PSCommandPath -Body $f -MaxLineLength 20 2>&1 | Out-String); $code = $LASTEXITCODE
+            Write-Host ($t.TrimEnd() -replace '(?m)^', '    ')
+            $code -eq 1 -and $t -match '1 line\(s\) over 20, in the block the body opens with .* are rewrapped by hand' -and $t -notmatch 'rewrapped by markdown-rewrap\.ps1:' } }
+        @{ Name = 'with -Body, an opening block nothing closes runs to the body''s end: its every long line is named as rewrapped by hand, the words saying to its end (PR #522''s panel review)'; Test = {
+            $own = Join-Path $temp 'body-open-hand'
+            New-Item -ItemType Directory -Path $own -Force | Out-Null
+            $long = ('word ' * 6).Trim()
+            $f = Join-Path $own 'open.md'
+            Set-Content -LiteralPath $f -Value '---', $long, '', $long
+            $t = (& pwsh -NoProfile -File $PSCommandPath -Body $f -MaxLineLength 20 2>&1 | Out-String); $code = $LASTEXITCODE
+            Write-Host ($t.TrimEnd() -replace '(?m)^', '    ')
+            $code -eq 1 -and $t -match '2 line\(s\) over 20, in the block the body opens with from its first --- to the next or to its end, are rewrapped by hand' -and $t -notmatch 'rewrapped by markdown-rewrap\.ps1:' } }
     )
 
     $failures = 0
@@ -1005,8 +1033,8 @@ if ($PSBoundParameters.ContainsKey('Body')) {
     if ($found) {
         # The rewrap takes a body by -Path where it ends in .md, and refuses another file
         # without -Comment, which would read it as a script. It reads a file, so a long line where
-        # a file has front matter is left to the hand.
-        $hint = if ($longAt -and $Body -match '\.md$') { Get-RewrapHint -Long $longAt.Count -Max $MaxLineLength -Reading " -Path $(ConvertTo-QuotedArgument $Body)" -ByHand (Get-BodyHandWrapCount -Lines $lines -LongAt $longAt) }
+        # a file has front matter is left to the hand, in a body of any name.
+        $hint = if ($longAt) { Get-RewrapHint -Long $longAt.Count -Max $MaxLineLength -Reading " -Path $(ConvertTo-QuotedArgument $Body)" -ByHand (Get-BodyHandWrapCount -Lines $lines -LongAt $longAt) -NoRewrap:($Body -notmatch '\.md$') }
         Write-Host ''
         Write-Host "FAILED - markdown-check: $found finding(s) in $Body, read as a body. What it reads as what: the header of markdown-check.ps1, under WITH -Body.$hint"
         exit 1
