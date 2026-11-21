@@ -83,7 +83,7 @@ function Get-FrontMatterLineCount {
         #522's panel review). Get-HeadingAnchor and Test-Markdown's length rule both read it here
         (#496).  #>
     param([Parameter(Mandatory)] [AllowEmptyCollection()] [AllowEmptyString()] [string[]] $Lines)
-    if ($Lines.Count -lt 2 -or $Lines[0] -notmatch '^﻿?---\s*$' -or $Lines[1] -notmatch '\S') { return 0 }
+    if ($Lines.Count -lt 2 -or $Lines[0] -notmatch '^\uFEFF?---\s*$' -or $Lines[1] -notmatch '\S') { return 0 }
     for ($i = 1; $i -lt $Lines.Count; $i++) { if ($Lines[$i] -match '^---\s*$') { return $i + 1 } }
     $Lines.Count
 }
