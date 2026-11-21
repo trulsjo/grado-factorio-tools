@@ -43,7 +43,10 @@
     finding names the file as it was given, and the summary line says it read a body. Beside -Path,
     -All or -Range, naming no file, or naming one that holds no text, as a failed write leaves, it
     fails before anything is checked, and says why. A byte-order mark at the file's start is
-    dropped.
+    dropped. Where a long line stands in the block a body opens with, from its first `---` to the
+    next, as FRONT MATTER below reads it, the summary line says that line is rewrapped by hand:
+    markdown-rewrap.ps1 reads a file, and leaves that block as front matter (PR #522's panel
+    review).
 
     WHAT IT READS AS WHAT. A paragraph ends at a blank line, a heading, a list item, a table or a
     fenced or indented code block; nothing inside either is read, no emphasis and no link
@@ -937,6 +940,20 @@ a glob like `2.0.*` and a note: *Until 2026-10-01 this said two: it missed an* A
             (& $named $staged '') -and (& $named $all ' -All') -and (& $named $range ' -Range HEAD~1...HEAD') -and (& $named $path " -Path 'long.md,open.md'") -and
                 (& $named $body " -Path 'long.md'") -and $command -and @($errors).Count -eq 0 -and $pathArg -ceq $curly -and
                 $short.Code -eq 1 -and (& $closing $short) -notmatch 'markdown-rewrap' -and $text.Code -eq 1 -and (& $closing $text) -notmatch 'markdown-rewrap' } }
+        @{ Name = 'with -Body, a long line where a file has front matter is named as rewrapped by hand, as the rewrap reads a file and leaves it; one after that block is not, and a body with no such block names none (PR #522''s panel review)'; Test = {
+            $own = Join-Path $temp 'body-hand'
+            New-Item -ItemType Directory -Path $own -Force | Out-Null
+            $long = ('word ' * 6).Trim()
+            $opened = Join-Path $own 'opened.md'; $plain = Join-Path $own 'plain.md'
+            # A blank line before the closing ---, so the long line is no setext heading's text.
+            Set-Content -LiteralPath $opened -Value '---', $long, '', '---', '', $long
+            Set-Content -LiteralPath $plain -Value 'Text.', '', $long
+            $go = { param([string] $f) $t = (& pwsh -NoProfile -File $PSCommandPath -Body $f -MaxLineLength 20 2>&1 | Out-String); @{ Code = $LASTEXITCODE; Text = $t } }
+            $a = & $go $opened; $b = & $go $plain
+            ($a, $b) | ForEach-Object { Write-Host ($_.Text.TrimEnd() -replace '(?m)^', '    ') }
+            $hand = 'of them, in the block the body opens with from its first --- to the next, are rewrapped by hand'
+            $a.Code -eq 1 -and $a.Text -match "(?m)2 line\(s\) over 20 are rewrapped by markdown-rewrap\.ps1: .* -MaxLineLength 20\. 1 $hand" -and
+                $b.Code -eq 1 -and $b.Text -match '1 line\(s\) over 20 are rewrapped' -and $b.Text -notmatch 'by hand' } }
     )
 
     $failures = 0
@@ -976,16 +993,17 @@ if ($PSBoundParameters.ContainsKey('Body')) {
     if ($refused) { Write-Host "FAILED - markdown-check: $refused, so nothing was checked."; exit 1 }
     $reader = [IO.StringReader]::new($text)
     $lines = @(while ($null -ne ($l = $reader.ReadLine())) { $l })
-    $found = 0; $long = 0
+    $found = 0; $longAt = @()
     foreach ($finding in Test-Markdown -Lines $lines -Path $Body -Body -Exists { $false } -Anchors { $null } -MaxLineLength $MaxLineLength | Sort-Object { $_.Line }) {
         Write-Host "${Body}:$($finding.Line): $($finding.Message)"
         $found++
-        if (Test-LongLineFinding $finding) { $long++ }
+        if (Test-LongLineFinding $finding) { $longAt += $finding.Line }
     }
     if ($found) {
         # The rewrap takes a body by -Path where it ends in .md, and refuses another file
-        # without -Comment, which would read it as a script.
-        $hint = if ($long -and $Body -match '\.md$') { Get-RewrapHint -Long $long -Max $MaxLineLength -Reading " -Path $(ConvertTo-QuotedArgument $Body)" }
+        # without -Comment, which would read it as a script. It reads a file, so a long line where
+        # a file has front matter is left to the hand.
+        $hint = if ($longAt -and $Body -match '\.md$') { Get-RewrapHint -Long $longAt.Count -Max $MaxLineLength -Reading " -Path $(ConvertTo-QuotedArgument $Body)" -ByHand (Get-BodyHandWrapCount -Lines $lines -LongAt $longAt) }
         Write-Host ''
         Write-Host "FAILED - markdown-check: $found finding(s) in $Body, read as a body. What it reads as what: the header of markdown-check.ps1, under WITH -Body.$hint"
         exit 1
