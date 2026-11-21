@@ -24,10 +24,23 @@ function Test-LongLineFinding {
 function Get-RewrapHint {
     <#  The words that name markdown-rewrap.ps1 for $Long lines over $Max, with the command that
         rewraps what was read: $Reading, the switch the check read by, and the rewrap's path from
-        the current directory, beside this script, so a consumer is told its own (#444).  #>
-    param([int] $Long, [int] $Max, [string] $Reading)
+        the current directory, beside this script, so a consumer is told its own (#444). $ByHand
+        of them stand in a body where a file would have front matter, as Get-BodyHandWrapCount
+        counts them: the rewrap reads a file, so it leaves those, and the words say they are
+        rewrapped by hand (PR #522's panel review).  #>
+    param([int] $Long, [int] $Max, [string] $Reading, [int] $ByHand)
     $rewrap = [IO.Path]::GetRelativePath($PWD.ProviderPath, (Join-Path $PSScriptRoot 'markdown-rewrap.ps1')) -replace '\\', '/'
-    " $Long line(s) over $Max are rewrapped by markdown-rewrap.ps1: pwsh -File $(ConvertTo-QuotedArgument $rewrap)$Reading -MaxLineLength $Max"
+    $hand = if ($ByHand -gt 0) { ". $ByHand of them, in the block the body opens with from its first --- to the next, are rewrapped by hand: the rewrap reads that block as front matter, and leaves it" } else { '' }
+    " $Long line(s) over $Max are rewrapped by markdown-rewrap.ps1: pwsh -File $(ConvertTo-QuotedArgument $rewrap)$Reading -MaxLineLength $Max$hand"
+}
+
+function Get-BodyHandWrapCount {
+    <#  How many of the long lines at $LongAt, 1-based, a body holds where a file would have front
+        matter: the lines markdown-rewrap.ps1 leaves, as it reads a file (PR #522's panel
+        review).  #>
+    param([Parameter(Mandatory)] [AllowEmptyCollection()] [AllowEmptyString()] [string[]] $Lines, [int[]] $LongAt)
+    $front = Get-FrontMatterLineCount -Lines $Lines
+    @($LongAt | Where-Object { $_ -le $front }).Count
 }
 
 function ConvertTo-QuotedArgument {
